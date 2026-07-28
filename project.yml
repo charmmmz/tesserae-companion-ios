@@ -29,6 +29,7 @@ targets:
         NSLocalNetworkUsageDescription: Discover and connect to your Tesserae server on the local network.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+        TesseraeAppGroupIdentifier: group.com.charmmmz.tesseraecompanion
         TesseraeKeychainAccessGroup: $(AppIdentifierPrefix)com.charmmmz.tesseraecompanion.shared
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:

@@ -8,21 +8,29 @@ struct TesseraeCompanionApp: App {
 
     init() {
         let credentials: any CredentialStoring
+        let stateStore: any CompanionStateStoring
 #if DEBUG
         if ProcessInfo.processInfo.environment[
             "TESSERAE_USE_IN_MEMORY_CREDENTIALS"
         ] == "1" {
             credentials = InMemoryCredentialStore()
+            stateStore = InMemoryCompanionStateStore()
         } else {
             credentials = KeychainCredentialStore(
-                service: AppConfiguration.bundleIdentifier,
+                service: AppConfiguration.keychainService,
                 accessGroup: AppConfiguration.keychainAccessGroup
+            )
+            stateStore = UserDefaultsCompanionStateStore(
+                suiteName: AppConfiguration.appGroupIdentifier
             )
         }
 #else
         credentials = KeychainCredentialStore(
-            service: AppConfiguration.bundleIdentifier,
+            service: AppConfiguration.keychainService,
             accessGroup: AppConfiguration.keychainAccessGroup
+        )
+        stateStore = UserDefaultsCompanionStateStore(
+            suiteName: AppConfiguration.appGroupIdentifier
         )
 #endif
         let liveClient = LiveTesseraeClient(
@@ -36,7 +44,8 @@ struct TesseraeCompanionApp: App {
             initialValue: AppModel(
                 liveClient: liveClient,
                 demoClient: MockTesseraeClient(),
-                credentials: credentials
+                credentials: credentials,
+                stateStore: stateStore
             )
         )
     }

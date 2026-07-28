@@ -24,9 +24,10 @@ struct SettingsView: View {
                 }
 
                 Section("Connection") {
+                    LabeledContent("Status", value: connectionStatus)
                     Text(
                         model.connectionMode == .live
-                            ? "The client token is stored in Keychain and sent only to this Tesserae instance."
+                            ? "The client token is stored in shared Keychain access. Non-secret connection details are stored in the App Group for the app and Share Extension."
                             : "This session uses local demo data and does not contact a Tesserae server."
                     )
                         .font(.footnote)
@@ -56,6 +57,21 @@ struct SettingsView: View {
                     Button("Done") { dismiss() }
                 }
             }
+        }
+    }
+
+    private var connectionStatus: String {
+        switch model.connectionHealth {
+        case .idle:
+            "Not connected"
+        case .restoring:
+            "Restoring"
+        case .connected:
+            "Connected"
+        case .offline:
+            "Saved for retry"
+        case .requiresPairing:
+            "Pair again"
         }
     }
 }

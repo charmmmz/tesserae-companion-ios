@@ -36,6 +36,8 @@ Companion surface; History, resend, and rich previews are follow-ups.
 - Stateful local HTTP contract server and end-to-end Swift transport test.
 - Embedded Share Extension target with reserved Bundle ID, App Group, and
   shared Keychain boundaries.
+- App Group-backed connection snapshots with cached displays, dashboards,
+  jobs, launch restoration, and explicit revoked-credential handling.
 - Tesserae-aligned light and dark visual tokens and accessible status labels.
 
 ### Changed
@@ -70,6 +72,9 @@ Companion surface; History, resend, and rich previews are follow-ups.
   App Group.
 - Local HTTP is limited to iOS local-network transport policy; public HTTPS
   continues to use platform certificate validation.
+- Temporary network failures retain cached connection metadata and Keychain
+  credentials; only an authenticated `401` or missing credential requires
+  pairing again.
 
 ## [0.1.0] - 2026-07-26
 

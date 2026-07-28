@@ -10,13 +10,25 @@ final class AppModel {
         case demo
     }
 
+    enum ConnectionHealth {
+        case idle
+        case restoring
+        case connected
+        case offline
+        case requiresPairing
+    }
+
     private let liveClient: any TesseraeServing
     private let demoClient: any TesseraeServing
     private var activeClient: any TesseraeServing
     private let credentials: any CredentialStoring
+    private let stateStore: any CompanionStateStoring
+    private var didAttemptRestore = false
 
     var activeInstance: TesseraeInstance?
     var connectionMode: ConnectionMode?
+    var connectionHealth: ConnectionHealth = .restoring
+    var connectionNotice: String?
     var capabilities: ServerCapabilities?
     var displays: [DisplaySummary] = []
     var dashboards: [DashboardSummary] = []
@@ -24,17 +36,20 @@ final class AppModel {
     var favoriteDashboardIDs: Set<String> = []
     var activeOperationIDs: Set<String> = []
     var isRefreshing = false
+    var isRestoringConnection = true
     var lastError: String?
 
     init(
         liveClient: any TesseraeServing,
         demoClient: any TesseraeServing,
-        credentials: any CredentialStoring
+        credentials: any CredentialStoring,
+        stateStore: any CompanionStateStoring
     ) {
         self.liveClient = liveClient
         self.demoClient = demoClient
         activeClient = liveClient
         self.credentials = credentials
+        self.stateStore = stateStore
     }
 
     var sortedDashboards: [DashboardSummary] {
@@ -81,6 +96,7 @@ final class AppModel {
         code: String,
         clientName: String
     ) async {
+        connectionNotice = nil
         activeOperationIDs.insert("pair")
         defer { activeOperationIDs.remove("pair") }
         do {
@@ -98,16 +114,59 @@ final class AppModel {
             }
             activeClient = candidate
             connectionMode = mode
+            connectionHealth = .connected
             self.capabilities = capabilities
             activeInstance = session.instance
             favoriteDashboardIDs = mode == .demo ? ["pantry"] : []
+            if mode == .live {
+                await persistSnapshot()
+            }
             await refresh()
         } catch {
             lastError = error.localizedDescription
         }
     }
 
-    func refresh() async {
+    func restoreConnectionIfNeeded() async {
+        guard !didAttemptRestore else { return }
+        didAttemptRestore = true
+        isRestoringConnection = true
+        connectionHealth = .restoring
+        defer { isRestoringConnection = false }
+
+        do {
+            guard let snapshot = try await stateStore.load() else {
+                connectionHealth = .idle
+                return
+            }
+            guard try await credentials.token(for: snapshot.activeInstance.id) != nil else {
+                try await stateStore.clear()
+                connectionHealth = .requiresPairing
+                connectionNotice = "The saved Tesserae pairing is no longer available. Pair again to reconnect."
+                return
+            }
+
+            activeClient = liveClient
+            connectionMode = .live
+            activeInstance = snapshot.activeInstance
+            capabilities = snapshot.capabilities
+            displays = snapshot.displays
+            dashboards = snapshot.dashboards
+            jobs = snapshot.jobs
+
+            capabilities = try await liveClient.probe(
+                baseURL: snapshot.activeInstance.baseURL
+            )
+            await refresh(showErrors: false)
+        } catch let error as TesseraeClientError {
+            await handleConnectionError(error, showAlert: false)
+        } catch {
+            connectionHealth = .offline
+            connectionNotice = error.localizedDescription
+        }
+    }
+
+    func refresh(showErrors: Bool = true) async {
         guard let activeInstance else { return }
         isRefreshing = true
         defer { isRefreshing = false }
@@ -115,8 +174,19 @@ final class AppModel {
         do {
             displays = try await activeClient.fetchDisplays(instance: activeInstance)
             dashboards = try await activeClient.fetchDashboards(instance: activeInstance)
+            connectionHealth = .connected
+            connectionNotice = nil
+            if connectionMode == .live {
+                await persistSnapshot(showErrors: showErrors)
+            }
+        } catch let error as TesseraeClientError {
+            await handleConnectionError(error, showAlert: showErrors)
         } catch {
-            lastError = error.localizedDescription
+            connectionHealth = .offline
+            connectionNotice = error.localizedDescription
+            if showErrors {
+                lastError = error.localizedDescription
+            }
         }
     }
 
@@ -142,6 +212,7 @@ final class AppModel {
                 instance: activeInstance
             )
             jobs.insert(job, at: 0)
+            await persistSnapshot()
             await updateUntilTerminal(job, instance: activeInstance)
         } catch {
             lastError = error.localizedDescription
@@ -170,6 +241,7 @@ final class AppModel {
                 instance: activeInstance
             )
             jobs.insert(job, at: 0)
+            await persistSnapshot()
             await updateUntilTerminal(job, instance: activeInstance)
             return true
         } catch {
@@ -191,6 +263,7 @@ final class AppModel {
                 if let index = jobs.firstIndex(where: { $0.id == current.id }) {
                     jobs[index] = current
                 }
+                await persistSnapshot(showErrors: false)
                 if !current.isTerminal {
                     try await Task.sleep(for: .milliseconds(350))
                 }
@@ -214,9 +287,16 @@ final class AppModel {
             } catch {
                 disconnectError = disconnectError ?? error
             }
+            do {
+                try await stateStore.clear()
+            } catch {
+                disconnectError = disconnectError ?? error
+            }
         }
         activeInstance = nil
         connectionMode = nil
+        connectionHealth = .idle
+        connectionNotice = nil
         capabilities = nil
         displays = []
         dashboards = []
@@ -225,6 +305,57 @@ final class AppModel {
         activeClient = liveClient
         if let disconnectError {
             lastError = disconnectError.localizedDescription
+        }
+    }
+
+    private func handleConnectionError(
+        _ error: TesseraeClientError,
+        showAlert: Bool
+    ) async {
+        if error == .unauthorized || error == .missingCredential {
+            if let activeInstance {
+                try? await credentials.removeToken(for: activeInstance.id)
+            }
+            try? await stateStore.clear()
+            activeInstance = nil
+            connectionMode = nil
+            capabilities = nil
+            displays = []
+            dashboards = []
+            jobs = []
+            activeClient = liveClient
+            connectionHealth = .requiresPairing
+            connectionNotice = "This Tesserae credential was revoked or expired. Pair again to reconnect."
+        } else {
+            connectionHealth = .offline
+            connectionNotice = error.localizedDescription
+        }
+        if showAlert {
+            lastError = connectionNotice
+        }
+    }
+
+    private func persistSnapshot(showErrors: Bool = true) async {
+        guard
+            connectionMode == .live,
+            let activeInstance
+        else {
+            return
+        }
+        do {
+            try await stateStore.save(
+                CompanionSnapshot(
+                    activeInstance: activeInstance,
+                    capabilities: capabilities,
+                    displays: displays,
+                    dashboards: dashboards,
+                    jobs: jobs
+                )
+            )
+        } catch {
+            if showErrors {
+                lastError = error.localizedDescription
+            }
         }
     }
 

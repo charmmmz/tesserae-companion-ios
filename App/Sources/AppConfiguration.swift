@@ -4,6 +4,12 @@ enum AppConfiguration {
     static let bundleIdentifier = Bundle.main.bundleIdentifier
         ?? "com.charmmmz.tesseraecompanion"
 
+    static let keychainService = "com.charmmmz.tesseraecompanion.credentials"
+
+    static let appGroupIdentifier = Bundle.main.object(
+        forInfoDictionaryKey: "TesseraeAppGroupIdentifier"
+    ) as? String
+
     static let appVersion = Bundle.main.object(
         forInfoDictionaryKey: "CFBundleShortVersionString"
     ) as? String ?? "0.1.0"

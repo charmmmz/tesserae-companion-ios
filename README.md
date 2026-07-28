@@ -103,7 +103,6 @@ provisioning profiles.
 
 - Bonjour browsing and local-network permission timing;
 - QR scanning;
-- persisted non-secret instance metadata and automatic reconnection;
 - Share Extension target selection/upload and retry queue;
 - App Intents;
 - History/resend and real server-rendered previews.

@@ -31,6 +31,8 @@
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Discover and connect to your Tesserae server on the local network.</string>
+	<key>TesseraeAppGroupIdentifier</key>
+	<string>group.com.charmmmz.tesseraecompanion</string>
 	<key>TesseraeKeychainAccessGroup</key>
 	<string>$(AppIdentifierPrefix)com.charmmmz.tesseraecompanion.shared</string>
 	<key>UILaunchScreen</key>
