@@ -617,8 +617,8 @@ display model/transport, and observed outcome.
   a practical transfer or successor-maintenance path available.
 - Secrets, Apple account access, signing certificates, and App Store
   Connect roles are never committed to the repository.
-- Public release, repository visibility, licence, and contribution model
-  must be decided before the first external TestFlight.
+- App Store ownership, signing access, and release permissions must be
+  documented before the first external TestFlight.
 
 ## 16. Decision log
 
@@ -635,18 +635,16 @@ display model/transport, and observed outcome.
 | D-009 | 2026-07-28 | Keep V1 photo handling server-authoritative via PushManager-backed asynchronous jobs. | Accepted in upstream maintainer review |
 | D-010 | 2026-07-26 | Ship English and Simplified Chinese in release 1.0. | Proposed |
 | D-011 | 2026-07-28 | Separate Job lifecycle from `published`/`quiet` terminal outcomes and require idempotency for both write routes. | Maintainer-aligned contract clarification |
-| D-012 | 2026-07-28 | Keep the iOS app in a separate future `tesserae-companion-ios` repository. | Accepted locally; public ownership and licence pending |
+| D-012 | 2026-07-28 | Keep the iOS app in the public `charmmmz/tesserae-companion-ios` repository under Apache-2.0. | Accepted |
 
 ## 17. Open questions for maintainer review
 
 1. May the companion use the Tesserae name, colour system, and adapted
    tessellated mark in the App Store?
 2. Which Tesserae release should become the minimum supported version?
-3. Which open-source licence and repository ownership model should the
-   iOS project use?
-4. What job and idempotency retention defaults should the first server
+3. What job and idempotency retention defaults should the first server
    implementation advertise?
-5. Which later release should add on-demand previews, History, and resend?
+4. Which later release should add on-demand previews, History, and resend?
 
 ## 18. Definition of release 1.0 done
 

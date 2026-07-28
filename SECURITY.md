@@ -11,9 +11,9 @@ before TestFlight or App Store distribution.
 Do not disclose suspected credential, pairing, local-network, image-handling,
 or privacy vulnerabilities in a public issue.
 
-Once the public repository exists, use its private GitHub Security Advisory
-reporting flow. Until then, contact the repository owner privately through the
-channel used to share this source tree.
+Use the repository's private GitHub Security Advisory reporting flow. If that
+flow is temporarily unavailable, contact the repository owner privately
+instead of opening a public issue.
 
 Include:
 

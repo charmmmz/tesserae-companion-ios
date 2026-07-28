@@ -13,6 +13,7 @@ The Tesserae name is used descriptively. Final App Store naming, marks, colour
 adaptation, screenshots, and other brand presentation remain subject to
 maintainer approval.
 
-The iOS repository's own open-source licence is intentionally undecided until
-repository ownership and App Store distribution terms are confirmed. No
-licence should be inferred merely from source availability.
+Tesserae Companion is distributed under the Apache License 2.0. See
+[`LICENSE`](LICENSE) and [`NOTICE`](NOTICE). That licence covers this
+repository's original code and documentation; it does not grant rights to
+Tesserae names, logos, or other marks.

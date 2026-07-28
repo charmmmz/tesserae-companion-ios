@@ -2,7 +2,7 @@
 
 Tesserae Companion is an independent, community-built iOS client for
 [Tesserae](https://github.com/dmellok/tesserae). Contributions are welcome
-once the public repository and licence have been confirmed.
+under the repository's Apache-2.0 licence.
 
 ## Development setup
 

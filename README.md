@@ -100,15 +100,22 @@ maintainer-aligned, but the current Tesserae server does not implement them.
 
 ## Repository boundary
 
-The iOS app should live in its own `tesserae-companion-ios` repository because
-it has an independent Xcode, signing, App Store, issue, and release lifecycle.
+The iOS app lives in the public
+[`charmmmz/tesserae-companion-ios`](https://github.com/charmmmz/tesserae-companion-ios)
+repository because it has an independent Xcode, signing, App Store, issue, and
+release lifecycle.
 The Tesserae server repository should own only the server implementation,
-server-facing OpenAPI integration, and server contract tests. No public
-repository has been created yet; ownership, visibility, and licence still
-require an explicit decision.
+server-facing OpenAPI integration, and server contract tests.
 
-Source availability does not currently grant a redistribution licence. See
-`ATTRIBUTION.md` before copying or publishing this repository.
+The repository is licensed under Apache-2.0. See [LICENSE](LICENSE),
+[NOTICE](NOTICE), and [ATTRIBUTION.md](ATTRIBUTION.md).
+
+## Licence
+
+Tesserae Companion's original code and documentation are available under the
+[Apache License 2.0](LICENSE). Tesserae itself is a separate project under
+AGPL-3.0-or-later; using this client licence does not change the Tesserae
+server's licence or grant rights to its name and marks.
 
 ## Collaboration workflow
 
