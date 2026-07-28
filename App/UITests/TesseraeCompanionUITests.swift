@@ -34,6 +34,29 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Published"].exists)
     }
 
+    func testSimplifiedChineseOnboarding() {
+        let app = XCUIApplication()
+        app.launchArguments += [
+            "-AppleLanguages", "(zh-Hans)",
+            "-AppleLocale", "zh_CN",
+        ]
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["Tesserae 伴侣"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["使用演示数据体验"].exists)
+        XCTAssertTrue(app.buttons["扫描配对二维码"].exists)
+
+        app.buttons["使用演示数据体验"].tap()
+        let tabBar = app.tabBars.firstMatch
+        XCTAssertTrue(tabBar.buttons["显示屏"].waitForExistence(timeout: 3))
+        XCTAssertTrue(tabBar.buttons["仪表盘"].exists)
+        XCTAssertTrue(tabBar.buttons["发送"].exists)
+        XCTAssertTrue(tabBar.buttons["活动"].exists)
+        XCTAssertTrue(app.staticTexts["本地演示连接 · 演示数据"].exists)
+        XCTAssertTrue(app.staticTexts["最近在线"].exists)
+    }
+
     func testManualConnectionAgainstFixtureServer() throws {
         let baseURL = "http://127.0.0.1:18765"
         guard

@@ -52,6 +52,14 @@ Companion surface; History, resend, and rich previews are follow-ups.
 - Capability-based compatibility validation for the complete Companion API v1
   feature set, plus an upstream compatibility record for Tesserae `0.205.1`.
 - Tesserae-aligned light and dark visual tokens and accessible status labels.
+- Privacy manifests for the main app and Share Extension, including the
+  required reasons for app-only and App Group UserDefaults access.
+- A plain-language privacy policy, App Store privacy disclosure draft, and
+  internal TestFlight preparation/test notes.
+- Simplified Chinese localization for the primary app, pairing, permission,
+  Share Extension, and Shortcuts surfaces.
+- Actionable loading and empty states for Displays, Dashboards, and image
+  targets, plus visible server failure details in Activity.
 
 ### Changed
 
@@ -73,12 +81,16 @@ Companion surface; History, resend, and rich previews are follow-ups.
   retention default.
 - Relative server and Dashboard web-management paths are now resolved against
   the paired Tesserae base URL.
+- Successful image sends now report server acceptance and point to Activity
+  instead of describing the fixture-server implementation.
 
 ### Fixed
 
 - Corrected the Apple Developer Team identifier used by automatic signing so
   the app and Share Extension can create provisioning profiles and deploy to
   physical devices.
+- Corrected the XcodeGen resource phase so asset catalogs, privacy manifests,
+  and localized resources are embedded in the app and Share Extension.
 
 ### Security
 

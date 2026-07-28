@@ -214,7 +214,12 @@ private final class ShareComposerModel: ObservableObject {
             )
             try? await queueStore.update(failed)
             queuedRequest = failed
-            errorMessage = "\(error.localizedDescription) The image is saved for up to 24 hours and the app will retry with the same request key."
+            errorMessage = [
+                error.localizedDescription,
+                String(
+                    localized: "The image is saved for up to 24 hours and the app will retry with the same request key."
+                ),
+            ].joined(separator: " ")
             phase = .failed
         }
     }
@@ -327,7 +332,10 @@ private struct ShareComposerView: View {
                     ContentUnavailableView(
                         "Open Tesserae Companion",
                         systemImage: "iphone.and.arrow.forward",
-                        description: Text(model.errorMessage ?? "Pair the app before sharing an image.")
+                        description: Text(
+                            model.errorMessage
+                                ?? String(localized: "Pair the app before sharing an image.")
+                        )
                     )
                 default:
                     composer
@@ -438,19 +446,31 @@ private enum ShareComposerError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .cancelled:
-            "Sharing was cancelled."
+            String(localized: "Sharing was cancelled.")
         case let .imageDimensionsTooLarge(maxEdge):
-            "This image exceeds the server limit of \(maxEdge) pixels on its longest edge."
+            String(
+                localized: "This image exceeds the server limit of \(maxEdge) pixels on its longest edge."
+            )
         case let .imageTooLarge(bytes):
-            "This image exceeds the server upload limit of \(ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file))."
+            String(
+                localized: "This image exceeds the server upload limit of \(ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file))."
+            )
         case .noDisplays:
-            "No Tesserae displays are available. Refresh the main app first."
+            String(
+                localized: "No Tesserae displays are available. Refresh the main app first."
+            )
         case .noImage:
-            "The shared item does not contain one readable still image."
+            String(
+                localized: "The shared item does not contain one readable still image."
+            )
         case .notPaired:
-            "Pair Tesserae Companion with a server before using the Share Sheet."
+            String(
+                localized: "Pair Tesserae Companion with a server before using the Share Sheet."
+            )
         case let .unsupportedImageType(type):
-            "The Tesserae server does not accept \(type) images."
+            String(
+                localized: "The Tesserae server does not accept \(type) images."
+            )
         }
     }
 }

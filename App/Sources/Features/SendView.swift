@@ -70,7 +70,7 @@ struct SendView: View {
         .alert("Sent", isPresented: $sentConfirmationPresented) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("The fixture server returned a published result. A live build will show the server job state here.")
+            Text("Tesserae accepted the image. Follow its progress in Activity.")
         }
         .tesseraeScreenBackground()
     }
@@ -84,7 +84,7 @@ struct SendView: View {
                     VStack(spacing: 8) {
                         Image(systemName: imageData == nil ? "photo.badge.plus" : "photo.fill")
                             .font(.system(size: 40))
-                        Text(imageData == nil ? "Choose one still image" : "Image ready")
+                        Text(imageSelectionLabel)
                             .font(.headline)
                         if let imageData {
                             Text(ByteCountFormatter.string(fromByteCount: Int64(imageData.count), countStyle: .file))
@@ -116,11 +116,11 @@ struct SendView: View {
                 .font(.headline)
             Picker("Image Fit", selection: $fitMode) {
                 ForEach(ImageFitMode.allCases, id: \.self) { mode in
-                    Text(mode.rawValue.capitalized).tag(mode)
+                    Text(mode == .fit ? "Fit" : "Fill").tag(mode)
                 }
             }
             .pickerStyle(.segmented)
-            Text(fitMode == .fit ? "Show the whole image with space around it." : "Fill the display and crop the edges.")
+            Text(fitDescription)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -133,38 +133,64 @@ struct SendView: View {
                 .font(.headline)
                 .padding(.bottom, 2)
 
-            ForEach(model.displays) { display in
-                Button {
-                    if selectedDeviceIDs.contains(display.id) {
-                        selectedDeviceIDs.remove(display.id)
-                    } else {
-                        selectedDeviceIDs.insert(display.id)
+            if model.displays.isEmpty {
+                ContentUnavailableView {
+                    Label("No Displays", systemImage: "rectangle.slash")
+                } description: {
+                    Text("Refresh Displays before sending an image.")
+                } actions: {
+                    Button("Refresh") {
+                        Task { await model.refresh() }
                     }
-                } label: {
-                    HStack {
-                        Image(
-                            systemName: selectedDeviceIDs.contains(display.id)
-                                ? "checkmark.circle.fill"
-                                : "circle"
-                        )
-                        .foregroundStyle(
-                            selectedDeviceIDs.contains(display.id)
-                                ? TesseraeTheme.accent
-                                : .secondary
-                        )
-                        Text(display.name)
-                            .foregroundStyle(.primary)
-                        Spacer()
-                        Text("\(display.panel.width)×\(display.panel.height)")
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
-                    }
-                    .contentShape(Rectangle())
-                    .padding(.vertical, 6)
+                    .buttonStyle(.bordered)
                 }
-                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
+            } else {
+                ForEach(model.displays) { display in
+                    Button {
+                        if selectedDeviceIDs.contains(display.id) {
+                            selectedDeviceIDs.remove(display.id)
+                        } else {
+                            selectedDeviceIDs.insert(display.id)
+                        }
+                    } label: {
+                        HStack {
+                            Image(
+                                systemName: selectedDeviceIDs.contains(display.id)
+                                    ? "checkmark.circle.fill"
+                                    : "circle"
+                            )
+                            .foregroundStyle(
+                                selectedDeviceIDs.contains(display.id)
+                                    ? TesseraeTheme.accent
+                                    : .secondary
+                            )
+                            Text(display.name)
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Text("\(display.panel.width)×\(display.panel.height)")
+                                .font(.caption.monospaced())
+                                .foregroundStyle(.secondary)
+                        }
+                        .contentShape(Rectangle())
+                        .padding(.vertical, 6)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
         .tesseraeCard()
+    }
+
+    private var imageSelectionLabel: String {
+        imageData == nil
+            ? String(localized: "Choose one still image")
+            : String(localized: "Image ready")
+    }
+
+    private var fitDescription: String {
+        fitMode == .fit
+            ? String(localized: "Show the whole image with space around it.")
+            : String(localized: "Fill the display and crop the edges.")
     }
 }

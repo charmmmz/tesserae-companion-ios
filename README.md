@@ -15,7 +15,7 @@ It is a community-built client, not the official Tesserae app.
 - Planned first App Store release: 1.0.0
 - Included product scope: native V1 plus Share Sheet and Shortcuts integrations
 - iOS implementation: native Swift and SwiftUI
-- Server dependency: the proposed scoped `/api/app/v1` surface
+- Server dependency: the complete scoped `/api/app/v1` surface
 
 The first release deliberately keeps dashboard creation, Canvas editing,
 plugins, themes, schedules, rotations, firmware, and advanced device
@@ -31,6 +31,11 @@ management in Tesserae's existing web UI.
   [Contracts/Fixtures](Contracts/Fixtures) are the machine-readable contract
   and shared server/client examples.
 - [CHANGELOG.md](CHANGELOG.md) records decisions and user-visible changes.
+- [PRIVACY.md](PRIVACY.md) records local data flow, retention, permissions,
+  and the draft App Store privacy position.
+- [TESTFLIGHT_CHECKLIST.md](TESTFLIGHT_CHECKLIST.md) and
+  [TESTFLIGHT_NOTES.md](TESTFLIGHT_NOTES.md) prepare the first internal beta
+  without implying that a build has been uploaded.
 - [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and
   [ATTRIBUTION.md](ATTRIBUTION.md) define repository, reporting, and upstream
   boundaries.
@@ -91,6 +96,8 @@ python -m pytest Contracts
 
 The generated Xcode scheme also includes a simulator UI test that walks the
 fixture-backed onboarding, Displays, Dashboards, Send, and Activity flow.
+The app and Share Extension include Simplified Chinese resources and privacy
+manifests. English remains the development language.
 
 The application identifier is `com.charmmmz.tesseraecompanion`; the embedded
 Share Extension is `com.charmmmz.tesseraecompanion.share`. Both use
@@ -103,6 +110,8 @@ provisioning profiles.
 
 - final physical-device permission validation against an upstream-advertised
   `_tesserae._tcp` service;
+- final icon, store metadata, privacy-policy hosting, and archive validation
+  before any TestFlight upload;
 - History/resend and real server-rendered previews.
 
 The Share Extension is implemented against the proposed contract: it loads one

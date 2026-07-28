@@ -93,9 +93,15 @@ struct OnboardingView: View {
                             }
 
                             if let discoveryError = model.discoveryError {
-                                Label(discoveryError, systemImage: "wifi.exclamationmark")
-                                    .font(.footnote)
-                                    .foregroundStyle(.secondary)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Label(
+                                        discoveryError,
+                                        systemImage: "wifi.exclamationmark"
+                                    )
+                                    Text("If Local Network access is off, enable it in iOS Settings. QR and manual connection remain available.")
+                                }
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
                             } else if !model.isDiscovering
                                 && model.discoveredInstances.isEmpty
                             {
@@ -179,7 +185,11 @@ struct OnboardingView: View {
         }
     }
 
-    private func onboardingRow(icon: String, title: String, detail: String) -> some View {
+    private func onboardingRow(
+        icon: String,
+        title: LocalizedStringKey,
+        detail: LocalizedStringKey
+    ) -> some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: icon)
                 .font(.title3)
@@ -247,11 +257,15 @@ private struct ManualConnectionView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Connect") {
                         guard let url = URL(string: serverAddress) else {
-                            model.lastError = "The server URL is invalid."
+                            model.lastError = String(
+                                localized: "The server URL is invalid."
+                            )
                             return
                         }
                         guard !pairingCode.isEmpty else {
-                            model.lastError = "Enter the one-time pairing code shown by Tesserae."
+                            model.lastError = String(
+                                localized: "Enter the one-time pairing code shown by Tesserae."
+                            )
                             return
                         }
                         Task {

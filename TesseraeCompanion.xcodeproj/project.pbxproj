@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		059821755403DD0ADCC646A0 /* TesseraeKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A7EA7E4D096679EEEC58B6C /* TesseraeKit */; };
+		3046E3D5594FAAD50F5E1467 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = DF8B7156D9BACE5476E42EA4 /* Localizable.strings */; };
+		33FF49B7B32BF243F0EE5DE9 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = AEF28EF26B0AF20FD40F858C /* PrivacyInfo.xcprivacy */; };
 		34687E78EE655E20CD4768D8 /* SendView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F71FB166C88F622C1873E39 /* SendView.swift */; };
 		38FFA83B75C8B09B8F32AE6E /* TesseraeCompanionApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BC6F53F178D10E050100D5A /* TesseraeCompanionApp.swift */; };
 		3F29C92C8E5B97327E3D0265 /* DisplaysView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6B1174AA85BE4EB711F746F /* DisplaysView.swift */; };
@@ -15,12 +17,17 @@
 		4F63438E4356B972B7A4600D /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EA5F074B206DD2FF54C9767 /* RootView.swift */; };
 		50F233622A7FB17CD2295534 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF3B64DA50FECFA7A4514489 /* ShareViewController.swift */; };
 		53F41FFBF07C36ADAB0218CA /* PairingScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B75069996A08498849CF991 /* PairingScannerView.swift */; };
+		55164D3148D6678C5CB03FCD /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 216C90508EC6D953751E6523 /* InfoPlist.strings */; };
 		56C7CF9DC0CBA6DC2FE131BD /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B285D6042818DD9ECF798800 /* AppModel.swift */; };
 		5A369EE1C0A1B4C46F414077 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E10BE2603FB01EFAAE4419 /* SettingsView.swift */; };
 		5EC9A7DAA43DC020D3D5DE6D /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68D757E72A99A23D9A75B361 /* OnboardingView.swift */; };
 		6934735274B0175C7C2D2AF8 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F548F3379CFFB93726CD704 /* MainTabView.swift */; };
+		7640D052F916B7D073F4D161 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = DA70B355A13002C7B64EA149 /* Localizable.strings */; };
+		7947C5ABEA598A1D59C57C68 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8FE0A6BC06BC1C26FD5AD93A /* Assets.xcassets */; };
+		7C7957F03F775B5E9B059BE2 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B2A5670FEC5BD4923C95159E /* PrivacyInfo.xcprivacy */; };
 		A39325FC03A45BD076B23270 /* TesseraeCompanionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F7B082A4F4C920F49545310 /* TesseraeCompanionUITests.swift */; };
 		BCC58FB96478BC3992F3946E /* ActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1A411679F997EDCC5BDFF5 /* ActivityView.swift */; };
+		CA3CCC0682447B674710FFE9 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 0580CE81ECB940408B4B84B9 /* InfoPlist.strings */; };
 		DF2314E330D5BC6AA639C723 /* TesseraeShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 6F532D2BC8A0893B35702D88 /* TesseraeShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E055718F1CCF2934072489D2 /* TesseraeKit in Frameworks */ = {isa = PBXBuildFile; productRef = E392BF45FD381310B341C63D /* TesseraeKit */; };
 		E4B121C46E04443F282C63C6 /* TesseraeTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73D8D2117A1ED9E5B0A36E10 /* TesseraeTheme.swift */; };
@@ -60,8 +67,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0580CE81ECB940408B4B84B9 /* InfoPlist.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = InfoPlist.strings; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		0B75069996A08498849CF991 /* PairingScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingScannerView.swift; sourceTree = "<group>"; };
 		1595109BA73E8D8DE2555D38 /* TesseraeCompanion.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TesseraeCompanion.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		216C90508EC6D953751E6523 /* InfoPlist.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = InfoPlist.strings; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		2F71FB166C88F622C1873E39 /* SendView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendView.swift; sourceTree = "<group>"; };
 		4EA5F074B206DD2FF54C9767 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		4F548F3379CFFB93726CD704 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
@@ -70,14 +79,19 @@
 		6F532D2BC8A0893B35702D88 /* TesseraeShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = TesseraeShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		73D8D2117A1ED9E5B0A36E10 /* TesseraeTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TesseraeTheme.swift; sourceTree = "<group>"; };
 		7F7B082A4F4C920F49545310 /* TesseraeCompanionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TesseraeCompanionUITests.swift; sourceTree = "<group>"; };
+		8FE0A6BC06BC1C26FD5AD93A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		9BC6F53F178D10E050100D5A /* TesseraeCompanionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TesseraeCompanionApp.swift; sourceTree = "<group>"; };
 		A6B1174AA85BE4EB711F746F /* DisplaysView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplaysView.swift; sourceTree = "<group>"; };
 		AB1A411679F997EDCC5BDFF5 /* ActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityView.swift; sourceTree = "<group>"; };
+		AEF28EF26B0AF20FD40F858C /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		B285D6042818DD9ECF798800 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		B2A5670FEC5BD4923C95159E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		CF3B64DA50FECFA7A4514489 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		D1E10BE2603FB01EFAAE4419 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		DA70B355A13002C7B64EA149 /* Localizable.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = Localizable.strings; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		DA9D7AD75F28CF202A22080E /* DashboardsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardsView.swift; sourceTree = "<group>"; };
 		DE83E45C36CFD34C381B1684 /* TesseraeIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TesseraeIntents.swift; sourceTree = "<group>"; };
+		DF8B7156D9BACE5476E42EA4 /* Localizable.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = Localizable.strings; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		E350791E94991CE131813063 /* TesseraeKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = TesseraeKit; path = Packages/TesseraeKit; sourceTree = SOURCE_ROOT; };
 		F1964C9534AA2D6526D1275E /* TesseraeCompanionUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = TesseraeCompanionUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -121,9 +135,20 @@
 		16F4C0688EDCB53F156106EC /* ShareExtension */ = {
 			isa = PBXGroup;
 			children = (
+				192D25560932465F0C575F73 /* Resources */,
 				0EEC27A8432034E45F0F7DEA /* Sources */,
 			);
 			path = ShareExtension;
+			sourceTree = "<group>";
+		};
+		192D25560932465F0C575F73 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				216C90508EC6D953751E6523 /* InfoPlist.strings */,
+				DA70B355A13002C7B64EA149 /* Localizable.strings */,
+				AEF28EF26B0AF20FD40F858C /* PrivacyInfo.xcprivacy */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 		2DC9327414E33AA4160EB599 /* DesignSystem */ = {
@@ -167,6 +192,17 @@
 			path = Sources;
 			sourceTree = "<group>";
 		};
+		A9E9E896C712B1972E167C9D /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				8FE0A6BC06BC1C26FD5AD93A /* Assets.xcassets */,
+				0580CE81ECB940408B4B84B9 /* InfoPlist.strings */,
+				DF8B7156D9BACE5476E42EA4 /* Localizable.strings */,
+				B2A5670FEC5BD4923C95159E /* PrivacyInfo.xcprivacy */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 		D62C8DE4C1A6CDC8E9C06378 /* Packages */ = {
 			isa = PBXGroup;
 			children = (
@@ -202,6 +238,7 @@
 		F0EE5D7E38EB6CC5F46B7FAB /* App */ = {
 			isa = PBXGroup;
 			children = (
+				A9E9E896C712B1972E167C9D /* Resources */,
 				64D0FBA4BF3F184508F3A83C /* Sources */,
 				0C19AEC43BFEFFA87E5A5D94 /* UITests */,
 			);
@@ -234,6 +271,7 @@
 			buildConfigurationList = 517D45B2ED06138C1B4480DA /* Build configuration list for PBXNativeTarget "TesseraeCompanion" */;
 			buildPhases = (
 				E6CFEAFE2B39668F79768F63 /* Sources */,
+				5C589DE9E2E824BD5DA747D1 /* Resources */,
 				155DC7A228F3B70BB2440D68 /* Frameworks */,
 				D6CEF04857CCC985C06FB326 /* Embed Foundation Extensions */,
 			);
@@ -255,6 +293,7 @@
 			buildConfigurationList = AC09E1DB2A8C7B2ECA54E042 /* Build configuration list for PBXNativeTarget "TesseraeShare" */;
 			buildPhases = (
 				446147379D42334E1CAFF1FE /* Sources */,
+				B773E2D437CA34D2454EA8DC /* Resources */,
 				61977551B5890B97ED0BD77E /* Frameworks */,
 			);
 			buildRules = (
@@ -299,6 +338,7 @@
 			knownRegions = (
 				Base,
 				en,
+				"zh-Hans",
 			);
 			mainGroup = 3B9024065E11E0712FDCB156;
 			minimizedProjectReferenceProxies = 1;
@@ -316,6 +356,30 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		5C589DE9E2E824BD5DA747D1 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7947C5ABEA598A1D59C57C68 /* Assets.xcassets in Resources */,
+				CA3CCC0682447B674710FFE9 /* InfoPlist.strings in Resources */,
+				3046E3D5594FAAD50F5E1467 /* Localizable.strings in Resources */,
+				7C7957F03F775B5E9B059BE2 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B773E2D437CA34D2454EA8DC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				55164D3148D6678C5CB03FCD /* InfoPlist.strings in Resources */,
+				7640D052F916B7D073F4D161 /* Localizable.strings in Resources */,
+				33FF49B7B32BF243F0EE5DE9 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		446147379D42334E1CAFF1FE /* Sources */ = {
@@ -487,7 +551,7 @@
 		814EA9A5BEE93E7914B0E125 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = App/Resources/TesseraeCompanion.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
@@ -608,7 +672,7 @@
 		FD2B85D6CA16F8A4295B9656 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = App/Resources/TesseraeCompanion.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";

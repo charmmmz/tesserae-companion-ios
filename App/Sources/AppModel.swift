@@ -90,7 +90,7 @@ final class AppModel {
     func connectDemo(baseURL: URL? = nil) async {
         let fallbackURL = URL(string: "http://tesserae.local:8765")
         guard let resolvedURL = baseURL ?? fallbackURL else {
-            lastError = "The server URL is invalid."
+            lastError = String(localized: "The server URL is invalid.")
             return
         }
 
@@ -167,7 +167,9 @@ final class AppModel {
             guard try await credentials.token(for: snapshot.activeInstance.id) != nil else {
                 try await stateStore.clear()
                 connectionHealth = .requiresPairing
-                connectionNotice = "The saved Tesserae pairing is no longer available. Pair again to reconnect."
+                connectionNotice = String(
+                    localized: "The saved Tesserae pairing is no longer available. Pair again to reconnect."
+                )
                 return
             }
 
@@ -365,7 +367,9 @@ final class AppModel {
 
     func displayNames(for ids: [String]) -> String {
         let names = ids.compactMap { id in displays.first(where: { $0.id == id })?.name }
-        return names.isEmpty ? "No displays" : names.joined(separator: ", ")
+        return names.isEmpty
+            ? String(localized: "No displays")
+            : names.joined(separator: ", ")
     }
 
     private func updateUntilTerminal(_ acceptedJob: PushJob, instance: TesseraeInstance) async {
@@ -438,7 +442,9 @@ final class AppModel {
             jobs = []
             activeClient = liveClient
             connectionHealth = .requiresPairing
-            connectionNotice = "This Tesserae credential was revoked or expired. Pair again to reconnect."
+            connectionNotice = String(
+                localized: "This Tesserae credential was revoked or expired. Pair again to reconnect."
+            )
         } else {
             connectionHealth = .offline
             connectionNotice = error.localizedDescription

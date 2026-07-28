@@ -2,9 +2,9 @@
 
 ## Supported versions
 
-Tesserae Companion is currently a fixture-backed prototype and has no
-supported public release. This section will be replaced by a version table
-before TestFlight or App Store distribution.
+Tesserae Companion is currently a pre-release client and has no supported
+public release. This section will be replaced by a version table before
+external TestFlight or App Store distribution.
 
 ## Reporting a vulnerability
 
@@ -29,10 +29,12 @@ No live credential is ever required for a report. Fixture credentials in
 ## Security boundaries
 
 - Companion credentials are per-client, scoped, revocable, and stored in
-  Keychain when live persistence is implemented.
+  Keychain with device-only accessibility.
 - Pairing codes are purpose-specific, single-use, and short-lived.
 - Bonjour discovers candidates; it does not authenticate servers.
 - Photos travel directly to the selected Tesserae instance.
+- Interrupted photo sends use protected App Group storage for at most 24 hours
+  and retain one idempotency key across retries.
 - The client does not fall back to firmware, webhook, MCP, or browser-session
   credentials.
 - Logs and diagnostics must redact credentials and user content.

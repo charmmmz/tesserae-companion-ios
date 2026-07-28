@@ -26,6 +26,11 @@ struct ActivityView: View {
                             Text(model.displayNames(for: job.targetDeviceIDs))
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
+                            if let failure = job.error {
+                                Text(failure.message)
+                                    .font(.caption)
+                                    .foregroundStyle(TesseraeTheme.terracotta)
+                            }
                             Text(job.createdAt, format: .dateTime.hour().minute())
                                 .font(.caption)
                                 .foregroundStyle(.tertiary)
@@ -48,15 +53,20 @@ struct ActivityView: View {
     }
 
     private func fallbackTitle(_ kind: PushJobKind) -> String {
-        kind == .imagePush ? "Photo" : "Dashboard"
+        kind == .imagePush
+            ? String(localized: "Photo")
+            : String(localized: "Dashboard")
     }
 
     private func statusLabel(_ job: PushJob) -> String {
         switch job.status {
-        case .accepted: "Queued"
-        case .running: "Sending"
-        case .succeeded: job.result?.status == .quiet ? "Quiet" : "Published"
-        case .failed: "Failed"
+        case .accepted: String(localized: "Queued")
+        case .running: String(localized: "Sending")
+        case .succeeded:
+            job.result?.status == .quiet
+                ? String(localized: "Quiet")
+                : String(localized: "Published")
+        case .failed: String(localized: "Failed")
         }
     }
 

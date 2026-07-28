@@ -16,6 +16,22 @@ struct DashboardsView: View {
         .refreshable {
             await model.refresh()
         }
+        .overlay {
+            if model.isRefreshing && model.dashboards.isEmpty {
+                ProgressView("Loading dashboards…")
+            } else if model.dashboards.isEmpty {
+                ContentUnavailableView {
+                    Label("No Dashboards", systemImage: "rectangle.grid.2x2")
+                } description: {
+                    Text("Create a Dashboard in Tesserae's web interface, then refresh.")
+                } actions: {
+                    Button("Refresh") {
+                        Task { await model.refresh() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+        }
         .tesseraeScreenBackground()
     }
 
@@ -89,4 +105,3 @@ struct DashboardsView: View {
         .tesseraeCard()
     }
 }
-

@@ -43,7 +43,7 @@ struct MainTabView: View {
     }
 
     private func tabNavigation<Content: View>(
-        title: String,
+        title: LocalizedStringKey,
         @ViewBuilder content: () -> Content
     ) -> some View {
         NavigationStack {
@@ -59,4 +59,3 @@ struct MainTabView: View {
         }
     }
 }
-

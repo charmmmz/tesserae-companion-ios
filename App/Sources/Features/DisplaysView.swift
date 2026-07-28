@@ -18,6 +18,17 @@ struct DisplaysView: View {
         .overlay {
             if model.isRefreshing && model.displays.isEmpty {
                 ProgressView("Loading displays…")
+            } else if model.displays.isEmpty {
+                ContentUnavailableView {
+                    Label("No Displays", systemImage: "rectangle.slash")
+                } description: {
+                    Text("No displays were returned by this Tesserae server.")
+                } actions: {
+                    Button("Refresh") {
+                        Task { await model.refresh() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
             }
         }
         .refreshable {
@@ -34,11 +45,7 @@ struct DisplaysView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(model.activeInstance?.name ?? "Tesserae")
                     .font(.headline)
-                Text(
-                    model.connectionMode == .live
-                        ? "Connected through Companion API"
-                        : "Connected locally · Demo data"
-                )
+                Text(connectionDescription)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -49,6 +56,12 @@ struct DisplaysView: View {
                 .accessibilityLabel("Connected")
         }
         .tesseraeCard()
+    }
+
+    private var connectionDescription: String {
+        model.connectionMode == .live
+            ? String(localized: "Connected through Companion API")
+            : String(localized: "Connected locally · Demo data")
     }
 }
 
@@ -106,9 +119,9 @@ private struct DisplayCard: View {
 
     private var freshnessLabel: String {
         switch display.freshness {
-        case .fresh: "Recently seen"
-        case .stale: "Last seen earlier"
-        case .unknown: "Unknown"
+        case .fresh: String(localized: "Recently seen")
+        case .stale: String(localized: "Last seen earlier")
+        case .unknown: String(localized: "Unknown")
         }
     }
 

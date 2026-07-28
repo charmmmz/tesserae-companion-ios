@@ -14,7 +14,7 @@ struct SettingsView: View {
                         LabeledContent("Version", value: instance.serverVersion)
                         LabeledContent(
                             "API mode",
-                            value: model.connectionMode == .live ? "Live Companion API" : "Demo data"
+                            value: apiMode
                         )
                         if let capabilities = model.capabilities {
                             LabeledContent(
@@ -31,11 +31,7 @@ struct SettingsView: View {
 
                 Section("Connection") {
                     LabeledContent("Status", value: connectionStatus)
-                    Text(
-                        model.connectionMode == .live
-                            ? "The client token is stored in shared Keychain access. Non-secret connection details are stored in the App Group for the app and Share Extension."
-                            : "This session uses local demo data and does not contact a Tesserae server."
-                    )
+                    Text(connectionDescription)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -69,15 +65,27 @@ struct SettingsView: View {
     private var connectionStatus: String {
         switch model.connectionHealth {
         case .idle:
-            "Not connected"
+            String(localized: "Not connected")
         case .restoring:
-            "Restoring"
+            String(localized: "Restoring")
         case .connected:
-            "Connected"
+            String(localized: "Connected")
         case .offline:
-            "Saved for retry"
+            String(localized: "Saved for retry")
         case .requiresPairing:
-            "Pair again"
+            String(localized: "Pair again")
         }
+    }
+
+    private var apiMode: String {
+        model.connectionMode == .live
+            ? String(localized: "Live Companion API")
+            : String(localized: "Demo data")
+    }
+
+    private var connectionDescription: String {
+        model.connectionMode == .live
+            ? String(localized: "The client token is stored in shared Keychain access. Non-secret connection details are stored in the App Group for the app and Share Extension.")
+            : String(localized: "This session uses local demo data and does not contact a Tesserae server.")
     }
 }
