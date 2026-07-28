@@ -552,7 +552,7 @@ in a diagnostics disclosure.
 ### Phase 3 — native integration workflows
 
 - [x] Share Extension and retry queue.
-- [ ] App Intents and entities.
+- [x] App Intents and entities.
 - [x] Activity backed by Companion Jobs.
 - [ ] Multiple instances and defaults.
 

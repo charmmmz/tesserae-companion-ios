@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import TesseraeKit
+import UIKit
 
 @MainActor
 @Observable
@@ -341,6 +342,25 @@ final class AppModel {
         } catch {
             connectionNotice = error.localizedDescription
         }
+    }
+
+    func openWebIfRequested() {
+        let defaults = UserDefaults(
+            suiteName: AppConfiguration.appGroupIdentifier
+        )
+        guard
+            defaults?.bool(forKey: "TesseraeOpenWebRequested") == true,
+            let activeInstance,
+            let url = URL(string: activeInstance.webURL)
+        else {
+            return
+        }
+        defaults?.removeObject(forKey: "TesseraeOpenWebRequested")
+        UIApplication.shared.open(
+            url,
+            options: [:],
+            completionHandler: nil
+        )
     }
 
     func displayNames(for ids: [String]) -> String {

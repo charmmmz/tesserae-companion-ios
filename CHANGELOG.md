@@ -47,6 +47,8 @@ Companion surface; History, resend, and rich previews are follow-ups.
   direct Companion API upload.
 - App Group-backed image retry handoff that reuses the original
   `Idempotency-Key` when the containing app resumes an interrupted transfer.
+- App Intents and Shortcuts entities for pushing a Dashboard, sending one
+  image, selecting displays, and opening the paired Tesserae web UI.
 - Tesserae-aligned light and dark visual tokens and accessible status labels.
 
 ### Changed

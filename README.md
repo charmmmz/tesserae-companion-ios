@@ -103,7 +103,6 @@ provisioning profiles.
 
 - final physical-device permission validation against an upstream-advertised
   `_tesserae._tcp` service;
-- App Intents;
 - History/resend and real server-rendered previews.
 
 The Share Extension is implemented against the proposed contract: it loads one
@@ -111,6 +110,10 @@ still image, validates server-advertised limits, selects targets and Fit/Fill,
 then stores a protected retry record before uploading. An interrupted request
 is retried by the containing app with the same idempotency key and is purged
 after 24 hours.
+
+Shortcuts can push a saved Dashboard, send one still image to selected
+displays, or open the paired Tesserae web UI. The image action uses the same
+24-hour retry queue and idempotency guarantees as the Share Extension.
 
 The live HTTP and Keychain paths are implemented against the reviewed
 contract, but the current Tesserae server does not yet provide `/api/app/v1`.
