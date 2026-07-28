@@ -98,8 +98,8 @@ private final class BonjourNetServiceSession: NSObject, @unchecked Sendable {
 }
 
 extension BonjourNetServiceSession:
-    @MainActor NetServiceBrowserDelegate,
-    @MainActor NetServiceDelegate
+    @preconcurrency NetServiceBrowserDelegate,
+    @preconcurrency NetServiceDelegate
 {
     func netServiceBrowser(
         _ browser: NetServiceBrowser,

@@ -91,6 +91,8 @@ Companion surface; History, resend, and rich previews are follow-ups.
   physical devices.
 - Corrected the XcodeGen resource phase so asset catalogs, privacy manifests,
   and localized resources are embedded in the app and Share Extension.
+- Kept Bonjour delegate isolation compatible with the Xcode 16.4 toolchain
+  used by GitHub Actions.
 
 ### Security
 
