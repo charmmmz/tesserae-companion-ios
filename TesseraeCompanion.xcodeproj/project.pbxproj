@@ -21,6 +21,7 @@
 		56C7CF9DC0CBA6DC2FE131BD /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B285D6042818DD9ECF798800 /* AppModel.swift */; };
 		5A369EE1C0A1B4C46F414077 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E10BE2603FB01EFAAE4419 /* SettingsView.swift */; };
 		5EC9A7DAA43DC020D3D5DE6D /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68D757E72A99A23D9A75B361 /* OnboardingView.swift */; };
+		66ED4DBFBDA5C24CE79DA230 /* AppShortcuts.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = AD24891D7CDB0886913F3675 /* AppShortcuts.xcstrings */; };
 		6934735274B0175C7C2D2AF8 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F548F3379CFFB93726CD704 /* MainTabView.swift */; };
 		7640D052F916B7D073F4D161 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = DA70B355A13002C7B64EA149 /* Localizable.strings */; };
 		7947C5ABEA598A1D59C57C68 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8FE0A6BC06BC1C26FD5AD93A /* Assets.xcassets */; };
@@ -83,6 +84,7 @@
 		9BC6F53F178D10E050100D5A /* TesseraeCompanionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TesseraeCompanionApp.swift; sourceTree = "<group>"; };
 		A6B1174AA85BE4EB711F746F /* DisplaysView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplaysView.swift; sourceTree = "<group>"; };
 		AB1A411679F997EDCC5BDFF5 /* ActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityView.swift; sourceTree = "<group>"; };
+		AD24891D7CDB0886913F3675 /* AppShortcuts.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = AppShortcuts.xcstrings; sourceTree = "<group>"; };
 		AEF28EF26B0AF20FD40F858C /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		B285D6042818DD9ECF798800 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		B2A5670FEC5BD4923C95159E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -195,6 +197,7 @@
 		A9E9E896C712B1972E167C9D /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				AD24891D7CDB0886913F3675 /* AppShortcuts.xcstrings */,
 				8FE0A6BC06BC1C26FD5AD93A /* Assets.xcassets */,
 				0580CE81ECB940408B4B84B9 /* InfoPlist.strings */,
 				DF8B7156D9BACE5476E42EA4 /* Localizable.strings */,
@@ -362,6 +365,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				66ED4DBFBDA5C24CE79DA230 /* AppShortcuts.xcstrings in Resources */,
 				7947C5ABEA598A1D59C57C68 /* Assets.xcassets in Resources */,
 				CA3CCC0682447B674710FFE9 /* InfoPlist.strings in Resources */,
 				3046E3D5594FAAD50F5E1467 /* Localizable.strings in Resources */,
