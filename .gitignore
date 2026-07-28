@@ -1,0 +1,15 @@
+.DS_Store
+.venv/
+.build/
+.swiftpm/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xcresult
+__pycache__/
+.pytest_cache/
+*.mobileprovision
+*.p12
+*.cer
+*.pem
+*.key

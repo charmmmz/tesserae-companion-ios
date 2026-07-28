@@ -1,0 +1,72 @@
+name: TesseraeCompanion
+
+options:
+  minimumXcodeGenVersion: 2.44.1
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+packages:
+  TesseraeKit:
+    path: Packages/TesseraeKit
+
+targets:
+  TesseraeCompanion:
+    type: application
+    platform: iOS
+    sources:
+      - path: App/Sources
+    resources:
+      - path: App/Resources
+    info:
+      path: App/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Tesserae Companion
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSBonjourServices:
+          - _tesserae._tcp
+        NSLocalNetworkUsageDescription: Discover and connect to your Tesserae server on the local network.
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+    dependencies:
+      - package: TesseraeKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.charm.TesseraeCompanion
+        PRODUCT_NAME: Tesserae Companion
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+        SWIFT_VERSION: 6.0
+        SWIFT_STRICT_CONCURRENCY: complete
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        TARGETED_DEVICE_FAMILY: "1"
+
+  TesseraeCompanionUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: App/UITests
+    dependencies:
+      - target: TesseraeCompanion
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.charm.TesseraeCompanionUITests
+        SWIFT_VERSION: 6.0
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: TesseraeCompanion
+
+schemes:
+  TesseraeCompanion:
+    build:
+      targets:
+        TesseraeCompanion: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - TesseraeCompanionUITests
+    archive:
+      config: Release
