@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct OnboardingView: View {
     @Environment(AppModel.self) private var model
@@ -76,7 +77,7 @@ struct OnboardingView: View {
                         .disabled(model.activeOperationIDs.contains("pair"))
                     }
 
-                    Text("The live pairing and discovery transports will be connected after the server contract is accepted.")
+                    Text("Manual connection uses the proposed Companion API. Bonjour and QR discovery are coming next.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -93,7 +94,7 @@ struct OnboardingView: View {
                 })
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Camera pairing is scaffolded but intentionally waits for the accepted Companion contract.")
+                Text("Camera pairing will reuse the live connection flow in the next implementation slice.")
             }
         }
     }
@@ -120,7 +121,12 @@ struct OnboardingView: View {
 private struct ManualConnectionView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
-    @State private var serverAddress = "http://tesserae.local:8765"
+    @State private var serverAddress = ProcessInfo.processInfo.environment[
+        "TESSERAE_SERVER_URL"
+    ] ?? "http://tesserae.local:8765"
+    @State private var pairingCode = ProcessInfo.processInfo.environment[
+        "TESSERAE_PAIRING_CODE"
+    ] ?? ""
 
     var body: some View {
         NavigationStack {
@@ -130,10 +136,12 @@ private struct ManualConnectionView: View {
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
                         .autocorrectionDisabled()
+                    TextField("Pairing code", text: $pairingCode)
+                        .keyboardType(.numberPad)
                 }
 
                 Section {
-                    Text("This prototype uses fixture data after validating the URL shape. It does not send a password or call an internal Tesserae route.")
+                    Text("The app probes `/api/app/v1`, exchanges the one-time code, and stores the returned Companion token in Keychain.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -150,8 +158,16 @@ private struct ManualConnectionView: View {
                             model.lastError = "The server URL is invalid."
                             return
                         }
+                        guard !pairingCode.isEmpty else {
+                            model.lastError = "Enter the one-time pairing code shown by Tesserae."
+                            return
+                        }
                         Task {
-                            await model.connectDemo(baseURL: url)
+                            await model.connectLive(
+                                baseURL: url,
+                                code: pairingCode,
+                                clientName: UIDevice.current.name
+                            )
                             if model.activeInstance != nil {
                                 dismiss()
                             }
@@ -162,4 +178,3 @@ private struct ManualConnectionView: View {
         }
     }
 }
-

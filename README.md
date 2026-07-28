@@ -10,7 +10,7 @@ It is a community-built client, not the official Tesserae app.
 
 ## Project status
 
-- Product status: native prototype framework and API-contract review
+- Product status: contract-connected native prototype
 - Document version: 0.2.0
 - Planned first App Store release: 1.0.0
 - Included product scope: native V1 plus Share Sheet and Shortcuts integrations
@@ -53,10 +53,10 @@ Packages/
 project.yml
 ```
 
-`TesseraeKit` owns the proposed models and protocol boundaries. The app
-currently uses `MockTesseraeClient`, so onboarding, displays, dashboards,
-photo sending, and Activity can be exercised without pretending that the
-proposed server contract already exists.
+`TesseraeKit` owns the proposed models, Keychain boundary, and HTTP transport.
+The app can use `LiveTesseraeClient` with a compatible `/api/app/v1` server,
+while `MockTesseraeClient` remains available for previews and the built-in
+demo journey.
 
 Generate and open the project:
 
@@ -71,32 +71,47 @@ Run the package tests:
 swift test --package-path Packages/TesseraeKit
 ```
 
+Run the local contract server and exercise the live manual-connection flow:
+
+```sh
+python3 Contracts/fixture_server.py --port 8765
+```
+
+In the app, enter `http://127.0.0.1:8765` and any six-digit pairing code.
+The fixture server is stateful enough to test capability probing, pairing,
+authenticated lists, idempotent Dashboard pushes, image multipart uploads,
+and Job polling. It is development infrastructure, not a Tesserae server.
+
 Run the OpenAPI fixture checks with a Python environment containing the
 small dependencies in `Contracts/requirements.txt`:
 
 ```sh
-python -m pytest Contracts/test_contract.py
+python -m pytest Contracts
 ```
 
 The generated Xcode scheme also includes a simulator UI test that walks the
 fixture-backed onboarding, Displays, Dashboards, Send, and Activity flow.
 
-The prototype bundle identifier is `com.charm.TesseraeCompanion`. Signing,
-the final bundle identifier, App Groups, Keychain access groups, and extension
-targets will be decided before physical-device or TestFlight work.
+The application identifier is `com.charmmmz.tesseraecompanion`; the embedded
+Share Extension is `com.charmmmz.tesseraecompanion.share`. Both use
+`group.com.charmmmz.tesseraecompanion` and a shared Keychain access group.
+Automatic signing is configured for the maintainer's Apple Developer team.
+Xcode must be signed into that team before it can create development
+provisioning profiles.
 
-### Deliberately not live yet
+### Still pending
 
 - Bonjour browsing and local-network permission timing;
-- QR scanning and one-time-code exchange;
-- Keychain-backed credential persistence;
-- live HTTP requests to a Companion API;
-- Share Extension and App Intents targets;
+- QR scanning;
+- persisted non-secret instance metadata and automatic reconnection;
+- Share Extension target selection/upload and retry queue;
+- App Intents;
 - History/resend and real server-rendered previews.
 
-These remain behind protocols or explicit fixture labels until their upstream
-implementations are released. The namespace and minimum contract shape are
-maintainer-aligned, but the current Tesserae server does not implement them.
+The live HTTP and Keychain paths are implemented against the reviewed
+contract, but the current Tesserae server does not yet provide `/api/app/v1`.
+Production compatibility therefore remains gated on an upstream release and
+physical-device validation.
 
 ## Repository boundary
 
@@ -142,7 +157,13 @@ matching Tesserae release and minimum compatible version are recorded.
 - Publisher: the companion app maintainer's Apple Developer account
 - Official status: always described as community-built, never official
 
-Use of the Tesserae name and brand mark in the final App Store listing
-remains subject to explicit maintainer approval. If maintenance stops, the
-maintainer will give notice and provide a practical handover path so users
-are not stranded.
+Tesserae's maintainer has granted permission to use the Tesserae name and
+mark for **Tesserae Companion**, subject to the community-built, privacy,
+advertising, data-use, and web-feature boundaries recorded in
+[`ATTRIBUTION.md`](ATTRIBUTION.md).
+
+If maintenance stops, the companion maintainer will give advance public
+notice and first seek to transfer the repository and App Store listing to a
+mutually acceptable successor. If no responsible successor is available,
+new distribution will stop rather than leave an unmaintained listing in
+place, while the final source and release remain available where practical.

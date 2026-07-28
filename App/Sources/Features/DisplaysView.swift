@@ -34,7 +34,11 @@ struct DisplaysView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(model.activeInstance?.name ?? "Tesserae")
                     .font(.headline)
-                Text("Connected locally · Fixture-backed")
+                Text(
+                    model.connectionMode == .live
+                        ? "Connected through Companion API"
+                        : "Connected locally · Demo data"
+                )
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -124,4 +128,3 @@ private struct DisplayCard: View {
         }
     }
 }
-

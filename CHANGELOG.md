@@ -29,6 +29,13 @@ Companion surface; History, resend, and rich previews are follow-ups.
   discovery, and credential-storage protocols.
 - Fixture-backed server implementation and unit tests so the UI can develop
   without depending on unaccepted upstream endpoints.
+- Live `URLSession` Companion client covering capability probing, pairing,
+  session revocation, authenticated lists, Dashboard pushes, image multipart
+  uploads, server errors, and asynchronous Job polling.
+- Keychain-backed, device-only Companion token storage.
+- Stateful local HTTP contract server and end-to-end Swift transport test.
+- Embedded Share Extension target with reserved Bundle ID, App Group, and
+  shared Keychain boundaries.
 - Tesserae-aligned light and dark visual tokens and accessible status labels.
 
 ### Changed
@@ -43,14 +50,26 @@ Companion surface; History, resend, and rich previews are follow-ups.
   repository under Apache-2.0.
 - Project status now distinguishes the runnable fixture-backed prototype from
   live Tesserae server compatibility.
+- Manual connection now calls the proposed Companion API instead of switching
+  to fixture data after URL validation.
+- Recorded the upstream maintainer's permission to use the Tesserae name and
+  mark, its privacy and product terms, and a concrete App Store handover path.
+- Accepted 24 hours as the initial server-advertised Job and idempotency
+  retention default.
 
 ### Fixed
 
-- Nothing yet.
+- Corrected the Apple Developer Team identifier used by automatic signing so
+  the app and Share Extension can create provisioning profiles and deploy to
+  physical devices.
 
 ### Security
 
-- Nothing yet.
+- Companion bearer tokens are stored in Keychain with
+  `AfterFirstUnlockThisDeviceOnly` accessibility and are never placed in the
+  App Group.
+- Local HTTP is limited to iOS local-network transport policy; public HTTPS
+  continues to use platform certificate validation.
 
 ## [0.1.0] - 2026-07-26
 

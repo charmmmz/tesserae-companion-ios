@@ -21,14 +21,26 @@ jobs:
           cache: pip
           cache-dependency-path: Contracts/requirements.txt
       - run: python -m pip install -r Contracts/requirements.txt
-      - run: python -m pytest Contracts/test_contract.py
+      - run: python -m pytest Contracts
 
   swift-package:
     name: TesseraeKit
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v7
-      - run: swift test --package-path Packages/TesseraeKit
+      - name: Run fixture-backed live transport tests
+        run: |
+          python3 Contracts/fixture_server.py --port 18765 &
+          fixture_pid=$!
+          trap 'kill "$fixture_pid"' EXIT
+          for attempt in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:18765/api/app/v1 >/dev/null; then
+              break
+            fi
+            sleep 0.25
+          done
+          TESSERAE_FIXTURE_BASE_URL=http://127.0.0.1:18765 \
+            swift test --package-path Packages/TesseraeKit
 
   ios-build:
     name: iOS Simulator build

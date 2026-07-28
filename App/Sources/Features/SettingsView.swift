@@ -12,7 +12,10 @@ struct SettingsView: View {
                         LabeledContent("Name", value: instance.name)
                         LabeledContent("Server", value: instance.baseURL.absoluteString)
                         LabeledContent("Version", value: instance.serverVersion)
-                        LabeledContent("API mode", value: "Fixture-backed")
+                        LabeledContent(
+                            "API mode",
+                            value: model.connectionMode == .live ? "Live Companion API" : "Demo data"
+                        )
 
                         Link(destination: instance.baseURL) {
                             Label("Open Web Management", systemImage: "safari")
@@ -20,14 +23,18 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("Prototype") {
-                    Text("The UI is running against contract fixtures. Bonjour, QR scanning, Keychain persistence, and live HTTP transport remain behind protocol boundaries until the upstream API is agreed.")
+                Section("Connection") {
+                    Text(
+                        model.connectionMode == .live
+                            ? "The client token is stored in Keychain and sent only to this Tesserae instance."
+                            : "This session uses local demo data and does not contact a Tesserae server."
+                    )
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
 
                 Section {
-                    Button("Disconnect Demo Instance", role: .destructive) {
+                    Button("Disconnect", role: .destructive) {
                         Task {
                             await model.disconnect()
                             dismiss()
@@ -52,4 +59,3 @@ struct SettingsView: View {
         }
     }
 }
-

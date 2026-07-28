@@ -21,6 +21,20 @@
                ReferencedContainer = "container:TesseraeCompanion.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "BF8FA7A603C51A901CE3496C"
+               BuildableName = "TesseraeShare.appex"
+               BlueprintName = "TesseraeShare"
+               ReferencedContainer = "container:TesseraeCompanion.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction

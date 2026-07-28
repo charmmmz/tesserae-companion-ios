@@ -5,10 +5,19 @@ import TesseraeKit
 @MainActor
 @Observable
 final class AppModel {
-    private let client: any TesseraeServing
+    enum ConnectionMode {
+        case live
+        case demo
+    }
+
+    private let liveClient: any TesseraeServing
+    private let demoClient: any TesseraeServing
+    private var activeClient: any TesseraeServing
     private let credentials: any CredentialStoring
 
     var activeInstance: TesseraeInstance?
+    var connectionMode: ConnectionMode?
+    var capabilities: ServerCapabilities?
     var displays: [DisplaySummary] = []
     var dashboards: [DashboardSummary] = []
     var jobs: [PushJob] = []
@@ -17,8 +26,14 @@ final class AppModel {
     var isRefreshing = false
     var lastError: String?
 
-    init(client: any TesseraeServing, credentials: any CredentialStoring) {
-        self.client = client
+    init(
+        liveClient: any TesseraeServing,
+        demoClient: any TesseraeServing,
+        credentials: any CredentialStoring
+    ) {
+        self.liveClient = liveClient
+        self.demoClient = demoClient
+        activeClient = liveClient
         self.credentials = credentials
     }
 
@@ -40,19 +55,52 @@ final class AppModel {
             return
         }
 
+        await connect(
+            using: demoClient,
+            mode: .demo,
+            baseURL: resolvedURL,
+            code: "482193",
+            clientName: "Demo iPhone"
+        )
+    }
+
+    func connectLive(baseURL: URL, code: String, clientName: String) async {
+        await connect(
+            using: liveClient,
+            mode: .live,
+            baseURL: baseURL,
+            code: code,
+            clientName: clientName
+        )
+    }
+
+    private func connect(
+        using candidate: any TesseraeServing,
+        mode: ConnectionMode,
+        baseURL: URL,
+        code: String,
+        clientName: String
+    ) async {
         activeOperationIDs.insert("pair")
         defer { activeOperationIDs.remove("pair") }
-
         do {
-            _ = try await client.probe(baseURL: resolvedURL)
-            let session = try await client.pair(
-                baseURL: resolvedURL,
-                code: "482193",
-                clientName: "Demo iPhone"
+            let capabilities = try await candidate.probe(baseURL: baseURL)
+            let session = try await candidate.pair(
+                baseURL: baseURL,
+                code: code,
+                clientName: clientName
             )
-            await credentials.save(token: session.token, for: session.instance.id)
+            if mode == .live {
+                try await credentials.save(
+                    token: session.token,
+                    for: session.instance.id
+                )
+            }
+            activeClient = candidate
+            connectionMode = mode
+            self.capabilities = capabilities
             activeInstance = session.instance
-            favoriteDashboardIDs = ["pantry"]
+            favoriteDashboardIDs = mode == .demo ? ["pantry"] : []
             await refresh()
         } catch {
             lastError = error.localizedDescription
@@ -65,8 +113,8 @@ final class AppModel {
         defer { isRefreshing = false }
 
         do {
-            displays = try await client.fetchDisplays(instance: activeInstance)
-            dashboards = try await client.fetchDashboards(instance: activeInstance)
+            displays = try await activeClient.fetchDisplays(instance: activeInstance)
+            dashboards = try await activeClient.fetchDashboards(instance: activeInstance)
         } catch {
             lastError = error.localizedDescription
         }
@@ -86,7 +134,7 @@ final class AppModel {
         defer { activeOperationIDs.remove(dashboard.id) }
 
         do {
-            let job = try await client.pushDashboard(
+            let job = try await activeClient.pushDashboard(
                 id: dashboard.id,
                 deviceIDs: dashboard.deviceIDs,
                 overrideQuietHours: false,
@@ -103,16 +151,18 @@ final class AppModel {
     func sendImage(
         data: Data,
         fit: ImageFitMode,
-        deviceIDs: [String]
+        deviceIDs: [String],
+        contentType: String
     ) async -> Bool {
         guard let activeInstance else { return false }
         activeOperationIDs.insert("image")
         defer { activeOperationIDs.remove("image") }
 
         do {
-            let job = try await client.sendImage(
+            let job = try await activeClient.sendImage(
                 data: data,
-                fileName: "Shared Photo",
+                fileName: imageFileName(for: contentType),
+                contentType: contentType,
                 fit: fit,
                 deviceIDs: deviceIDs,
                 overrideQuietHours: false,
@@ -137,7 +187,7 @@ final class AppModel {
         var current = acceptedJob
         for _ in 0..<8 where !current.isTerminal {
             do {
-                current = try await client.fetchJob(id: current.id, instance: instance)
+                current = try await activeClient.fetchJob(id: current.id, instance: instance)
                 if let index = jobs.firstIndex(where: { $0.id == current.id }) {
                     jobs[index] = current
                 }
@@ -152,13 +202,39 @@ final class AppModel {
     }
 
     func disconnect() async {
-        if let activeInstance {
-            await credentials.removeToken(for: activeInstance.id)
+        var disconnectError: Error?
+        if let activeInstance, connectionMode == .live {
+            do {
+                try await activeClient.revokeSession(instance: activeInstance)
+            } catch {
+                disconnectError = error
+            }
+            do {
+                try await credentials.removeToken(for: activeInstance.id)
+            } catch {
+                disconnectError = disconnectError ?? error
+            }
         }
         activeInstance = nil
+        connectionMode = nil
+        capabilities = nil
         displays = []
         dashboards = []
         jobs = []
         favoriteDashboardIDs = []
+        activeClient = liveClient
+        if let disconnectError {
+            lastError = disconnectError.localizedDescription
+        }
+    }
+
+    private func imageFileName(for contentType: String) -> String {
+        switch contentType {
+        case "image/png": "shared-photo.png"
+        case "image/heic": "shared-photo.heic"
+        case "image/heif": "shared-photo.heif"
+        case "image/webp": "shared-photo.webp"
+        default: "shared-photo.jpg"
+        }
     }
 }

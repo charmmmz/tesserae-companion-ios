@@ -1,11 +1,13 @@
 import PhotosUI
 import SwiftUI
 import TesseraeKit
+import UniformTypeIdentifiers
 
 struct SendView: View {
     @Environment(AppModel.self) private var model
     @State private var pickerItem: PhotosPickerItem?
     @State private var imageData: Data?
+    @State private var imageContentType = "image/jpeg"
     @State private var fitMode: ImageFitMode = .fit
     @State private var selectedDeviceIDs: Set<String> = []
     @State private var sentConfirmationPresented = false
@@ -23,7 +25,8 @@ struct SendView: View {
                         let sent = await model.sendImage(
                             data: imageData,
                             fit: fitMode,
-                            deviceIDs: Array(selectedDeviceIDs)
+                            deviceIDs: Array(selectedDeviceIDs),
+                            contentType: imageContentType
                         )
                         if sent {
                             sentConfirmationPresented = true
@@ -58,6 +61,10 @@ struct SendView: View {
         .onChange(of: pickerItem) { _, newItem in
             Task {
                 imageData = try? await newItem?.loadTransferable(type: Data.self)
+                imageContentType = newItem?
+                    .supportedContentTypes
+                    .compactMap(\.preferredMIMEType)
+                    .first ?? "image/jpeg"
             }
         }
         .alert("Sent", isPresented: $sentConfirmationPresented) {
@@ -95,6 +102,7 @@ struct SendView: View {
 
                 Button("Use Sample") {
                     imageData = Data("fixture-image".utf8)
+                    imageContentType = "image/jpeg"
                 }
                 .buttonStyle(.bordered)
             }
@@ -160,4 +168,3 @@ struct SendView: View {
         .tesseraeCard()
     }
 }
-

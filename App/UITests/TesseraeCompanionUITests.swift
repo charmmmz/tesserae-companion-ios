@@ -32,4 +32,35 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Shared Photo"].waitForExistence(timeout: 2))
         XCTAssertTrue(app.staticTexts["Published"].exists)
     }
+
+    func testManualConnectionAgainstFixtureServer() throws {
+        let baseURL = "http://127.0.0.1:18765"
+        guard
+            let probeURL = URL(string: "\(baseURL)/api/app/v1"),
+            (try? Data(contentsOf: probeURL)) != nil
+        else {
+            throw XCTSkip("Start Contracts/fixture_server.py on port 18765.")
+        }
+
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_SERVER_URL"] = baseURL
+        app.launchEnvironment["TESSERAE_PAIRING_CODE"] = "482193"
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launch()
+
+        XCTAssertTrue(app.buttons["Enter Server Address"].waitForExistence(timeout: 3))
+        app.buttons["Enter Server Address"].tap()
+        XCTAssertTrue(app.textFields["Pairing code"].waitForExistence(timeout: 2))
+        app.buttons["Connect"].tap()
+
+        let kitchen = app.staticTexts["Kitchen"]
+        if !kitchen.waitForExistence(timeout: 5) {
+            let alert = app.alerts["Something Went Wrong"]
+            let details = alert.staticTexts.allElementsBoundByIndex
+                .map { element in element.label }
+                .joined(separator: " ")
+            XCTFail(details.isEmpty ? "Live connection did not complete." : details)
+        }
+        XCTAssertTrue(app.staticTexts["Connected through Companion API"].exists)
+    }
 }

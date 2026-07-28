@@ -445,6 +445,9 @@ instances legitimately rotate hosts and certificates.
 - The companion project runs no image relay in release 1.0.
 - No third-party analytics SDK receives server addresses, display names,
   photo metadata, thumbnails, or tokens.
+- No third-party advertising SDK is included.
+- Analytics or telemetry leaves the device only after explicit opt-in.
+- User data is never sold or shared.
 - Image metadata is stripped unless Tesserae explicitly needs orientation,
   which should be normalized into pixels before upload.
 - Diagnostics are opt-in exports that redact credentials and user images.
@@ -521,7 +524,7 @@ in a diagnostics disclosure.
 ### Phase 0 — contract and collaboration
 
 - [x] Publish this draft to Tesserae Discussions.
-- [ ] Confirm the app name and brand-use boundary.
+- [x] Confirm the app name and brand-use boundary.
 - [x] Agree on `/api/app/v1`, pairing, scopes, job semantics, and mDNS.
 - [x] Create compact OpenAPI examples and local contract tests.
 - [ ] Land server contract tests and OpenAPI additions.
@@ -531,22 +534,25 @@ in a diagnostics disclosure.
 
 - [x] Create the SwiftUI workspace and application target.
 - [x] Implement TesseraeKit API models, protocols, and fixtures.
-- [ ] Implement discovery, manual URL, QR scanner, Keychain, and instance
+- [x] Implement live manual URL, one-time-code exchange, Keychain credentials,
+      and authenticated Companion transport.
+- [ ] Implement Bonjour discovery, QR scanner, and non-secret instance
       persistence.
-- [ ] Build the Tesserae-aligned design system and accessibility harness.
+- [x] Build the Tesserae-aligned design system foundation.
+- [ ] Complete the accessibility harness.
 
 ### Phase 2 — V1 workflows
 
-- [ ] Displays overview.
-- [ ] Dashboard browse, bindings, favourites, and push.
-- [ ] In-app photo send.
+- [x] Displays overview.
+- [x] Dashboard browse, bindings, favourites, and push.
+- [x] In-app photo send.
 - [ ] Web-management links and diagnostics.
 
 ### Phase 3 — native integration workflows
 
 - [ ] Share Extension and retry queue.
 - [ ] App Intents and entities.
-- [ ] Activity backed by Companion Jobs.
+- [x] Activity backed by Companion Jobs.
 - [ ] Multiple instances and defaults.
 
 ### Phase 4 — release validation
@@ -615,6 +621,10 @@ display model/transport, and observed outcome.
   server treats them as stable.
 - If the companion maintainer steps back, they will give notice and make
   a practical transfer or successor-maintenance path available.
+- The maintainer will first seek to transfer the repository and App Store
+  listing to a mutually acceptable successor. If none is available, new
+  distribution stops rather than leaving an unmaintained listing in place;
+  final source and releases remain available where practical.
 - Secrets, Apple account access, signing certificates, and App Store
   Connect roles are never committed to the repository.
 - App Store ownership, signing access, and release permissions must be
@@ -625,7 +635,7 @@ display model/transport, and observed outcome.
 | ID | Date | Decision | Status |
 | --- | --- | --- | --- |
 | D-001 | 2026-07-26 | Build a companion, not a mobile copy of Tesserae admin/Canvas. | Accepted in maintainer conversation |
-| D-002 | 2026-07-26 | Name the app Tesserae Companion and label it community-built. | Proposed, brand permission pending |
+| D-002 | 2026-07-26 | Name the app Tesserae Companion and label it community-built. | Accepted by upstream maintainer |
 | D-003 | 2026-07-26 | Use native Swift 6 and SwiftUI. | Accepted by app maintainer |
 | D-004 | 2026-07-28 | Keep first stable integration focused; History, resend, and previews do not block release 1.0. | Accepted in upstream maintainer review |
 | D-005 | 2026-07-28 | Require a scoped `/api/app/v1`; do not depend on MCP, firmware tokens, or admin internals. | Accepted in upstream maintainer review |
@@ -636,15 +646,15 @@ display model/transport, and observed outcome.
 | D-010 | 2026-07-26 | Ship English and Simplified Chinese in release 1.0. | Proposed |
 | D-011 | 2026-07-28 | Separate Job lifecycle from `published`/`quiet` terminal outcomes and require idempotency for both write routes. | Maintainer-aligned contract clarification |
 | D-012 | 2026-07-28 | Keep the iOS app in the public `charmmmz/tesserae-companion-ios` repository under Apache-2.0. | Accepted |
+| D-013 | 2026-07-28 | Use `com.charmmmz.tesseraecompanion` with a `.share` extension, shared App Group, and shared Keychain access group. | Accepted by app maintainer |
+| D-014 | 2026-07-28 | Develop the live client against a stateful local contract server until upstream `/api/app/v1` ships. | Accepted by app maintainer |
+| D-015 | 2026-07-28 | Use 24 hours as the initial server-advertised Job and idempotency retention default. | Accepted by upstream maintainer |
+| D-016 | 2026-07-28 | Use the Tesserae name and mark under the community-built, advertising, analytics, data-use, and free-web-feature terms in `ATTRIBUTION.md`. | Accepted by upstream maintainer |
 
 ## 17. Open questions for maintainer review
 
-1. May the companion use the Tesserae name, colour system, and adapted
-   tessellated mark in the App Store?
-2. Which Tesserae release should become the minimum supported version?
-3. What job and idempotency retention defaults should the first server
-   implementation advertise?
-4. Which later release should add on-demand previews, History, and resend?
+1. Which Tesserae release should become the minimum supported version?
+2. Which later release should add on-demand previews, History, and resend?
 
 ## 18. Definition of release 1.0 done
 

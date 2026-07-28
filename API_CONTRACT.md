@@ -82,8 +82,9 @@ point:
 - JPEG, PNG, HEIC/HEIF, and WebP still images;
 - 24-hour job and idempotency-record retention.
 
-The 24-hour retention values are proposal defaults, not a server commitment.
-Clients must use the advertised values.
+The maintainer accepted 24 hours as the initial server default for both
+records. Retention remains server-advertised rather than hard-coded so it can
+be tuned without an app release; clients must use the advertised values.
 
 ## Display and dashboard reads
 
@@ -143,9 +144,10 @@ stores and `PushManager`, not a second delivery pipeline. The iOS app does not
 use firmware tokens, the global webhook credential, Flask session cookies,
 privileged MCP, or internal web routes.
 
-The client may build against fixtures now, but live networking stays disabled
-until the matching server contract is implemented and its minimum Tesserae
-release is recorded.
+The client now includes a live `URLSession` transport against this contract,
+but production compatibility remains gated until the matching server contract
+is implemented and its minimum Tesserae release is recorded. The in-repository
+fixture server is the only currently verified live endpoint.
 
 ## Contract checks
 
@@ -153,19 +155,18 @@ From the companion repository:
 
 ```sh
 python -m pip install -r Contracts/requirements.txt
-python -m pytest Contracts/test_contract.py
+python -m pytest Contracts
 swift test --package-path Packages/TesseraeKit
 ```
 
 The Python checks validate every fixture against its OpenAPI component,
 operation ID uniqueness, required endpoint coverage, Job/result separation,
-and idempotency headers. Swift tests decode the same JSON files into
-`TesseraeKit` models, preventing the server proposal and app fixtures from
-drifting independently.
+idempotency headers, and the stateful local fixture server. Swift tests decode
+the same JSON files into `TesseraeKit` models. With
+`TESSERAE_FIXTURE_BASE_URL` set, they also exercise the live transport from
+pairing through publish polling.
 
 ## Remaining decisions
 
 - first Tesserae release containing the stable contract;
-- final job/idempotency retention defaults;
-- brand permission, repository ownership, and open-source licence;
 - later additive contracts for previews, History, and resend.

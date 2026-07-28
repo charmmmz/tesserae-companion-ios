@@ -61,6 +61,10 @@ public actor MockTesseraeClient: TesseraeServing {
         )
     }
 
+    public func revokeSession(instance: TesseraeInstance) async throws {
+        try await pause()
+    }
+
     public func fetchDisplays(instance: TesseraeInstance) async throws -> [DisplaySummary] {
         try await pause()
         return [
@@ -152,6 +156,7 @@ public actor MockTesseraeClient: TesseraeServing {
     public func sendImage(
         data: Data,
         fileName: String,
+        contentType: String,
         fit: ImageFitMode,
         deviceIDs: [String],
         overrideQuietHours: Bool,
@@ -163,7 +168,11 @@ public actor MockTesseraeClient: TesseraeServing {
         }
         return try await acceptJob(
             kind: .imagePush,
-            label: fileName,
+            label: URL(fileURLWithPath: fileName)
+                .deletingPathExtension()
+                .lastPathComponent
+                .replacingOccurrences(of: "-", with: " ")
+                .capitalized,
             deviceIDs: deviceIDs,
             overrideQuietHours: overrideQuietHours,
             idempotencyKey: idempotencyKey,

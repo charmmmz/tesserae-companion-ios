@@ -27,20 +27,61 @@ targets:
         NSBonjourServices:
           - _tesserae._tcp
         NSLocalNetworkUsageDescription: Discover and connect to your Tesserae server on the local network.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        TesseraeKeychainAccessGroup: $(AppIdentifierPrefix)com.charmmmz.tesseraecompanion.shared
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
     dependencies:
       - package: TesseraeKit
+      - target: TesseraeShare
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.charm.TesseraeCompanion
+        PRODUCT_BUNDLE_IDENTIFIER: com.charmmmz.tesseraecompanion
         PRODUCT_NAME: Tesserae Companion
         MARKETING_VERSION: 0.1.0
         CURRENT_PROJECT_VERSION: 1
+        DEVELOPMENT_TEAM: 3MSS7DJGVR
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: App/Resources/TesseraeCompanion.entitlements
         SWIFT_VERSION: 6.0
         SWIFT_STRICT_CONCURRENCY: complete
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        TARGETED_DEVICE_FAMILY: "1"
+
+  TesseraeShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ShareExtension/Sources
+    info:
+      path: ShareExtension/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Send to Tesserae
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsImageWithMaxCount: 1
+    dependencies:
+      - package: TesseraeKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.charmmmz.tesseraecompanion.share
+        PRODUCT_NAME: TesseraeShare
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+        DEVELOPMENT_TEAM: 3MSS7DJGVR
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: ShareExtension/Resources/TesseraeShare.entitlements
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
+        SWIFT_VERSION: 6.0
+        SWIFT_STRICT_CONCURRENCY: complete
         TARGETED_DEVICE_FAMILY: "1"
 
   TesseraeCompanionUITests:
@@ -52,7 +93,9 @@ targets:
       - target: TesseraeCompanion
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.charm.TesseraeCompanionUITests
+        PRODUCT_BUNDLE_IDENTIFIER: com.charmmmz.tesseraecompanion.uitests
+        DEVELOPMENT_TEAM: 3MSS7DJGVR
+        CODE_SIGN_STYLE: Automatic
         SWIFT_VERSION: 6.0
         GENERATE_INFOPLIST_FILE: YES
         TEST_TARGET_NAME: TesseraeCompanion
@@ -62,6 +105,7 @@ schemes:
     build:
       targets:
         TesseraeCompanion: all
+        TesseraeShare: all
     run:
       config: Debug
     test:
