@@ -7,6 +7,7 @@ final class TesseraeCompanionUITests: XCTestCase {
 
     func testDemoJourneyAcrossMainTabs() {
         let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launch()
 
         XCTAssertTrue(app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3))
@@ -62,5 +63,31 @@ final class TesseraeCompanionUITests: XCTestCase {
             XCTFail(details.isEmpty ? "Live connection did not complete." : details)
         }
         XCTAssertTrue(app.staticTexts["Connected through Companion API"].exists)
+    }
+
+    func testBonjourDiscoveryAgainstAdvertisedFixture() throws {
+        guard ProcessInfo.processInfo.environment[
+            "TESSERAE_EXPECT_BONJOUR_FIXTURE"
+        ] == "1" else {
+            throw XCTSkip(
+                "Set TESSERAE_EXPECT_BONJOUR_FIXTURE while advertising Tesserae Fixture."
+            )
+        }
+
+        addUIInterruptionMonitor(withDescription: "Local Network") { alert in
+            if alert.buttons["Allow"].exists {
+                alert.buttons["Allow"].tap()
+                return true
+            }
+            return false
+        }
+
+        let app = XCUIApplication()
+        app.launch()
+        app.tap()
+
+        XCTAssertTrue(
+            app.staticTexts["Tesserae Fixture"].waitForExistence(timeout: 8)
+        )
     }
 }

@@ -29,6 +29,8 @@
 	<array>
 		<string>_tesserae._tcp</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Scan a Tesserae pairing QR code containing the local server address and a short-lived one-time code.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Discover and connect to your Tesserae server on the local network.</string>
 	<key>TesseraeAppGroupIdentifier</key>

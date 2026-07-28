@@ -24,6 +24,7 @@ targets:
         CFBundleDisplayName: Tesserae Companion
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSCameraUsageDescription: Scan a Tesserae pairing QR code containing the local server address and a short-lived one-time code.
         NSBonjourServices:
           - _tesserae._tcp
         NSLocalNetworkUsageDescription: Discover and connect to your Tesserae server on the local network.

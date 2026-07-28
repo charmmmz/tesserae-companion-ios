@@ -23,12 +23,15 @@ final class AppModel {
     private var activeClient: any TesseraeServing
     private let credentials: any CredentialStoring
     private let stateStore: any CompanionStateStoring
+    private let discovery: any TesseraeDiscovering
     private var didAttemptRestore = false
 
     var activeInstance: TesseraeInstance?
     var connectionMode: ConnectionMode?
     var connectionHealth: ConnectionHealth = .restoring
     var connectionNotice: String?
+    var discoveredInstances: [DiscoveredInstance] = []
+    var discoveryError: String?
     var capabilities: ServerCapabilities?
     var displays: [DisplaySummary] = []
     var dashboards: [DashboardSummary] = []
@@ -36,6 +39,7 @@ final class AppModel {
     var favoriteDashboardIDs: Set<String> = []
     var activeOperationIDs: Set<String> = []
     var isRefreshing = false
+    var isDiscovering = false
     var isRestoringConnection = true
     var lastError: String?
 
@@ -43,13 +47,15 @@ final class AppModel {
         liveClient: any TesseraeServing,
         demoClient: any TesseraeServing,
         credentials: any CredentialStoring,
-        stateStore: any CompanionStateStoring
+        stateStore: any CompanionStateStoring,
+        discovery: any TesseraeDiscovering
     ) {
         self.liveClient = liveClient
         self.demoClient = demoClient
         activeClient = liveClient
         self.credentials = credentials
         self.stateStore = stateStore
+        self.discovery = discovery
     }
 
     var sortedDashboards: [DashboardSummary] {
@@ -60,6 +66,19 @@ final class AppModel {
                 return lhsFavorite
             }
             return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+        }
+    }
+
+    func discoverNearby() async {
+        guard activeInstance == nil, !isDiscovering else { return }
+        isDiscovering = true
+        discoveryError = nil
+        defer { isDiscovering = false }
+        do {
+            discoveredInstances = try await discovery.instances()
+        } catch {
+            discoveredInstances = []
+            discoveryError = error.localizedDescription
         }
     }
 

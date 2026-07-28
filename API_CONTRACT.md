@@ -59,6 +59,16 @@ Manual URL and QR pairing remain mandatory fallbacks. A QR payload contains
 only the base URL and a short-lived, single-use Companion code; it never
 contains the long-lived token.
 
+The client uses this canonical QR interchange form:
+
+```text
+tesserae://pair?base_url=<percent-encoded-http-or-https-url>&code=<one-time-code>
+```
+
+It also accepts the equivalent JSON object with `base_url` and `code` keys so
+server-side renderers can migrate without exposing a credential. Both forms
+are validated before the normal capability probe and pairing request run.
+
 Companion pairing is a separate credential purpose from firmware pairing.
 The server keeps a dedicated Companion registry with client name, explicit
 scopes, last use, and independent revocation. Release 1 may issue one fixed

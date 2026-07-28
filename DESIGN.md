@@ -536,7 +536,7 @@ in a diagnostics disclosure.
 - [x] Implement TesseraeKit API models, protocols, and fixtures.
 - [x] Implement live manual URL, one-time-code exchange, Keychain credentials,
       and authenticated Companion transport.
-- [ ] Implement Bonjour discovery and QR scanner.
+- [x] Implement Bonjour discovery and QR scanner.
 - [x] Persist non-secret instance metadata and restore saved connections
       without deleting credentials on temporary network failures.
 - [x] Build the Tesserae-aligned design system foundation.

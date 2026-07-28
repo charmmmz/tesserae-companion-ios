@@ -38,6 +38,10 @@ Companion surface; History, resend, and rich previews are follow-ups.
   shared Keychain boundaries.
 - App Group-backed connection snapshots with cached displays, dashboards,
   jobs, launch restoration, and explicit revoked-credential handling.
+- `_tesserae._tcp.local` Bonjour browsing with resolved server addresses,
+  retryable empty/error states, and manual fallback.
+- Native QR scanning for canonical `tesserae://pair` and equivalent JSON
+  payloads containing only a server URL and one-time code.
 - Tesserae-aligned light and dark visual tokens and accessible status labels.
 
 ### Changed
@@ -75,6 +79,8 @@ Companion surface; History, resend, and rich previews are follow-ups.
 - Temporary network failures retain cached connection metadata and Keychain
   credentials; only an authenticated `401` or missing credential requires
   pairing again.
+- Bonjour discovery never authenticates a client; all discovered instances
+  still require purpose-specific pairing.
 
 ## [0.1.0] - 2026-07-26
 

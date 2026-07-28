@@ -1,10 +1,13 @@
 import SwiftUI
+import TesseraeKit
 import UIKit
 
 struct OnboardingView: View {
     @Environment(AppModel.self) private var model
     @State private var manualSetupPresented = false
-    @State private var qrNoticePresented = false
+    @State private var scannerPresented = false
+    @State private var manualServerAddress: String?
+    @State private var manualPairingCode: String?
 
     var body: some View {
         NavigationStack {
@@ -45,9 +48,68 @@ struct OnboardingView: View {
                     }
                     .tesseraeCard()
 
+                    if model.isDiscovering || !model.discoveredInstances.isEmpty
+                        || model.discoveryError != nil
+                    {
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Text("Nearby Tesserae")
+                                    .font(.headline)
+                                Spacer()
+                                if model.isDiscovering {
+                                    ProgressView()
+                                } else {
+                                    Button {
+                                        Task { await model.discoverNearby() }
+                                    } label: {
+                                        Image(systemName: "arrow.clockwise")
+                                    }
+                                    .accessibilityLabel("Refresh nearby Tesserae servers")
+                                }
+                            }
+
+                            ForEach(model.discoveredInstances) { instance in
+                                Button {
+                                    manualServerAddress = instance.baseURL.absoluteString
+                                    manualPairingCode = nil
+                                    manualSetupPresented = true
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "server.rack")
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(instance.name)
+                                                .font(.body.weight(.semibold))
+                                            Text(instance.baseURL.absoluteString)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                            }
+
+                            if let discoveryError = model.discoveryError {
+                                Label(discoveryError, systemImage: "wifi.exclamationmark")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            } else if !model.isDiscovering
+                                && model.discoveredInstances.isEmpty
+                            {
+                                Text("No server found. QR and manual connection still work across discovery failures.")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .tesseraeCard()
+                    }
+
                     VStack(spacing: 12) {
                         Button {
-                            qrNoticePresented = true
+                            scannerPresented = true
                         } label: {
                             Label("Scan Pairing QR", systemImage: "qrcode.viewfinder")
                                 .frame(maxWidth: .infinity)
@@ -56,6 +118,8 @@ struct OnboardingView: View {
                         .controlSize(.large)
 
                         Button("Enter Server Address") {
+                            manualServerAddress = nil
+                            manualPairingCode = nil
                             manualSetupPresented = true
                         }
                         .buttonStyle(.bordered)
@@ -77,7 +141,7 @@ struct OnboardingView: View {
                         .disabled(model.activeOperationIDs.contains("pair"))
                     }
 
-                    Text("Manual connection uses the proposed Companion API. Bonjour and QR discovery are coming next.")
+                    Text("Bonjour finds servers but never authenticates. Every connection still requires a one-time code from Tesserae.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -86,15 +150,31 @@ struct OnboardingView: View {
             }
             .tesseraeScreenBackground()
             .sheet(isPresented: $manualSetupPresented) {
-                ManualConnectionView()
+                ManualConnectionView(
+                    initialServerAddress: manualServerAddress,
+                    initialPairingCode: manualPairingCode
+                )
             }
-            .alert("QR Pairing Placeholder", isPresented: $qrNoticePresented) {
-                Button("Use Demo", action: {
-                    Task { await model.connectDemo() }
-                })
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Camera pairing will reuse the live connection flow in the next implementation slice.")
+            .sheet(isPresented: $scannerPresented) {
+                PairingScannerView { value in
+                    do {
+                        let payload = try PairingPayloadCodec.decode(value)
+                        manualServerAddress = payload.baseURL.absoluteString
+                        manualPairingCode = payload.code
+                        scannerPresented = false
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(250))
+                            manualSetupPresented = true
+                        }
+                    } catch {
+                        model.lastError = error.localizedDescription
+                    }
+                }
+            }
+            .task {
+                if model.discoveredInstances.isEmpty {
+                    await model.discoverNearby()
+                }
             }
         }
     }
@@ -121,12 +201,24 @@ struct OnboardingView: View {
 private struct ManualConnectionView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
-    @State private var serverAddress = ProcessInfo.processInfo.environment[
-        "TESSERAE_SERVER_URL"
-    ] ?? "http://tesserae.local:8765"
-    @State private var pairingCode = ProcessInfo.processInfo.environment[
-        "TESSERAE_PAIRING_CODE"
-    ] ?? ""
+    @State private var serverAddress: String
+    @State private var pairingCode: String
+
+    init(
+        initialServerAddress: String? = nil,
+        initialPairingCode: String? = nil
+    ) {
+        _serverAddress = State(
+            initialValue: initialServerAddress
+                ?? ProcessInfo.processInfo.environment["TESSERAE_SERVER_URL"]
+                ?? "http://tesserae.local:8765"
+        )
+        _pairingCode = State(
+            initialValue: initialPairingCode
+                ?? ProcessInfo.processInfo.environment["TESSERAE_PAIRING_CODE"]
+                ?? ""
+        )
+    }
 
     var body: some View {
         NavigationStack {

@@ -101,8 +101,8 @@ provisioning profiles.
 
 ### Still pending
 
-- Bonjour browsing and local-network permission timing;
-- QR scanning;
+- final physical-device permission validation against an upstream-advertised
+  `_tesserae._tcp` service;
 - Share Extension target selection/upload and retry queue;
 - App Intents;
 - History/resend and real server-rendered previews.
