@@ -15,10 +15,17 @@ SDK, analytics SDK, tracking, or telemetry.
 - Photos selected in the app, Share Sheet, or Shortcuts are sent directly to
   the user's selected Tesserae instance. They do not pass through a service
   operated by the companion app maintainer.
+- Display and Dashboard preview PNGs are fetched directly from that instance
+  only when it advertises the optional feature. The app keeps them in memory
+  with their ETags and does not write them to the App Group or photo library.
 - A photo whose upload is interrupted is stored with iOS file protection in
   the App Group so the containing app can retry it with the same idempotency
   key. It is deleted immediately after server acceptance or purged after 24
   hours if delivery cannot complete.
+- After server acceptance, Activity stores only a protected JPEG thumbnail
+  with a maximum edge of 480 pixels so the user can recognise what was sent.
+  Thumbnails remain on device and are limited to 30 days, 100 items, and
+  15 MB; the oldest entries are removed first.
 - Bonjour browsing is limited to the local network and only discovers
   `_tesserae._tcp` candidates. Discovery does not authenticate or pair a
   client.
@@ -33,7 +40,7 @@ operators remain responsible for their own privacy policy and configuration.
 
 - Disconnect revokes the presented Companion session when the server is
   reachable, removes the local Keychain token, and clears cached connection
-  state.
+  state and Activity thumbnails for that instance.
 - The Tesserae administrator can revoke each paired client independently.
 - Deleting the app removes its private container. iOS and the server control
   deletion of their respective Keychain and server-side records.

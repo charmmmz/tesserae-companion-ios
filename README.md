@@ -10,8 +10,8 @@ It is a community-built client, not the official Tesserae app.
 
 ## Project status
 
-- Product status: contract-connected native prototype
-- Document version: 0.2.0
+- Product status: live-connected internal beta candidate
+- Document version: 0.3.0
 - Planned first App Store release: 1.0.0
 - Included product scope: native V1 plus Share Sheet and Shortcuts integrations
 - iOS implementation: native Swift and SwiftUI
@@ -108,11 +108,10 @@ provisioning profiles.
 
 ### Still pending
 
-- final physical-device permission validation against an upstream-advertised
-  `_tesserae._tcp` service;
+- the remaining physical-device permission and failure-mode test matrix;
 - final icon, store metadata, privacy-policy hosting, and archive validation
   before any TestFlight upload;
-- History/resend and real server-rendered previews.
+- History/resend.
 
 The Share Extension is implemented against the proposed contract: it loads one
 still image, validates server-advertised limits, selects targets and Fit/Fill,
@@ -124,11 +123,12 @@ Shortcuts can push a saved Dashboard, send one still image to selected
 displays, or open the paired Tesserae web UI. The image action uses the same
 24-hour retry queue and idempotency guarantees as the Share Extension.
 
-Upstream `main` now contains the complete `/api/app/v1` implementation at
-commit `3e4d481` (reported server version `0.205.1`), and its vendored contract
-and fixtures exactly match this repository. It had not yet been published as a
-release tag when reviewed. See [COMPATIBILITY.md](COMPATIBILITY.md) for the
-capability gate and validation evidence.
+Upstream `main` contains the complete base `/api/app/v1` implementation at
+commit `3e4d481` (reported server version `0.207.0`) and the additive preview
+extension at commit `76521718` (deployed here as Tesserae `0.208.0`). A physical
+iPhone has paired with the base implementation and published a photo through
+the Share Extension to a real display. See [COMPATIBILITY.md](COMPATIBILITY.md)
+for the capability gates and validation evidence.
 
 ## Repository boundary
 

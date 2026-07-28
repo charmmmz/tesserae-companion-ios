@@ -6,14 +6,16 @@ Tesserae Companion are recorded here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 App releases follow [Semantic Versioning](https://semver.org/) where
 practical. The planned App Store release 1.0.0 focuses on the accepted native
-Companion surface; History, resend, and rich previews are follow-ups.
+Companion surface; History and resend remain follow-ups.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-29
+
 ### Added
 
-- Machine-readable `/api/app/v1` OpenAPI 0.2.0 proposal with JSON request,
-  response, Job, quiet-hours, and error fixtures.
+- Machine-readable `/api/app/v1` OpenAPI 0.3.0 contract with JSON request,
+  response, Job, quiet-hours, error fixtures, and optional binary previews.
 - Contract tests that validate fixtures, endpoint coverage, unique operation
   IDs, mandatory write idempotency, and Job/result semantics.
 - Swift fixture-decoding coverage and asynchronous Job polling in the mock
@@ -50,7 +52,7 @@ Companion surface; History, resend, and rich previews are follow-ups.
 - App Intents and Shortcuts entities for pushing a Dashboard, sending one
   image, selecting displays, and opening the paired Tesserae web UI.
 - Capability-based compatibility validation for the complete Companion API v1
-  feature set, plus an upstream compatibility record for Tesserae `0.205.1`.
+  feature set, plus an upstream compatibility record for Tesserae `0.207.0`.
 - Tesserae-aligned light and dark visual tokens and accessible status labels.
 - Privacy manifests for the main app and Share Extension, including the
   required reasons for app-only and App Group UserDefaults access.
@@ -60,9 +62,39 @@ Companion surface; History, resend, and rich previews are follow-ups.
   Share Extension, and Shortcuts surfaces.
 - Actionable loading and empty states for Displays, Dashboards, and image
   targets, plus visible server failure details in Activity.
+- Capability-gated device and Dashboard previews with authenticated PNG
+  loading, ETag revalidation, asynchronous Dashboard preparation, and safe
+  placeholder fallback.
+- Bundled manufacturer marks for Seeed Studio, Pimoroni, TRMNL, Waveshare,
+  and PicPak, sourced from each vendor's current official site or brand kit.
+- Tesserae teal App Icon with a simplified iPhone and link mark.
+- Local Activity photo thumbnails shared by the app, Share Extension, and
+  Shortcuts, protected on disk and bounded to 30 days, 100 items, and 15 MB.
+- Dashboard thumbnails open a native full-size preview with pinch and
+  double-tap zoom without changing the list layout or drag-to-reorder gesture.
 
 ### Changed
 
+- Light and dark screens now use Tesserae's ambient page treatment: the warm
+  paper or slate base, a restrained teal glow near the top, and a faint
+  24-point grid extending behind content and Settings, with stronger light-mode
+  contrast so the texture remains visible on iPhone displays.
+- Connection failures now use the persistent top status banner and Retry action
+  without also presenting a duplicate blocking error alert.
+- Dashboard favourites have been replaced by a per-server order that users can
+  change with native long-press drag and drop; cards move continuously between
+  targets with the same spring treatment used by Charm Player Home.
+- Dashboard cards now match the compact split layout used by Displays, with
+  metadata and actions on the left and a fixed-size preview on the right.
+- Dashboard cards now use a compact `Push` action instead of the full-width
+  `Send Now` button.
+- Display cards now shape their panel preview placeholders from the server's
+  actual width and height instead of stretching every display into the same
+  landscape rectangle.
+- Display cards now identify known hardware with its manufacturer mark and
+  friendly model name instead of exposing the server's raw device-kind value;
+  known marks adapt to light and dark appearance without a white backing, while
+  generic protocols and unknown hardware retain a neutral fallback.
 - Aligned the Companion contract with maintainer decisions: `/api/app/v1`,
   persisted asynchronous jobs, dedicated Companion credentials,
   `_tesserae._tcp`, dynamically advertised image limits, and JPEG, PNG,
@@ -83,9 +115,36 @@ Companion surface; History, resend, and rich previews are follow-ups.
   the paired Tesserae base URL.
 - Successful image sends now report server acceptance and point to Activity
   instead of describing the fixture-server implementation.
+- Updated the project status with the first physical iPhone-to-display Share
+  Extension validation against Tesserae `0.207.0`.
+- The Share Extension now uses the same paper background, cards, teal accent,
+  image preview, and target-selection treatment as the main app.
+- The Displays header now keeps transport details in Settings instead of
+  repeating the Companion API connection mode.
+- Displays now uses compact two-column cards with device health and telemetry
+  on the left and an aspect-correct panel silhouette on the right; the
+  redundant server-status card has been removed.
+- Send now previews the first selected display at its real panel aspect ratio
+  and updates immediately between Fit letterboxing and Fill cropping, matching
+  Tesserae's web Send preview. Multi-display sends remain rendered separately
+  by the server for each target.
+- Activity photo cards now show the actual sent image on the left and expand
+  it inline when tapped. The fixed thumbnail remains in place while one
+  pre-decoded image expands below it, avoiding the previous multi-stage morph.
+- The Send panel preview now opens the system photo picker when tapped, without
+  a separate Choose Photo button.
 
 ### Fixed
 
+- Settings now refreshes the displayed Tesserae server version after launch
+  restoration and manual refresh instead of retaining the version captured
+  when the Companion was first paired.
+- Kept the Send button's label in the layout while showing its progress
+  indicator, preventing the button from changing thickness during upload.
+- Dashboard previews now request and adopt the first bound display's panel
+  shape, so portrait artwork fills the thumbnail instead of showing side bars.
+- Send reserves a stable preview slot and retains a preview target while display
+  selections change, preventing the Displays list from jumping vertically.
 - Corrected the Apple Developer Team identifier used by automatic signing so
   the app and Share Extension can create provisioning profiles and deploy to
   physical devices.
@@ -93,6 +152,19 @@ Companion surface; History, resend, and rich previews are follow-ups.
   and localized resources are embedded in the app and Share Extension.
 - Kept Bonjour delegate isolation compatible with the Xcode 16.4 toolchain
   used by GitHub Actions.
+- Normalized non-upright EXIF image orientation into the uploaded pixel matrix
+  so Photos and Share Sheet images do not rotate on the display.
+- Added a real selected-image preview to the main Send screen.
+- Merged Share Extension Job records when the main app becomes active so shared
+  photos appear in Activity and continue polling to a terminal result.
+- Reduced Share Extension memory pressure by using ImageIO to rotate and
+  downsample shared photos directly to the largest registered panel edge
+  instead of decoding and re-encoding the full-resolution source with Core
+  Image.
+- Constrained the main app and Share Extension image previews to the selected
+  panel canvas and applied the same centered Fit letterboxing and Fill cropping
+  geometry as Tesserae's server renderer, preventing preview images from
+  overflowing their screen frames.
 
 ### Security
 
@@ -106,9 +178,10 @@ Companion surface; History, resend, and rich previews are follow-ups.
   pairing again.
 - Bonjour discovery never authenticates a client; all discovered instances
   still require purpose-specific pairing.
-- Shared images are protected on disk, removed immediately after server
-  acceptance, and purged after 24 hours when an interrupted upload cannot be
-  completed.
+- Shared original images are protected on disk, removed immediately after
+  server acceptance, and purged after 24 hours when an interrupted upload
+  cannot be completed. Activity retains only a protected 480-pixel JPEG
+  thumbnail, automatically bounded to 30 days, 100 items, and 15 MB.
 
 ## [0.1.0] - 2026-07-26
 
@@ -138,5 +211,6 @@ Companion surface; History, resend, and rich previews are follow-ups.
 - Required Keychain storage, scoped credentials, revocation, redacted
   diagnostics, direct-to-instance photo transfer, and idempotent writes.
 
-Comparison links will be added after the public repository and release
-location are explicitly agreed.
+[Unreleased]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/charmmmz/tesserae-companion-ios/releases/tag/v0.2.0
+[0.1.0]: https://github.com/charmmmz/tesserae-companion-ios/commit/6519c5c

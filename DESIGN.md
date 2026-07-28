@@ -3,14 +3,14 @@
 | Field | Value |
 | --- | --- |
 | Status | Maintainer-aligned implementation draft |
-| Document version | 0.2.0 |
+| Document version | 0.3.0 |
 | Last updated | 2026-07-28 |
 | App name | Tesserae Companion |
 | Planned first release | 1.0.0, focused on the accepted native Companion surface |
 | Client | Native iOS, Swift 6, SwiftUI |
 | Deployment target | iOS 17 or later, subject to prototype validation |
-| Upstream reviewed | `dmellok/tesserae` `main` at `23f9adba53af30a059722e842680b16efccd1554` |
-| Reviewed source version | Tesserae 0.205.0 |
+| Upstream reviewed | `dmellok/tesserae` `main` at `76521718411ff0632920b2daa4ace19bc4e6d098` |
+| Reviewed source version | Tesserae 0.208.0 |
 
 ## 1. Purpose
 
@@ -51,9 +51,9 @@ delivery.
 ## 2. Scope
 
 The first App Store release combines the V1 foundation with the native
-integrations that justify an iOS app: Share Sheet and Shortcuts. History,
-resend, and render previews are follow-ups and do not block the first stable
-integration.
+integrations that justify an iOS app: Share Sheet and Shortcuts. Read-only
+previews are an optional server capability; History and resend remain
+follow-ups and do not block the first stable integration.
 
 ### V1 — household control foundation
 
@@ -68,6 +68,7 @@ integration.
 | V1-07 | Send a photo in-app | Select a photo, preview Fit/Fill, choose target displays, and submit it to Tesserae. |
 | V1-08 | Open web management | Deep-link to the appropriate Tesserae web page for editing and advanced management. |
 | V1-09 | Accessible native UI | Support Dynamic Type, VoiceOver labels, Reduce Motion, light/dark appearance, and non-colour status cues. |
+| V1-10 | Read-only previews | Lazily show the latest full display composition and cached Dashboard visuals when the server advertises `previews`; retain aspect-correct placeholders otherwise. |
 
 ### Native integrations included in release 1.0
 
@@ -92,7 +93,7 @@ integration.
 - background Apple Health, Calendar, or Photos synchronization;
 - exposing the experimental MCP authoring surface to the app;
 - arbitrary server administration;
-- History/resend and server-rendered previews;
+- History/resend;
 - Android, iPad-specific layouts, watchOS, macOS, or visionOS targets.
 
 The existing web UI remains accessible from the app for these workflows.
@@ -295,6 +296,9 @@ exercise every feature without a running server.
   defaults, favourites, and queued-share metadata.
 - Queued image bytes live as protected files in the App Group and are
   deleted immediately after successful upload or user deletion.
+- Successful image sends retain only a protected 480-pixel Activity thumbnail,
+  bounded by age, item count, and total bytes. The app, Share Extension, and
+  App Intents all address it by the server job ID.
 - The UI may optimistically show a job as Queued but never as Sent until
   confirmed by server state.
 
@@ -562,7 +566,8 @@ in a diagnostics disclosure.
 - [ ] Physical iPhone tests with local-network permission reset.
 - [ ] At least one REST/MQTT Tesserae-native display and one HTTP-polled
       device where available.
-- [ ] Share from Photos, Files, and Safari.
+- [x] Share from Photos to a physical display.
+- [ ] Share from Files and Safari.
 - [ ] Shortcuts run with the app terminated and with the server offline.
 - [ ] VoiceOver, largest Dynamic Type, dark mode, and Simplified Chinese.
 - [ ] TestFlight household trial.
@@ -651,11 +656,12 @@ display model/transport, and observed outcome.
 | D-014 | 2026-07-28 | Develop the live client against a stateful local contract server until upstream `/api/app/v1` ships. | Accepted by app maintainer |
 | D-015 | 2026-07-28 | Use 24 hours as the initial server-advertised Job and idempotency retention default. | Accepted by upstream maintainer |
 | D-016 | 2026-07-28 | Use the Tesserae name and mark under the community-built, advertising, analytics, data-use, and free-web-feature terms in `ATTRIBUTION.md`. | Accepted by upstream maintainer |
+| D-017 | 2026-07-28 | Treat authenticated read-only previews as an optional additive capability with ETag revalidation and placeholder fallback. | Implemented upstream and in the client |
 
 ## 17. Open questions for maintainer review
 
 1. Which Tesserae release should become the minimum supported version?
-2. Which later release should add on-demand previews, History, and resend?
+2. Which later release should add History and resend?
 
 ## 18. Definition of release 1.0 done
 

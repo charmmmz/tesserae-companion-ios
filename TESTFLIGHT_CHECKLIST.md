@@ -5,14 +5,20 @@ or approved.
 
 ## Server compatibility
 
-- [ ] Use a Tesserae release that exposes the complete Companion API v1
+- [x] Use a Tesserae build that exposes the complete Companion API v1
       capability set: `devices`, `dashboards`, `dashboard_push`,
       `image_push`, and `jobs`.
-- [ ] Replace the current known-good upstream reference (`0.205.1` from
+- [ ] Replace the current known-good upstream reference (`0.207.0` from
       commit `3e4d481`) with the first published Tesserae release tag that
       contains it.
-- [ ] Confirm pairing, dashboard push, image push, Job polling, quiet hours,
-      and `_tesserae._tcp` advertisement on the deployment used by testers.
+- [x] Confirm physical iPhone pairing and Share Extension image publishing on
+      the Tesserae `0.207.0` deployment used by testers.
+- [x] Confirm authenticated device preview loading and portrait presentation
+      on the Tesserae `0.208.0` deployment.
+- [ ] Confirm Dashboard preview preparation, ETag revalidation, and
+      base-server placeholder fallback.
+- [ ] Confirm dashboard push, Job polling, quiet hours, and `_tesserae._tcp`
+      discovery on the deployment used by testers.
 
 ## Apple identifiers and signing
 
@@ -80,8 +86,12 @@ or approved.
 - [ ] Dashboard push in normal time and quiet hours.
 - [ ] JPEG, PNG, HEIC/HEIF, WebP, oversized, over-dimension, and unsupported
       image cases.
-- [ ] Share Extension success, timeout, queued retry, 24-hour purge, and
-      duplicate retry with one idempotency key.
+- [x] Share Extension success from Photos to a real display.
+- [ ] Confirm Activity shows the sent photo thumbnail for main-app,
+      Share Extension, and Shortcut sends, and that tapping it expands the
+      image smoothly.
+- [ ] Share Extension timeout, queued retry, 24-hour purge, and duplicate retry
+      with one idempotency key.
 - [ ] Each App Intent from Shortcuts, including explicit quiet-hours override.
 - [ ] English and Simplified Chinese layouts, Dynamic Type, VoiceOver, light
       mode, and dark mode.
