@@ -28,6 +28,33 @@ public struct CompanionSnapshot: Codable, Hashable, Sendable {
         self.jobs = jobs
         self.updatedAt = updatedAt
     }
+
+    public static func mergingJobs(
+        current: [PushJob],
+        incoming: [PushJob]
+    ) -> [PushJob] {
+        var jobsByID = Dictionary(
+            current.map { ($0.id, $0) },
+            uniquingKeysWith: { lhs, rhs in
+                lhs.updatedAt >= rhs.updatedAt ? lhs : rhs
+            }
+        )
+        for job in incoming {
+            if
+                let existing = jobsByID[job.id],
+                existing.updatedAt > job.updatedAt
+            {
+                continue
+            }
+            jobsByID[job.id] = job
+        }
+        return jobsByID.values.sorted { lhs, rhs in
+            if lhs.createdAt != rhs.createdAt {
+                return lhs.createdAt > rhs.createdAt
+            }
+            return lhs.id < rhs.id
+        }
+    }
 }
 
 public protocol CompanionStateStoring: Sendable {

@@ -116,6 +116,19 @@ public struct TesseraeInstance: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
+public extension TesseraeInstance {
+    func updatingServerVersion(to serverVersion: String) -> TesseraeInstance {
+        TesseraeInstance(
+            id: id,
+            name: name,
+            baseURL: baseURL,
+            serverVersion: serverVersion,
+            timezone: timezone,
+            webURL: webURL
+        )
+    }
+}
+
 public struct PairingClient: Codable, Hashable, Sendable {
     public let name: String
     public let platform: String

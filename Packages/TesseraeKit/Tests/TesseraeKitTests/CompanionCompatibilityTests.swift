@@ -31,6 +31,25 @@ final class CompanionCompatibilityTests: XCTestCase {
         }
     }
 
+    func testAcceptsOptionalPreviewExtension() throws {
+        let extended = ServerCapabilities(
+            product: fixtureCapabilities.product,
+            serverVersion: "0.208.0",
+            api: fixtureCapabilities.api,
+            pairing: fixtureCapabilities.pairing,
+            features: fixtureCapabilities.features.union(["previews"]),
+            limits: fixtureCapabilities.limits,
+            webURL: fixtureCapabilities.webURL
+        )
+
+        XCTAssertNoThrow(
+            try CompanionCompatibility.validate(extended)
+        )
+        XCTAssertFalse(
+            CompanionCompatibility.requiredFeatures.contains("previews")
+        )
+    }
+
     func testResolvesRelativeInstanceAndDashboardWebURLs() async throws {
         let credentials = InMemoryCredentialStore()
         let transport = StaticTransport(
@@ -80,7 +99,7 @@ final class CompanionCompatibilityTests: XCTestCase {
     private var fixtureCapabilities: ServerCapabilities {
         ServerCapabilities(
             product: "tesserae",
-            serverVersion: "0.205.1",
+            serverVersion: "0.207.0",
             api: CompanionAPI(version: 1),
             pairing: PairingCapabilities(
                 supported: true,
@@ -109,7 +128,7 @@ final class CompanionCompatibilityTests: XCTestCase {
           "instance": {
             "id": "inst_test",
             "name": "Home",
-            "server_version": "0.205.1",
+            "server_version": "0.207.0",
             "timezone": "Asia/Shanghai",
             "web_url": "/"
           }

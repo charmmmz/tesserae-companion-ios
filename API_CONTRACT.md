@@ -2,22 +2,22 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Maintainer-aligned proposal |
-| Contract proposal | 0.2.0 |
+| Status | Implemented base contract with optional preview extension |
+| Contract version | 0.3.0 |
 | Namespace | `/api/app/v1` |
 | Authentication | Revocable per-client Companion bearer token |
 | Machine-readable source | [`Contracts/app-v1.openapi.yaml`](Contracts/app-v1.openapi.yaml) |
 | Example payloads | [`Contracts/Fixtures`](Contracts/Fixtures) |
 
-This is the smallest stable server surface needed by the first native
-Tesserae companion. It complements the web UI rather than replacing it.
-The endpoints are not live until they land in a released Tesserae version.
+This is the server surface used by the native Tesserae companion. It
+complements the web UI rather than replacing it. The five base features form
+the compatibility floor; `previews` is an additive capability.
 
 The proposal reflects the maintainer review in
 [Discussion #147](https://github.com/dmellok/tesserae/discussions/147).
 Dashboard editing, plugin administration, schedules, firmware controls,
-History/resend, rich previews, and general server administration remain
-outside this first contract.
+History/resend, and general server administration remain outside this
+contract.
 
 ## Contract rules
 
@@ -40,7 +40,9 @@ outside this first contract.
 | `POST` | `/api/app/v1/pair` | Redeem a single-use Companion pairing code |
 | `DELETE` | `/api/app/v1/session` | Revoke the presented client token |
 | `GET` | `/api/app/v1/devices` | List stable display targets and lightweight status |
+| `GET` | `/api/app/v1/devices/{device_id}/preview` | Read the latest full display composition |
 | `GET` | `/api/app/v1/dashboards` | List saved dashboards without forcing renders |
+| `GET` | `/api/app/v1/dashboards/{dashboard_id}/preview` | Read or prepare an on-demand cached preview |
 | `POST` | `/api/app/v1/dashboards/{dashboard_id}/push` | Push to bindings or explicit targets |
 | `POST` | `/api/app/v1/images` | Upload one still image to explicit targets |
 | `GET` | `/api/app/v1/jobs/{job_id}` | Poll job lifecycle and terminal outcome |
@@ -104,7 +106,20 @@ online/sleeping/offline truth because many e-ink devices intentionally sleep.
 
 Dashboard lists contain stable IDs, names, kind, bound device IDs, and an
 optional web-management URL. Listing dashboards never triggers preview
-renders. On-demand previews can be added in a later additive contract.
+renders.
+
+When the capability probe advertises `previews`, the device endpoint returns
+the latest full composition PNG with a content-addressed ETag. It represents
+the renderer's latest composition, not a guarantee that a newer on-glass patch
+or overlay is included. It returns `404` when no retained full composition is
+available.
+
+The Dashboard endpoint returns a cached composition PNG, or `202` with
+`Retry-After` while the server prepares one in the background. An optional
+`device_id` selects target dimensions; otherwise Tesserae resolves the
+Dashboard target or virtual panel. Both endpoints accept `If-None-Match` and
+return `304` when the cached client image remains current. The app keeps its
+aspect-correct placeholder whenever `previews` is absent or no image exists.
 
 ## Writes, quiet hours, and jobs
 
@@ -179,4 +194,4 @@ pairing through publish polling.
 ## Remaining decisions
 
 - first Tesserae release containing the stable contract;
-- later additive contracts for previews, History, and resend.
+- later additive contracts for History and resend.

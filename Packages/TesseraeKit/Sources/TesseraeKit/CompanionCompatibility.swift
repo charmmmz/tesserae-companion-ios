@@ -7,7 +7,7 @@ public enum CompanionCompatibility {
     /// The first upstream revision known to contain the complete v1 surface.
     /// Compatibility is still negotiated by API version and features so a
     /// backport or downstream build is not rejected solely by its app version.
-    public static let firstKnownUpstreamServerVersion = "0.205.1"
+    public static let firstKnownUpstreamServerVersion = "0.207.0"
 
     public static let requiredFeatures: Set<String> = [
         "devices",

@@ -70,4 +70,50 @@ final class CompanionStateStoreTests: XCTestCase {
             webURL: "http://tesserae.local:8765"
         )
     }
+
+    func testMergesExtensionJobsWithoutRegressingNewerState() {
+        let older = PushJob.fixture(
+            id: "job-shared",
+            status: .accepted,
+            updatedAt: Date(timeIntervalSince1970: 100)
+        )
+        let newer = PushJob.fixture(
+            id: "job-shared",
+            status: .succeeded,
+            updatedAt: Date(timeIntervalSince1970: 200)
+        )
+        let extensionJob = PushJob.fixture(
+            id: "job-extension",
+            status: .accepted,
+            updatedAt: Date(timeIntervalSince1970: 300)
+        )
+
+        let merged = CompanionSnapshot.mergingJobs(
+            current: [newer],
+            incoming: [older, extensionJob]
+        )
+
+        XCTAssertEqual(merged.map(\.id), ["job-extension", "job-shared"])
+        XCTAssertEqual(
+            merged.first(where: { $0.id == "job-shared" })?.status,
+            .succeeded
+        )
+    }
+}
+
+private extension PushJob {
+    static func fixture(
+        id: String,
+        status: PushJobStatus,
+        updatedAt: Date
+    ) -> PushJob {
+        PushJob(
+            id: id,
+            kind: .imagePush,
+            status: status,
+            targetDeviceIDs: ["display"],
+            createdAt: updatedAt,
+            updatedAt: updatedAt
+        )
+    }
 }

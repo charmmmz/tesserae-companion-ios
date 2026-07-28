@@ -133,6 +133,25 @@ public actor MockTesseraeClient: TesseraeServing {
         ]
     }
 
+    public func fetchDevicePreview(
+        id: String,
+        ifNoneMatch: String?,
+        instance: TesseraeInstance
+    ) async throws -> PreviewFetchResult {
+        try await pause()
+        return .notFound
+    }
+
+    public func fetchDashboardPreview(
+        id: String,
+        deviceID: String?,
+        ifNoneMatch: String?,
+        instance: TesseraeInstance
+    ) async throws -> PreviewFetchResult {
+        try await pause()
+        return .notFound
+    }
+
     public func pushDashboard(
         id: String,
         deviceIDs: [String]?,

@@ -141,6 +141,51 @@ public actor LiveTesseraeClient: TesseraeServing {
         }
     }
 
+    public func fetchDevicePreview(
+        id: String,
+        ifNoneMatch: String?,
+        instance: TesseraeInstance
+    ) async throws -> PreviewFetchResult {
+        var request = try await authenticatedRequest(
+            instance: instance,
+            path: ["devices", id, "preview"],
+            method: "GET",
+            accept: "image/png"
+        )
+        if let ifNoneMatch {
+            request.setValue(ifNoneMatch, forHTTPHeaderField: "If-None-Match")
+        }
+        return try await previewResponse(
+            for: request,
+            allowsPreparing: false
+        )
+    }
+
+    public func fetchDashboardPreview(
+        id: String,
+        deviceID: String?,
+        ifNoneMatch: String?,
+        instance: TesseraeInstance
+    ) async throws -> PreviewFetchResult {
+        let queryItems = deviceID.map {
+            [URLQueryItem(name: "device_id", value: $0)]
+        } ?? []
+        var request = try await authenticatedRequest(
+            instance: instance,
+            path: ["dashboards", id, "preview"],
+            method: "GET",
+            queryItems: queryItems,
+            accept: "image/png"
+        )
+        if let ifNoneMatch {
+            request.setValue(ifNoneMatch, forHTTPHeaderField: "If-None-Match")
+        }
+        return try await previewResponse(
+            for: request,
+            allowsPreparing: true
+        )
+    }
+
     public func pushDashboard(
         id: String,
         deviceIDs: [String]?,
@@ -229,7 +274,9 @@ public actor LiveTesseraeClient: TesseraeServing {
         path: [String],
         method: String,
         body: Data? = nil,
-        contentType: String = "application/json"
+        contentType: String = "application/json",
+        queryItems: [URLQueryItem] = [],
+        accept: String = "application/json"
     ) async throws -> URLRequest {
         guard let token = try await credentials.token(for: instance.id) else {
             throw TesseraeClientError.missingCredential
@@ -239,7 +286,9 @@ public actor LiveTesseraeClient: TesseraeServing {
             path: path,
             method: method,
             body: body,
-            contentType: contentType
+            contentType: contentType,
+            queryItems: queryItems,
+            accept: accept
         )
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         return request
@@ -250,7 +299,9 @@ public actor LiveTesseraeClient: TesseraeServing {
         path: [String],
         method: String,
         body: Data? = nil,
-        contentType: String = "application/json"
+        contentType: String = "application/json",
+        queryItems: [URLQueryItem] = [],
+        accept: String = "application/json"
     ) throws -> URLRequest {
         var endpoint = try normalized(baseURL)
             .appending(path: "api")
@@ -259,11 +310,26 @@ public actor LiveTesseraeClient: TesseraeServing {
         for component in path {
             endpoint.append(path: component)
         }
+        if !queryItems.isEmpty {
+            guard
+                var components = URLComponents(
+                    url: endpoint,
+                    resolvingAgainstBaseURL: false
+                )
+            else {
+                throw TesseraeClientError.invalidServerURL
+            }
+            components.queryItems = queryItems
+            guard let queriedEndpoint = components.url else {
+                throw TesseraeClientError.invalidServerURL
+            }
+            endpoint = queriedEndpoint
+        }
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = method
         request.timeoutInterval = 30
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(accept, forHTTPHeaderField: "Accept")
         if let body {
             request.httpBody = body
             request.setValue(contentType, forHTTPHeaderField: "Content-Type")
@@ -328,6 +394,33 @@ public actor LiveTesseraeClient: TesseraeServing {
             throw try serverError(from: response)
         }
         return response
+    }
+
+    private func previewResponse(
+        for request: URLRequest,
+        allowsPreparing: Bool
+    ) async throws -> PreviewFetchResult {
+        let response = try await response(for: request)
+        switch response.statusCode {
+        case 200:
+            guard !response.data.isEmpty else {
+                throw TesseraeClientError.invalidResponse
+            }
+            return .image(
+                data: response.data,
+                eTag: response.headers["etag"]
+            )
+        case 202 where allowsPreparing:
+            let retryAfter = response.headers["retry-after"]
+                .flatMap(TimeInterval.init) ?? 2
+            return .preparing(retryAfterSeconds: retryAfter)
+        case 304:
+            return .notModified
+        case 404:
+            return .notFound
+        default:
+            throw try serverError(from: response)
+        }
     }
 
     private func response(for request: URLRequest) async throws -> TesseraeHTTPResponse {

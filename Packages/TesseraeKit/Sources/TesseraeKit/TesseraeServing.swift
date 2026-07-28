@@ -6,6 +6,17 @@ public protocol TesseraeServing: Sendable {
     func revokeSession(instance: TesseraeInstance) async throws
     func fetchDisplays(instance: TesseraeInstance) async throws -> [DisplaySummary]
     func fetchDashboards(instance: TesseraeInstance) async throws -> [DashboardSummary]
+    func fetchDevicePreview(
+        id: String,
+        ifNoneMatch: String?,
+        instance: TesseraeInstance
+    ) async throws -> PreviewFetchResult
+    func fetchDashboardPreview(
+        id: String,
+        deviceID: String?,
+        ifNoneMatch: String?,
+        instance: TesseraeInstance
+    ) async throws -> PreviewFetchResult
     func pushDashboard(
         id: String,
         deviceIDs: [String]?,
