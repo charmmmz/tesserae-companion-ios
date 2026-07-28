@@ -35,13 +35,7 @@ public actor LiveTesseraeClient: TesseraeServing {
             request,
             expectedStatusCodes: [200]
         )
-        guard
-            capabilities.product == "tesserae",
-            capabilities.api.name == "companion",
-            capabilities.api.version == 1
-        else {
-            throw TesseraeClientError.incompatibleServer
-        }
+        try CompanionCompatibility.validate(capabilities)
         return capabilities
     }
 
@@ -81,7 +75,10 @@ public actor LiveTesseraeClient: TesseraeServing {
             baseURL: try normalized(baseURL),
             serverVersion: response.instance.serverVersion,
             timezone: response.instance.timezone,
-            webURL: response.instance.webURL
+            webURL: try resolvedWebURL(
+                response.instance.webURL,
+                against: baseURL
+            )
         )
         return PairedSession(
             instance: instance,
@@ -127,7 +124,21 @@ public actor LiveTesseraeClient: TesseraeServing {
             request,
             expectedStatusCodes: [200]
         )
-        return response.dashboards
+        return try response.dashboards.map { dashboard in
+            DashboardSummary(
+                id: dashboard.id,
+                name: dashboard.name,
+                kind: dashboard.kind,
+                deviceIDs: dashboard.deviceIDs,
+                updatedAt: dashboard.updatedAt,
+                webURL: try dashboard.webURL.map {
+                    try resolvedWebURL(
+                        $0,
+                        against: instance.baseURL
+                    )
+                }
+            )
+        }
     }
 
     public func pushDashboard(
@@ -274,6 +285,23 @@ public actor LiveTesseraeClient: TesseraeServing {
             throw TesseraeClientError.invalidServerURL
         }
         return normalizedURL
+    }
+
+    private func resolvedWebURL(
+        _ rawValue: String,
+        against baseURL: URL
+    ) throws -> String {
+        guard
+            let url = URL(
+                string: rawValue,
+                relativeTo: try normalized(baseURL)
+            )?.absoluteURL,
+            url.scheme == "http" || url.scheme == "https",
+            url.host != nil
+        else {
+            throw TesseraeClientError.invalidServerURL
+        }
+        return url.absoluteString
     }
 
     private func perform<Response: Decodable>(

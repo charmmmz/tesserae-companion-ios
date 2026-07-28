@@ -115,10 +115,11 @@ Shortcuts can push a saved Dashboard, send one still image to selected
 displays, or open the paired Tesserae web UI. The image action uses the same
 24-hour retry queue and idempotency guarantees as the Share Extension.
 
-The live HTTP and Keychain paths are implemented against the reviewed
-contract, but the current Tesserae server does not yet provide `/api/app/v1`.
-Production compatibility therefore remains gated on an upstream release and
-physical-device validation.
+Upstream `main` now contains the complete `/api/app/v1` implementation at
+commit `3e4d481` (reported server version `0.205.1`), and its vendored contract
+and fixtures exactly match this repository. It had not yet been published as a
+release tag when reviewed. See [COMPATIBILITY.md](COMPATIBILITY.md) for the
+capability gate and validation evidence.
 
 ## Repository boundary
 

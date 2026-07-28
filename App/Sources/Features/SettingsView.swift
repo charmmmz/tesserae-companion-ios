@@ -16,6 +16,12 @@ struct SettingsView: View {
                             "API mode",
                             value: model.connectionMode == .live ? "Live Companion API" : "Demo data"
                         )
+                        if let capabilities = model.capabilities {
+                            LabeledContent(
+                                "Companion API",
+                                value: "v\(capabilities.api.version)"
+                            )
+                        }
 
                         Link(destination: instance.baseURL) {
                             Label("Open Web Management", systemImage: "safari")

@@ -49,6 +49,8 @@ Companion surface; History, resend, and rich previews are follow-ups.
   `Idempotency-Key` when the containing app resumes an interrupted transfer.
 - App Intents and Shortcuts entities for pushing a Dashboard, sending one
   image, selecting displays, and opening the paired Tesserae web UI.
+- Capability-based compatibility validation for the complete Companion API v1
+  feature set, plus an upstream compatibility record for Tesserae `0.205.1`.
 - Tesserae-aligned light and dark visual tokens and accessible status labels.
 
 ### Changed
@@ -69,6 +71,8 @@ Companion surface; History, resend, and rich previews are follow-ups.
   mark, its privacy and product terms, and a concrete App Store handover path.
 - Accepted 24 hours as the initial server-advertised Job and idempotency
   retention default.
+- Relative server and Dashboard web-management paths are now resolved against
+  the paired Tesserae base URL.
 
 ### Fixed
 

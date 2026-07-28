@@ -30,8 +30,10 @@ public enum TesseraeClientError: Error, Equatable, LocalizedError, Sendable {
     case incompatibleServer
     case invalidPairingCode
     case invalidServerURL
+    case missingFeatures([String])
     case missingCredential
     case noTargets
+    case pairingUnavailable
     case unavailable
     case unauthorized
     case invalidResponse
@@ -48,10 +50,14 @@ public enum TesseraeClientError: Error, Equatable, LocalizedError, Sendable {
             "The pairing code is invalid or expired."
         case .invalidServerURL:
             "Enter a valid HTTP or HTTPS Tesserae server URL."
+        case let .missingFeatures(features):
+            "This Tesserae server is missing required Companion features: \(features.joined(separator: ", "))."
         case .missingCredential:
             "This Tesserae instance is not paired on this device."
         case .noTargets:
             "Select at least one display."
+        case .pairingUnavailable:
+            "Companion pairing is disabled on this Tesserae server."
         case .unavailable:
             "The Tesserae instance is unavailable."
         case .unauthorized:
