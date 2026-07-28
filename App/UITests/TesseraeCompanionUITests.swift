@@ -1,8 +1,68 @@
 import XCTest
 
+@MainActor
 final class TesseraeCompanionUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
+    }
+
+    func testDisplayManufacturerBadges() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_COLOR_SCHEME"] = "light"
+        app.launch()
+
+        assertDisplayManufacturerBadges(in: app, screenshotName: "Light Manufacturer Badges")
+    }
+
+    func testDisplayManufacturerBadgesInDarkMode() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_COLOR_SCHEME"] = "dark"
+        app.launch()
+
+        assertDisplayManufacturerBadges(in: app, screenshotName: "Dark Manufacturer Badges")
+    }
+
+    private func assertDisplayManufacturerBadges(
+        in app: XCUIApplication,
+        screenshotName: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        XCTAssertTrue(
+            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3),
+            file: file,
+            line: line
+        )
+        app.buttons["Explore with Demo Data"].tap()
+
+        XCTAssertTrue(
+            app.staticTexts["Kitchen"].waitForExistence(timeout: 3),
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["display-hardware-picPak"].exists,
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["display-hardware-seeedStudio"].exists,
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(app.staticTexts["picpak"].exists, file: file, line: line)
+        XCTAssertFalse(
+            app.staticTexts["reterminal_e1004"].exists,
+            file: file,
+            line: line
+        )
+
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = screenshotName
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
     }
 
     func testDemoJourneyAcrossMainTabs() {
@@ -16,22 +76,139 @@ final class TesseraeCompanionUITests: XCTestCase {
         let tabBar = app.tabBars.firstMatch
         XCTAssertTrue(tabBar.buttons["Displays"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["Kitchen"].exists)
+        assertPreview(
+            app.descendants(matching: .any)["display-preview-picpak-kitchen"],
+            hasAspectRatio: 800.0 / 480.0
+        )
+
+        let deskPreview = app.descendants(matching: .any)["display-preview-e1004-desk"]
+        for _ in 0..<4 where !deskPreview.exists {
+            app.swipeUp()
+        }
+        assertPreview(deskPreview, hasAspectRatio: 1_200.0 / 1_600.0)
 
         tabBar.buttons["Dashboards"].tap()
         XCTAssertTrue(app.staticTexts["Pantry"].waitForExistence(timeout: 2))
+        let dashboardPreview = app.descendants(matching: .any)[
+            "dashboard-preview-pantry"
+        ]
+        assertPreview(
+            dashboardPreview,
+            hasAspectRatio: 800.0 / 480.0
+        )
+        let dashboardPreviewButton = app.buttons[
+            "dashboard-preview-button-pantry"
+        ]
+        XCTAssertTrue(dashboardPreviewButton.exists)
+        dashboardPreviewButton.tap()
+        let previewDoneButton = app.buttons["Done"]
+        XCTAssertTrue(previewDoneButton.waitForExistence(timeout: 2))
+        let expandedDashboardScreenshot = XCTAttachment(
+            screenshot: app.screenshot()
+        )
+        expandedDashboardScreenshot.name = "Expanded Dashboard Preview"
+        expandedDashboardScreenshot.lifetime = .keepAlways
+        add(expandedDashboardScreenshot)
+        previewDoneButton.tap()
+        XCTAssertTrue(dashboardPreviewButton.waitForExistence(timeout: 2))
+        XCTAssertFalse(app.buttons["Add to favourites"].exists)
+        XCTAssertFalse(app.buttons["Remove from favourites"].exists)
+        XCTAssertTrue(app.buttons["Push"].exists)
+        XCTAssertFalse(app.buttons["Send Now"].exists)
+        let dashboardScreenshot = XCTAttachment(screenshot: app.screenshot())
+        dashboardScreenshot.name = "Dashboard Compact Previews"
+        dashboardScreenshot.lifetime = .keepAlways
+        add(dashboardScreenshot)
 
         tabBar.buttons["Send"].tap()
         app.buttons["Use Sample"].tap()
-        XCTAssertTrue(app.buttons["Send to Displays"].isEnabled)
-        app.buttons["Send to Displays"].tap()
+        let sendButton = app.buttons["Send to Displays"]
+        XCTAssertTrue(sendButton.isEnabled)
+        let sendButtonHeight = sendButton.frame.height
+        sendButton.tap()
 
         let sentAlert = app.alerts["Sent"]
         XCTAssertTrue(sentAlert.waitForExistence(timeout: 3))
+        XCTAssertEqual(
+            sendButton.frame.height,
+            sendButtonHeight,
+            accuracy: 1
+        )
         sentAlert.buttons["OK"].tap()
 
         tabBar.buttons["Activity"].tap()
         XCTAssertTrue(app.staticTexts["Shared Photo"].waitForExistence(timeout: 2))
         XCTAssertTrue(app.staticTexts["Published"].exists)
+
+        let collapsedCard = app.buttons.matching(
+            NSPredicate(
+                format: "identifier BEGINSWITH %@",
+                "activity-photo-card-"
+            )
+        ).firstMatch
+        XCTAssertTrue(collapsedCard.waitForExistence(timeout: 2))
+        let collapsedHeight = collapsedCard.frame.height
+        XCTAssertEqual(collapsedCard.value as? String, "Collapsed")
+        collapsedCard.tap()
+
+        XCTAssertEqual(collapsedCard.value as? String, "Expanded")
+        XCTAssertGreaterThan(collapsedCard.frame.height, collapsedHeight)
+
+        let activityScreenshot = XCTAttachment(screenshot: app.screenshot())
+        activityScreenshot.name = "Expanded Activity Photo"
+        activityScreenshot.lifetime = .keepAlways
+        add(activityScreenshot)
+    }
+
+    func testDashboardCardsReorderWithLongPressDrag() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launch()
+
+        XCTAssertTrue(
+            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
+        )
+        app.buttons["Explore with Demo Data"].tap()
+        app.tabBars.firstMatch.buttons["Dashboards"].tap()
+
+        let morning = app.staticTexts["Morning"]
+        let pantry = app.staticTexts["Pantry"]
+        XCTAssertTrue(morning.waitForExistence(timeout: 2))
+        XCTAssertTrue(pantry.waitForExistence(timeout: 2))
+        let upper = morning.frame.minY < pantry.frame.minY
+            ? morning
+            : pantry
+        let lower = morning.frame.minY < pantry.frame.minY
+            ? pantry
+            : morning
+
+        lower.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)
+        ).press(
+            forDuration: 0.45,
+            thenDragTo: upper.coordinate(
+                withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)
+            )
+        )
+
+        XCTAssertLessThan(lower.frame.minY, upper.frame.minY)
+    }
+
+    private func assertPreview(
+        _ preview: XCUIElement,
+        hasAspectRatio expectedRatio: CGFloat,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        XCTAssertTrue(preview.waitForExistence(timeout: 2), file: file, line: line)
+        XCTAssertGreaterThan(preview.frame.height, 0, file: file, line: line)
+        XCTAssertEqual(
+            preview.frame.width / preview.frame.height,
+            expectedRatio,
+            accuracy: 0.03,
+            file: file,
+            line: line
+        )
     }
 
     func testSimplifiedChineseOnboarding() {
@@ -53,8 +230,108 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(tabBar.buttons["仪表盘"].exists)
         XCTAssertTrue(tabBar.buttons["发送"].exists)
         XCTAssertTrue(tabBar.buttons["活动"].exists)
-        XCTAssertTrue(app.staticTexts["本地演示连接 · 演示数据"].exists)
+        XCTAssertFalse(app.staticTexts["演示数据"].exists)
         XCTAssertTrue(app.staticTexts["最近在线"].exists)
+    }
+
+    func testDemoSendShowsPreviewAndRecordsActivity() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3))
+        app.buttons["Explore with Demo Data"].tap()
+
+        let tabBar = app.tabBars.firstMatch
+        XCTAssertTrue(tabBar.buttons["Send"].waitForExistence(timeout: 3))
+        tabBar.buttons["Send"].tap()
+
+        let deskTarget = app.buttons.containing(
+            .staticText,
+            identifier: "Desk"
+        ).firstMatch
+        let kitchenTarget = app.buttons.containing(
+            .staticText,
+            identifier: "Kitchen"
+        ).firstMatch
+        XCTAssertTrue(deskTarget.waitForExistence(timeout: 2))
+        XCTAssertTrue(kitchenTarget.exists)
+        for _ in 0..<4 where !deskTarget.isHittable {
+            app.swipeUp()
+        }
+        XCTAssertTrue(deskTarget.isHittable)
+        let targetList = app.staticTexts["Displays"].firstMatch
+        XCTAssertTrue(targetList.waitForExistence(timeout: 2))
+        let initialTargetListY = targetList.frame.minY
+        deskTarget.tap()
+        XCTAssertEqual(
+            targetList.frame.minY,
+            initialTargetListY,
+            accuracy: 1
+        )
+        kitchenTarget.tap()
+        XCTAssertEqual(
+            targetList.frame.minY,
+            initialTargetListY,
+            accuracy: 1
+        )
+
+        app.buttons["Use Sample"].tap()
+        let panelPreview = app.descendants(matching: .any)["send-panel-preview"]
+        XCTAssertTrue(panelPreview.waitForExistence(timeout: 2))
+        let portraitPreviewValue = (
+            panelPreview.value as? String ?? ""
+        ).replacingOccurrences(of: ",", with: "")
+        XCTAssertTrue(portraitPreviewValue.contains("fit"))
+        XCTAssertTrue(
+            portraitPreviewValue.contains("1200 by 1600")
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["selected-image-preview"]
+                .waitForExistence(timeout: 2)
+        )
+        let imagePreview = app.descendants(matching: .any)[
+            "selected-image-preview"
+        ]
+        XCTAssertGreaterThanOrEqual(
+            imagePreview.frame.minX,
+            panelPreview.frame.minX - 1
+        )
+        XCTAssertLessThanOrEqual(
+            imagePreview.frame.maxX,
+            panelPreview.frame.maxX + 1
+        )
+        app.buttons["Fill"].tap()
+        XCTAssertTrue((panelPreview.value as? String)?.contains("fill") == true)
+        XCTAssertGreaterThanOrEqual(
+            imagePreview.frame.minX,
+            panelPreview.frame.minX - 1
+        )
+        XCTAssertLessThanOrEqual(
+            imagePreview.frame.maxX,
+            panelPreview.frame.maxX + 1
+        )
+        let previewScreenshot = XCTAttachment(screenshot: app.screenshot())
+        previewScreenshot.name = "Send Fill Preview"
+        previewScreenshot.lifetime = .keepAlways
+        add(previewScreenshot)
+        let previewSendButton = app.buttons["Send to Displays"]
+        XCTAssertTrue(previewSendButton.isEnabled)
+        let previewSendButtonHeight = previewSendButton.frame.height
+        previewSendButton.tap()
+
+        let sentAlert = app.alerts["Sent"]
+        XCTAssertTrue(sentAlert.waitForExistence(timeout: 3))
+        XCTAssertEqual(
+            previewSendButton.frame.height,
+            previewSendButtonHeight,
+            accuracy: 1
+        )
+        sentAlert.buttons["OK"].tap()
+
+        tabBar.buttons["Activity"].tap()
+        XCTAssertTrue(app.staticTexts["Shared Photo"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.staticTexts["Published"].exists)
     }
 
     func testManualConnectionAgainstFixtureServer() throws {
@@ -85,7 +362,45 @@ final class TesseraeCompanionUITests: XCTestCase {
                 .joined(separator: " ")
             XCTFail(details.isEmpty ? "Live connection did not complete." : details)
         }
-        XCTAssertTrue(app.staticTexts["Connected through Companion API"].exists)
+        XCTAssertFalse(app.staticTexts["Connected through Companion API"].exists)
+    }
+
+    func testLivePreviewsAgainstPairedServer() throws {
+        guard ProcessInfo.processInfo.environment[
+            "TESSERAE_EXPECT_LIVE_PREVIEWS"
+        ] == "1" else {
+            throw XCTSkip(
+                "Set TESSERAE_EXPECT_LIVE_PREVIEWS on a paired physical device."
+            )
+        }
+
+        let app = XCUIApplication()
+        app.launch()
+
+        let tabBar = app.tabBars.firstMatch
+        XCTAssertTrue(
+            tabBar.buttons["Displays"].waitForExistence(timeout: 10)
+        )
+        let displayPreview = app.descendants(matching: .any)
+            .matching(
+                NSPredicate(
+                    format: "label BEGINSWITH %@",
+                    "Latest full composition preview"
+                )
+            )
+            .firstMatch
+        XCTAssertTrue(displayPreview.waitForExistence(timeout: 10))
+
+        tabBar.buttons["Dashboards"].tap()
+        let dashboardPreview = app.descendants(matching: .any)
+            .matching(
+                NSPredicate(
+                    format: "label BEGINSWITH %@",
+                    "Cached visual preview"
+                )
+            )
+            .firstMatch
+        XCTAssertTrue(dashboardPreview.waitForExistence(timeout: 20))
     }
 
     func testBonjourDiscoveryAgainstAdvertisedFixture() throws {

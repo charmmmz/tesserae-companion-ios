@@ -7,6 +7,10 @@
 "Cancel" = "取消";
 "Done" = "完成";
 "Image" = "图片";
+"Shared image preview" = "分享图片预览";
+"Display image preview" = "显示屏图片预览";
+"No display selected" = "未选择显示屏";
+"Select a display to preview its panel shape." = "请选择显示屏以预览其屏幕比例。";
 "Layout" = "布局";
 "Fit" = "适应";
 "Fill" = "填充";

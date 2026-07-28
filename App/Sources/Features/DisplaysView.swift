@@ -7,10 +7,14 @@ struct DisplaysView: View {
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 14) {
-                instanceHeader
-
                 ForEach(model.displays) { display in
-                    DisplayCard(display: display)
+                    DisplayCard(
+                        display: display,
+                        preview: model.displayPreviews[display.id]
+                    )
+                    .task(id: model.previewGeneration) {
+                        await model.loadDisplayPreview(display)
+                    }
                 }
             }
             .padding(16)
@@ -36,85 +40,90 @@ struct DisplaysView: View {
         }
         .tesseraeScreenBackground()
     }
-
-    private var instanceHeader: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "server.rack")
-                .font(.title2)
-                .foregroundStyle(TesseraeTheme.accent)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(model.activeInstance?.name ?? "Tesserae")
-                    .font(.headline)
-                Text(connectionDescription)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            Circle()
-                .fill(.green)
-                .frame(width: 9, height: 9)
-                .accessibilityLabel("Connected")
-        }
-        .tesseraeCard()
-    }
-
-    private var connectionDescription: String {
-        model.connectionMode == .live
-            ? String(localized: "Connected through Companion API")
-            : String(localized: "Connected locally · Demo data")
-    }
 }
 
 private struct DisplayCard: View {
     let display: DisplaySummary
+    let preview: PreviewImageState?
+    private let previewCanvasSize = CGSize(width: 112, height: 118)
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(display.name)
-                        .font(.title3.bold())
-                    Text(display.kind)
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
+        HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 9) {
+                Text(display.name)
+                    .font(.headline)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.82)
+
+                DisplayHardwareBadge(
+                    presentation: display.hardwarePresentation
+                )
+
                 Label(freshnessLabel, systemImage: freshnessSymbol)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(freshnessColor)
-            }
 
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(TesseraeTheme.accentSoft.gradient)
-                .frame(height: 112)
-                .overlay {
-                    VStack(spacing: 6) {
-                        Image(systemName: "rectangle.inset.filled")
-                            .font(.title)
-                        Text("\(display.panel.width) × \(display.panel.height)")
-                            .font(.caption.monospaced())
-                    }
-                    .foregroundStyle(TesseraeTheme.accent)
+                HStack(spacing: 12) {
+                    metric(
+                        "battery.75percent",
+                        display.batteryPercent.map { "\($0)%" } ?? "—"
+                    )
+                    metric(
+                        "wifi",
+                        display.rssiDBM.map { "\($0) dBm" } ?? "—"
+                    )
                 }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Display preview placeholder, \(display.panel.width) by \(display.panel.height)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
 
-            HStack {
-                metric("battery.75percent", display.batteryPercent.map { "\($0)%" } ?? "—")
-                Spacer()
-                metric("wifi", display.rssiDBM.map { "\($0) dBm" } ?? "—")
-                Spacer()
-                metric("rotate.right", display.panel.orientation.capitalized)
+                Label(display.panel.orientation.capitalized, systemImage: "rotate.right")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            panelPreview
         }
         .tesseraeCard()
+    }
+
+    private var panelPreview: some View {
+        let previewSize = display.panel.fittedPreviewSize(
+            maxWidth: previewCanvasSize.width,
+            maxHeight: previewCanvasSize.height
+        )
+
+        return ZStack {
+            Color.clear
+
+            PreviewArtwork(
+                state: preview,
+                placeholderSystemName: previewSymbol,
+                placeholderLabel: "Display preview placeholder, \(display.panel.width) by \(display.panel.height), \(display.panel.orientation)",
+                imageLabel: "Latest full composition preview for \(display.name)",
+                accessibilityIdentifier: "display-preview-\(display.id)",
+                placeholderDetail: "\(display.panel.width) × \(display.panel.height)"
+            )
+            .frame(
+                width: CGFloat(previewSize.width),
+                height: CGFloat(previewSize.height)
+            )
+        }
+        .frame(
+            width: previewCanvasSize.width,
+            height: previewCanvasSize.height
+        )
     }
 
     private func metric(_ symbol: String, _ value: String) -> some View {
         Label(value, systemImage: symbol)
             .labelStyle(.titleAndIcon)
+    }
+
+    private var previewSymbol: String {
+        display.panel.height > display.panel.width
+            ? "rectangle.portrait.inset.filled"
+            : "rectangle.inset.filled"
     }
 
     private var freshnessLabel: String {

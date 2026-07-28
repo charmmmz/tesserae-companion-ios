@@ -43,6 +43,7 @@ private final class ShareComposerModel: ObservableObject {
     @Published var fit: ImageFitMode = .fit
     @Published var overrideQuietHours = false
     @Published var imageByteCount = 0
+    @Published var previewImage: UIImage?
     @Published var errorMessage: String?
 
     private weak var extensionContext: NSExtensionContext?
@@ -53,6 +54,7 @@ private final class ShareComposerModel: ObservableObject {
 
     private let stateStore: any CompanionStateStoring
     private let queueStore: any ShareQueueStoring
+    private let activityThumbnails: any ActivityThumbnailStoring
     private let credentials: any CredentialStoring
     private let client: any TesseraeServing
 
@@ -85,6 +87,9 @@ private final class ShareComposerModel: ObservableObject {
 
         stateStore = UserDefaultsCompanionStateStore(suiteName: appGroup)
         queueStore = FileShareQueueStore(directoryURL: containerURL)
+        activityThumbnails = FileActivityThumbnailStore(
+            directoryURL: containerURL
+        )
         let keychain = KeychainCredentialStore(
             service: "com.charmmmz.tesseraecompanion.credentials",
             accessGroup: accessGroup
@@ -112,6 +117,10 @@ private final class ShareComposerModel: ObservableObject {
             && snapshot != nil
     }
 
+    var previewDisplay: DisplaySummary? {
+        displays.first { selectedDeviceIDs.contains($0.id) }
+    }
+
     func load() async {
         do {
             try await queueStore.purge(
@@ -129,7 +138,16 @@ private final class ShareComposerModel: ObservableObject {
                 throw ShareComposerError.noDisplays
             }
 
-            let loaded = try await loadSharedImage()
+            let displayMaxEdge = snapshot.displays
+                .map { max($0.panel.width, $0.panel.height) }
+                .max() ?? 2_048
+            let preparationMaxEdge = min(
+                displayMaxEdge,
+                snapshot.capabilities?.limits.imageMaxEdge ?? displayMaxEdge
+            )
+            let loaded = try await loadSharedImage(
+                maximumPixelSize: preparationMaxEdge
+            )
             try validate(
                 data: loaded.data,
                 contentType: loaded.contentType,
@@ -139,6 +157,7 @@ private final class ShareComposerModel: ObservableObject {
             self.snapshot = snapshot
             imageData = loaded.data
             imageByteCount = loaded.data.count
+            previewImage = UIImage(data: loaded.data)
             contentType = loaded.contentType
             fileName = loaded.fileName
             selectedDeviceIDs = Set(snapshot.displays.prefix(1).map(\.id))
@@ -195,6 +214,12 @@ private final class ShareComposerModel: ObservableObject {
                 instance: snapshot.activeInstance
             )
             let jobs = [job] + snapshot.jobs.filter { $0.id != job.id }
+            _ = try? await activityThumbnails.save(
+                imageData: imageData,
+                jobID: job.id,
+                instanceID: snapshot.activeInstance.id,
+                createdAt: job.createdAt
+            )
             try await stateStore.save(
                 CompanionSnapshot(
                     activeInstance: snapshot.activeInstance,
@@ -234,7 +259,9 @@ private final class ShareComposerModel: ObservableObject {
         )
     }
 
-    private func loadSharedImage() async throws -> (
+    private func loadSharedImage(
+        maximumPixelSize: Int
+    ) async throws -> (
         data: Data,
         contentType: String,
         fileName: String
@@ -258,11 +285,17 @@ private final class ShareComposerModel: ObservableObject {
             from: provider,
             typeIdentifier: type.identifier
         )
-        let fileExtension = type.preferredFilenameExtension ?? "jpg"
+        let prepared = try await Task.detached(priority: .userInitiated) {
+            try UploadImagePreparer.prepare(
+                data: data,
+                fallbackContentType: type.preferredMIMEType ?? "image/jpeg",
+                maximumPixelSize: maximumPixelSize
+            )
+        }.value
         return (
-            data,
-            type.preferredMIMEType ?? "image/jpeg",
-            "shared-photo.\(fileExtension)"
+            prepared.data,
+            prepared.contentType,
+            "shared-photo.\(prepared.fileExtension)"
         )
     }
 
@@ -315,6 +348,7 @@ private final class ShareComposerModel: ObservableObject {
 
 private struct ShareComposerView: View {
     @ObservedObject var model: ShareComposerModel
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         NavigationStack {
@@ -342,8 +376,14 @@ private struct ShareComposerView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .tesseraeScreenBackground()
             .navigationTitle("Send to Tesserae")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(
+                TesseraeTheme.background(for: colorScheme),
+                for: .navigationBar
+            )
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { model.cancel() }
@@ -355,65 +395,25 @@ private struct ShareComposerView: View {
                 }
             }
         }
+        .tint(TesseraeTheme.accent)
     }
 
     private var composer: some View {
-        Form {
-            Section("Image") {
-                Label(
-                    ByteCountFormatter.string(
-                        fromByteCount: Int64(model.imageByteCount),
-                        countStyle: .file
-                    ),
-                    systemImage: "photo"
-                )
-                Picker("Layout", selection: $model.fit) {
-                    Text("Fit").tag(ImageFitMode.fit)
-                    Text("Fill").tag(ImageFitMode.fill)
-                }
-                .pickerStyle(.segmented)
-            }
+        ScrollView {
+            VStack(spacing: 14) {
+                imageCard
+                layoutCard
+                displaysCard
+                quietHoursCard
 
-            Section("Displays") {
-                ForEach(model.displays) { display in
-                    Button {
-                        if model.selectedDeviceIDs.contains(display.id) {
-                            model.selectedDeviceIDs.remove(display.id)
-                        } else {
-                            model.selectedDeviceIDs.insert(display.id)
-                        }
-                    } label: {
-                        HStack {
-                            Text(display.name)
-                                .foregroundStyle(.primary)
-                            Spacer()
-                            Image(
-                                systemName: model.selectedDeviceIDs.contains(display.id)
-                                    ? "checkmark.circle.fill"
-                                    : "circle"
-                            )
-                        }
-                    }
-                }
-            }
-
-            Section {
-                Toggle(
-                    "Override quiet hours",
-                    isOn: $model.overrideQuietHours
-                )
-            } footer: {
-                Text("Leave this off unless the image should be sent immediately.")
-            }
-
-            if let errorMessage = model.errorMessage {
-                Section {
+                if let errorMessage = model.errorMessage {
                     Label(errorMessage, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.secondary)
+                        .font(.footnote)
+                        .foregroundStyle(TesseraeTheme.terracotta)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .tesseraeCard()
                 }
-            }
 
-            Section {
                 Button {
                     Task { await model.send() }
                 } label: {
@@ -428,9 +428,129 @@ private struct ShareComposerView: View {
                         .frame(maxWidth: .infinity)
                     }
                 }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
                 .disabled(!model.canSend && model.phase != .failed)
             }
+            .padding(16)
         }
+    }
+
+    private var imageCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Image")
+                    .font(.headline)
+                Spacer()
+                Label(
+                    ByteCountFormatter.string(
+                        fromByteCount: Int64(model.imageByteCount),
+                        countStyle: .file
+                    ),
+                    systemImage: "photo"
+                )
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            }
+
+            if let previewDisplay = model.previewDisplay {
+                TesseraePanelImagePreview(
+                    image: model.previewImage,
+                    panel: previewDisplay.panel,
+                    fit: model.fit,
+                    maximumCanvasHeight: 220,
+                    emptyTitle: String(localized: "Loading shared image…"),
+                    accessibilityIdentifier: "share-panel-preview",
+                    imageAccessibilityIdentifier: "shared-image-preview"
+                )
+                .accessibilityLabel("Display image preview")
+                .accessibilityValue(
+                    "\(model.fit.rawValue), \(previewDisplay.panel.width) by \(previewDisplay.panel.height)"
+                )
+
+                Text(
+                    "\(previewDisplay.name) · \(previewDisplay.panel.width) × \(previewDisplay.panel.height)"
+                )
+                .font(.caption.monospaced())
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+            } else {
+                ContentUnavailableView {
+                    Label("No display selected", systemImage: "rectangle.slash")
+                } description: {
+                    Text("Select a display to preview its panel shape.")
+                }
+                .frame(maxWidth: .infinity, minHeight: 150)
+            }
+        }
+        .tesseraeCard()
+    }
+
+    private var layoutCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Layout")
+                .font(.headline)
+            Picker("Layout", selection: $model.fit) {
+                Text("Fit").tag(ImageFitMode.fit)
+                Text("Fill").tag(ImageFitMode.fill)
+            }
+            .pickerStyle(.segmented)
+        }
+        .tesseraeCard()
+    }
+
+    private var displaysCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Displays")
+                .font(.headline)
+            ForEach(model.displays) { display in
+                Button {
+                    if model.selectedDeviceIDs.contains(display.id) {
+                        model.selectedDeviceIDs.remove(display.id)
+                    } else {
+                        model.selectedDeviceIDs.insert(display.id)
+                    }
+                } label: {
+                    HStack {
+                        Image(
+                            systemName: model.selectedDeviceIDs.contains(display.id)
+                                ? "checkmark.circle.fill"
+                                : "circle"
+                        )
+                        .foregroundStyle(
+                            model.selectedDeviceIDs.contains(display.id)
+                                ? TesseraeTheme.accent
+                                : .secondary
+                        )
+                        Text(display.name)
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Text("\(display.panel.width)×\(display.panel.height)")
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                    }
+                    .contentShape(Rectangle())
+                    .padding(.vertical, 6)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .tesseraeCard()
+    }
+
+    private var quietHoursCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(
+                "Override quiet hours",
+                isOn: $model.overrideQuietHours
+            )
+            Text("Leave this off unless the image should be sent immediately.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .tesseraeCard()
     }
 }
 

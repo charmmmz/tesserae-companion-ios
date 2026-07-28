@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="900" viewBox="0 0 1400 900">
+  <defs>
+    <linearGradient id="page" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0A0D13"/>
+      <stop offset="1" stop-color="#121821"/>
+    </linearGradient>
+    <linearGradient id="teal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#11A092"/>
+      <stop offset="1" stop-color="#08756D"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="180%">
+      <feDropShadow dx="0" dy="28" stdDeviation="28" flood-color="#000000" flood-opacity=".38"/>
+    </filter>
+  </defs>
+
+  <rect width="1400" height="900" fill="url(#page)"/>
+  <text x="90" y="100" fill="#F7F8F7" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="48" font-weight="700">Phone Link</text>
+  <text x="92" y="148" fill="#8D98A7" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="23">One phone, one unmistakable link.</text>
+
+  <!-- Main icon -->
+  <rect x="105" y="210" width="500" height="500" rx="116" fill="url(#teal)" filter="url(#shadow)"/>
+
+  <!-- Deliberately simplified iPhone silhouette. -->
+  <rect x="234" y="336" width="132" height="248" rx="38" fill="#F1F0EA"/>
+  <rect x="273" y="354" width="54" height="13" rx="6.5" fill="#111820"/>
+  <g transform="translate(350 375) scale(7.2)" fill="none" stroke="#9FDC58" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+    <path d="M14 11a5 5 0 0 0-7.07-.07l-3 3A5 5 0 0 0 11 21l1.71-1.71"/>
+  </g>
+
+  <text x="105" y="782" fill="#F7F8F7" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="33" font-weight="700">Recommended direction</text>
+  <text x="105" y="824" fill="#AAB2BE" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="21">Warm-white phone · lime link · Tesserae teal</text>
+
+  <!-- Size and background checks -->
+  <text x="750" y="238" fill="#F7F8F7" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="30" font-weight="650">Home Screen scale</text>
+
+  <rect x="750" y="280" width="530" height="210" rx="36" fill="#080B10"/>
+  <rect x="790" y="320" width="130" height="130" rx="30" fill="url(#teal)"/>
+  <rect x="823" y="353" width="34.5" height="64.5" rx="9.9" fill="#F1F0EA"/>
+  <rect x="833.2" y="358" width="14" height="3.4" rx="1.7" fill="#111820"/>
+  <g transform="translate(853 363) scale(1.9)" fill="none" stroke="#9FDC58" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+    <path d="M14 11a5 5 0 0 0-7.07-.07l-3 3A5 5 0 0 0 11 21l1.71-1.71"/>
+  </g>
+  <text x="952" y="390" fill="#F5F6F7" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="28" font-weight="600">Tesserae Link</text>
+
+  <rect x="750" y="525" width="530" height="210" rx="36" fill="#F2F3F0"/>
+  <rect x="790" y="565" width="130" height="130" rx="30" fill="url(#teal)"/>
+  <rect x="823" y="598" width="34.5" height="64.5" rx="9.9" fill="#F1F0EA"/>
+  <rect x="833.2" y="603" width="14" height="3.4" rx="1.7" fill="#111820"/>
+  <g transform="translate(853 608) scale(1.9)" fill="none" stroke="#9FDC58" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+    <path d="M14 11a5 5 0 0 0-7.07-.07l-3 3A5 5 0 0 0 11 21l1.71-1.71"/>
+  </g>
+  <text x="952" y="635" fill="#202731" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="28" font-weight="600">Tesserae Link</text>
+
+  <text x="750" y="796" fill="#31B7AA" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="21" font-weight="650">A complete link symbol avoids the “second device” and “mug” readings.</text>
+  <text x="750" y="829" fill="#748092" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="19">Concept artwork — geometry and name remain provisional.</text>
+</svg>

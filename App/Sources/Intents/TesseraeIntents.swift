@@ -211,6 +211,11 @@ struct SendImageToTesseraeIntent: AppIntent {
                 idempotencyKey: request.idempotencyKey,
                 instance: snapshot.activeInstance
             )
+            await TesseraeIntentRuntime.recordThumbnail(
+                image.data,
+                for: job,
+                instanceID: snapshot.activeInstance.id
+            )
             try await TesseraeIntentRuntime.record(job, in: snapshot)
             try await queue.remove(submitting)
             return .result(dialog: "Tesserae accepted the image.")
@@ -303,6 +308,22 @@ private enum TesseraeIntentRuntime {
     static func queue() -> FileShareQueueStore {
         FileShareQueueStore(
             directoryURL: AppConfiguration.sharedContainerURL
+        )
+    }
+
+    static func recordThumbnail(
+        _ imageData: Data,
+        for job: PushJob,
+        instanceID: String
+    ) async {
+        let store = FileActivityThumbnailStore(
+            directoryURL: AppConfiguration.sharedContainerURL
+        )
+        _ = try? await store.save(
+            imageData: imageData,
+            jobID: job.id,
+            instanceID: instanceID,
+            createdAt: job.createdAt
         )
     }
 

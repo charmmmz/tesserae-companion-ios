@@ -52,6 +52,9 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 model.openWebIfRequested()
+                Task {
+                    await model.synchronizeSharedActivity()
+                }
             }
         }
         .alert(

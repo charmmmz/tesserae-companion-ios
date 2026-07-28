@@ -11,7 +11,11 @@ struct SettingsView: View {
                     Section("Instance") {
                         LabeledContent("Name", value: instance.name)
                         LabeledContent("Server", value: instance.baseURL.absoluteString)
-                        LabeledContent("Version", value: instance.serverVersion)
+                        LabeledContent(
+                            "Version",
+                            value: model.capabilities?.serverVersion
+                                ?? instance.serverVersion
+                        )
                         LabeledContent(
                             "API mode",
                             value: apiMode
@@ -52,6 +56,8 @@ struct SettingsView: View {
                     Text("About")
                 }
             }
+            .scrollContentBackground(.hidden)
+            .tesseraeScreenBackground()
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

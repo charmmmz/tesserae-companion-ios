@@ -38,3 +38,26 @@ Tesserae Companion is distributed under the Apache License 2.0. See
 [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE). That licence covers this
 repository's original code and documentation; it does not grant rights to
 Tesserae names, logos, or other marks.
+
+## Compatible-hardware marks
+
+The app bundles unmodified manufacturer marks solely to identify compatible
+hardware in the user's own Tesserae device list. Each name and mark remains
+the property of its respective owner and is not covered by this repository's
+Apache-2.0 licence. Their presence does not imply sponsorship or endorsement
+of Tesserae Companion.
+
+The bundled source files were retrieved from the owners' current official
+sites on 2026-07-29:
+
+- Seeed Studio colour and white wordmarks; the white wordmark is rendered with
+  the official Seeed Green sampled from the colour asset in dark appearance:
+  [official branding-kit archive](https://files.seeedstudio.com/wiki/Seeed_Studio_LOGO.zip)
+- Pimoroni square mark:
+  [official shop favicon](https://cdn.shopify.com/s/files/1/0174/1800/t/119/assets/favicon.png?v=46731808014570061601773155236)
+- TRMNL black glyph:
+  [official Framework asset](https://trmnl.com/assets/trmnl--glyph-black-4ca602fd.svg)
+- Waveshare colour wordmark:
+  [official store header asset](https://www.waveshare.com/media/eternal/venedor/default/logo.png)
+- PicPak red wordmark:
+  [official shop header asset](https://cdn.shopify.com/s/files/1/0674/8569/6246/files/Vector.svg?v=1774110422)

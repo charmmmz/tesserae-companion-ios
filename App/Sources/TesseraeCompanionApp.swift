@@ -10,6 +10,7 @@ struct TesseraeCompanionApp: App {
         let credentials: any CredentialStoring
         let stateStore: any CompanionStateStoring
         let shareQueue: any ShareQueueStoring
+        let activityThumbnails: any ActivityThumbnailStoring
         let discovery: any TesseraeDiscovering
 #if DEBUG
         if ProcessInfo.processInfo.environment[
@@ -18,6 +19,7 @@ struct TesseraeCompanionApp: App {
             credentials = InMemoryCredentialStore()
             stateStore = InMemoryCompanionStateStore()
             shareQueue = InMemoryShareQueueStore()
+            activityThumbnails = InMemoryActivityThumbnailStore()
             discovery = StaticDiscoveryService(results: [])
         } else {
             credentials = KeychainCredentialStore(
@@ -28,6 +30,9 @@ struct TesseraeCompanionApp: App {
                 suiteName: AppConfiguration.appGroupIdentifier
             )
             shareQueue = FileShareQueueStore(
+                directoryURL: AppConfiguration.sharedContainerURL
+            )
+            activityThumbnails = FileActivityThumbnailStore(
                 directoryURL: AppConfiguration.sharedContainerURL
             )
             discovery = BonjourDiscoveryService()
@@ -41,6 +46,9 @@ struct TesseraeCompanionApp: App {
             suiteName: AppConfiguration.appGroupIdentifier
         )
         shareQueue = FileShareQueueStore(
+            directoryURL: AppConfiguration.sharedContainerURL
+        )
+        activityThumbnails = FileActivityThumbnailStore(
             directoryURL: AppConfiguration.sharedContainerURL
         )
         discovery = BonjourDiscoveryService()
@@ -59,6 +67,7 @@ struct TesseraeCompanionApp: App {
                 credentials: credentials,
                 stateStore: stateStore,
                 shareQueue: shareQueue,
+                activityThumbnails: activityThumbnails,
                 discovery: discovery
             )
         )
@@ -69,6 +78,24 @@ struct TesseraeCompanionApp: App {
             RootView()
                 .environment(model)
                 .tint(TesseraeTheme.accent)
+                .preferredColorScheme(uiTestColorScheme)
         }
+    }
+
+    private var uiTestColorScheme: ColorScheme? {
+#if DEBUG
+        switch ProcessInfo.processInfo.environment[
+            "TESSERAE_UI_TEST_COLOR_SCHEME"
+        ] {
+        case "light":
+            .light
+        case "dark":
+            .dark
+        default:
+            nil
+        }
+#else
+        nil
+#endif
     }
 }

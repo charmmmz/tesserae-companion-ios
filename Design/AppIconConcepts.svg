@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1200" viewBox="0 0 1800 1200">
+  <defs>
+    <linearGradient id="page" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0A0D13"/>
+      <stop offset="1" stop-color="#121821"/>
+    </linearGradient>
+    <linearGradient id="teal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#11A092"/>
+      <stop offset="1" stop-color="#08756D"/>
+    </linearGradient>
+    <linearGradient id="tealDeep" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0C8E83"/>
+      <stop offset="1" stop-color="#075D58"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="180%">
+      <feDropShadow dx="0" dy="28" stdDeviation="28" flood-color="#000000" flood-opacity=".38"/>
+    </filter>
+    <filter id="smallShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#000000" flood-opacity=".28"/>
+    </filter>
+  </defs>
+
+  <rect width="1800" height="1200" fill="url(#page)"/>
+  <text x="100" y="105" fill="#F7F8F7" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="52" font-weight="700">Tesserae Link — App Icon Directions</text>
+  <text x="102" y="157" fill="#8D98A7" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="25">Same Tesserae family, but with a distinct phone ↔ display connection.</text>
+
+  <!-- Card A -->
+  <rect x="70" y="220" width="520" height="880" rx="44" fill="#171C24"/>
+  <rect x="145" y="285" width="370" height="370" rx="86" fill="url(#teal)" filter="url(#shadow)"/>
+
+  <!-- Linked Tiles: phone, connector, display -->
+  <rect x="235" y="431" width="103" height="166" rx="29" fill="#F1F0EA"/>
+  <rect x="351" y="359" width="120" height="78" rx="26" fill="#F1F0EA"/>
+  <rect x="330" y="428" width="37" height="14" rx="7" fill="#9FDC58" transform="rotate(-28 348.5 435)"/>
+
+  <text x="110" y="739" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="34" font-weight="700">01  Linked Tiles</text>
+  <text x="110" y="787" fill="#8D98A7" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="22" font-weight="650">Most functional</text>
+  <text x="110" y="839" fill="#AAB2BE" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="22">Phone tile + display tile.</text>
+  <text x="110" y="873" fill="#AAB2BE" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="22">A green bridge becomes the “Link”.</text>
+
+  <rect x="110" y="968" width="200" height="82" rx="24" fill="#090C12"/>
+  <rect x="126" y="979" width="60" height="60" rx="14" fill="url(#teal)"/>
+  <rect x="140.5" y="1002.5" width="16.5" height="26.5" rx="4.6" fill="#F1F0EA"/>
+  <rect x="159" y="991" width="19.2" height="12.5" rx="4.2" fill="#F1F0EA"/>
+  <rect x="155.2" y="1002.2" width="7" height="2.8" rx="1.4" fill="#9FDC58" transform="rotate(-28 158.7 1003.6)"/>
+  <text x="199" y="1017" fill="#E8EBEE" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="20" font-weight="600">Link</text>
+
+  <!-- Card B -->
+  <rect x="640" y="220" width="520" height="880" rx="44" fill="#171C24"/>
+  <rect x="715" y="285" width="370" height="370" rx="86" fill="url(#tealDeep)" filter="url(#shadow)"/>
+
+  <!-- Corner Tiles -->
+  <path d="M808 451 H907 V550 H850 C827 550 808 531 808 508 Z" fill="#F1F0EA"/>
+  <path d="M907 389 H992 C1014 389 1032 407 1032 429 V488 H907 Z" fill="#F1F0EA"/>
+  <rect x="897" y="478" width="20" height="20" rx="6" fill="#9FDC58"/>
+
+  <text x="680" y="739" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="34" font-weight="700">02  Corner Link</text>
+  <text x="680" y="787" fill="#31B7AA" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="22" font-weight="650">Recommended</text>
+  <text x="680" y="839" fill="#AAB2BE" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="22">Original diagonal rhythm, new proportions.</text>
+  <text x="680" y="873" fill="#AAB2BE" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="22">The clearest Tesserae family resemblance.</text>
+
+  <rect x="680" y="968" width="200" height="82" rx="24" fill="#F3F4F2"/>
+  <rect x="696" y="979" width="60" height="60" rx="14" fill="url(#tealDeep)"/>
+  <path d="M711 1005 H727 V1021 H718 C714 1021 711 1018 711 1014 Z" fill="#F1F0EA"/>
+  <path d="M727 995 H740 C743.5 995 746 997.5 746 1001 V1011 H727 Z" fill="#F1F0EA"/>
+  <rect x="725.5" y="1009.5" width="3" height="3" rx="1" fill="#9FDC58"/>
+  <text x="769" y="1017" fill="#1F2731" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="20" font-weight="600">Link</text>
+
+  <!-- Card C -->
+  <rect x="1210" y="220" width="520" height="880" rx="44" fill="#171C24"/>
+  <rect x="1285" y="285" width="370" height="370" rx="86" fill="url(#teal)" filter="url(#shadow)"/>
+
+  <!-- Signal Fold -->
+  <path d="M1382 526 V421 C1382 403 1397 388 1415 388 H1432 V541 H1397 C1389 541 1382 534 1382 526 Z" fill="#F1F0EA"/>
+  <path d="M1447 388 H1574 C1592 388 1607 403 1607 421 V466 H1447 Z" fill="#F1F0EA"/>
+  <path d="M1449 489 C1476 489 1476 516 1503 516" fill="none" stroke="#9FDC58" stroke-width="15" stroke-linecap="round"/>
+
+  <text x="1250" y="739" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="34" font-weight="700">03  Signal Fold</text>
+  <text x="1250" y="787" fill="#8D98A7" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="22" font-weight="650">More expressive</text>
+  <text x="1250" y="839" fill="#AAB2BE" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="22">A bolder phone-and-screen silhouette.</text>
+  <text x="1250" y="873" fill="#AAB2BE" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="22">Clearer function, but less timeless.</text>
+
+  <rect x="1250" y="968" width="200" height="82" rx="24" fill="#090C12"/>
+  <rect x="1266" y="979" width="60" height="60" rx="14" fill="url(#teal)"/>
+  <path d="M1282 1018 V1001 C1282 998 1284.5 996 1287 996 H1290 V1021 H1284 C1283 1021 1282 1020 1282 1018 Z" fill="#F1F0EA"/>
+  <path d="M1292.5 996 H1313 C1316 996 1318 998 1318 1001 V1008 H1292.5 Z" fill="#F1F0EA"/>
+  <path d="M1293 1012 C1297 1012 1297 1017 1302 1017" fill="none" stroke="#9FDC58" stroke-width="2.5" stroke-linecap="round"/>
+  <text x="1339" y="1017" fill="#E8EBEE" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="20" font-weight="600">Link</text>
+
+  <text x="100" y="1155" fill="#657183" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="20">Concept study — icon geometry and naming are provisional; final artwork should be optically tuned at 1024, 180, 60, and 40 pt.</text>
+</svg>

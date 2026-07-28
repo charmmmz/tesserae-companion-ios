@@ -6,6 +6,8 @@ import UIKit
 @MainActor
 @Observable
 final class AppModel {
+    private static let dashboardOrderKeyPrefix = "dashboard-order."
+
     enum ConnectionMode {
         case live
         case demo
@@ -25,8 +27,10 @@ final class AppModel {
     private let credentials: any CredentialStoring
     private let stateStore: any CompanionStateStoring
     private let shareQueue: any ShareQueueStoring
+    private let activityThumbnails: any ActivityThumbnailStoring
     private let discovery: any TesseraeDiscovering
     private var didAttemptRestore = false
+    private var isSynchronizingSharedState = false
 
     var activeInstance: TesseraeInstance?
     var connectionMode: ConnectionMode?
@@ -38,7 +42,11 @@ final class AppModel {
     var displays: [DisplaySummary] = []
     var dashboards: [DashboardSummary] = []
     var jobs: [PushJob] = []
-    var favoriteDashboardIDs: Set<String> = []
+    var activityThumbnailData: [String: Data] = [:]
+    var displayPreviews: [String: PreviewImageState] = [:]
+    var dashboardPreviews: [String: PreviewImageState] = [:]
+    var previewGeneration = 0
+    var dashboardOrderIDs: [String] = []
     var activeOperationIDs: Set<String> = []
     var isRefreshing = false
     var isDiscovering = false
@@ -46,12 +54,17 @@ final class AppModel {
     var isRetryingSharedImages = false
     var lastError: String?
 
+    var supportsPreviews: Bool {
+        capabilities?.features.contains("previews") == true
+    }
+
     init(
         liveClient: any TesseraeServing,
         demoClient: any TesseraeServing,
         credentials: any CredentialStoring,
         stateStore: any CompanionStateStoring,
         shareQueue: any ShareQueueStoring,
+        activityThumbnails: any ActivityThumbnailStoring,
         discovery: any TesseraeDiscovering
     ) {
         self.liveClient = liveClient
@@ -60,17 +73,31 @@ final class AppModel {
         self.credentials = credentials
         self.stateStore = stateStore
         self.shareQueue = shareQueue
+        self.activityThumbnails = activityThumbnails
         self.discovery = discovery
     }
 
     var sortedDashboards: [DashboardSummary] {
-        dashboards.sorted { lhs, rhs in
-            let lhsFavorite = favoriteDashboardIDs.contains(lhs.id)
-            let rhsFavorite = favoriteDashboardIDs.contains(rhs.id)
-            if lhsFavorite != rhsFavorite {
-                return lhsFavorite
+        var ranking: [String: Int] = [:]
+        for dashboardID in dashboardOrderIDs where ranking[dashboardID] == nil {
+            ranking[dashboardID] = ranking.count
+        }
+
+        return dashboards.sorted { lhs, rhs in
+            switch (ranking[lhs.id], ranking[rhs.id]) {
+            case let (lhsRank?, rhsRank?):
+                return lhsRank < rhsRank
+            case (_?, nil):
+                return true
+            case (nil, _?):
+                return false
+            case (nil, nil):
+                let nameOrder = lhs.name.localizedStandardCompare(rhs.name)
+                if nameOrder != .orderedSame {
+                    return nameOrder == .orderedAscending
+                }
+                return lhs.id < rhs.id
             }
-            return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
         }
     }
 
@@ -140,12 +167,17 @@ final class AppModel {
             connectionMode = mode
             connectionHealth = .connected
             self.capabilities = capabilities
-            activeInstance = session.instance
-            favoriteDashboardIDs = mode == .demo ? ["pantry"] : []
+            activeInstance = session.instance.updatingServerVersion(
+                to: capabilities.serverVersion
+            )
+            activityThumbnailData = [:]
+            displayPreviews = [:]
+            dashboardPreviews = [:]
+            loadDashboardOrder(for: session.instance.id)
             if mode == .live {
                 await persistSnapshot()
             }
-            await refresh()
+            await refresh(probeCapabilities: false)
             await retryPendingSharedImages()
         } catch {
             lastError = error.localizedDescription
@@ -176,54 +208,100 @@ final class AppModel {
             activeClient = liveClient
             connectionMode = .live
             activeInstance = snapshot.activeInstance
+            loadDashboardOrder(for: snapshot.activeInstance.id)
             capabilities = snapshot.capabilities
             displays = snapshot.displays
             dashboards = snapshot.dashboards
             jobs = snapshot.jobs
+            await reloadActivityThumbnails(instanceID: snapshot.activeInstance.id)
 
-            capabilities = try await liveClient.probe(
+            let currentCapabilities = try await liveClient.probe(
                 baseURL: snapshot.activeInstance.baseURL
             )
-            await refresh(showErrors: false)
+            capabilities = currentCapabilities
+            activeInstance = snapshot.activeInstance.updatingServerVersion(
+                to: currentCapabilities.serverVersion
+            )
+            await refresh(
+                showErrors: false,
+                probeCapabilities: false
+            )
             await retryPendingSharedImages()
         } catch let error as TesseraeClientError {
-            await handleConnectionError(error, showAlert: false)
+            await handleConnectionError(error)
         } catch {
             connectionHealth = .offline
             connectionNotice = error.localizedDescription
         }
     }
 
-    func refresh(showErrors: Bool = true) async {
-        guard let activeInstance else { return }
+    func refresh(
+        showErrors: Bool = true,
+        probeCapabilities: Bool = true
+    ) async {
+        guard var currentInstance = activeInstance else { return }
         isRefreshing = true
         defer { isRefreshing = false }
 
         do {
-            displays = try await activeClient.fetchDisplays(instance: activeInstance)
-            dashboards = try await activeClient.fetchDashboards(instance: activeInstance)
+            if probeCapabilities, connectionMode == .live {
+                let currentCapabilities = try await activeClient.probe(
+                    baseURL: currentInstance.baseURL
+                )
+                capabilities = currentCapabilities
+                currentInstance = currentInstance.updatingServerVersion(
+                    to: currentCapabilities.serverVersion
+                )
+                activeInstance = currentInstance
+            }
+
+            displays = try await activeClient.fetchDisplays(instance: currentInstance)
+            dashboards = try await activeClient.fetchDashboards(instance: currentInstance)
+            reconcileDashboardOrder()
             connectionHealth = .connected
             connectionNotice = nil
+            if supportsPreviews {
+                let displayIDs = Set(displays.map(\.id))
+                let dashboardIDs = Set(dashboards.map(\.id))
+                displayPreviews = displayPreviews.filter {
+                    displayIDs.contains($0.key)
+                }
+                dashboardPreviews = dashboardPreviews.filter {
+                    dashboardIDs.contains($0.key)
+                }
+            } else {
+                displayPreviews = [:]
+                dashboardPreviews = [:]
+            }
+            previewGeneration &+= 1
             if connectionMode == .live {
                 await persistSnapshot(showErrors: showErrors)
             }
         } catch let error as TesseraeClientError {
-            await handleConnectionError(error, showAlert: showErrors)
+            await handleConnectionError(error)
         } catch {
             connectionHealth = .offline
             connectionNotice = error.localizedDescription
-            if showErrors {
-                lastError = error.localizedDescription
-            }
+            lastError = nil
         }
     }
 
-    func toggleFavorite(_ dashboardID: String) {
-        if favoriteDashboardIDs.contains(dashboardID) {
-            favoriteDashboardIDs.remove(dashboardID)
-        } else {
-            favoriteDashboardIDs.insert(dashboardID)
+    func moveDashboard(
+        _ dashboardID: String,
+        to destinationIndex: Int
+    ) {
+        var orderedIDs = sortedDashboards.map(\.id)
+        guard let sourceIndex = orderedIDs.firstIndex(of: dashboardID) else {
+            return
         }
+
+        orderedIDs.remove(at: sourceIndex)
+        let boundedIndex = min(max(0, destinationIndex), orderedIDs.count)
+        orderedIDs.insert(dashboardID, at: boundedIndex)
+        guard orderedIDs != dashboardOrderIDs else { return }
+
+        dashboardOrderIDs = orderedIDs
+        saveDashboardOrder()
     }
 
     func push(_ dashboard: DashboardSummary) async {
@@ -243,7 +321,7 @@ final class AppModel {
             await persistSnapshot()
             await updateUntilTerminal(job, instance: activeInstance)
         } catch {
-            lastError = error.localizedDescription
+            await presentOperationError(error)
         }
     }
 
@@ -268,12 +346,17 @@ final class AppModel {
                 idempotencyKey: UUID().uuidString,
                 instance: activeInstance
             )
+            await rememberActivityThumbnail(
+                imageData: data,
+                for: job,
+                instanceID: activeInstance.id
+            )
             jobs.insert(job, at: 0)
             await persistSnapshot()
             await updateUntilTerminal(job, instance: activeInstance)
             return true
         } catch {
-            lastError = error.localizedDescription
+            await presentOperationError(error)
             return false
         }
     }
@@ -317,6 +400,11 @@ final class AppModel {
                         idempotencyKey: submitting.idempotencyKey,
                         instance: activeInstance
                     )
+                    await rememberActivityThumbnail(
+                        imageData: data,
+                        for: job,
+                        instanceID: activeInstance.id
+                    )
                     if !jobs.contains(where: { $0.id == job.id }) {
                         jobs.insert(job, at: 0)
                     }
@@ -333,14 +421,53 @@ final class AppModel {
                        clientError == .unauthorized
                             || clientError == .missingCredential
                     {
-                        await handleConnectionError(
-                            clientError,
-                            showAlert: false
-                        )
+                        await handleConnectionError(clientError)
                         return
                     }
                 }
             }
+        } catch {
+            connectionNotice = error.localizedDescription
+        }
+    }
+
+    func synchronizeSharedActivity() async {
+        guard
+            connectionMode == .live,
+            connectionHealth == .connected,
+            let activeInstance,
+            !isSynchronizingSharedState
+        else {
+            return
+        }
+
+        isSynchronizingSharedState = true
+        defer { isSynchronizingSharedState = false }
+
+        do {
+            guard
+                let snapshot = try await stateStore.load(),
+                snapshot.activeInstance.id == activeInstance.id
+            else {
+                return
+            }
+
+            let incomingNonterminalIDs = Set(
+                snapshot.jobs
+                    .filter { !$0.isTerminal }
+                    .map(\.id)
+            )
+            jobs = CompanionSnapshot.mergingJobs(
+                current: jobs,
+                incoming: snapshot.jobs
+            )
+            await reloadActivityThumbnails(instanceID: activeInstance.id)
+            await persistSnapshot(showErrors: false)
+
+            for job in jobs where incomingNonterminalIDs.contains(job.id) {
+                await updateUntilTerminal(job, instance: activeInstance)
+            }
+            await retryPendingSharedImages()
         } catch {
             connectionNotice = error.localizedDescription
         }
@@ -372,6 +499,114 @@ final class AppModel {
             : names.joined(separator: ", ")
     }
 
+    func loadDisplayPreview(_ display: DisplaySummary) async {
+        guard supportsPreviews, let instance = activeInstance else {
+            return
+        }
+        let previous = displayPreviews[display.id] ?? .idle
+        guard previous.phase != .loading else {
+            return
+        }
+        displayPreviews[display.id] = PreviewImageState(
+            data: previous.data,
+            eTag: previous.eTag,
+            phase: .loading
+        )
+
+        do {
+            let result = try await activeClient.fetchDevicePreview(
+                id: display.id,
+                ifNoneMatch: previous.data == nil ? nil : previous.eTag,
+                instance: instance
+            )
+            guard activeInstance?.id == instance.id, !Task.isCancelled else {
+                return
+            }
+            apply(
+                result,
+                previous: previous,
+                to: &displayPreviews,
+                key: display.id
+            )
+        } catch is CancellationError {
+            finishCancelledPreview(
+                previous: previous,
+                in: &displayPreviews,
+                key: display.id
+            )
+        } catch {
+            finishFailedPreview(
+                previous: previous,
+                in: &displayPreviews,
+                key: display.id
+            )
+        }
+    }
+
+    func loadDashboardPreview(_ dashboard: DashboardSummary) async {
+        guard supportsPreviews, let instance = activeInstance else {
+            return
+        }
+        let previous = dashboardPreviews[dashboard.id] ?? .idle
+        guard previous.phase != .loading else {
+            return
+        }
+        dashboardPreviews[dashboard.id] = PreviewImageState(
+            data: previous.data,
+            eTag: previous.eTag,
+            phase: .loading
+        )
+
+        do {
+            for attempt in 0..<8 {
+                try Task.checkCancellation()
+                let result = try await activeClient.fetchDashboardPreview(
+                    id: dashboard.id,
+                    deviceID: dashboard.deviceIDs.first,
+                    ifNoneMatch: previous.data == nil ? nil : previous.eTag,
+                    instance: instance
+                )
+                guard activeInstance?.id == instance.id else {
+                    return
+                }
+                if case let .preparing(retryAfterSeconds) = result {
+                    guard attempt < 7 else {
+                        break
+                    }
+                    let boundedDelay = min(max(retryAfterSeconds, 0.25), 30)
+                    try await Task.sleep(
+                        for: .milliseconds(Int(boundedDelay * 1_000))
+                    )
+                    continue
+                }
+                apply(
+                    result,
+                    previous: previous,
+                    to: &dashboardPreviews,
+                    key: dashboard.id
+                )
+                return
+            }
+            finishFailedPreview(
+                previous: previous,
+                in: &dashboardPreviews,
+                key: dashboard.id
+            )
+        } catch is CancellationError {
+            finishCancelledPreview(
+                previous: previous,
+                in: &dashboardPreviews,
+                key: dashboard.id
+            )
+        } catch {
+            finishFailedPreview(
+                previous: previous,
+                in: &dashboardPreviews,
+                key: dashboard.id
+            )
+        }
+    }
+
     private func updateUntilTerminal(_ acceptedJob: PushJob, instance: TesseraeInstance) async {
         var current = acceptedJob
         for _ in 0..<8 where !current.isTerminal {
@@ -385,14 +620,18 @@ final class AppModel {
                     try await Task.sleep(for: .milliseconds(350))
                 }
             } catch {
-                lastError = error.localizedDescription
+                await presentOperationError(error)
                 return
             }
+        }
+        if current.isTerminal {
+            previewGeneration &+= 1
         }
     }
 
     func disconnect() async {
         var disconnectError: Error?
+        let disconnectedInstanceID = activeInstance?.id
         if let activeInstance, connectionMode == .live {
             do {
                 try await activeClient.revokeSession(instance: activeInstance)
@@ -410,6 +649,11 @@ final class AppModel {
                 disconnectError = disconnectError ?? error
             }
         }
+        if let disconnectedInstanceID {
+            try? await activityThumbnails.clear(
+                instanceID: disconnectedInstanceID
+            )
+        }
         activeInstance = nil
         connectionMode = nil
         connectionHealth = .idle
@@ -418,7 +662,10 @@ final class AppModel {
         displays = []
         dashboards = []
         jobs = []
-        favoriteDashboardIDs = []
+        activityThumbnailData = [:]
+        displayPreviews = [:]
+        dashboardPreviews = [:]
+        dashboardOrderIDs = []
         activeClient = liveClient
         if let disconnectError {
             lastError = disconnectError.localizedDescription
@@ -426,20 +673,33 @@ final class AppModel {
     }
 
     private func handleConnectionError(
-        _ error: TesseraeClientError,
-        showAlert: Bool
+        _ error: TesseraeClientError
     ) async {
+        // Connection state is already presented persistently in RootView's
+        // top banner. Clear any modal error so one failure never produces
+        // both the banner and a blocking alert.
+        lastError = nil
         if error == .unauthorized || error == .missingCredential {
+            let disconnectedInstanceID = activeInstance?.id
             if let activeInstance {
                 try? await credentials.removeToken(for: activeInstance.id)
             }
             try? await stateStore.clear()
+            if let disconnectedInstanceID {
+                try? await activityThumbnails.clear(
+                    instanceID: disconnectedInstanceID
+                )
+            }
             activeInstance = nil
             connectionMode = nil
             capabilities = nil
             displays = []
             dashboards = []
             jobs = []
+            activityThumbnailData = [:]
+            displayPreviews = [:]
+            dashboardPreviews = [:]
+            dashboardOrderIDs = []
             activeClient = liveClient
             connectionHealth = .requiresPairing
             connectionNotice = String(
@@ -449,9 +709,63 @@ final class AppModel {
             connectionHealth = .offline
             connectionNotice = error.localizedDescription
         }
-        if showAlert {
-            lastError = connectionNotice
+    }
+
+    private func presentOperationError(_ error: Error) async {
+        if error is CancellationError {
+            return
         }
+        guard let clientError = error as? TesseraeClientError else {
+            lastError = error.localizedDescription
+            return
+        }
+
+        switch clientError {
+        case .transport, .unavailable, .unauthorized, .missingCredential:
+            await handleConnectionError(clientError)
+        case let .httpStatus(status) where [502, 503, 504].contains(status):
+            await handleConnectionError(clientError)
+        default:
+            lastError = clientError.localizedDescription
+        }
+    }
+
+    private func loadDashboardOrder(for instanceID: String) {
+        dashboardOrderIDs = UserDefaults.standard.stringArray(
+            forKey: Self.dashboardOrderKeyPrefix + instanceID
+        ) ?? []
+    }
+
+    private func reconcileDashboardOrder() {
+        let availableIDs = Set(dashboards.map(\.id))
+        var seenIDs: Set<String> = []
+        let retainedIDs = dashboardOrderIDs.filter { dashboardID in
+            availableIDs.contains(dashboardID)
+                && seenIDs.insert(dashboardID).inserted
+        }
+        let newIDs = dashboards
+            .filter { !seenIDs.contains($0.id) }
+            .sorted { lhs, rhs in
+                let nameOrder = lhs.name.localizedStandardCompare(rhs.name)
+                if nameOrder != .orderedSame {
+                    return nameOrder == .orderedAscending
+                }
+                return lhs.id < rhs.id
+            }
+            .map(\.id)
+        let normalizedOrder = retainedIDs + newIDs
+
+        guard normalizedOrder != dashboardOrderIDs else { return }
+        dashboardOrderIDs = normalizedOrder
+        saveDashboardOrder()
+    }
+
+    private func saveDashboardOrder() {
+        guard let instanceID = activeInstance?.id else { return }
+        UserDefaults.standard.set(
+            dashboardOrderIDs,
+            forKey: Self.dashboardOrderKeyPrefix + instanceID
+        )
     }
 
     private func persistSnapshot(showErrors: Bool = true) async {
@@ -478,6 +792,36 @@ final class AppModel {
         }
     }
 
+    private func rememberActivityThumbnail(
+        imageData: Data,
+        for job: PushJob,
+        instanceID: String
+    ) async {
+        guard job.kind == .imagePush else { return }
+        if let thumbnail = try? await activityThumbnails.save(
+            imageData: imageData,
+            jobID: job.id,
+            instanceID: instanceID,
+            createdAt: job.createdAt
+        ) {
+            activityThumbnailData[job.id] = thumbnail
+        }
+    }
+
+    private func reloadActivityThumbnails(instanceID: String) async {
+        try? await activityThumbnails.purge(referenceDate: Date())
+        var loaded: [String: Data] = [:]
+        for job in jobs where job.kind == .imagePush {
+            if let data = try? await activityThumbnails.data(
+                forJobID: job.id,
+                instanceID: instanceID
+            ) {
+                loaded[job.id] = data
+            }
+        }
+        activityThumbnailData = loaded
+    }
+
     private func imageFileName(for contentType: String) -> String {
         switch contentType {
         case "image/png": "shared-photo.png"
@@ -486,5 +830,63 @@ final class AppModel {
         case "image/webp": "shared-photo.webp"
         default: "shared-photo.jpg"
         }
+    }
+
+    private func apply(
+        _ result: PreviewFetchResult,
+        previous: PreviewImageState,
+        to previews: inout [String: PreviewImageState],
+        key: String
+    ) {
+        switch result {
+        case let .image(data, eTag):
+            previews[key] = PreviewImageState(
+                data: data,
+                eTag: eTag,
+                phase: .ready
+            )
+        case .notModified:
+            previews[key] = PreviewImageState(
+                data: previous.data,
+                eTag: previous.eTag,
+                phase: previous.data == nil ? .idle : .ready
+            )
+        case .notFound:
+            previews[key] = PreviewImageState(
+                data: nil,
+                eTag: nil,
+                phase: .unavailable
+            )
+        case .preparing:
+            previews[key] = PreviewImageState(
+                data: previous.data,
+                eTag: previous.eTag,
+                phase: .loading
+            )
+        }
+    }
+
+    private func finishCancelledPreview(
+        previous: PreviewImageState,
+        in previews: inout [String: PreviewImageState],
+        key: String
+    ) {
+        previews[key] = PreviewImageState(
+            data: previous.data,
+            eTag: previous.eTag,
+            phase: previous.data == nil ? .idle : .ready
+        )
+    }
+
+    private func finishFailedPreview(
+        previous: PreviewImageState,
+        in previews: inout [String: PreviewImageState],
+        key: String
+    ) {
+        previews[key] = PreviewImageState(
+            data: previous.data,
+            eTag: previous.eTag,
+            phase: previous.data == nil ? .unavailable : .ready
+        )
     }
 }

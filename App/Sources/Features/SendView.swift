@@ -1,16 +1,21 @@
 import PhotosUI
 import SwiftUI
 import TesseraeKit
+import UIKit
 import UniformTypeIdentifiers
 
 struct SendView: View {
     @Environment(AppModel.self) private var model
     @State private var pickerItem: PhotosPickerItem?
+    @State private var isPhotoPickerPresented = false
     @State private var imageData: Data?
+    @State private var previewImage: UIImage?
     @State private var imageContentType = "image/jpeg"
     @State private var fitMode: ImageFitMode = .fit
     @State private var selectedDeviceIDs: Set<String> = []
+    @State private var previewDeviceID: String?
     @State private var sentConfirmationPresented = false
+    private let previewSlotHeight: CGFloat = 310
 
     var body: some View {
         ScrollView {
@@ -31,24 +36,32 @@ struct SendView: View {
                         if sent {
                             sentConfirmationPresented = true
                             self.imageData = nil
+                            previewImage = nil
                             pickerItem = nil
                         }
                     }
                 } label: {
-                    if model.activeOperationIDs.contains("image") {
-                        ProgressView()
-                            .frame(maxWidth: .infinity)
-                    } else {
-                        Label("Send to Displays", systemImage: "paperplane.fill")
-                            .frame(maxWidth: .infinity)
-                    }
+                    Label("Send to Displays", systemImage: "paperplane.fill")
+                        .frame(maxWidth: .infinity)
+                        .opacity(isSending ? 0 : 1)
+                        .overlay {
+                            if isSending {
+                                ProgressView()
+                                    .tint(.white)
+                                    .transition(.opacity)
+                            }
+                        }
+                        .animation(
+                            .easeInOut(duration: 0.18),
+                            value: isSending
+                        )
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 .disabled(
                     imageData == nil
                         || selectedDeviceIDs.isEmpty
-                        || model.activeOperationIDs.contains("image")
+                        || isSending
                 )
             }
             .padding(16)
@@ -57,16 +70,21 @@ struct SendView: View {
             if selectedDeviceIDs.isEmpty {
                 selectedDeviceIDs = Set(model.displays.prefix(1).map(\.id))
             }
+            if previewDeviceID == nil {
+                previewDeviceID = selectedDeviceIDs.first
+                    ?? model.displays.first?.id
+            }
         }
         .onChange(of: pickerItem) { _, newItem in
             Task {
-                imageData = try? await newItem?.loadTransferable(type: Data.self)
-                imageContentType = newItem?
-                    .supportedContentTypes
-                    .compactMap(\.preferredMIMEType)
-                    .first ?? "image/jpeg"
+                await load(newItem)
             }
         }
+        .photosPicker(
+            isPresented: $isPhotoPickerPresented,
+            selection: $pickerItem,
+            matching: .images
+        )
         .alert("Sent", isPresented: $sentConfirmationPresented) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -76,38 +94,98 @@ struct SendView: View {
     }
 
     private var imagePickerCard: some View {
-        VStack(spacing: 14) {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(TesseraeTheme.accentSoft)
-                .frame(height: 180)
-                .overlay {
-                    VStack(spacing: 8) {
-                        Image(systemName: imageData == nil ? "photo.badge.plus" : "photo.fill")
-                            .font(.system(size: 40))
-                        Text(imageSelectionLabel)
-                            .font(.headline)
-                        if let imageData {
-                            Text(ByteCountFormatter.string(fromByteCount: Int64(imageData.count), countStyle: .file))
-                                .font(.caption)
-                        }
-                    }
-                    .foregroundStyle(TesseraeTheme.accent)
-                }
-
+        VStack(alignment: .leading, spacing: 14) {
             HStack {
-                PhotosPicker(selection: $pickerItem, matching: .images) {
-                    Label("Choose Photo", systemImage: "photo.on.rectangle")
+                Text("Preview")
+                    .font(.headline)
+                Spacer()
+                if let imageData {
+                    Text(
+                        ByteCountFormatter.string(
+                            fromByteCount: Int64(imageData.count),
+                            countStyle: .file
+                        )
+                    )
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.bordered)
+            }
 
+            simulatedPanel
+
+            if model.connectionMode == .demo {
                 Button("Use Sample") {
-                    imageData = Data("fixture-image".utf8)
+                    let renderer = UIGraphicsImageRenderer(
+                        size: CGSize(width: 800, height: 600)
+                    )
+                    let sample = renderer.image { context in
+                        UIColor.systemTeal.setFill()
+                        context.fill(
+                            CGRect(x: 0, y: 0, width: 800, height: 600)
+                        )
+                    }
+                    imageData = sample.jpegData(compressionQuality: 0.9)
+                    previewImage = sample
                     imageContentType = "image/jpeg"
                 }
                 .buttonStyle(.bordered)
             }
         }
         .tesseraeCard()
+    }
+
+    @ViewBuilder
+    private var simulatedPanel: some View {
+        Group {
+            if let previewDisplay {
+                let panel = previewDisplay.panel
+
+                VStack(spacing: 9) {
+                    ZStack {
+                        TesseraePanelImagePreview(
+                            image: previewImage,
+                            panel: panel,
+                            fit: fitMode,
+                            maximumCanvasHeight: 250,
+                            emptyTitle: imageSelectionLabel,
+                            accessibilityIdentifier: "send-panel-preview",
+                            imageAccessibilityIdentifier: "selected-image-preview"
+                        )
+                        .accessibilityLabel("Display image preview")
+                        .accessibilityValue(
+                            "\(fitMode.rawValue), \(panel.width) by \(panel.height)"
+                        )
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 276)
+
+                    Text(
+                        "\(previewDisplay.name) · \(panel.width) × \(panel.height)"
+                    )
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                }
+            } else {
+                ContentUnavailableView {
+                    Label("No display selected", systemImage: "rectangle.slash")
+                } description: {
+                    Text("Connect a display to preview its panel shape.")
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .frame(height: previewSlotHeight)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            isPhotoPickerPresented = true
+        }
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Tap to choose a photo.")
+        .accessibilityAction {
+            isPhotoPickerPresented = true
+        }
     }
 
     private var fitCard: some View {
@@ -150,8 +228,17 @@ struct SendView: View {
                     Button {
                         if selectedDeviceIDs.contains(display.id) {
                             selectedDeviceIDs.remove(display.id)
+                            if previewDeviceID == display.id,
+                               let remainingPreview = model.displays.first(
+                                   where: {
+                                       selectedDeviceIDs.contains($0.id)
+                                   }
+                               ) {
+                                previewDeviceID = remainingPreview.id
+                            }
                         } else {
                             selectedDeviceIDs.insert(display.id)
+                            previewDeviceID = display.id
                         }
                     } label: {
                         HStack {
@@ -188,9 +275,66 @@ struct SendView: View {
             : String(localized: "Image ready")
     }
 
+    private var isSending: Bool {
+        model.activeOperationIDs.contains("image")
+    }
+
+    private var previewDisplay: DisplaySummary? {
+        if let previewDeviceID,
+           let preview = model.displays.first(
+               where: { $0.id == previewDeviceID }
+           ) {
+            return preview
+        }
+        return model.displays.first {
+            selectedDeviceIDs.contains($0.id)
+        } ?? model.displays.first
+    }
+
     private var fitDescription: String {
         fitMode == .fit
             ? String(localized: "Show the whole image with space around it.")
             : String(localized: "Fill the display and crop the edges.")
+    }
+
+    private func load(_ item: PhotosPickerItem?) async {
+        guard let item else {
+            imageData = nil
+            previewImage = nil
+            return
+        }
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self) else {
+                throw UploadImagePreparationError.decoding
+            }
+            let fallbackContentType = item.supportedContentTypes
+                .compactMap(\.preferredMIMEType)
+                .first ?? "image/jpeg"
+            let maximumPixelSize = imagePreparationMaxEdge
+            let prepared = try await Task.detached(priority: .userInitiated) {
+                try UploadImagePreparer.prepare(
+                    data: data,
+                    fallbackContentType: fallbackContentType,
+                    maximumPixelSize: maximumPixelSize
+                )
+            }.value
+            imageData = prepared.data
+            imageContentType = prepared.contentType
+            previewImage = UIImage(data: prepared.data)
+        } catch {
+            imageData = nil
+            previewImage = nil
+            model.lastError = error.localizedDescription
+        }
+    }
+
+    private var imagePreparationMaxEdge: Int {
+        let displayMaxEdge = model.displays
+            .map { max($0.panel.width, $0.panel.height) }
+            .max() ?? 2_048
+        return min(
+            displayMaxEdge,
+            model.capabilities?.limits.imageMaxEdge ?? displayMaxEdge
+        )
     }
 }
