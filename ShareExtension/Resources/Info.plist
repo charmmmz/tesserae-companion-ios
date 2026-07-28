@@ -20,6 +20,11 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionAttributes</key>
@@ -35,5 +40,11 @@
 		<key>NSExtensionPrincipalClass</key>
 		<string>$(PRODUCT_MODULE_NAME).ShareViewController</string>
 	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Connect to your paired Tesserae server to send this image.</string>
+	<key>TesseraeAppGroupIdentifier</key>
+	<string>group.com.charmmmz.tesseraecompanion</string>
+	<key>TesseraeKeychainAccessGroup</key>
+	<string>$(AppIdentifierPrefix)com.charmmmz.tesseraecompanion.shared</string>
 </dict>
 </plist>

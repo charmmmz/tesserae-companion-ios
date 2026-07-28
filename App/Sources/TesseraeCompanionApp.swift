@@ -9,6 +9,7 @@ struct TesseraeCompanionApp: App {
     init() {
         let credentials: any CredentialStoring
         let stateStore: any CompanionStateStoring
+        let shareQueue: any ShareQueueStoring
         let discovery: any TesseraeDiscovering
 #if DEBUG
         if ProcessInfo.processInfo.environment[
@@ -16,6 +17,7 @@ struct TesseraeCompanionApp: App {
         ] == "1" {
             credentials = InMemoryCredentialStore()
             stateStore = InMemoryCompanionStateStore()
+            shareQueue = InMemoryShareQueueStore()
             discovery = StaticDiscoveryService(results: [])
         } else {
             credentials = KeychainCredentialStore(
@@ -24,6 +26,9 @@ struct TesseraeCompanionApp: App {
             )
             stateStore = UserDefaultsCompanionStateStore(
                 suiteName: AppConfiguration.appGroupIdentifier
+            )
+            shareQueue = FileShareQueueStore(
+                directoryURL: AppConfiguration.sharedContainerURL
             )
             discovery = BonjourDiscoveryService()
         }
@@ -34,6 +39,9 @@ struct TesseraeCompanionApp: App {
         )
         stateStore = UserDefaultsCompanionStateStore(
             suiteName: AppConfiguration.appGroupIdentifier
+        )
+        shareQueue = FileShareQueueStore(
+            directoryURL: AppConfiguration.sharedContainerURL
         )
         discovery = BonjourDiscoveryService()
 #endif
@@ -50,6 +58,7 @@ struct TesseraeCompanionApp: App {
                 demoClient: MockTesseraeClient(),
                 credentials: credentials,
                 stateStore: stateStore,
+                shareQueue: shareQueue,
                 discovery: discovery
             )
         )

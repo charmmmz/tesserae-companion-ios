@@ -1,47 +1,456 @@
+import SwiftUI
 import TesseraeKit
 import UIKit
+import UniformTypeIdentifiers
 
+@MainActor
 final class ShareViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        view.backgroundColor = .systemBackground
-
-        let icon = UIImageView(image: UIImage(systemName: "paperplane.circle.fill"))
-        icon.tintColor = UIColor(red: 13 / 255, green: 140 / 255, blue: 126 / 255, alpha: 1)
-        icon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 42)
-        icon.contentMode = .scaleAspectFit
-
-        let titleLabel = UILabel()
-        titleLabel.text = "Send to Tesserae"
-        titleLabel.font = .preferredFont(forTextStyle: .title2)
-        titleLabel.textAlignment = .center
-
-        let detailLabel = UILabel()
-        detailLabel.text = "The Share Sheet target is registered. Display selection and upload will be connected in the next slice."
-        detailLabel.font = .preferredFont(forTextStyle: .body)
-        detailLabel.textColor = .secondaryLabel
-        detailLabel.textAlignment = .center
-        detailLabel.numberOfLines = 0
-
-        let closeButton = UIButton(type: .system)
-        closeButton.setTitle("Close", for: .normal)
-        closeButton.addTarget(self, action: #selector(close), for: .touchUpInside)
-
-        let stack = UIStackView(arrangedSubviews: [icon, titleLabel, detailLabel, closeButton])
-        stack.axis = .vertical
-        stack.spacing = 16
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(stack)
-
+        let model = ShareComposerModel(extensionContext: extensionContext)
+        let host = UIHostingController(rootView: ShareComposerView(model: model))
+        addChild(host)
+        host.view.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(host.view)
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: view.layoutMarginsGuide.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: view.layoutMarginsGuide.trailingAnchor),
-            stack.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            host.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            host.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            host.view.topAnchor.constraint(equalTo: view.topAnchor),
+            host.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
+        host.didMove(toParent: self)
+
+        Task {
+            await model.load()
+        }
+    }
+}
+
+@MainActor
+private final class ShareComposerModel: ObservableObject {
+    enum Phase {
+        case loading
+        case ready
+        case submitting
+        case accepted
+        case failed
     }
 
-    @objc private func close() {
+    @Published var phase: Phase = .loading
+    @Published var snapshot: CompanionSnapshot?
+    @Published var selectedDeviceIDs: Set<String> = []
+    @Published var fit: ImageFitMode = .fit
+    @Published var overrideQuietHours = false
+    @Published var imageByteCount = 0
+    @Published var errorMessage: String?
+
+    private weak var extensionContext: NSExtensionContext?
+    private var imageData: Data?
+    private var contentType = "image/jpeg"
+    private var fileName = "shared-photo.jpg"
+    private var queuedRequest: SharedImageRequest?
+
+    private let stateStore: any CompanionStateStoring
+    private let queueStore: any ShareQueueStoring
+    private let credentials: any CredentialStoring
+    private let client: any TesseraeServing
+
+    init(extensionContext: NSExtensionContext?) {
+        self.extensionContext = extensionContext
+
+        let appGroup = Bundle.main.object(
+            forInfoDictionaryKey: "TesseraeAppGroupIdentifier"
+        ) as? String
+        let containerURL = appGroup.flatMap {
+            FileManager.default.containerURL(
+                forSecurityApplicationGroupIdentifier: $0
+            )
+        }
+        let accessGroup: String? = {
+#if targetEnvironment(simulator)
+            return nil
+#else
+            guard
+                let value = Bundle.main.object(
+                    forInfoDictionaryKey: "TesseraeKeychainAccessGroup"
+                ) as? String,
+                !value.contains("$(")
+            else {
+                return nil
+            }
+            return value
+#endif
+        }()
+
+        stateStore = UserDefaultsCompanionStateStore(suiteName: appGroup)
+        queueStore = FileShareQueueStore(directoryURL: containerURL)
+        let keychain = KeychainCredentialStore(
+            service: "com.charmmmz.tesseraecompanion.credentials",
+            accessGroup: accessGroup
+        )
+        credentials = keychain
+        client = LiveTesseraeClient(
+            credentials: keychain,
+            identity: TesseraeClientIdentity(
+                appVersion: Bundle.main.object(
+                    forInfoDictionaryKey: "CFBundleShortVersionString"
+                ) as? String ?? "0.1.0",
+                installationID: "share-extension"
+            )
+        )
+    }
+
+    var displays: [DisplaySummary] {
+        snapshot?.displays ?? []
+    }
+
+    var canSend: Bool {
+        phase == .ready
+            && imageData != nil
+            && !selectedDeviceIDs.isEmpty
+            && snapshot != nil
+    }
+
+    func load() async {
+        do {
+            try await queueStore.purge(
+                expiredBefore: Date().addingTimeInterval(-24 * 60 * 60)
+            )
+            guard let snapshot = try await stateStore.load() else {
+                throw ShareComposerError.notPaired
+            }
+            guard try await credentials.token(
+                for: snapshot.activeInstance.id
+            ) != nil else {
+                throw ShareComposerError.notPaired
+            }
+            guard !snapshot.displays.isEmpty else {
+                throw ShareComposerError.noDisplays
+            }
+
+            let loaded = try await loadSharedImage()
+            try validate(
+                data: loaded.data,
+                contentType: loaded.contentType,
+                capabilities: snapshot.capabilities
+            )
+
+            self.snapshot = snapshot
+            imageData = loaded.data
+            imageByteCount = loaded.data.count
+            contentType = loaded.contentType
+            fileName = loaded.fileName
+            selectedDeviceIDs = Set(snapshot.displays.prefix(1).map(\.id))
+            phase = .ready
+        } catch {
+            errorMessage = error.localizedDescription
+            phase = .failed
+        }
+    }
+
+    func send() async {
+        guard
+            let snapshot,
+            let imageData,
+            !selectedDeviceIDs.isEmpty
+        else {
+            return
+        }
+        phase = .submitting
+        errorMessage = nil
+
+        let request = queuedRequest ?? SharedImageRequest(
+            instanceID: snapshot.activeInstance.id,
+            fileName: fileName,
+            contentType: contentType,
+            fit: fit,
+            deviceIDs: Array(selectedDeviceIDs).sorted(),
+            overrideQuietHours: overrideQuietHours
+        )
+
+        do {
+            if queuedRequest == nil {
+                try await queueStore.enqueue(
+                    imageData: imageData,
+                    request: request
+                )
+                queuedRequest = request
+            }
+            let submitting = request.updating(
+                status: .submitting,
+                error: nil
+            )
+            try await queueStore.update(submitting)
+            queuedRequest = submitting
+
+            let job = try await client.sendImage(
+                data: imageData,
+                fileName: submitting.fileName,
+                contentType: submitting.contentType,
+                fit: submitting.fit,
+                deviceIDs: submitting.deviceIDs,
+                overrideQuietHours: submitting.overrideQuietHours,
+                idempotencyKey: submitting.idempotencyKey,
+                instance: snapshot.activeInstance
+            )
+            let jobs = [job] + snapshot.jobs.filter { $0.id != job.id }
+            try await stateStore.save(
+                CompanionSnapshot(
+                    activeInstance: snapshot.activeInstance,
+                    capabilities: snapshot.capabilities,
+                    displays: snapshot.displays,
+                    dashboards: snapshot.dashboards,
+                    jobs: jobs
+                )
+            )
+            try await queueStore.remove(submitting)
+            queuedRequest = nil
+            phase = .accepted
+        } catch {
+            let failed = request.updating(
+                status: .failed,
+                error: error.localizedDescription
+            )
+            try? await queueStore.update(failed)
+            queuedRequest = failed
+            errorMessage = "\(error.localizedDescription) The image is saved for up to 24 hours and the app will retry with the same request key."
+            phase = .failed
+        }
+    }
+
+    func complete() {
         extensionContext?.completeRequest(returningItems: nil)
+    }
+
+    func cancel() {
+        extensionContext?.cancelRequest(
+            withError: ShareComposerError.cancelled
+        )
+    }
+
+    private func loadSharedImage() async throws -> (
+        data: Data,
+        contentType: String,
+        fileName: String
+    ) {
+        guard let items = extensionContext?.inputItems as? [NSExtensionItem] else {
+            throw ShareComposerError.noImage
+        }
+        let providers = items.flatMap { item in
+            item.attachments ?? []
+        }
+        guard let provider = providers.first(where: {
+            $0.hasItemConformingToTypeIdentifier(UTType.image.identifier)
+        }) else {
+            throw ShareComposerError.noImage
+        }
+
+        let type = provider.registeredTypeIdentifiers
+            .compactMap(UTType.init)
+            .first(where: { $0.conforms(to: UTType.image) }) ?? .jpeg
+        let data = try await loadData(
+            from: provider,
+            typeIdentifier: type.identifier
+        )
+        let fileExtension = type.preferredFilenameExtension ?? "jpg"
+        return (
+            data,
+            type.preferredMIMEType ?? "image/jpeg",
+            "shared-photo.\(fileExtension)"
+        )
+    }
+
+    private func loadData(
+        from provider: NSItemProvider,
+        typeIdentifier: String
+    ) async throws -> Data {
+        try await withCheckedThrowingContinuation { continuation in
+            provider.loadDataRepresentation(
+                forTypeIdentifier: typeIdentifier
+            ) { data, error in
+                if let data {
+                    continuation.resume(returning: data)
+                } else {
+                    continuation.resume(
+                        throwing: error ?? ShareComposerError.noImage
+                    )
+                }
+            }
+        }
+    }
+
+    private func validate(
+        data: Data,
+        contentType: String,
+        capabilities: ServerCapabilities?
+    ) throws {
+        guard let capabilities else { return }
+        guard data.count <= capabilities.limits.imageUploadBytes else {
+            throw ShareComposerError.imageTooLarge(
+                capabilities.limits.imageUploadBytes
+            )
+        }
+        guard capabilities.limits.imageContentTypes.contains(contentType) else {
+            throw ShareComposerError.unsupportedImageType(contentType)
+        }
+        if
+            let image = UIImage(data: data),
+            max(
+                image.size.width * image.scale,
+                image.size.height * image.scale
+            ) > CGFloat(capabilities.limits.imageMaxEdge)
+        {
+            throw ShareComposerError.imageDimensionsTooLarge(
+                capabilities.limits.imageMaxEdge
+            )
+        }
+    }
+}
+
+private struct ShareComposerView: View {
+    @ObservedObject var model: ShareComposerModel
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                switch model.phase {
+                case .loading:
+                    ProgressView("Loading shared image…")
+                case .accepted:
+                    ContentUnavailableView(
+                        "Accepted by Tesserae",
+                        systemImage: "checkmark.circle.fill",
+                        description: Text("The server will render and publish the image.")
+                    )
+                case .failed where model.snapshot == nil:
+                    ContentUnavailableView(
+                        "Open Tesserae Companion",
+                        systemImage: "iphone.and.arrow.forward",
+                        description: Text(model.errorMessage ?? "Pair the app before sharing an image.")
+                    )
+                default:
+                    composer
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .navigationTitle("Send to Tesserae")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { model.cancel() }
+                }
+                if model.phase == .accepted || model.phase == .failed {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { model.complete() }
+                    }
+                }
+            }
+        }
+    }
+
+    private var composer: some View {
+        Form {
+            Section("Image") {
+                Label(
+                    ByteCountFormatter.string(
+                        fromByteCount: Int64(model.imageByteCount),
+                        countStyle: .file
+                    ),
+                    systemImage: "photo"
+                )
+                Picker("Layout", selection: $model.fit) {
+                    Text("Fit").tag(ImageFitMode.fit)
+                    Text("Fill").tag(ImageFitMode.fill)
+                }
+                .pickerStyle(.segmented)
+            }
+
+            Section("Displays") {
+                ForEach(model.displays) { display in
+                    Button {
+                        if model.selectedDeviceIDs.contains(display.id) {
+                            model.selectedDeviceIDs.remove(display.id)
+                        } else {
+                            model.selectedDeviceIDs.insert(display.id)
+                        }
+                    } label: {
+                        HStack {
+                            Text(display.name)
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Image(
+                                systemName: model.selectedDeviceIDs.contains(display.id)
+                                    ? "checkmark.circle.fill"
+                                    : "circle"
+                            )
+                        }
+                    }
+                }
+            }
+
+            Section {
+                Toggle(
+                    "Override quiet hours",
+                    isOn: $model.overrideQuietHours
+                )
+            } footer: {
+                Text("Leave this off unless the image should be sent immediately.")
+            }
+
+            if let errorMessage = model.errorMessage {
+                Section {
+                    Label(errorMessage, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section {
+                Button {
+                    Task { await model.send() }
+                } label: {
+                    if model.phase == .submitting {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        Label(
+                            model.phase == .failed ? "Retry Now" : "Send",
+                            systemImage: "paperplane.fill"
+                        )
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+                .disabled(!model.canSend && model.phase != .failed)
+            }
+        }
+    }
+}
+
+private enum ShareComposerError: Error, LocalizedError {
+    case cancelled
+    case imageDimensionsTooLarge(Int)
+    case imageTooLarge(Int)
+    case noDisplays
+    case noImage
+    case notPaired
+    case unsupportedImageType(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .cancelled:
+            "Sharing was cancelled."
+        case let .imageDimensionsTooLarge(maxEdge):
+            "This image exceeds the server limit of \(maxEdge) pixels on its longest edge."
+        case let .imageTooLarge(bytes):
+            "This image exceeds the server upload limit of \(ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file))."
+        case .noDisplays:
+            "No Tesserae displays are available. Refresh the main app first."
+        case .noImage:
+            "The shared item does not contain one readable still image."
+        case .notPaired:
+            "Pair Tesserae Companion with a server before using the Share Sheet."
+        case let .unsupportedImageType(type):
+            "The Tesserae server does not accept \(type) images."
+        }
     }
 }

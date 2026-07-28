@@ -63,6 +63,11 @@ targets:
         CFBundleDisplayName: Send to Tesserae
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSLocalNetworkUsageDescription: Connect to your paired Tesserae server to send this image.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        TesseraeAppGroupIdentifier: group.com.charmmmz.tesseraecompanion
+        TesseraeKeychainAccessGroup: $(AppIdentifierPrefix)com.charmmmz.tesseraecompanion.shared
         NSExtension:
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController

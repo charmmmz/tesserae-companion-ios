@@ -10,6 +10,13 @@ enum AppConfiguration {
         forInfoDictionaryKey: "TesseraeAppGroupIdentifier"
     ) as? String
 
+    static var sharedContainerURL: URL? {
+        guard let appGroupIdentifier else { return nil }
+        return FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: appGroupIdentifier
+        )
+    }
+
     static let appVersion = Bundle.main.object(
         forInfoDictionaryKey: "CFBundleShortVersionString"
     ) as? String ?? "0.1.0"

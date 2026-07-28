@@ -23,6 +23,7 @@ final class AppModel {
     private var activeClient: any TesseraeServing
     private let credentials: any CredentialStoring
     private let stateStore: any CompanionStateStoring
+    private let shareQueue: any ShareQueueStoring
     private let discovery: any TesseraeDiscovering
     private var didAttemptRestore = false
 
@@ -41,6 +42,7 @@ final class AppModel {
     var isRefreshing = false
     var isDiscovering = false
     var isRestoringConnection = true
+    var isRetryingSharedImages = false
     var lastError: String?
 
     init(
@@ -48,6 +50,7 @@ final class AppModel {
         demoClient: any TesseraeServing,
         credentials: any CredentialStoring,
         stateStore: any CompanionStateStoring,
+        shareQueue: any ShareQueueStoring,
         discovery: any TesseraeDiscovering
     ) {
         self.liveClient = liveClient
@@ -55,6 +58,7 @@ final class AppModel {
         activeClient = liveClient
         self.credentials = credentials
         self.stateStore = stateStore
+        self.shareQueue = shareQueue
         self.discovery = discovery
     }
 
@@ -141,6 +145,7 @@ final class AppModel {
                 await persistSnapshot()
             }
             await refresh()
+            await retryPendingSharedImages()
         } catch {
             lastError = error.localizedDescription
         }
@@ -177,6 +182,7 @@ final class AppModel {
                 baseURL: snapshot.activeInstance.baseURL
             )
             await refresh(showErrors: false)
+            await retryPendingSharedImages()
         } catch let error as TesseraeClientError {
             await handleConnectionError(error, showAlert: false)
         } catch {
@@ -266,6 +272,74 @@ final class AppModel {
         } catch {
             lastError = error.localizedDescription
             return false
+        }
+    }
+
+    func retryPendingSharedImages() async {
+        guard
+            connectionMode == .live,
+            connectionHealth == .connected,
+            let activeInstance,
+            !isRetryingSharedImages
+        else {
+            return
+        }
+
+        isRetryingSharedImages = true
+        defer { isRetryingSharedImages = false }
+
+        do {
+            try await shareQueue.purge(
+                expiredBefore: Date().addingTimeInterval(-24 * 60 * 60)
+            )
+            let pending = try await shareQueue.requests()
+                .filter { $0.instanceID == activeInstance.id }
+
+            for request in pending {
+                let submitting = request.updating(
+                    status: .submitting,
+                    error: nil
+                )
+                try await shareQueue.update(submitting)
+
+                do {
+                    let data = try await shareQueue.imageData(for: submitting)
+                    let job = try await liveClient.sendImage(
+                        data: data,
+                        fileName: submitting.fileName,
+                        contentType: submitting.contentType,
+                        fit: submitting.fit,
+                        deviceIDs: submitting.deviceIDs,
+                        overrideQuietHours: submitting.overrideQuietHours,
+                        idempotencyKey: submitting.idempotencyKey,
+                        instance: activeInstance
+                    )
+                    if !jobs.contains(where: { $0.id == job.id }) {
+                        jobs.insert(job, at: 0)
+                    }
+                    try await shareQueue.remove(submitting)
+                    await persistSnapshot(showErrors: false)
+                } catch {
+                    try? await shareQueue.update(
+                        submitting.updating(
+                            status: .failed,
+                            error: error.localizedDescription
+                        )
+                    )
+                    if let clientError = error as? TesseraeClientError,
+                       clientError == .unauthorized
+                            || clientError == .missingCredential
+                    {
+                        await handleConnectionError(
+                            clientError,
+                            showAlert: false
+                        )
+                        return
+                    }
+                }
+            }
+        } catch {
+            connectionNotice = error.localizedDescription
         }
     }
 

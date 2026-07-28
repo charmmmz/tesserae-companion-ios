@@ -42,6 +42,11 @@ Companion surface; History, resend, and rich previews are follow-ups.
   retryable empty/error states, and manual fallback.
 - Native QR scanning for canonical `tesserae://pair` and equivalent JSON
   payloads containing only a server URL and one-time code.
+- Functional Share Extension with cached display selection, Fit/Fill,
+  explicit quiet-hours override, server-advertised image validation, and
+  direct Companion API upload.
+- App Group-backed image retry handoff that reuses the original
+  `Idempotency-Key` when the containing app resumes an interrupted transfer.
 - Tesserae-aligned light and dark visual tokens and accessible status labels.
 
 ### Changed
@@ -81,6 +86,9 @@ Companion surface; History, resend, and rich previews are follow-ups.
   pairing again.
 - Bonjour discovery never authenticates a client; all discovered instances
   still require purpose-specific pairing.
+- Shared images are protected on disk, removed immediately after server
+  acceptance, and purged after 24 hours when an interrupted upload cannot be
+  completed.
 
 ## [0.1.0] - 2026-07-26
 
