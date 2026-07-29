@@ -49,6 +49,14 @@ def test_fixture_server_exercises_companion_vertical_slice():
         status, capabilities = request(base_url, "/api/app/v1")
         assert status == 200
         assert capabilities["api"]["version"] == 1
+        assert capabilities["limits"]["image_fit_modes"] == [
+            "fit",
+            "fill",
+            "blur",
+            "stretch",
+            "center",
+        ]
+        assert "history" in capabilities["features"]
 
         status, pair = request(
             base_url,
@@ -112,6 +120,62 @@ def test_fixture_server_exercises_companion_vertical_slice():
         assert status == 200
         assert completed["job"]["status"] == "succeeded"
         assert completed["job"]["result"]["status"] == "published"
+
+        status, history = request(
+            base_url,
+            "/api/app/v1/history?limit=30",
+            token=FIXTURE_TOKEN,
+        )
+        assert status == 200
+        assert history["items"][0]["fit"] == "blur"
+
+        resend_key = "fixture-resend-key-0001"
+        status, resend = request(
+            base_url,
+            "/api/app/v1/history/history_0102/resend",
+            method="POST",
+            payload={"override_quiet_hours": False},
+            token=FIXTURE_TOKEN,
+            idempotency_key=resend_key,
+        )
+        assert status == 202
+        assert resend["job"]["kind"] == "history_resend"
+
+        status, resent = request(
+            base_url,
+            f"/api/app/v1/jobs/{resend['job']['id']}",
+            token=FIXTURE_TOKEN,
+        )
+        assert status == 200
+        assert resent["job"]["result"]["history_event_ids"]
+
+        preview = urllib.request.Request(
+            f"{base_url}/api/app/v1/history/history_0102/preview",
+            headers={
+                "Accept": "image/png",
+                "Authorization": f"Bearer {FIXTURE_TOKEN}",
+            },
+        )
+        with urllib.request.urlopen(preview, timeout=2) as response:
+            assert response.status == 200
+            assert response.headers["Content-Type"] == "image/png"
+            assert response.headers["ETag"] == '"history-preview-fixture"'
+            assert response.read().startswith(b"\x89PNG")
+
+        cached_preview = urllib.request.Request(
+            f"{base_url}/api/app/v1/history/history_0102/preview",
+            headers={
+                "Accept": "image/png",
+                "Authorization": f"Bearer {FIXTURE_TOKEN}",
+                "If-None-Match": '"history-preview-fixture"',
+            },
+        )
+        try:
+            urllib.request.urlopen(cached_preview, timeout=2)
+            raise AssertionError("Expected a 304 response for a matching ETag")
+        except urllib.error.HTTPError as error:
+            assert error.code == 304
+            assert error.headers["ETag"] == '"history-preview-fixture"'
     finally:
         server.shutdown()
         server.server_close()

@@ -26,11 +26,13 @@ final class AppModel {
     private var activeClient: any TesseraeServing
     private let credentials: any CredentialStoring
     private let stateStore: any CompanionStateStoring
+    private let sendPreferences: any CompanionSendPreferencesStoring
     private let shareQueue: any ShareQueueStoring
     private let activityThumbnails: any ActivityThumbnailStoring
     private let discovery: any TesseraeDiscovering
     private var didAttemptRestore = false
     private var isSynchronizingSharedState = false
+    private var activityRefreshTask: Task<Void, Never>?
 
     var activeInstance: TesseraeInstance?
     var connectionMode: ConnectionMode?
@@ -42,7 +44,13 @@ final class AppModel {
     var displays: [DisplaySummary] = []
     var dashboards: [DashboardSummary] = []
     var jobs: [PushJob] = []
+    var historyItems: [HistoryItem] = []
+    var historyNextBeforeID: String?
+    var activityClearedBefore: Date?
     var activityThumbnailData: [String: Data] = [:]
+    var queuedImageRequests: [SharedImageRequest] = []
+    var queuedImagePreviewData: [String: Data] = [:]
+    var historyPreviews: [String: PreviewImageState] = [:]
     var displayPreviews: [String: PreviewImageState] = [:]
     var dashboardPreviews: [String: PreviewImageState] = [:]
     var previewGeneration = 0
@@ -52,10 +60,17 @@ final class AppModel {
     var isDiscovering = false
     var isRestoringConnection = true
     var isRetryingSharedImages = false
+    var isLoadingMoreHistory = false
+    var isClearingLocalActivity = false
+    var activeQueuedImageRequestIDs: Set<String> = []
     var lastError: String?
 
     var supportsPreviews: Bool {
         capabilities?.features.contains("previews") == true
+    }
+
+    var supportsHistory: Bool {
+        capabilities?.features.contains("history") == true
     }
 
     init(
@@ -63,6 +78,7 @@ final class AppModel {
         demoClient: any TesseraeServing,
         credentials: any CredentialStoring,
         stateStore: any CompanionStateStoring,
+        sendPreferences: any CompanionSendPreferencesStoring,
         shareQueue: any ShareQueueStoring,
         activityThumbnails: any ActivityThumbnailStoring,
         discovery: any TesseraeDiscovering
@@ -72,6 +88,7 @@ final class AppModel {
         activeClient = liveClient
         self.credentials = credentials
         self.stateStore = stateStore
+        self.sendPreferences = sendPreferences
         self.shareQueue = shareQueue
         self.activityThumbnails = activityThumbnails
         self.discovery = discovery
@@ -171,6 +188,12 @@ final class AppModel {
                 to: capabilities.serverVersion
             )
             activityThumbnailData = [:]
+            queuedImageRequests = []
+            queuedImagePreviewData = [:]
+            historyItems = []
+            historyNextBeforeID = nil
+            activityClearedBefore = nil
+            historyPreviews = [:]
             displayPreviews = [:]
             dashboardPreviews = [:]
             loadDashboardOrder(for: session.instance.id)
@@ -178,6 +201,7 @@ final class AppModel {
                 await persistSnapshot()
             }
             await refresh(probeCapabilities: false)
+            await reloadQueuedImages()
             await retryPendingSharedImages()
         } catch {
             lastError = error.localizedDescription
@@ -212,8 +236,10 @@ final class AppModel {
             capabilities = snapshot.capabilities
             displays = snapshot.displays
             dashboards = snapshot.dashboards
-            jobs = snapshot.jobs
+            activityClearedBefore = snapshot.activityClearedBefore
+            jobs = retainedActivityJobs(snapshot.jobs)
             await reloadActivityThumbnails(instanceID: snapshot.activeInstance.id)
+            await reloadQueuedImages()
 
             let currentCapabilities = try await liveClient.probe(
                 baseURL: snapshot.activeInstance.baseURL
@@ -239,7 +265,12 @@ final class AppModel {
         showErrors: Bool = true,
         probeCapabilities: Bool = true
     ) async {
-        guard var currentInstance = activeInstance else { return }
+        guard
+            var currentInstance = activeInstance,
+            !isRefreshing
+        else {
+            return
+        }
         isRefreshing = true
         defer { isRefreshing = false }
 
@@ -257,6 +288,25 @@ final class AppModel {
 
             displays = try await activeClient.fetchDisplays(instance: currentInstance)
             dashboards = try await activeClient.fetchDashboards(instance: currentInstance)
+            if supportsHistory {
+                let history = try await activeClient.fetchHistory(
+                    beforeID: nil,
+                    limit: 30,
+                    instance: currentInstance
+                )
+                let retainedHistory = retainedHistoryPage(history)
+                historyItems = retainedHistory.items
+                historyNextBeforeID = retainedHistory.nextBeforeID
+                let historyIDs = Set(retainedHistory.items.map(\.id))
+                historyPreviews = historyPreviews.filter {
+                    historyIDs.contains($0.key)
+                }
+            } else {
+                historyItems = []
+                historyNextBeforeID = nil
+                historyPreviews = [:]
+            }
+            await refreshTrackedJobs(instance: currentInstance)
             reconcileDashboardOrder()
             connectionHealth = .connected
             connectionNotice = nil
@@ -286,6 +336,66 @@ final class AppModel {
         }
     }
 
+    func refreshActivity(showErrors: Bool = true) async {
+        guard
+            let currentInstance = activeInstance,
+            !isRefreshing
+        else {
+            return
+        }
+        isRefreshing = true
+        defer { isRefreshing = false }
+
+        await reloadQueuedImages(showErrors: showErrors)
+
+        do {
+            if supportsHistory {
+                let history = try await activeClient.fetchHistory(
+                    beforeID: nil,
+                    limit: 30,
+                    instance: currentInstance
+                )
+                guard activeInstance?.id == currentInstance.id else {
+                    return
+                }
+                let retainedHistory = retainedHistoryPage(history)
+                historyItems = retainedHistory.items
+                historyNextBeforeID = retainedHistory.nextBeforeID
+                let historyIDs = Set(retainedHistory.items.map(\.id))
+                historyPreviews = historyPreviews.filter {
+                    historyIDs.contains($0.key)
+                }
+            }
+
+            await refreshTrackedJobs(instance: currentInstance)
+            guard activeInstance?.id == currentInstance.id else {
+                return
+            }
+            connectionHealth = .connected
+            connectionNotice = nil
+            previewGeneration &+= 1
+            if connectionMode == .live {
+                await persistSnapshot(showErrors: showErrors)
+            }
+        } catch let error as TesseraeClientError {
+            await handleConnectionError(error)
+        } catch {
+            connectionHealth = .offline
+            connectionNotice = error.localizedDescription
+            lastError = nil
+        }
+    }
+
+    func startActivityRefresh() {
+        guard activityRefreshTask == nil else { return }
+
+        activityRefreshTask = Task { [weak self] in
+            guard let self else { return }
+            await self.refreshActivity()
+            self.activityRefreshTask = nil
+        }
+    }
+
     func moveDashboard(
         _ dashboardID: String,
         to destinationIndex: Int
@@ -304,15 +414,19 @@ final class AppModel {
         saveDashboardOrder()
     }
 
-    func push(_ dashboard: DashboardSummary) async {
-        guard let activeInstance else { return }
+    @discardableResult
+    func push(
+        _ dashboard: DashboardSummary,
+        deviceIDs: [String]
+    ) async -> Bool {
+        guard let activeInstance, !deviceIDs.isEmpty else { return false }
         activeOperationIDs.insert(dashboard.id)
         defer { activeOperationIDs.remove(dashboard.id) }
 
         do {
             let job = try await activeClient.pushDashboard(
                 id: dashboard.id,
-                deviceIDs: dashboard.deviceIDs,
+                deviceIDs: deviceIDs,
                 overrideQuietHours: false,
                 idempotencyKey: UUID().uuidString,
                 instance: activeInstance
@@ -320,8 +434,40 @@ final class AppModel {
             jobs.insert(job, at: 0)
             await persistSnapshot()
             await updateUntilTerminal(job, instance: activeInstance)
+            return true
         } catch {
             await presentOperationError(error)
+            return false
+        }
+    }
+
+    func savedSendPreferences() async -> CompanionSendPreferences? {
+        guard let activeInstance else { return nil }
+        do {
+            return try await sendPreferences.preferences(
+                for: activeInstance.id
+            )
+        } catch {
+            lastError = error.localizedDescription
+            return nil
+        }
+    }
+
+    func saveSendPreferences(
+        deviceIDs: [String],
+        fit: ImageFitMode
+    ) async {
+        guard let activeInstance else { return }
+        do {
+            try await sendPreferences.save(
+                CompanionSendPreferences(
+                    instanceID: activeInstance.id,
+                    deviceIDs: deviceIDs,
+                    imageFitMode: fit
+                )
+            )
+        } catch {
+            lastError = error.localizedDescription
         }
     }
 
@@ -361,6 +507,90 @@ final class AppModel {
         }
     }
 
+    func loadMoreHistory() async {
+        guard
+            supportsHistory,
+            !isLoadingMoreHistory,
+            let beforeID = historyNextBeforeID,
+            let activeInstance
+        else {
+            return
+        }
+        isLoadingMoreHistory = true
+        defer { isLoadingMoreHistory = false }
+
+        do {
+            let page = try await activeClient.fetchHistory(
+                beforeID: beforeID,
+                limit: 30,
+                instance: activeInstance
+            )
+            let retainedPage = retainedHistoryPage(page)
+            let existingIDs = Set(historyItems.map(\.id))
+            historyItems.append(
+                contentsOf: retainedPage.items.filter {
+                    !existingIDs.contains($0.id)
+                }
+            )
+            historyNextBeforeID = retainedPage.nextBeforeID
+        } catch {
+            await presentOperationError(error)
+        }
+    }
+
+    func resend(_ item: HistoryItem) async {
+        guard supportsHistory, item.resendable, let activeInstance else {
+            return
+        }
+        let operationID = "history-\(item.id)"
+        activeOperationIDs.insert(operationID)
+        defer { activeOperationIDs.remove(operationID) }
+
+        do {
+            let job = try await activeClient.resendHistory(
+                id: item.id,
+                overrideQuietHours: false,
+                idempotencyKey: UUID().uuidString,
+                instance: activeInstance
+            )
+            jobs.insert(job, at: 0)
+            await persistSnapshot()
+            await updateUntilTerminal(job, instance: activeInstance)
+        } catch {
+            await presentOperationError(error)
+        }
+    }
+
+    @discardableResult
+    func clearLocalActivity() async -> Bool {
+        guard let activeInstance, !isClearingLocalActivity else {
+            return false
+        }
+
+        isClearingLocalActivity = true
+        defer { isClearingLocalActivity = false }
+
+        do {
+            activityClearedBefore = max(
+                activityClearedBefore ?? .distantPast,
+                Date()
+            )
+            try await activityThumbnails.clear(
+                instanceID: activeInstance.id
+            )
+            jobs = []
+            historyItems = []
+            historyNextBeforeID = nil
+            activityThumbnailData = [:]
+            historyPreviews = [:]
+            ActivityPhotoCache.shared.removeAll()
+            return await persistSnapshot()
+        } catch {
+            lastError = error.localizedDescription
+            return false
+        }
+    }
+
     func retryPendingSharedImages() async {
         guard
             connectionMode == .live,
@@ -374,61 +604,189 @@ final class AppModel {
         isRetryingSharedImages = true
         defer { isRetryingSharedImages = false }
 
+        await reloadQueuedImages()
+        for request in queuedImageRequests {
+            _ = await submitQueuedImage(
+                request,
+                instance: activeInstance
+            )
+        }
+    }
+
+    func reloadQueuedImages(showErrors: Bool = false) async {
+        guard let activeInstance else {
+            queuedImageRequests = []
+            queuedImagePreviewData = [:]
+            return
+        }
+
         do {
             try await shareQueue.purge(
                 expiredBefore: Date().addingTimeInterval(-24 * 60 * 60)
             )
-            let pending = try await shareQueue.requests()
+            let requests = try await shareQueue.requests()
                 .filter { $0.instanceID == activeInstance.id }
-
-            for request in pending {
-                let submitting = request.updating(
-                    status: .submitting,
-                    error: nil
-                )
-                try await shareQueue.update(submitting)
-
-                do {
-                    let data = try await shareQueue.imageData(for: submitting)
-                    let job = try await liveClient.sendImage(
-                        data: data,
-                        fileName: submitting.fileName,
-                        contentType: submitting.contentType,
-                        fit: submitting.fit,
-                        deviceIDs: submitting.deviceIDs,
-                        overrideQuietHours: submitting.overrideQuietHours,
-                        idempotencyKey: submitting.idempotencyKey,
-                        instance: activeInstance
-                    )
-                    await rememberActivityThumbnail(
-                        imageData: data,
-                        for: job,
-                        instanceID: activeInstance.id
-                    )
-                    if !jobs.contains(where: { $0.id == job.id }) {
-                        jobs.insert(job, at: 0)
+                .sorted {
+                    if $0.createdAt != $1.createdAt {
+                        return $0.createdAt > $1.createdAt
                     }
-                    try await shareQueue.remove(submitting)
-                    await persistSnapshot(showErrors: false)
-                } catch {
-                    try? await shareQueue.update(
-                        submitting.updating(
-                            status: .failed,
-                            error: error.localizedDescription
-                        )
-                    )
-                    if let clientError = error as? TesseraeClientError,
-                       clientError == .unauthorized
-                            || clientError == .missingCredential
-                    {
-                        await handleConnectionError(clientError)
-                        return
-                    }
+                    return $0.id < $1.id
                 }
+            queuedImageRequests = requests
+            let retainedIDs = Set(requests.map(\.id))
+            queuedImagePreviewData = queuedImagePreviewData.filter {
+                retainedIDs.contains($0.key)
             }
+        } catch {
+            if showErrors {
+                connectionNotice = error.localizedDescription
+            }
+        }
+    }
+
+    func loadQueuedImagePreview(_ request: SharedImageRequest) async {
+        guard
+            queuedImagePreviewData[request.id] == nil,
+            queuedImageRequests.contains(where: { $0.id == request.id })
+        else {
+            return
+        }
+
+        do {
+            let data = try await shareQueue.imageData(for: request)
+            guard queuedImageRequests.contains(where: { $0.id == request.id }) else {
+                return
+            }
+            queuedImagePreviewData[request.id] = data
+        } catch {
+            // The card remains actionable without artwork. Retry will surface
+            // a missing/corrupt queue item as its latest failure reason.
+        }
+    }
+
+    func retryQueuedImage(_ request: SharedImageRequest) async {
+        guard
+            connectionMode == .live,
+            let activeInstance,
+            request.instanceID == activeInstance.id
+        else {
+            return
+        }
+
+        _ = await submitQueuedImage(request, instance: activeInstance)
+    }
+
+    func discardQueuedImage(_ request: SharedImageRequest) async {
+        guard
+            !activeQueuedImageRequestIDs.contains(request.id),
+            queuedImageRequests.contains(where: { $0.id == request.id })
+        else {
+            return
+        }
+
+        do {
+            try await shareQueue.remove(request)
+            removeQueuedImageFromView(request.id)
         } catch {
             connectionNotice = error.localizedDescription
         }
+    }
+
+    @discardableResult
+    private func submitQueuedImage(
+        _ request: SharedImageRequest,
+        instance: TesseraeInstance
+    ) async -> Bool {
+        guard
+            request.instanceID == instance.id,
+            !activeQueuedImageRequestIDs.contains(request.id)
+        else {
+            return false
+        }
+
+        activeQueuedImageRequestIDs.insert(request.id)
+        defer { activeQueuedImageRequestIDs.remove(request.id) }
+
+        let submitting = request.updating(
+            status: .submitting,
+            error: nil
+        )
+
+        do {
+            try await shareQueue.update(submitting)
+            upsertQueuedImage(submitting)
+
+            let data = try await shareQueue.imageData(for: submitting)
+            let job = try await liveClient.sendImage(
+                data: data,
+                fileName: submitting.fileName,
+                contentType: submitting.contentType,
+                fit: submitting.fit,
+                deviceIDs: submitting.deviceIDs,
+                overrideQuietHours: submitting.overrideQuietHours,
+                idempotencyKey: submitting.idempotencyKey,
+                instance: instance
+            )
+            try await shareQueue.remove(submitting)
+            if activeInstance?.id == instance.id {
+                await rememberActivityThumbnail(
+                    imageData: data,
+                    for: job,
+                    instanceID: instance.id
+                )
+                if !jobs.contains(where: { $0.id == job.id }) {
+                    jobs.insert(job, at: 0)
+                }
+                removeQueuedImageFromView(submitting.id)
+                connectionHealth = .connected
+                connectionNotice = nil
+                await persistSnapshot(showErrors: false)
+
+                Task { [weak self] in
+                    await self?.updateUntilTerminal(job, instance: instance)
+                }
+            }
+            return true
+        } catch {
+            let failed = submitting.updating(
+                status: .failed,
+                error: error.localizedDescription
+            )
+            try? await shareQueue.update(failed)
+            upsertQueuedImage(failed)
+
+            if let clientError = error as? TesseraeClientError,
+               clientError == .unauthorized
+                    || clientError == .missingCredential
+            {
+                await handleConnectionError(clientError)
+            }
+            return false
+        }
+    }
+
+    private func upsertQueuedImage(_ request: SharedImageRequest) {
+        if let index = queuedImageRequests.firstIndex(
+            where: { $0.id == request.id }
+        ) {
+            queuedImageRequests[index] = request
+        } else {
+            queuedImageRequests.append(request)
+        }
+        queuedImageRequests.sort {
+            if $0.createdAt != $1.createdAt {
+                return $0.createdAt > $1.createdAt
+            }
+            return $0.id < $1.id
+        }
+    }
+
+    private func removeQueuedImageFromView(_ requestID: String) {
+        queuedImageRequests.removeAll { $0.id == requestID }
+        queuedImagePreviewData.removeValue(forKey: requestID)
+        ActivityPhotoCache.shared.remove(
+            key: "queued-\(requestID)"
+        )
     }
 
     func synchronizeSharedActivity() async {
@@ -459,7 +817,7 @@ final class AppModel {
             )
             jobs = CompanionSnapshot.mergingJobs(
                 current: jobs,
-                incoming: snapshot.jobs
+                incoming: retainedActivityJobs(snapshot.jobs)
             )
             await reloadActivityThumbnails(instanceID: activeInstance.id)
             await persistSnapshot(showErrors: false)
@@ -494,6 +852,16 @@ final class AppModel {
 
     func displayNames(for ids: [String]) -> String {
         let names = ids.compactMap { id in displays.first(where: { $0.id == id })?.name }
+        return names.isEmpty
+            ? String(localized: "No displays")
+            : names.joined(separator: ", ")
+    }
+
+    func displayNames(for item: HistoryItem) -> String {
+        let names = ActivityReconciliation.displayNames(
+            for: item,
+            from: displays
+        )
         return names.isEmpty
             ? String(localized: "No displays")
             : names.joined(separator: ", ")
@@ -607,18 +975,67 @@ final class AppModel {
         }
     }
 
+    func loadHistoryPreview(_ item: HistoryItem) async {
+        guard supportsHistory, item.previewAvailable, let instance = activeInstance else {
+            return
+        }
+        let previous = historyPreviews[item.id] ?? .idle
+        guard previous.phase != .loading else {
+            return
+        }
+        historyPreviews[item.id] = PreviewImageState(
+            data: previous.data,
+            eTag: previous.eTag,
+            phase: .loading
+        )
+
+        do {
+            let result = try await activeClient.fetchHistoryPreview(
+                id: item.id,
+                ifNoneMatch: previous.data == nil ? nil : previous.eTag,
+                instance: instance
+            )
+            guard activeInstance?.id == instance.id, !Task.isCancelled else {
+                return
+            }
+            apply(
+                result,
+                previous: previous,
+                to: &historyPreviews,
+                key: item.id
+            )
+        } catch is CancellationError {
+            finishCancelledPreview(
+                previous: previous,
+                in: &historyPreviews,
+                key: item.id
+            )
+        } catch {
+            finishFailedPreview(
+                previous: previous,
+                in: &historyPreviews,
+                key: item.id
+            )
+        }
+    }
+
     private func updateUntilTerminal(_ acceptedJob: PushJob, instance: TesseraeInstance) async {
         var current = acceptedJob
-        for _ in 0..<8 where !current.isTerminal {
+        for _ in 0..<60 where !current.isTerminal {
             do {
                 current = try await activeClient.fetchJob(id: current.id, instance: instance)
+                guard activeInstance?.id == instance.id else {
+                    return
+                }
                 if let index = jobs.firstIndex(where: { $0.id == current.id }) {
                     jobs[index] = current
                 }
                 await persistSnapshot(showErrors: false)
                 if !current.isTerminal {
-                    try await Task.sleep(for: .milliseconds(350))
+                    try await Task.sleep(for: .milliseconds(500))
                 }
+            } catch is CancellationError {
+                return
             } catch {
                 await presentOperationError(error)
                 return
@@ -626,6 +1043,38 @@ final class AppModel {
         }
         if current.isTerminal {
             previewGeneration &+= 1
+            if supportsHistory {
+                await refreshHistoryAfterWrite(instance: instance)
+            }
+        }
+    }
+
+    private func refreshTrackedJobs(instance: TesseraeInstance) async {
+        let nonterminalJobIDs = jobs
+            .filter { !$0.isTerminal }
+            .map(\.id)
+
+        for jobID in nonterminalJobIDs {
+            do {
+                let refreshed = try await activeClient.fetchJob(
+                    id: jobID,
+                    instance: instance
+                )
+                guard activeInstance?.id == instance.id else {
+                    return
+                }
+                if let index = jobs.firstIndex(where: { $0.id == jobID }),
+                   jobs[index].updatedAt <= refreshed.updatedAt
+                {
+                    jobs[index] = refreshed
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                // Keep the existing local progress card. A later refresh can
+                // retry without turning an otherwise healthy list refresh
+                // into a connection error.
+            }
         }
     }
 
@@ -662,7 +1111,13 @@ final class AppModel {
         displays = []
         dashboards = []
         jobs = []
+        historyItems = []
+        historyNextBeforeID = nil
+        activityClearedBefore = nil
         activityThumbnailData = [:]
+        queuedImageRequests = []
+        queuedImagePreviewData = [:]
+        historyPreviews = [:]
         displayPreviews = [:]
         dashboardPreviews = [:]
         dashboardOrderIDs = []
@@ -696,7 +1151,13 @@ final class AppModel {
             displays = []
             dashboards = []
             jobs = []
+            historyItems = []
+            historyNextBeforeID = nil
+            activityClearedBefore = nil
             activityThumbnailData = [:]
+            queuedImageRequests = []
+            queuedImagePreviewData = [:]
+            historyPreviews = [:]
             displayPreviews = [:]
             dashboardPreviews = [:]
             dashboardOrderIDs = []
@@ -768,12 +1229,13 @@ final class AppModel {
         )
     }
 
-    private func persistSnapshot(showErrors: Bool = true) async {
+    @discardableResult
+    private func persistSnapshot(showErrors: Bool = true) async -> Bool {
         guard
             connectionMode == .live,
             let activeInstance
         else {
-            return
+            return true
         }
         do {
             try await stateStore.save(
@@ -782,13 +1244,36 @@ final class AppModel {
                     capabilities: capabilities,
                     displays: displays,
                     dashboards: dashboards,
-                    jobs: jobs
+                    jobs: jobs,
+                    activityClearedBefore: activityClearedBefore
                 )
             )
+            return true
         } catch {
             if showErrors {
                 lastError = error.localizedDescription
             }
+            return false
+        }
+    }
+
+    private func refreshHistoryAfterWrite(instance: TesseraeInstance) async {
+        do {
+            let history = try await activeClient.fetchHistory(
+                beforeID: nil,
+                limit: 30,
+                instance: instance
+            )
+            guard activeInstance?.id == instance.id else {
+                return
+            }
+            let retainedHistory = retainedHistoryPage(history)
+            historyItems = retainedHistory.items
+            historyNextBeforeID = retainedHistory.nextBeforeID
+        } catch {
+            // The Job remains visible as the immediate activity record. A
+            // later pull-to-refresh can reconcile eventually consistent
+            // server History without turning a successful send into an error.
         }
     }
 
@@ -820,6 +1305,32 @@ final class AppModel {
             }
         }
         activityThumbnailData = loaded
+    }
+
+    private func retainedActivityJobs(_ candidates: [PushJob]) -> [PushJob] {
+        guard let activityClearedBefore else {
+            return candidates
+        }
+        return candidates.filter {
+            $0.createdAt > activityClearedBefore
+        }
+    }
+
+    private func retainedHistoryPage(
+        _ page: HistoryResponse
+    ) -> HistoryResponse {
+        guard let activityClearedBefore else {
+            return page
+        }
+        let retained = page.items.filter {
+            $0.createdAt > activityClearedBefore
+        }
+        return HistoryResponse(
+            items: retained,
+            nextBeforeID: retained.count == page.items.count
+                ? page.nextBeforeID
+                : nil
+        )
     }
 
     private func imageFileName(for contentType: String) -> String {

@@ -23,6 +23,11 @@ final class LiveTesseraeClientTests: XCTestCase {
         let capabilities = try await client.probe(baseURL: baseURL)
         XCTAssertEqual(capabilities.api.version, 1)
         XCTAssertTrue(capabilities.features.contains("jobs"))
+        XCTAssertTrue(capabilities.features.contains("history"))
+        XCTAssertEqual(
+            capabilities.limits.imageFitModes,
+            ImageFitMode.allCases
+        )
 
         let session = try await client.pair(
             baseURL: baseURL,
@@ -67,6 +72,38 @@ final class LiveTesseraeClientTests: XCTestCase {
         )
         XCTAssertEqual(image.kind, .imagePush)
         XCTAssertEqual(image.status, .accepted)
+
+        let history = try await client.fetchHistory(
+            beforeID: nil,
+            limit: 30,
+            instance: session.instance
+        )
+        let photo = try XCTUnwrap(history.items.first)
+        XCTAssertEqual(photo.fit, .blur)
+
+        let preview = try await client.fetchHistoryPreview(
+            id: photo.id,
+            ifNoneMatch: nil,
+            instance: session.instance
+        )
+        guard case let .image(data, eTag) = preview else {
+            return XCTFail("Expected a History preview image.")
+        }
+        XCTAssertFalse(data.isEmpty)
+        XCTAssertEqual(eTag, "\"history-preview-fixture\"")
+
+        let resend = try await client.resendHistory(
+            id: photo.id,
+            overrideQuietHours: false,
+            idempotencyKey: "swift-history-resend-0001",
+            instance: session.instance
+        )
+        let resent = try await client.fetchJob(
+            id: resend.id,
+            instance: session.instance
+        )
+        XCTAssertEqual(resend.kind, .historyResend)
+        XCTAssertNotNil(resent.result?.historyEventIDs)
 
         try await client.revokeSession(instance: session.instance)
     }

@@ -53,6 +53,7 @@ private final class ShareComposerModel: ObservableObject {
     private var queuedRequest: SharedImageRequest?
 
     private let stateStore: any CompanionStateStoring
+    private let sendPreferences: any CompanionSendPreferencesStoring
     private let queueStore: any ShareQueueStoring
     private let activityThumbnails: any ActivityThumbnailStoring
     private let credentials: any CredentialStoring
@@ -86,6 +87,9 @@ private final class ShareComposerModel: ObservableObject {
         }()
 
         stateStore = UserDefaultsCompanionStateStore(suiteName: appGroup)
+        sendPreferences = UserDefaultsCompanionSendPreferencesStore(
+            suiteName: appGroup
+        )
         queueStore = FileShareQueueStore(directoryURL: containerURL)
         activityThumbnails = FileActivityThumbnailStore(
             directoryURL: containerURL
@@ -119,6 +123,13 @@ private final class ShareComposerModel: ObservableObject {
 
     var previewDisplay: DisplaySummary? {
         displays.first { selectedDeviceIDs.contains($0.id) }
+    }
+
+    var fitModes: [ImageFitMode] {
+        let advertised = snapshot?.capabilities?.limits.imageFitModes
+            ?? ImageFitMode.legacyModes
+        let modes = ImageFitMode.allCases.filter(advertised.contains)
+        return modes.isEmpty ? ImageFitMode.legacyModes : modes
     }
 
     func load() async {
@@ -155,12 +166,29 @@ private final class ShareComposerModel: ObservableObject {
             )
 
             self.snapshot = snapshot
+            let savedPreferences = try? await sendPreferences.preferences(
+                for: snapshot.activeInstance.id
+            )
+            let availableDeviceIDs = Set(snapshot.displays.map(\.id))
+            let preferredDeviceIDs = Set(savedPreferences?.deviceIDs ?? [])
+                .intersection(availableDeviceIDs)
+            if !preferredDeviceIDs.isEmpty {
+                selectedDeviceIDs = preferredDeviceIDs
+            } else {
+                selectedDeviceIDs = Set(snapshot.displays.prefix(1).map(\.id))
+            }
+            if let preferredFit = savedPreferences?.imageFitMode,
+               fitModes.contains(preferredFit)
+            {
+                fit = preferredFit
+            } else if !fitModes.contains(fit) {
+                fit = fitModes.first ?? .fit
+            }
             imageData = loaded.data
             imageByteCount = loaded.data.count
             previewImage = UIImage(data: loaded.data)
             contentType = loaded.contentType
             fileName = loaded.fileName
-            selectedDeviceIDs = Set(snapshot.displays.prefix(1).map(\.id))
             phase = .ready
         } catch {
             errorMessage = error.localizedDescription
@@ -178,6 +206,7 @@ private final class ShareComposerModel: ObservableObject {
         }
         phase = .submitting
         errorMessage = nil
+        await savePreferences()
 
         let request = queuedRequest ?? SharedImageRequest(
             instanceID: snapshot.activeInstance.id,
@@ -226,7 +255,8 @@ private final class ShareComposerModel: ObservableObject {
                     capabilities: snapshot.capabilities,
                     displays: snapshot.displays,
                     dashboards: snapshot.dashboards,
-                    jobs: jobs
+                    jobs: jobs,
+                    activityClearedBefore: snapshot.activityClearedBefore
                 )
             )
             try await queueStore.remove(submitting)
@@ -247,6 +277,17 @@ private final class ShareComposerModel: ObservableObject {
             ].joined(separator: " ")
             phase = .failed
         }
+    }
+
+    func savePreferences() async {
+        guard let snapshot, !selectedDeviceIDs.isEmpty else { return }
+        try? await sendPreferences.save(
+            CompanionSendPreferences(
+                instanceID: snapshot.activeInstance.id,
+                deviceIDs: Array(selectedDeviceIDs),
+                imageFitMode: fit
+            )
+        )
     }
 
     func complete() {
@@ -396,6 +437,14 @@ private struct ShareComposerView: View {
             }
         }
         .tint(TesseraeTheme.accent)
+        .onChange(of: model.selectedDeviceIDs) {
+            guard model.phase == .ready else { return }
+            Task { await model.savePreferences() }
+        }
+        .onChange(of: model.fit) {
+            guard model.phase == .ready else { return }
+            Task { await model.savePreferences() }
+        }
     }
 
     private var composer: some View {
@@ -492,13 +541,51 @@ private struct ShareComposerView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Layout")
                 .font(.headline)
-            Picker("Layout", selection: $model.fit) {
-                Text("Fit").tag(ImageFitMode.fit)
-                Text("Fill").tag(ImageFitMode.fill)
+            HStack(spacing: 10) {
+                Picker("Layout", selection: $model.fit) {
+                    ForEach(primaryFitModes, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                if !advancedFitModes.isEmpty {
+                    Menu {
+                        ForEach(advancedFitModes, id: \.self) { mode in
+                            Button {
+                                model.fit = mode
+                            } label: {
+                                if model.fit == mode {
+                                    Label(mode.displayName, systemImage: "checkmark")
+                                } else {
+                                    Text(mode.displayName)
+                                }
+                            }
+                        }
+                    } label: {
+                        Label(
+                            advancedFitModes.contains(model.fit)
+                                ? model.fit.displayName
+                                : "More",
+                            systemImage: "ellipsis.circle"
+                        )
+                    }
+                    .buttonStyle(.bordered)
+                }
             }
-            .pickerStyle(.segmented)
+            Text(model.fit.helpText)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
         }
         .tesseraeCard()
+    }
+
+    private var primaryFitModes: [ImageFitMode] {
+        model.fitModes.filter { $0 != .stretch && $0 != .center }
+    }
+
+    private var advancedFitModes: [ImageFitMode] {
+        model.fitModes.filter { $0 == .stretch || $0 == .center }
     }
 
     private var displaysCard: some View {

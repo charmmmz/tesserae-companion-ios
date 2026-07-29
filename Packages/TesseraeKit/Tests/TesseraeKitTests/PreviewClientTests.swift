@@ -8,7 +8,7 @@ final class PreviewClientTests: XCTestCase {
             response: TesseraeHTTPResponse(
                 data: Data("png-data".utf8),
                 statusCode: 200,
-                headers: ["etag": "\"composition-digest\""]
+                headers: ["etag": "\"device-preview-digest\""]
             )
         )
         let client = try await makeClient(transport: transport)
@@ -23,7 +23,7 @@ final class PreviewClientTests: XCTestCase {
             result,
             .image(
                 data: Data("png-data".utf8),
-                eTag: "\"composition-digest\""
+                eTag: "\"device-preview-digest\""
             )
         )
         let capturedRequest = await transport.lastRequest()
@@ -47,14 +47,14 @@ final class PreviewClientTests: XCTestCase {
             response: TesseraeHTTPResponse(
                 data: Data(),
                 statusCode: 304,
-                headers: ["etag": "\"composition-digest\""]
+                headers: ["etag": "\"device-preview-digest\""]
             )
         )
         let client = try await makeClient(transport: transport)
 
         let result = try await client.fetchDevicePreview(
             id: "display-one",
-            ifNoneMatch: "\"composition-digest\"",
+            ifNoneMatch: "\"device-preview-digest\"",
             instance: instance
         )
 
@@ -63,7 +63,7 @@ final class PreviewClientTests: XCTestCase {
         let request = try XCTUnwrap(capturedRequest)
         XCTAssertEqual(
             request.value(forHTTPHeaderField: "If-None-Match"),
-            "\"composition-digest\""
+            "\"device-preview-digest\""
         )
     }
 

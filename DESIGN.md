@@ -52,8 +52,9 @@ delivery.
 
 The first App Store release combines the V1 foundation with the native
 integrations that justify an iOS app: Share Sheet and Shortcuts. Read-only
-previews are an optional server capability; History and resend remain
-follow-ups and do not block the first stable integration.
+previews and canonical History/resend are optional server capabilities. They
+remain follow-ups for the Tesserae server and do not block the first stable
+Companion release.
 
 ### V1 — household control foundation
 
@@ -65,10 +66,11 @@ follow-ups and do not block the first stable integration.
 | V1-04 | Display overview | List displays with name, panel type, raw last-seen time, freshness, battery when known, signal when known, and firmware when known. |
 | V1-05 | Dashboard browser | List saved dashboards with bindings and favourites without forcing renders. |
 | V1-06 | Push dashboard | Send a selected saved dashboard to its bound displays or an explicitly selected compatible display. |
-| V1-07 | Send a photo in-app | Select a photo, preview Fit/Fill, choose target displays, and submit it to Tesserae. |
+| V1-07 | Send a photo in-app | Select a photo, preview server-advertised image layouts, choose target displays, and submit it to Tesserae. |
 | V1-08 | Open web management | Deep-link to the appropriate Tesserae web page for editing and advanced management. |
 | V1-09 | Accessible native UI | Support Dynamic Type, VoiceOver labels, Reduce Motion, light/dark appearance, and non-colour status cues. |
 | V1-10 | Read-only previews | Lazily show the latest full display composition and cached Dashboard visuals when the server advertises `previews`; retain aspect-correct placeholders otherwise. |
+| V1-11 | Canonical Activity | When the server advertises `history`, merge canonical push History, composition thumbnails, pagination, and resend into Activity without adding another top-level tab. |
 
 ### Native integrations included in release 1.0
 
@@ -93,7 +95,6 @@ follow-ups and do not block the first stable integration.
 - background Apple Health, Calendar, or Photos synchronization;
 - exposing the experimental MCP authoring surface to the app;
 - arbitrary server administration;
-- History/resend;
 - Android, iPad-specific layouts, watchOS, macOS, or visionOS targets.
 
 The existing web UI remains accessible from the app for these workflows.
@@ -164,7 +165,8 @@ The iPhone app uses four top-level areas:
 1. **Displays** — household status and lightweight telemetry.
 2. **Dashboards** — browse, favourite, and send saved dashboards.
 3. **Send** — choose a photo and target.
-4. **Activity** — recent Companion jobs and outcomes.
+4. **Activity** — immediate Companion Job progress plus canonical server
+   History and resend when supported.
 
 Settings is presented from the instance switcher and contains:
 
@@ -558,6 +560,8 @@ in a diagnostics disclosure.
 - [x] Share Extension and retry queue.
 - [x] App Intents and entities.
 - [x] Activity backed by Companion Jobs.
+- [x] Capability-gated canonical History, composition previews, pagination,
+      and resend in Activity.
 - [ ] Multiple instances and defaults.
 
 ### Phase 4 — release validation
@@ -657,11 +661,15 @@ display model/transport, and observed outcome.
 | D-015 | 2026-07-28 | Use 24 hours as the initial server-advertised Job and idempotency retention default. | Accepted by upstream maintainer |
 | D-016 | 2026-07-28 | Use the Tesserae name and mark under the community-built, advertising, analytics, data-use, and free-web-feature terms in `ATTRIBUTION.md`. | Accepted by upstream maintainer |
 | D-017 | 2026-07-28 | Treat authenticated read-only previews as an optional additive capability with ETag revalidation and placeholder fallback. | Implemented upstream and in the client |
+| D-018 | 2026-07-29 | Advertise image fit modes from server limits; prioritise Fit/Fill/Blur and keep Stretch/Center in advanced UI. | Accepted by upstream maintainer |
+| D-019 | 2026-07-29 | Keep History thumbnails as source compositions, but make Displays use the device-specific post-fit preview. | Accepted by upstream maintainer |
+| D-020 | 2026-07-29 | Add canonical server History and idempotent resend to Activity as an optional capability without adding another tab or exposing History administration. | Accepted by upstream maintainer |
 
 ## 17. Open questions for maintainer review
 
 1. Which Tesserae release should become the minimum supported version?
-2. Which later release should add History and resend?
+2. Which edge and stable releases should first advertise the optional 0.4.0
+   image-fit and History extensions?
 
 ## 18. Definition of release 1.0 done
 

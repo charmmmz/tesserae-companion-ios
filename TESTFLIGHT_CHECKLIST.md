@@ -15,6 +15,10 @@ or approved.
       the Tesserae `0.207.0` deployment used by testers.
 - [x] Confirm authenticated device preview loading and portrait presentation
       on the Tesserae `0.208.0` deployment.
+- [ ] On a server with logical device previews, send one asymmetric photo
+      using Fit, Fill, Blur, Stretch, and Center; confirm the Displays preview
+      matches the target panel geometry and remains upright on a portrait
+      reTerminal E1004.
 - [ ] Confirm Dashboard preview preparation, ETag revalidation, and
       base-server placeholder fallback.
 - [ ] Confirm dashboard push, Job polling, quiet hours, and `_tesserae._tcp`
@@ -62,6 +66,10 @@ or approved.
 
 ## Archive and validation
 
+- [x] Build and install a signed Debug app containing the Share Extension and
+      App Intents on physical device `AD89415F-DB55-5D1E-BEF7-F78EA165C3DD`.
+- [ ] Launch that installed build while the device is unlocked and complete
+      the new-feature smoke tests below.
 - [ ] Run package, contract, simulator UI, and physical-device smoke tests
       from a clean commit.
 - [ ] Archive with the Release configuration and validate the archive in
@@ -83,16 +91,20 @@ or approved.
 - [ ] Relaunch while online, offline with cached data, and after server-side
       token revocation.
 - [ ] Empty display and Dashboard lists plus server failures.
-- [ ] Dashboard push in normal time and quiet hours.
+- [ ] Dashboard push in normal time and quiet hours, using both its bound
+      displays and a one-time explicit target override.
 - [ ] JPEG, PNG, HEIC/HEIF, WebP, oversized, over-dimension, and unsupported
       image cases.
+- [ ] Change the default display and layout in the app, then confirm both are
+      restored in the app and Share Extension after relaunch.
 - [x] Share Extension success from Photos to a real display.
 - [ ] Confirm Activity shows the sent photo thumbnail for main-app,
       Share Extension, and Shortcut sends, and that tapping it expands the
       image smoothly.
-- [ ] Share Extension timeout, queued retry, 24-hour purge, and duplicate retry
-      with one idempotency key.
-- [ ] Each App Intent from Shortcuts, including explicit quiet-hours override.
+- [ ] Share Extension timeout, visible Activity queue card, manual Retry and
+      Discard, 24-hour purge, and duplicate retry with one idempotency key.
+- [ ] Each App Intent from Shortcuts, including Fit, Fill, Blur, Stretch,
+      Center, unsupported-layout validation, and explicit quiet-hours override.
 - [ ] English and Simplified Chinese layouts, Dynamic Type, VoiceOver, light
       mode, and dark mode.
 - [ ] Disconnect while the server is reachable and unreachable, then pair

@@ -9,15 +9,25 @@ struct TesseraeCompanionApp: App {
     init() {
         let credentials: any CredentialStoring
         let stateStore: any CompanionStateStoring
+        let sendPreferences: any CompanionSendPreferencesStoring
         let shareQueue: any ShareQueueStoring
         let activityThumbnails: any ActivityThumbnailStoring
         let discovery: any TesseraeDiscovering
+        let demoLatency: Duration
 #if DEBUG
+        if let rawLatency = ProcessInfo.processInfo.environment[
+            "TESSERAE_UI_TEST_DEMO_LATENCY_MS"
+        ], let milliseconds = Int64(rawLatency), milliseconds >= 0 {
+            demoLatency = .milliseconds(milliseconds)
+        } else {
+            demoLatency = .milliseconds(180)
+        }
         if ProcessInfo.processInfo.environment[
             "TESSERAE_USE_IN_MEMORY_CREDENTIALS"
         ] == "1" {
             credentials = InMemoryCredentialStore()
             stateStore = InMemoryCompanionStateStore()
+            sendPreferences = InMemoryCompanionSendPreferencesStore()
             shareQueue = InMemoryShareQueueStore()
             activityThumbnails = InMemoryActivityThumbnailStore()
             discovery = StaticDiscoveryService(results: [])
@@ -27,6 +37,9 @@ struct TesseraeCompanionApp: App {
                 accessGroup: AppConfiguration.keychainAccessGroup
             )
             stateStore = UserDefaultsCompanionStateStore(
+                suiteName: AppConfiguration.appGroupIdentifier
+            )
+            sendPreferences = UserDefaultsCompanionSendPreferencesStore(
                 suiteName: AppConfiguration.appGroupIdentifier
             )
             shareQueue = FileShareQueueStore(
@@ -45,6 +58,9 @@ struct TesseraeCompanionApp: App {
         stateStore = UserDefaultsCompanionStateStore(
             suiteName: AppConfiguration.appGroupIdentifier
         )
+        sendPreferences = UserDefaultsCompanionSendPreferencesStore(
+            suiteName: AppConfiguration.appGroupIdentifier
+        )
         shareQueue = FileShareQueueStore(
             directoryURL: AppConfiguration.sharedContainerURL
         )
@@ -52,6 +68,7 @@ struct TesseraeCompanionApp: App {
             directoryURL: AppConfiguration.sharedContainerURL
         )
         discovery = BonjourDiscoveryService()
+        demoLatency = .milliseconds(180)
 #endif
         let liveClient = LiveTesseraeClient(
             credentials: credentials,
@@ -63,9 +80,10 @@ struct TesseraeCompanionApp: App {
         _model = State(
             initialValue: AppModel(
                 liveClient: liveClient,
-                demoClient: MockTesseraeClient(),
+                demoClient: MockTesseraeClient(latency: demoLatency),
                 credentials: credentials,
                 stateStore: stateStore,
+                sendPreferences: sendPreferences,
                 shareQueue: shareQueue,
                 activityThumbnails: activityThumbnails,
                 discovery: discovery

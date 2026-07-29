@@ -20,6 +20,8 @@ final class MockTesseraeClientTests: XCTestCase {
         XCTAssertTrue(capabilities.features.contains("image_push"))
         XCTAssertEqual(capabilities.limits.imageMaxEdge, 8_192)
         XCTAssertTrue(capabilities.limits.imageContentTypes.contains("image/heic"))
+        XCTAssertEqual(capabilities.limits.imageFitModes, ImageFitMode.allCases)
+        XCTAssertTrue(capabilities.features.contains("history"))
     }
 
     func testPairRejectsNonSixDigitCode() async {
@@ -113,6 +115,11 @@ final class MockTesseraeClientTests: XCTestCase {
             fixture: "capabilities.json",
             decoder: decoder
         )
+        let extendedCapabilities = try decode(
+            ServerCapabilities.self,
+            fixture: "capabilities-extended.json",
+            decoder: decoder
+        )
         let pairRequest = try decode(
             PairingRequest.self,
             fixture: "pair-request.json",
@@ -143,6 +150,16 @@ final class MockTesseraeClientTests: XCTestCase {
             fixture: "image-push-request.json",
             decoder: decoder
         )
+        let history = try decode(
+            HistoryResponse.self,
+            fixture: "history-response.json",
+            decoder: decoder
+        )
+        let historyResendRequest = try decode(
+            HistoryResendRequest.self,
+            fixture: "history-resend-request.json",
+            decoder: decoder
+        )
         let accepted = try decode(
             JobResponse.self,
             fixture: "job-accepted.json",
@@ -163,6 +180,11 @@ final class MockTesseraeClientTests: XCTestCase {
             fixture: "job-failed.json",
             decoder: decoder
         )
+        let historyResend = try decode(
+            JobResponse.self,
+            fixture: "job-history-resend.json",
+            decoder: decoder
+        )
         let error = try decode(
             APIErrorResponse.self,
             fixture: "error-response.json",
@@ -170,17 +192,65 @@ final class MockTesseraeClientTests: XCTestCase {
         )
 
         XCTAssertEqual(capabilities.api.version, 1)
+        XCTAssertEqual(
+            capabilities.limits.imageFitModes,
+            ImageFitMode.legacyModes
+        )
+        XCTAssertEqual(
+            extendedCapabilities.limits.imageFitModes,
+            ImageFitMode.allCases
+        )
         XCTAssertEqual(pairRequest.client.installationID, "A1B2C3D4-E5F6-47A8-9012-3456789ABCDE")
         XCTAssertEqual(pairResponse.tokenID, "ct_01JABCDEF")
         XCTAssertEqual(devices.devices.first?.rssiDBM, -54)
         XCTAssertEqual(dashboards.dashboards.first?.deviceIDs, ["picpak-kitchen"])
         XCTAssertEqual(dashboardPush.deviceIDs, ["picpak-kitchen"])
-        XCTAssertEqual(imagePush.fit, .fill)
+        XCTAssertEqual(imagePush.fit, .blur)
+        XCTAssertEqual(history.items.first?.fit, .blur)
+        XCTAssertEqual(history.nextBeforeID, "history_0100")
+        XCTAssertFalse(historyResendRequest.overrideQuietHours)
         XCTAssertEqual(accepted.job.status, .accepted)
         XCTAssertEqual(published.job.result?.status, .published)
         XCTAssertEqual(quiet.job.result?.status, .quiet)
         XCTAssertEqual(failed.job.error?.code, "render_failed")
+        XCTAssertEqual(historyResend.job.kind, .historyResend)
+        XCTAssertEqual(
+            historyResend.job.result?.historyEventIDs,
+            ["history_0103"]
+        )
         XCTAssertEqual(error.error.requestID, "req_01JABCDEF")
+    }
+
+    func testMockHistoryResendProducesCorrelatableJob() async throws {
+        let client = MockTesseraeClient(latency: .zero)
+        let session = try await client.pair(
+            baseURL: baseURL,
+            code: "123456",
+            clientName: "Test iPhone"
+        )
+
+        let history = try await client.fetchHistory(
+            beforeID: nil,
+            limit: 1,
+            instance: session.instance
+        )
+        let item = try XCTUnwrap(history.items.first)
+        let accepted = try await client.resendHistory(
+            id: item.id,
+            overrideQuietHours: false,
+            idempotencyKey: "mock-history-resend-0001",
+            instance: session.instance
+        )
+        let completed = try await client.fetchJob(
+            id: accepted.id,
+            instance: session.instance
+        )
+
+        XCTAssertEqual(accepted.kind, .historyResend)
+        XCTAssertEqual(
+            completed.result?.historyEventIDs,
+            ["history-demo-resent"]
+        )
     }
 
     func testRequestModelsEncodeSnakeCaseKeys() throws {

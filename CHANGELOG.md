@@ -6,9 +6,73 @@ Tesserae Companion are recorded here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 App releases follow [Semantic Versioning](https://semver.org/) where
 practical. The planned App Store release 1.0.0 focuses on the accepted native
-Companion surface; History and resend remain follow-ups.
+Companion surface; History and resend remain optional, server-gated
+capabilities.
 
 ## [Unreleased]
+
+### Added
+
+- Display cards now open a native details view with a larger current-screen
+  preview, freshness and last-seen information, power and signal telemetry,
+  hardware identity, firmware, and panel characteristics.
+- Dashboard cards now open a one-time target chooser, defaulting to their valid
+  bindings while allowing an explicit display override without editing the
+  Dashboard on the server.
+- Image sends remember the last valid display selection and layout per Tesserae
+  instance across the app and Share Extension.
+- The Send Image Shortcut now offers all five server-advertised layouts: Fit,
+  Fill, Blur, Stretch, and Center.
+- Activity now shows image sends waiting in the 24-hour Share/Shortcut queue,
+  including their thumbnail, destination, fit mode, latest failure, and explicit
+  Retry and Discard controls.
+- Settings now offers a confirmed Clear Local Activity action that empties the
+  current instance's Activity list and persistently hides existing server
+  History on this iPhone without deleting canonical Tesserae server History.
+- OpenAPI 0.4.0 optional `history` capability with cursor-paginated canonical
+  History, ETag-backed composition previews, idempotent resend to original
+  targets, fit-mode metadata, and exact Job-to-History correlation.
+- Server-advertised `limits.image_fit_modes` with all five Tesserae modes and
+  a backward-compatible Fit/Fill fallback when the field is absent.
+- Capability-gated server History in Activity, including composition
+  thumbnails, pull-to-refresh, pagination, resend, and correlation-based
+  replacement of short-lived local Job progress.
+
+### Changed
+
+- Display cards now show freshness using compact, accessible status glyphs
+  beside the device name, distinguish states by both shape and colour, tighten
+  hardware brand and model spacing, and omit the redundant orientation label.
+- Settings now places the Disconnect action inside the Connection section so
+  connection status, storage details, and lifecycle control stay together.
+- Settings About now links directly to the Tesserae Companion GitHub repository
+  instead of showing the redundant community-client label.
+- Activity cards no longer show redundant disclosure chevrons; tapping a card
+  with an available image still expands and collapses its preview.
+- History cards now use a compact `Resend` action aligned with the status pill
+  instead of a full-width action row.
+- Activity now follows foreground sends for up to 30 seconds and reconciles
+  unfinished Jobs during refresh, preventing a stale Sending card from
+  lingering beside its correlated Published server History entry.
+- Tightened the device-preview contract to the device-specific viewable result
+  after image fit and panel geometry, while keeping History previews as source
+  compositions used to identify what was sent. Displays accessibility labels
+  now use the same device-specific terminology.
+- Send and Share now expose Fit, Fill, and Blur as primary layouts,
+  Stretch and Center as advanced choices, and simulate all five using the same
+  geometry as Tesserae's server renderer.
+
+### Fixed
+
+- Activity now reconciles legacy or incomplete successful Companion Jobs with
+  their canonical server History rows using a strict one-to-one match, avoiding
+  duplicate cards when `history_event_ids` is unavailable.
+- Button-triggered Fetched History rows now show the uniquely matching display
+  name when the server row omits its `device_ids` snapshot.
+- Activity pull-to-refresh now returns the list to its resting position
+  immediately while History and pending Job reconciliation continue in the
+  background. It also avoids overlapping refreshes and no longer retries queued
+  image sends from the refresh gesture.
 
 ## [0.2.0] - 2026-07-29
 

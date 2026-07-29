@@ -3,6 +3,8 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
+    @State private var clearActivityConfirmationPresented = false
+    @State private var activityClearConfirmation: String?
 
     var body: some View {
         NavigationStack {
@@ -38,9 +40,7 @@ struct SettingsView: View {
                     Text(connectionDescription)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
-                }
 
-                Section {
                     Button("Disconnect", role: .destructive) {
                         Task {
                             await model.disconnect()
@@ -50,7 +50,51 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    LabeledContent("Client", value: "Community-built")
+                    Button(role: .destructive) {
+                        clearActivityConfirmationPresented = true
+                    } label: {
+                        if model.isClearingLocalActivity {
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                Text("Clearing Local Activity…")
+                            }
+                        } else {
+                            Label(
+                                "Clear Local Activity",
+                                systemImage: "trash"
+                            )
+                        }
+                    }
+                    .disabled(model.isClearingLocalActivity)
+                    .accessibilityIdentifier("clear-local-activity")
+
+                    if let activityClearConfirmation {
+                        Label(
+                            activityClearConfirmation,
+                            systemImage: "checkmark.circle.fill"
+                        )
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("Local Storage")
+                } footer: {
+                    Text(
+                        "Clears Activity on this iPhone, including locally displayed server History. Tesserae server History is not deleted."
+                    )
+                }
+
+                Section {
+                    Link(
+                        destination: URL(
+                            string: "https://github.com/charmmmz/tesserae-companion-ios"
+                        )!
+                    ) {
+                        LabeledContent(
+                            "GitHub Repository",
+                            value: "charmmmz/tesserae-companion-ios"
+                        )
+                    }
                     LabeledContent("Framework", value: "0.1.0")
                 } header: {
                     Text("About")
@@ -64,6 +108,26 @@ struct SettingsView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
+            }
+            .confirmationDialog(
+                "Clear Local Activity?",
+                isPresented: $clearActivityConfirmationPresented,
+                titleVisibility: .visible
+            ) {
+                Button("Clear Local Activity", role: .destructive) {
+                    Task {
+                        if await model.clearLocalActivity() {
+                            activityClearConfirmation = String(
+                                localized: "Local Activity was cleared."
+                            )
+                        }
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(
+                    "This clears the Activity list for this Tesserae instance and hides existing server History on this iPhone. Server History remains available in Tesserae."
+                )
             }
         }
     }

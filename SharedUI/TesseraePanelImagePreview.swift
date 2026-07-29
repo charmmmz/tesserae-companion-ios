@@ -2,9 +2,9 @@ import SwiftUI
 import TesseraeKit
 import UIKit
 
-/// A fixed Tesserae panel canvas that mirrors the server's centered Fit/Fill
-/// geometry. The image is laid out explicitly and clipped by the canvas,
-/// avoiding SwiftUI's implicit `aspectRatio` sizing from escaping its parent.
+/// A fixed Tesserae panel canvas that mirrors the server's five image-fit
+/// modes. The image is laid out explicitly and clipped by the canvas, avoiding
+/// SwiftUI's implicit `aspectRatio` sizing from escaping its parent.
 struct TesseraePanelImagePreview: View {
     let image: UIImage?
     let panel: PanelProfile
@@ -40,13 +40,29 @@ struct TesseraePanelImagePreview: View {
             Color.white
 
             if let image {
+                if fit == .blur {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: size.width, height: size.height)
+                        .blur(
+                            radius: max(
+                                2,
+                                min(size.width, size.height) / 16
+                            )
+                        )
+                        .clipped()
+                }
+
                 let sourceWidth = image.size.width * image.scale
                 let sourceHeight = image.size.height * image.scale
                 let rect = fit.previewRect(
                     sourceWidth: sourceWidth,
                     sourceHeight: sourceHeight,
                     canvasWidth: size.width,
-                    canvasHeight: size.height
+                    canvasHeight: size.height,
+                    targetPixelWidth: Double(panel.width),
+                    targetPixelHeight: Double(panel.height)
                 )
 
                 Image(uiImage: image)

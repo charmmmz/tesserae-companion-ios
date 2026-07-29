@@ -16,7 +16,15 @@ public actor MockTesseraeClient: TesseraeServing {
             serverVersion: "0.205.0",
             api: CompanionAPI(version: 1),
             pairing: PairingCapabilities(supported: true, codeLength: 6, ttlSeconds: 600),
-            features: ["devices", "dashboards", "dashboard_push", "image_push", "jobs"],
+            features: [
+                "devices",
+                "dashboards",
+                "dashboard_push",
+                "image_push",
+                "jobs",
+                "previews",
+                "history",
+            ],
             limits: CompanionLimits(
                 imageUploadBytes: 26_214_400,
                 imageMaxEdge: 8_192,
@@ -27,6 +35,7 @@ public actor MockTesseraeClient: TesseraeServing {
                     "image/heif",
                     "image/webp",
                 ],
+                imageFitModes: ImageFitMode.allCases,
                 jobRetentionSeconds: 86_400,
                 idempotencyRetentionSeconds: 86_400
             ),
@@ -152,6 +161,78 @@ public actor MockTesseraeClient: TesseraeServing {
         return .notFound
     }
 
+    public func fetchHistory(
+        beforeID: String?,
+        limit: Int?,
+        instance: TesseraeInstance
+    ) async throws -> HistoryResponse {
+        try await pause()
+        let rows = [
+            HistoryItem(
+                id: "history-demo-photo",
+                createdAt: .now.addingTimeInterval(-300),
+                source: "companion",
+                label: "Shared Photo",
+                deviceIDs: ["e1004-desk"],
+                status: "sent",
+                durationSeconds: 8.2,
+                previewAvailable: true,
+                resendable: true,
+                fit: .blur
+            ),
+            HistoryItem(
+                id: "history-demo-dashboard",
+                createdAt: .now.addingTimeInterval(-3_600),
+                source: "scheduler",
+                label: "Pantry",
+                deviceIDs: ["picpak-kitchen"],
+                status: "sent",
+                durationSeconds: 2.4,
+                previewAvailable: true,
+                resendable: true
+            ),
+        ]
+        return HistoryResponse(
+            items: Array(rows.prefix(limit ?? rows.count)),
+            nextBeforeID: nil
+        )
+    }
+
+    public func fetchHistoryPreview(
+        id: String,
+        ifNoneMatch: String?,
+        instance: TesseraeInstance
+    ) async throws -> PreviewFetchResult {
+        try await pause()
+        return .notFound
+    }
+
+    public func resendHistory(
+        id: String,
+        overrideQuietHours: Bool,
+        idempotencyKey: String,
+        instance: TesseraeInstance
+    ) async throws -> PushJob {
+        let history = try await fetchHistory(
+            beforeID: nil,
+            limit: nil,
+            instance: instance
+        )
+        guard let item = history.items.first(where: { $0.id == id }),
+              item.resendable
+        else {
+            throw TesseraeClientError.unavailable
+        }
+        return try await acceptJob(
+            kind: .historyResend,
+            label: item.label,
+            deviceIDs: item.deviceIDs,
+            overrideQuietHours: overrideQuietHours,
+            idempotencyKey: idempotencyKey,
+            historyEventIDs: ["history-demo-resent"]
+        )
+    }
+
     public func pushDashboard(
         id: String,
         deviceIDs: [String]?,
@@ -213,7 +294,8 @@ public actor MockTesseraeClient: TesseraeServing {
         deviceIDs: [String],
         overrideQuietHours: Bool,
         idempotencyKey: String,
-        resultReason: String? = nil
+        resultReason: String? = nil,
+        historyEventIDs: [String]? = nil
     ) async throws -> PushJob {
         try await pause()
         if let existing = jobsByIdempotencyKey[idempotencyKey] {
@@ -242,7 +324,8 @@ public actor MockTesseraeClient: TesseraeServing {
             result: PushJobResult(
                 status: .published,
                 reason: resultReason ?? (overrideQuietHours ? "quiet_hours_overridden" : nil),
-                deviceIDs: deviceIDs
+                deviceIDs: deviceIDs,
+                historyEventIDs: historyEventIDs
             )
         )
         jobsByIdempotencyKey[idempotencyKey] = accepted

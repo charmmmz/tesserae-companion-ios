@@ -88,6 +88,55 @@ final class PanelPreviewGeometryTests: XCTestCase {
         XCTAssertEqual(rect.height, 400, accuracy: 0.001)
     }
 
+    func testBlurUsesFitGeometryForItsForeground() {
+        let rect = ImageFitMode.blur.previewRect(
+            sourceWidth: 1_600,
+            sourceHeight: 1_200,
+            canvasWidth: 300,
+            canvasHeight: 400
+        )
+
+        XCTAssertEqual(
+            rect,
+            ImageFitMode.fit.previewRect(
+                sourceWidth: 1_600,
+                sourceHeight: 1_200,
+                canvasWidth: 300,
+                canvasHeight: 400
+            )
+        )
+    }
+
+    func testStretchUsesTheWholePanelCanvas() {
+        let rect = ImageFitMode.stretch.previewRect(
+            sourceWidth: 1_600,
+            sourceHeight: 1_200,
+            canvasWidth: 300,
+            canvasHeight: 400
+        )
+
+        XCTAssertEqual(
+            rect,
+            PanelImagePreviewRect(x: 0, y: 0, width: 300, height: 400)
+        )
+    }
+
+    func testCenterPreservesPreparedPixelsInPanelPixelSpace() {
+        let rect = ImageFitMode.center.previewRect(
+            sourceWidth: 600,
+            sourceHeight: 800,
+            canvasWidth: 300,
+            canvasHeight: 400,
+            targetPixelWidth: 1_200,
+            targetPixelHeight: 1_600
+        )
+
+        XCTAssertEqual(rect.x, 75, accuracy: 0.001)
+        XCTAssertEqual(rect.y, 100, accuracy: 0.001)
+        XCTAssertEqual(rect.width, 150, accuracy: 0.001)
+        XCTAssertEqual(rect.height, 200, accuracy: 0.001)
+    }
+
     func testPreviewGeometryRejectsInvalidSourceDimensions() {
         XCTAssertEqual(
             ImageFitMode.fit.previewRect(

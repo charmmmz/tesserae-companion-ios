@@ -53,18 +53,19 @@ public extension PanelProfile {
 }
 
 public extension ImageFitMode {
-    /// Returns the image rectangle inside a fixed panel canvas using the same
-    /// centered aspect-preserving geometry as Tesserae's `fit_to_panel`.
+    /// Returns the foreground image rectangle inside a fixed panel canvas using
+    /// the same geometry as Tesserae's `fit_to_panel`.
     ///
-    /// For `fit`, the rectangle remains fully inside the canvas and the
-    /// surrounding canvas is the server's white letterbox. For `fill`, the
-    /// rectangle extends beyond one canvas axis and the caller clips it to the
-    /// panel bounds, matching the server's centered crop.
+    /// `blur` uses the `fit` foreground rectangle; callers paint the blurred
+    /// `fill` copy behind it. `center` needs the target panel's pixel dimensions
+    /// because its defining behavior is no scaling in panel-pixel space.
     func previewRect(
         sourceWidth: Double,
         sourceHeight: Double,
         canvasWidth: Double,
-        canvasHeight: Double
+        canvasHeight: Double,
+        targetPixelWidth: Double? = nil,
+        targetPixelHeight: Double? = nil
     ) -> PanelImagePreviewRect {
         guard
             sourceWidth > 0,
@@ -75,14 +76,33 @@ public extension ImageFitMode {
             return .zero
         }
 
+        if self == .stretch {
+            return PanelImagePreviewRect(
+                x: 0,
+                y: 0,
+                width: canvasWidth,
+                height: canvasHeight
+            )
+        }
+
+        if self == .center {
+            let panelWidth = max(targetPixelWidth ?? canvasWidth, 1)
+            let panelHeight = max(targetPixelHeight ?? canvasHeight, 1)
+            let width = sourceWidth * canvasWidth / panelWidth
+            let height = sourceHeight * canvasHeight / panelHeight
+            return PanelImagePreviewRect(
+                x: (canvasWidth - width) / 2,
+                y: (canvasHeight - height) / 2,
+                width: width,
+                height: height
+            )
+        }
+
         let widthScale = canvasWidth / sourceWidth
         let heightScale = canvasHeight / sourceHeight
-        let scale = switch self {
-        case .fit:
-            min(widthScale, heightScale)
-        case .fill:
-            max(widthScale, heightScale)
-        }
+        let scale = self == .fill
+            ? max(widthScale, heightScale)
+            : min(widthScale, heightScale)
         let width = sourceWidth * scale
         let height = sourceHeight * scale
 

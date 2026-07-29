@@ -81,6 +81,22 @@ final class TesseraeCompanionUITests: XCTestCase {
             hasAspectRatio: 800.0 / 480.0
         )
 
+        let kitchenCard = app.buttons["display-card-picpak-kitchen"]
+        XCTAssertTrue(kitchenCard.exists)
+        kitchenCard.tap()
+        XCTAssertTrue(
+            app.navigationBars["Kitchen"].waitForExistence(timeout: 2)
+        )
+        XCTAssertTrue(app.staticTexts["Current Screen"].exists)
+        XCTAssertTrue(app.staticTexts["800 × 480"].exists)
+        assertPreview(
+            app.descendants(matching: .any)[
+                "display-detail-preview-picpak-kitchen"
+            ],
+            hasAspectRatio: 800.0 / 480.0
+        )
+        app.navigationBars["Kitchen"].buttons["Displays"].tap()
+
         let deskPreview = app.descendants(matching: .any)["display-preview-e1004-desk"]
         for _ in 0..<4 where !deskPreview.exists {
             app.swipeUp()
@@ -115,6 +131,18 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertFalse(app.buttons["Remove from favourites"].exists)
         XCTAssertTrue(app.buttons["Push"].exists)
         XCTAssertFalse(app.buttons["Send Now"].exists)
+
+        let pantryPushButton = app.buttons["dashboard-push-pantry"]
+        XCTAssertTrue(pantryPushButton.exists)
+        pantryPushButton.tap()
+        XCTAssertTrue(
+            app.navigationBars["Push Dashboard"].waitForExistence(timeout: 2)
+        )
+        XCTAssertTrue(app.staticTexts["Dashboard binding"].exists)
+        XCTAssertTrue(app.buttons["Push to Selected Displays"].isEnabled)
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(pantryPushButton.waitForExistence(timeout: 2))
+
         let dashboardScreenshot = XCTAttachment(screenshot: app.screenshot())
         dashboardScreenshot.name = "Dashboard Compact Previews"
         dashboardScreenshot.lifetime = .keepAlways
@@ -139,6 +167,21 @@ final class TesseraeCompanionUITests: XCTestCase {
         tabBar.buttons["Activity"].tap()
         XCTAssertTrue(app.staticTexts["Shared Photo"].waitForExistence(timeout: 2))
         XCTAssertTrue(app.staticTexts["Published"].exists)
+        let historyStatus = app.descendants(matching: .any)[
+            "history-status-history-demo-photo"
+        ]
+        let historyResend = app.buttons[
+            "history-resend-history-demo-photo"
+        ]
+        XCTAssertTrue(historyStatus.exists)
+        XCTAssertTrue(historyResend.exists)
+        XCTAssertEqual(
+            historyResend.frame.width,
+            historyStatus.frame.width,
+            accuracy: 1
+        )
+        XCTAssertEqual(historyResend.label, "Resend")
+        XCTAssertFalse(app.buttons["Resend to Original Displays"].exists)
 
         let collapsedCard = app.buttons.matching(
             NSPredicate(
@@ -147,6 +190,17 @@ final class TesseraeCompanionUITests: XCTestCase {
             )
         ).firstMatch
         XCTAssertTrue(collapsedCard.waitForExistence(timeout: 2))
+        let restingCardMinY = collapsedCard.frame.minY
+        let activityScrollView = app.scrollViews.firstMatch
+        XCTAssertTrue(activityScrollView.exists)
+        activityScrollView.swipeDown()
+        XCTAssertTrue(collapsedCard.waitForExistence(timeout: 2))
+        XCTAssertEqual(
+            collapsedCard.frame.minY,
+            restingCardMinY,
+            accuracy: 3
+        )
+
         let collapsedHeight = collapsedCard.frame.height
         XCTAssertEqual(collapsedCard.value as? String, "Collapsed")
         collapsedCard.tap()
@@ -158,6 +212,100 @@ final class TesseraeCompanionUITests: XCTestCase {
         activityScreenshot.name = "Expanded Activity Photo"
         activityScreenshot.lifetime = .keepAlways
         add(activityScreenshot)
+
+        let localActivityCardIdentifier = collapsedCard.identifier
+        XCTAssertTrue(
+            app.descendants(matching: .any).matching(
+                NSPredicate(
+                    format: "identifier BEGINSWITH %@",
+                    "history-card-"
+                )
+            ).firstMatch.exists
+        )
+
+        app.buttons["Settings"].tap()
+        let clearLocalActivityButton = app.buttons["clear-local-activity"]
+        XCTAssertTrue(clearLocalActivityButton.waitForExistence(timeout: 2))
+        for _ in 0..<4 where !clearLocalActivityButton.isHittable {
+            app.swipeUp()
+        }
+        XCTAssertTrue(clearLocalActivityButton.isHittable)
+        clearLocalActivityButton.tap()
+
+        let confirmation = app.sheets.firstMatch
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 2))
+        confirmation.buttons["Clear Local Activity"].tap()
+        XCTAssertTrue(
+            app.staticTexts["Local Activity was cleared."]
+                .waitForExistence(timeout: 2)
+        )
+        app.buttons["Done"].tap()
+
+        XCTAssertFalse(
+            app.buttons[localActivityCardIdentifier]
+                .waitForExistence(timeout: 1)
+        )
+        XCTAssertFalse(
+            app.descendants(matching: .any).matching(
+                NSPredicate(
+                    format: "identifier BEGINSWITH %@",
+                    "history-card-"
+                )
+            ).firstMatch.exists
+        )
+        XCTAssertTrue(
+            app.staticTexts["No Activity Yet"].waitForExistence(timeout: 2)
+        )
+
+        let clearedActivityScrollView = app.scrollViews.firstMatch
+        XCTAssertTrue(clearedActivityScrollView.exists)
+        clearedActivityScrollView.swipeDown()
+        XCTAssertTrue(
+            app.staticTexts["No Activity Yet"].waitForExistence(timeout: 2)
+        )
+        XCTAssertFalse(
+            app.descendants(matching: .any).matching(
+                NSPredicate(
+                    format: "identifier BEGINSWITH %@",
+                    "history-card-"
+                )
+            ).firstMatch.exists
+        )
+    }
+
+    func testSlowActivityRefreshReturnsListToRestingPosition() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "1500"
+        app.launch()
+
+        XCTAssertTrue(
+            app.staticTexts["Tesserae Companion"]
+                .waitForExistence(timeout: 3)
+        )
+        app.buttons["Explore with Demo Data"].tap()
+
+        let activityTab = app.tabBars.firstMatch.buttons["Activity"]
+        XCTAssertTrue(activityTab.waitForExistence(timeout: 15))
+        activityTab.tap()
+
+        let historyCard = app.buttons[
+            "history-card-history-demo-photo"
+        ].firstMatch
+        XCTAssertTrue(historyCard.waitForExistence(timeout: 5))
+        let restingMinY = historyCard.frame.minY
+
+        let scrollView = app.scrollViews.firstMatch
+        XCTAssertTrue(scrollView.exists)
+        scrollView.swipeDown()
+
+        XCTAssertTrue(historyCard.waitForExistence(timeout: 2))
+        XCTAssertEqual(
+            historyCard.frame.minY,
+            restingMinY,
+            accuracy: 3,
+            "The list must return before the delayed server refresh finishes."
+        )
     }
 
     func testDashboardCardsReorderWithLongPressDrag() {
@@ -231,7 +379,9 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(tabBar.buttons["发送"].exists)
         XCTAssertTrue(tabBar.buttons["活动"].exists)
         XCTAssertFalse(app.staticTexts["演示数据"].exists)
-        XCTAssertTrue(app.staticTexts["最近在线"].exists)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["最近在线"].exists
+        )
     }
 
     func testDemoSendShowsPreviewAndRecordsActivity() {
@@ -385,7 +535,7 @@ final class TesseraeCompanionUITests: XCTestCase {
             .matching(
                 NSPredicate(
                     format: "label BEGINSWITH %@",
-                    "Latest full composition preview"
+                    "Latest device-specific preview"
                 )
             )
             .firstMatch
