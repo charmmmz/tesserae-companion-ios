@@ -7,6 +7,7 @@ struct DashboardsView: View {
     @State private var draggedDashboardID: String?
     @State private var dropTargetDashboardID: String?
     @State private var expandedPreview: DashboardPreviewSelection?
+    @State private var dashboardToPush: DashboardSummary?
     private let previewCanvasSize = CGSize(width: 112, height: 118)
 
     var body: some View {
@@ -70,6 +71,10 @@ struct DashboardsView: View {
         .sheet(item: $expandedPreview) { preview in
             DashboardPreviewViewer(preview: preview)
         }
+        .sheet(item: $dashboardToPush) { dashboard in
+            DashboardPushSheet(dashboard: dashboard)
+                .environment(model)
+        }
         .overlay {
             if model.isRefreshing && model.dashboards.isEmpty {
                 ProgressView("Loading dashboards…")
@@ -110,7 +115,7 @@ struct DashboardsView: View {
                 .lineLimit(2)
 
                 Button {
-                    Task { await model.push(dashboard) }
+                    dashboardToPush = dashboard
                 } label: {
                     HStack(spacing: 5) {
                         if model.activeOperationIDs.contains(dashboard.id) {
@@ -126,8 +131,9 @@ struct DashboardsView: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
                 .fixedSize()
+                .accessibilityIdentifier("dashboard-push-\(dashboard.id)")
                 .disabled(
-                    dashboard.deviceIDs.isEmpty
+                    model.displays.isEmpty
                         || model.activeOperationIDs.contains(dashboard.id)
                 )
             }
@@ -285,6 +291,166 @@ struct DashboardsView: View {
             draggedDashboardID = nil
             dropTargetDashboardID = nil
         }
+    }
+}
+
+private struct DashboardPushSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+
+    let dashboard: DashboardSummary
+
+    @State private var selectedDeviceIDs: Set<String> = []
+    @State private var didLoadInitialSelection = false
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(dashboard.name)
+                            .font(.title3.weight(.semibold))
+                        Text(
+                            "Choose where to send this render. Dashboard bindings are not changed."
+                        )
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .tesseraeCard()
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Displays")
+                                .font(.headline)
+                            Spacer()
+                            if !boundDeviceIDs.isEmpty {
+                                Button("Use Bindings") {
+                                    selectedDeviceIDs = boundDeviceIDs
+                                }
+                                .font(.caption.weight(.semibold))
+                            }
+                        }
+
+                        ForEach(model.displays) { display in
+                            Button {
+                                if selectedDeviceIDs.contains(display.id) {
+                                    selectedDeviceIDs.remove(display.id)
+                                } else {
+                                    selectedDeviceIDs.insert(display.id)
+                                }
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(
+                                        systemName: selectedDeviceIDs.contains(
+                                            display.id
+                                        )
+                                            ? "checkmark.circle.fill"
+                                            : "circle"
+                                    )
+                                    .foregroundStyle(
+                                        selectedDeviceIDs.contains(display.id)
+                                            ? TesseraeTheme.accent
+                                            : .secondary
+                                    )
+
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(display.name)
+                                            .foregroundStyle(.primary)
+                                        if dashboard.deviceIDs.contains(
+                                            display.id
+                                        ) {
+                                            Text("Dashboard binding")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+
+                                    Spacer()
+
+                                    Text(
+                                        "\(display.panel.width)×\(display.panel.height)"
+                                    )
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(.secondary)
+                                }
+                                .contentShape(Rectangle())
+                                .padding(.vertical, 7)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .tesseraeCard()
+
+                    Button {
+                        Task {
+                            let sent = await model.push(
+                                dashboard,
+                                deviceIDs: Array(selectedDeviceIDs).sorted()
+                            )
+                            if sent {
+                                dismiss()
+                            }
+                        }
+                    } label: {
+                        Label(
+                            model.activeOperationIDs.contains(dashboard.id)
+                                ? "Sending…"
+                                : "Push to Selected Displays",
+                            systemImage: "paperplane.fill"
+                        )
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .disabled(
+                        selectedDeviceIDs.isEmpty
+                            || model.activeOperationIDs.contains(dashboard.id)
+                    )
+                }
+                .padding(16)
+            }
+            .navigationTitle("Push Dashboard")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+            .task {
+                await loadInitialSelection()
+            }
+            .tesseraeScreenBackground()
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private var boundDeviceIDs: Set<String> {
+        let availableIDs = Set(model.displays.map(\.id))
+        return Set(dashboard.deviceIDs).intersection(availableIDs)
+    }
+
+    private func loadInitialSelection() async {
+        guard !didLoadInitialSelection else { return }
+        didLoadInitialSelection = true
+
+        if !boundDeviceIDs.isEmpty {
+            selectedDeviceIDs = boundDeviceIDs
+            return
+        }
+
+        let availableIDs = Set(model.displays.map(\.id))
+        if let preferences = await model.savedSendPreferences() {
+            let preferred = Set(preferences.deviceIDs)
+                .intersection(availableIDs)
+            if !preferred.isEmpty {
+                selectedDeviceIDs = preferred
+                return
+            }
+        }
+        selectedDeviceIDs = Set(model.displays.prefix(1).map(\.id))
     }
 }
 

@@ -6,7 +6,7 @@ struct DisplayHardwareBadge: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 4) {
             if let brand = presentation.brand {
                 brandLogo(brand)
             } else {
@@ -34,7 +34,7 @@ struct DisplayHardwareBadge: View {
             .scaledToFit()
             .frame(width: brand.logoWidth, height: 20)
             .offset(x: brand.opticalLeadingCorrection)
-            .frame(width: DisplayHardwareBrand.logoSlotWidth, alignment: .leading)
+            .frame(width: brand.logoWidth, alignment: .leading)
             .accessibilityLabel(brand.displayName)
             .accessibilityIdentifier("display-brand-\(brand.rawValue)")
     }
@@ -62,8 +62,6 @@ struct DisplayHardwareBadge: View {
 }
 
 private extension DisplayHardwareBrand {
-    static let logoSlotWidth: CGFloat = 66
-
     var assetName: String {
         switch self {
         case .seeedStudio:
