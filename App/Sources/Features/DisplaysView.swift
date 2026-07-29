@@ -100,7 +100,7 @@ private struct DisplayCard: View {
                 state: preview,
                 placeholderSystemName: previewSymbol,
                 placeholderLabel: "Display preview placeholder, \(display.panel.width) by \(display.panel.height), \(display.panel.orientation)",
-                imageLabel: "Latest full composition preview for \(display.name)",
+                imageLabel: "Latest device-specific preview for \(display.name)",
                 accessibilityIdentifier: "display-preview-\(display.id)",
                 placeholderDetail: "\(display.panel.width) × \(display.panel.height)"
             )

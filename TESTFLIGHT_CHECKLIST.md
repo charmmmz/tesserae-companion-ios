@@ -15,6 +15,10 @@ or approved.
       the Tesserae `0.207.0` deployment used by testers.
 - [x] Confirm authenticated device preview loading and portrait presentation
       on the Tesserae `0.208.0` deployment.
+- [ ] On a server with logical device previews, send one asymmetric photo
+      using Fit, Fill, Blur, Stretch, and Center; confirm the Displays preview
+      matches the target panel geometry and remains upright on a portrait
+      reTerminal E1004.
 - [ ] Confirm Dashboard preview preparation, ETag revalidation, and
       base-server placeholder fallback.
 - [ ] Confirm dashboard push, Job polling, quiet hours, and `_tesserae._tcp`

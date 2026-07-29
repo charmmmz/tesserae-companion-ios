@@ -40,7 +40,7 @@ outside this contract.
 | `POST` | `/api/app/v1/pair` | Redeem a single-use Companion pairing code |
 | `DELETE` | `/api/app/v1/session` | Revoke the presented client token |
 | `GET` | `/api/app/v1/devices` | List stable display targets and lightweight status |
-| `GET` | `/api/app/v1/devices/{device_id}/preview` | Read the latest full display composition |
+| `GET` | `/api/app/v1/devices/{device_id}/preview` | Read the latest device-specific logical preview |
 | `GET` | `/api/app/v1/dashboards` | List saved dashboards without forcing renders |
 | `GET` | `/api/app/v1/dashboards/{dashboard_id}/preview` | Read or prepare an on-demand cached preview |
 | `POST` | `/api/app/v1/dashboards/{dashboard_id}/push` | Push to bindings or explicit targets |

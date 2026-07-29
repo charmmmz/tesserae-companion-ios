@@ -26,7 +26,8 @@ capabilities.
 
 - Tightened the device-preview contract to the device-specific viewable result
   after image fit and panel geometry, while keeping History previews as source
-  compositions used to identify what was sent.
+  compositions used to identify what was sent. Displays accessibility labels
+  now use the same device-specific terminology.
 - Send and Share now expose Fit, Fill, and Blur as primary layouts,
   Stretch and Center as advanced choices, and simulate all five using the same
   geometry as Tesserae's server renderer.
