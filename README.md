@@ -11,7 +11,7 @@ It is a community-built client, not the official Tesserae app.
 ## Project status
 
 - Product status: live-connected internal beta candidate
-- Document version: 0.3.0
+- Document version: 0.4.0
 - Planned first App Store release: 1.0.0
 - Included product scope: native V1 plus Share Sheet and Shortcuts integrations
 - iOS implementation: native Swift and SwiftUI
@@ -84,8 +84,9 @@ python3 Contracts/fixture_server.py --port 8765
 
 In the app, enter `http://127.0.0.1:8765` and any six-digit pairing code.
 The fixture server is stateful enough to test capability probing, pairing,
-authenticated lists, idempotent Dashboard pushes, image multipart uploads,
-and Job polling. It is development infrastructure, not a Tesserae server.
+authenticated lists, idempotent Dashboard and History resend writes, image
+multipart uploads, History pagination/preview, and Job polling. It is
+development infrastructure, not a Tesserae server.
 
 Run the OpenAPI fixture checks with a Python environment containing the
 small dependencies in `Contracts/requirements.txt`:
@@ -111,13 +112,14 @@ provisioning profiles.
 - the remaining physical-device permission and failure-mode test matrix;
 - final icon, store metadata, privacy-policy hosting, and archive validation
   before any TestFlight upload;
-- History/resend.
+- live server implementation and physical validation of the optional
+  History/resend contract.
 
 The Share Extension is implemented against the proposed contract: it loads one
-still image, validates server-advertised limits, selects targets and Fit/Fill,
-then stores a protected retry record before uploading. An interrupted request
-is retried by the containing app with the same idempotency key and is purged
-after 24 hours.
+still image, validates server-advertised limits, selects targets and a
+server-advertised layout mode, then stores a protected retry record before
+uploading. An interrupted request is retried by the containing app with the
+same idempotency key and is purged after 24 hours.
 
 Shortcuts can push a saved Dashboard, send one still image to selected
 displays, or open the paired Tesserae web UI. The image action uses the same
@@ -127,8 +129,11 @@ Upstream `main` contains the complete base `/api/app/v1` implementation at
 commit `3e4d481` (reported server version `0.207.0`) and the additive preview
 extension at commit `76521718` (deployed here as Tesserae `0.208.0`). A physical
 iPhone has paired with the base implementation and published a photo through
-the Share Extension to a real display. See [COMPATIBILITY.md](COMPATIBILITY.md)
-for the capability gates and validation evidence.
+the Share Extension to a real display. Upstream PR
+[#148](https://github.com/dmellok/tesserae/pull/148) corrected the shared
+renderer path so arbitrary photos are fitted at composition dimensions before
+firmware-native rotation. See [COMPATIBILITY.md](COMPATIBILITY.md) for the
+capability gates and validation evidence.
 
 ## Repository boundary
 

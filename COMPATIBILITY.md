@@ -43,6 +43,25 @@ Preview support is not part of `CompanionCompatibility.requiredFeatures`.
 Servers implementing only the five base features remain compatible and receive
 aspect-correct placeholders instead of broken image requests.
 
+## Optional contract 0.4 extensions
+
+OpenAPI 0.4.0 adds two independently negotiated extensions:
+
+- `limits.image_fit_modes` advertises the exact image layout vocabulary. When
+  absent, the client assumes `fit` and `fill`; current accepted servers may
+  advertise `fit`, `fill`, `blur`, `stretch`, and `center`.
+- the `history` feature gates canonical History listing, composition previews,
+  and idempotent resend to the original target snapshot.
+
+The device-preview path is unchanged, but its 0.4 semantic is tightened to the
+device-specific viewable result after image fit and panel geometry rather than
+the source composition. Older edge servers may continue to return the
+composition until they adopt the updated semantic.
+
+These additions are not part of `CompanionCompatibility.requiredFeatures`.
+The app must continue to pair with a base 0.2-compatible server, hide History,
+and limit image sending to Fit/Fill when the extension fields are absent.
+
 ## Physical validation
 
 On 2026-07-28, a physical iPhone paired with a Tesserae `0.207.0` deployment
@@ -50,6 +69,14 @@ and sent a Photos Share Sheet image through `/api/app/v1/images` to a Seeed
 reTerminal E1004. The display refreshed successfully. That test exposed an EXIF
 orientation mismatch in the original client; the current unreleased client
 normalizes non-upright image pixels before upload.
+
+Upstream PR
+[#148](https://github.com/dmellok/tesserae/pull/148), merged as `4a9ae2b`,
+also fixed the server renderer invariant: arbitrary uploads are fitted into
+composition dimensions before the renderer reconciles the result with a
+firmware-native row stride. This keeps landscape photos upright on
+portrait-native ESP32 panels while leaving panel-sized dashboard compositions
+unchanged.
 
 After the server was updated to Tesserae `0.208.0`, the same paired iPhone
 loaded the E1004's authenticated device preview and displayed the retained

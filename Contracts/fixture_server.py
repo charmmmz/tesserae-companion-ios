@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import threading
@@ -17,6 +18,10 @@ from urllib.parse import urlparse
 
 FIXTURES = Path(__file__).with_name("Fixtures")
 FIXTURE_TOKEN = "tc_live_fixture_secret_returned_once"
+FIXTURE_PREVIEW_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwC"
+    "AAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+)
 
 
 def load_fixture(name: str) -> dict[str, Any]:
@@ -72,6 +77,10 @@ class FixtureState:
                 }
             )
             completed["job"]["result"]["device_ids"] = device_ids
+            if kind == "history_resend":
+                completed["job"]["result"]["history_event_ids"] = [
+                    f"history_fixture_{self.sequence:04d}"
+                ]
             job = FixtureJob(
                 accepted=accepted,
                 completed=completed,
@@ -96,7 +105,7 @@ class FixtureRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         path = urlparse(self.path).path.rstrip("/")
         if path == "/api/app/v1":
-            self.send_fixture("capabilities.json")
+            self.send_fixture("capabilities-extended.json")
             return
         if not self.authorized():
             return
@@ -105,6 +114,34 @@ class FixtureRequestHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/app/v1/dashboards":
             self.send_fixture("dashboards-response.json")
+            return
+        if path == "/api/app/v1/history":
+            self.send_fixture("history-response.json")
+            return
+        if path.startswith("/api/app/v1/history/") and path.endswith("/preview"):
+            history_id = path.split("/")[-2]
+            if history_id not in {"history_0101", "history_0102"}:
+                self.send_error_response(
+                    HTTPStatus.NOT_FOUND,
+                    "not_found",
+                    "The requested History preview does not exist.",
+                )
+                return
+            preview_etag = '"history-preview-fixture"'
+            if self.headers.get("If-None-Match") == preview_etag:
+                self.send_response(HTTPStatus.NOT_MODIFIED)
+                self.send_header("ETag", preview_etag)
+                self.end_headers()
+                return
+            self.send_bytes(
+                HTTPStatus.OK,
+                FIXTURE_PREVIEW_PNG,
+                content_type="image/png",
+                headers={
+                    "ETag": preview_etag,
+                    "Cache-Control": "private, no-cache",
+                },
+            )
             return
         if path.startswith("/api/app/v1/jobs/"):
             job_id = path.rsplit("/", 1)[-1]
@@ -177,6 +214,36 @@ class FixtureRequestHandler(BaseHTTPRequestHandler):
                 label="Shared Photo",
                 device_ids=["picpak-kitchen"],
                 body=body,
+            )
+            return
+        if path.startswith("/api/app/v1/history/") and path.endswith("/resend"):
+            payload = self.read_json()
+            if payload is None:
+                return
+            history_id = path.split("/")[-2]
+            if history_id not in {"history_0101", "history_0102"}:
+                self.send_error_response(
+                    HTTPStatus.NOT_FOUND,
+                    "not_found",
+                    "The requested History row does not exist.",
+                )
+                return
+            if not isinstance(payload.get("override_quiet_hours"), bool):
+                self.send_error_response(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid_request",
+                    "override_quiet_hours is required.",
+                )
+                return
+            self.accept_job(
+                kind="history_resend",
+                label="Shared Photo" if history_id == "history_0102" else "Pantry",
+                device_ids=(
+                    ["e1004-desk"]
+                    if history_id == "history_0102"
+                    else ["picpak-kitchen"]
+                ),
+                body=json.dumps(payload, sort_keys=True).encode(),
             )
             return
         self.send_error_response(
@@ -298,6 +365,22 @@ class FixtureRequestHandler(BaseHTTPRequestHandler):
         body = json.dumps(payload, separators=(",", ":")).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        for key, value in (headers or {}).items():
+            self.send_header(key, value)
+        self.end_headers()
+        self.wfile.write(body)
+
+    def send_bytes(
+        self,
+        status: HTTPStatus,
+        body: bytes,
+        *,
+        content_type: str,
+        headers: dict[str, str] | None = None,
+    ) -> None:
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         for key, value in (headers or {}).items():
             self.send_header(key, value)
