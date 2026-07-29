@@ -186,6 +186,73 @@ public actor LiveTesseraeClient: TesseraeServing {
         )
     }
 
+    public func fetchHistory(
+        beforeID: String?,
+        limit: Int?,
+        instance: TesseraeInstance
+    ) async throws -> HistoryResponse {
+        var queryItems: [URLQueryItem] = []
+        if let beforeID {
+            queryItems.append(URLQueryItem(name: "before_id", value: beforeID))
+        }
+        if let limit {
+            queryItems.append(URLQueryItem(name: "limit", value: String(limit)))
+        }
+        let request = try await authenticatedRequest(
+            instance: instance,
+            path: ["history"],
+            method: "GET",
+            queryItems: queryItems
+        )
+        return try await perform(
+            request,
+            expectedStatusCodes: [200]
+        )
+    }
+
+    public func fetchHistoryPreview(
+        id: String,
+        ifNoneMatch: String?,
+        instance: TesseraeInstance
+    ) async throws -> PreviewFetchResult {
+        var request = try await authenticatedRequest(
+            instance: instance,
+            path: ["history", id, "preview"],
+            method: "GET",
+            accept: "image/png"
+        )
+        if let ifNoneMatch {
+            request.setValue(ifNoneMatch, forHTTPHeaderField: "If-None-Match")
+        }
+        return try await previewResponse(
+            for: request,
+            allowsPreparing: false
+        )
+    }
+
+    public func resendHistory(
+        id: String,
+        overrideQuietHours: Bool,
+        idempotencyKey: String,
+        instance: TesseraeInstance
+    ) async throws -> PushJob {
+        let body = HistoryResendRequest(
+            overrideQuietHours: overrideQuietHours
+        )
+        var request = try await authenticatedRequest(
+            instance: instance,
+            path: ["history", id, "resend"],
+            method: "POST",
+            body: TesseraeJSON.encoder().encode(body)
+        )
+        request.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
+        let response: JobResponse = try await perform(
+            request,
+            expectedStatusCodes: [202]
+        )
+        return response.job
+    }
+
     public func pushDashboard(
         id: String,
         deviceIDs: [String]?,

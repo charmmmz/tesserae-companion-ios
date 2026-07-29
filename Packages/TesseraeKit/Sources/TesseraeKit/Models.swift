@@ -26,6 +26,7 @@ public struct CompanionLimits: Codable, Hashable, Sendable {
     public let imageUploadBytes: Int
     public let imageMaxEdge: Int
     public let imageContentTypes: [String]
+    public let imageFitModes: [ImageFitMode]
     public let jobRetentionSeconds: Int
     public let idempotencyRetentionSeconds: Int
 
@@ -33,14 +34,47 @@ public struct CompanionLimits: Codable, Hashable, Sendable {
         imageUploadBytes: Int,
         imageMaxEdge: Int,
         imageContentTypes: [String],
+        imageFitModes: [ImageFitMode] = ImageFitMode.legacyModes,
         jobRetentionSeconds: Int,
         idempotencyRetentionSeconds: Int
     ) {
         self.imageUploadBytes = imageUploadBytes
         self.imageMaxEdge = imageMaxEdge
         self.imageContentTypes = imageContentTypes
+        self.imageFitModes = imageFitModes
         self.jobRetentionSeconds = jobRetentionSeconds
         self.idempotencyRetentionSeconds = idempotencyRetentionSeconds
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case imageUploadBytes
+        case imageMaxEdge
+        case imageContentTypes
+        case imageFitModes
+        case jobRetentionSeconds
+        case idempotencyRetentionSeconds
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        imageUploadBytes = try container.decode(Int.self, forKey: .imageUploadBytes)
+        imageMaxEdge = try container.decode(Int.self, forKey: .imageMaxEdge)
+        imageContentTypes = try container.decode(
+            [String].self,
+            forKey: .imageContentTypes
+        )
+        imageFitModes = try container.decodeIfPresent(
+            [ImageFitMode].self,
+            forKey: .imageFitModes
+        ) ?? ImageFitMode.legacyModes
+        jobRetentionSeconds = try container.decode(
+            Int.self,
+            forKey: .jobRetentionSeconds
+        )
+        idempotencyRetentionSeconds = try container.decode(
+            Int.self,
+            forKey: .idempotencyRetentionSeconds
+        )
     }
 }
 
@@ -379,6 +413,36 @@ public struct DashboardsResponse: Codable, Hashable, Sendable {
 public enum ImageFitMode: String, Codable, CaseIterable, Hashable, Sendable {
     case fit
     case fill
+    case blur
+    case stretch
+    case center
+
+    public static let legacyModes: [ImageFitMode] = [.fit, .fill]
+
+    public var displayName: String {
+        switch self {
+        case .fit: "Fit"
+        case .fill: "Fill"
+        case .blur: "Blur"
+        case .stretch: "Stretch"
+        case .center: "Center"
+        }
+    }
+
+    public var helpText: String {
+        switch self {
+        case .fit:
+            "Show the whole image with space around it."
+        case .fill:
+            "Fill the display and crop the edges."
+        case .blur:
+            "Show the whole image over a blurred edge-to-edge background."
+        case .stretch:
+            "Stretch the image to the display, changing its proportions."
+        case .center:
+            "Keep the image at its prepared pixel size and clip or pad around it."
+        }
+    }
 }
 
 public struct DashboardPushRequest: Codable, Hashable, Sendable {
@@ -418,9 +482,87 @@ public struct ImagePushRequest: Codable, Hashable, Sendable {
     }
 }
 
+public struct HistoryResponse: Codable, Hashable, Sendable {
+    public let items: [HistoryItem]
+    public let nextBeforeID: String?
+
+    public init(items: [HistoryItem], nextBeforeID: String?) {
+        self.items = items
+        self.nextBeforeID = nextBeforeID
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case items
+        case nextBeforeID = "nextBeforeId"
+    }
+}
+
+public struct HistoryItem: Codable, Identifiable, Hashable, Sendable {
+    public let id: String
+    public let createdAt: Date
+    public let source: String
+    public let label: String
+    public let deviceIDs: [String]
+    public let status: String
+    public let durationSeconds: Double?
+    public let error: String?
+    public let previewAvailable: Bool
+    public let resendable: Bool
+    public let fit: ImageFitMode?
+
+    public init(
+        id: String,
+        createdAt: Date,
+        source: String,
+        label: String,
+        deviceIDs: [String],
+        status: String,
+        durationSeconds: Double? = nil,
+        error: String? = nil,
+        previewAvailable: Bool,
+        resendable: Bool,
+        fit: ImageFitMode? = nil
+    ) {
+        self.id = id
+        self.createdAt = createdAt
+        self.source = source
+        self.label = label
+        self.deviceIDs = deviceIDs
+        self.status = status
+        self.durationSeconds = durationSeconds
+        self.error = error
+        self.previewAvailable = previewAvailable
+        self.resendable = resendable
+        self.fit = fit
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case createdAt
+        case source
+        case label
+        case deviceIDs = "deviceIds"
+        case status
+        case durationSeconds
+        case error
+        case previewAvailable
+        case resendable
+        case fit
+    }
+}
+
+public struct HistoryResendRequest: Codable, Hashable, Sendable {
+    public let overrideQuietHours: Bool
+
+    public init(overrideQuietHours: Bool = false) {
+        self.overrideQuietHours = overrideQuietHours
+    }
+}
+
 public enum PushJobKind: String, Codable, Hashable, Sendable {
     case dashboardPush = "dashboard_push"
     case imagePush = "image_push"
+    case historyResend = "history_resend"
 }
 
 public enum PushJobStatus: String, Codable, Hashable, Sendable {
@@ -439,17 +581,25 @@ public struct PushJobResult: Codable, Hashable, Sendable {
     public let status: PushOutcomeStatus
     public let reason: String?
     public let deviceIDs: [String]
+    public let historyEventIDs: [String]?
 
-    public init(status: PushOutcomeStatus, reason: String? = nil, deviceIDs: [String]) {
+    public init(
+        status: PushOutcomeStatus,
+        reason: String? = nil,
+        deviceIDs: [String],
+        historyEventIDs: [String]? = nil
+    ) {
         self.status = status
         self.reason = reason
         self.deviceIDs = deviceIDs
+        self.historyEventIDs = historyEventIDs
     }
 
     private enum CodingKeys: String, CodingKey {
         case status
         case reason
         case deviceIDs = "deviceIds"
+        case historyEventIDs = "historyEventIds"
     }
 }
 

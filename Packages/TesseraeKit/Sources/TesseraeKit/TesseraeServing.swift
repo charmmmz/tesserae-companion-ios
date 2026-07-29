@@ -17,6 +17,22 @@ public protocol TesseraeServing: Sendable {
         ifNoneMatch: String?,
         instance: TesseraeInstance
     ) async throws -> PreviewFetchResult
+    func fetchHistory(
+        beforeID: String?,
+        limit: Int?,
+        instance: TesseraeInstance
+    ) async throws -> HistoryResponse
+    func fetchHistoryPreview(
+        id: String,
+        ifNoneMatch: String?,
+        instance: TesseraeInstance
+    ) async throws -> PreviewFetchResult
+    func resendHistory(
+        id: String,
+        overrideQuietHours: Bool,
+        idempotencyKey: String,
+        instance: TesseraeInstance
+    ) async throws -> PushJob
     func pushDashboard(
         id: String,
         deviceIDs: [String]?,

@@ -6,10 +6,11 @@ import UIKit
 struct ActivityView: View {
     @Environment(AppModel.self) private var model
     @State private var expandedJobID: String?
+    @State private var expandedHistoryID: String?
 
     var body: some View {
         Group {
-            if model.jobs.isEmpty {
+            if visibleJobs.isEmpty && model.historyItems.isEmpty {
                 ContentUnavailableView(
                     "No Activity Yet",
                     systemImage: "clock.arrow.circlepath",
@@ -18,15 +19,56 @@ struct ActivityView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 12) {
-                        ForEach(model.jobs) { job in
+                        ForEach(visibleJobs) { job in
                             activityCard(job)
+                        }
+                        ForEach(model.historyItems) { item in
+                            historyCard(item)
+                        }
+                        if model.historyNextBeforeID != nil {
+                            Button {
+                                Task { await model.loadMoreHistory() }
+                            } label: {
+                                if model.isLoadingMoreHistory {
+                                    ProgressView()
+                                        .frame(maxWidth: .infinity)
+                                } else {
+                                    Label(
+                                        "Load Older Activity",
+                                        systemImage: "clock.badge.plus"
+                                    )
+                                    .frame(maxWidth: .infinity)
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(model.isLoadingMoreHistory)
                         }
                     }
                     .padding(16)
                 }
             }
         }
+        .refreshable {
+            await model.refresh()
+        }
         .tesseraeScreenBackground()
+    }
+
+    private var visibleJobs: [PushJob] {
+        guard model.supportsHistory else {
+            return model.jobs
+        }
+        let historyIDs = Set(model.historyItems.map(\.id))
+        return model.jobs.filter { job in
+            guard job.isTerminal else {
+                return true
+            }
+            if let correlated = job.result?.historyEventIDs,
+               correlated.contains(where: historyIDs.contains) {
+                return false
+            }
+            return Date().timeIntervalSince(job.createdAt) < 120
+        }
     }
 
     @ViewBuilder
@@ -164,6 +206,164 @@ struct ActivityView: View {
         )
     }
 
+    private func historyCard(_ item: HistoryItem) -> some View {
+        let preview = model.historyPreviews[item.id]?.data.flatMap {
+            ActivityPhotoCache.shared.image(
+                for: "\(model.activeInstance?.id ?? "unknown")-history-\(item.id)",
+                data: $0
+            )
+        }
+        let isExpanded = expandedHistoryID == item.id
+
+        return VStack(alignment: .leading, spacing: isExpanded ? 14 : 10) {
+            Button {
+                guard preview != nil else { return }
+                withAnimation(.smooth(duration: 0.28)) {
+                    expandedHistoryID = isExpanded ? nil : item.id
+                }
+            } label: {
+                HStack(alignment: .center, spacing: 13) {
+                    historyArtwork(item, preview: preview)
+
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(item.label)
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                        Text(model.displayNames(for: item.deviceIDs))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                        if let error = item.error {
+                            Text(error)
+                                .font(.caption)
+                                .foregroundStyle(TesseraeTheme.terracotta)
+                                .lineLimit(isExpanded ? nil : 2)
+                        }
+                        HStack(spacing: 6) {
+                            Text(item.source.replacingOccurrences(
+                                of: "_",
+                                with: " "
+                            ).capitalized)
+                            if let fit = item.fit {
+                                Text("·")
+                                Text(fit.displayName)
+                            }
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        Text(
+                            item.createdAt,
+                            format: .dateTime
+                                .month(.abbreviated)
+                                .day()
+                                .hour()
+                                .minute()
+                        )
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.tertiary)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    VStack(alignment: .trailing, spacing: 12) {
+                        Label(
+                            historyStatusLabel(item),
+                            systemImage: historyStatusSymbol(item)
+                        )
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(historyStatusColor(item))
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 6)
+                        .background(
+                            historyStatusColor(item).opacity(0.11),
+                            in: Capsule()
+                        )
+                        if preview != nil {
+                            Image(systemName: "chevron.down")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.secondary)
+                                .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                        }
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if let preview, isExpanded {
+                VStack(alignment: .leading, spacing: 8) {
+                    expandedPhoto(preview)
+                    Text(historyPreviewCaption(item))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .transition(.opacity)
+            }
+
+            if item.resendable {
+                Divider()
+                Button {
+                    Task { await model.resend(item) }
+                } label: {
+                    Label(
+                        model.activeOperationIDs.contains("history-\(item.id)")
+                            ? "Resending…"
+                            : "Resend to Original Displays",
+                        systemImage: "arrow.clockwise"
+                    )
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(TesseraeTheme.accent)
+                .disabled(
+                    model.activeOperationIDs.contains("history-\(item.id)")
+                )
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .tesseraeCard()
+        .clipShape(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+        )
+        .task(id: model.previewGeneration) {
+            await model.loadHistoryPreview(item)
+        }
+        .accessibilityIdentifier("history-card-\(item.id)")
+    }
+
+    @ViewBuilder
+    private func historyArtwork(
+        _ item: HistoryItem,
+        preview: UIImage?
+    ) -> some View {
+        if let preview {
+            Image(uiImage: preview)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 76, height: 88)
+                .clipShape(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                )
+                .accessibilityLabel("Sent composition preview")
+        } else {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(TesseraeTheme.accent.opacity(0.11))
+                Image(
+                    systemName: item.fit == nil
+                        ? "rectangle.grid.2x2"
+                        : "photo"
+                )
+                .font(.title2)
+                .foregroundStyle(TesseraeTheme.accent)
+            }
+            .frame(width: 58, height: 64)
+            .accessibilityHidden(true)
+        }
+    }
+
     @ViewBuilder
     private func leadingArtwork(
         _ job: PushJob,
@@ -224,10 +424,63 @@ struct ActivityView: View {
             .accessibilityLabel("Expanded sent photo preview")
     }
 
+    private func historyPreviewCaption(_ item: HistoryItem) -> String {
+        if let fit = item.fit {
+            return String(
+                localized: "Source composition · \(fit.displayName) was applied per display"
+            )
+        }
+        return String(localized: "Rendered dashboard composition")
+    }
+
+    private func historyStatusLabel(_ item: HistoryItem) -> String {
+        switch item.status {
+        case "sent", "published", "succeeded":
+            String(localized: "Published")
+        case "quiet":
+            String(localized: "Quiet")
+        case "failed", "error":
+            String(localized: "Failed")
+        default:
+            item.status.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
+
+    private func historyStatusSymbol(_ item: HistoryItem) -> String {
+        switch item.status {
+        case "sent", "published", "succeeded":
+            "checkmark.circle.fill"
+        case "quiet":
+            "moon.fill"
+        case "failed", "error":
+            "exclamationmark.triangle.fill"
+        default:
+            "clock"
+        }
+    }
+
+    private func historyStatusColor(_ item: HistoryItem) -> Color {
+        switch item.status {
+        case "sent", "published", "succeeded":
+            TesseraeTheme.accent
+        case "quiet":
+            .indigo
+        case "failed", "error":
+            TesseraeTheme.terracotta
+        default:
+            TesseraeTheme.ochre
+        }
+    }
+
     private func fallbackTitle(_ kind: PushJobKind) -> String {
-        kind == .imagePush
-            ? String(localized: "Photo")
-            : String(localized: "Dashboard")
+        switch kind {
+        case .imagePush:
+            String(localized: "Photo")
+        case .dashboardPush:
+            String(localized: "Dashboard")
+        case .historyResend:
+            String(localized: "Resent item")
+        }
     }
 
     private func statusLabel(_ job: PushJob) -> String {

@@ -42,7 +42,10 @@ final class AppModel {
     var displays: [DisplaySummary] = []
     var dashboards: [DashboardSummary] = []
     var jobs: [PushJob] = []
+    var historyItems: [HistoryItem] = []
+    var historyNextBeforeID: String?
     var activityThumbnailData: [String: Data] = [:]
+    var historyPreviews: [String: PreviewImageState] = [:]
     var displayPreviews: [String: PreviewImageState] = [:]
     var dashboardPreviews: [String: PreviewImageState] = [:]
     var previewGeneration = 0
@@ -52,10 +55,15 @@ final class AppModel {
     var isDiscovering = false
     var isRestoringConnection = true
     var isRetryingSharedImages = false
+    var isLoadingMoreHistory = false
     var lastError: String?
 
     var supportsPreviews: Bool {
         capabilities?.features.contains("previews") == true
+    }
+
+    var supportsHistory: Bool {
+        capabilities?.features.contains("history") == true
     }
 
     init(
@@ -171,6 +179,9 @@ final class AppModel {
                 to: capabilities.serverVersion
             )
             activityThumbnailData = [:]
+            historyItems = []
+            historyNextBeforeID = nil
+            historyPreviews = [:]
             displayPreviews = [:]
             dashboardPreviews = [:]
             loadDashboardOrder(for: session.instance.id)
@@ -257,6 +268,23 @@ final class AppModel {
 
             displays = try await activeClient.fetchDisplays(instance: currentInstance)
             dashboards = try await activeClient.fetchDashboards(instance: currentInstance)
+            if supportsHistory {
+                let history = try await activeClient.fetchHistory(
+                    beforeID: nil,
+                    limit: 30,
+                    instance: currentInstance
+                )
+                historyItems = history.items
+                historyNextBeforeID = history.nextBeforeID
+                let historyIDs = Set(history.items.map(\.id))
+                historyPreviews = historyPreviews.filter {
+                    historyIDs.contains($0.key)
+                }
+            } else {
+                historyItems = []
+                historyNextBeforeID = nil
+                historyPreviews = [:]
+            }
             reconcileDashboardOrder()
             connectionHealth = .connected
             connectionNotice = nil
@@ -358,6 +386,57 @@ final class AppModel {
         } catch {
             await presentOperationError(error)
             return false
+        }
+    }
+
+    func loadMoreHistory() async {
+        guard
+            supportsHistory,
+            !isLoadingMoreHistory,
+            let beforeID = historyNextBeforeID,
+            let activeInstance
+        else {
+            return
+        }
+        isLoadingMoreHistory = true
+        defer { isLoadingMoreHistory = false }
+
+        do {
+            let page = try await activeClient.fetchHistory(
+                beforeID: beforeID,
+                limit: 30,
+                instance: activeInstance
+            )
+            let existingIDs = Set(historyItems.map(\.id))
+            historyItems.append(
+                contentsOf: page.items.filter { !existingIDs.contains($0.id) }
+            )
+            historyNextBeforeID = page.nextBeforeID
+        } catch {
+            await presentOperationError(error)
+        }
+    }
+
+    func resend(_ item: HistoryItem) async {
+        guard supportsHistory, item.resendable, let activeInstance else {
+            return
+        }
+        let operationID = "history-\(item.id)"
+        activeOperationIDs.insert(operationID)
+        defer { activeOperationIDs.remove(operationID) }
+
+        do {
+            let job = try await activeClient.resendHistory(
+                id: item.id,
+                overrideQuietHours: false,
+                idempotencyKey: UUID().uuidString,
+                instance: activeInstance
+            )
+            jobs.insert(job, at: 0)
+            await persistSnapshot()
+            await updateUntilTerminal(job, instance: activeInstance)
+        } catch {
+            await presentOperationError(error)
         }
     }
 
@@ -607,6 +686,50 @@ final class AppModel {
         }
     }
 
+    func loadHistoryPreview(_ item: HistoryItem) async {
+        guard supportsHistory, item.previewAvailable, let instance = activeInstance else {
+            return
+        }
+        let previous = historyPreviews[item.id] ?? .idle
+        guard previous.phase != .loading else {
+            return
+        }
+        historyPreviews[item.id] = PreviewImageState(
+            data: previous.data,
+            eTag: previous.eTag,
+            phase: .loading
+        )
+
+        do {
+            let result = try await activeClient.fetchHistoryPreview(
+                id: item.id,
+                ifNoneMatch: previous.data == nil ? nil : previous.eTag,
+                instance: instance
+            )
+            guard activeInstance?.id == instance.id, !Task.isCancelled else {
+                return
+            }
+            apply(
+                result,
+                previous: previous,
+                to: &historyPreviews,
+                key: item.id
+            )
+        } catch is CancellationError {
+            finishCancelledPreview(
+                previous: previous,
+                in: &historyPreviews,
+                key: item.id
+            )
+        } catch {
+            finishFailedPreview(
+                previous: previous,
+                in: &historyPreviews,
+                key: item.id
+            )
+        }
+    }
+
     private func updateUntilTerminal(_ acceptedJob: PushJob, instance: TesseraeInstance) async {
         var current = acceptedJob
         for _ in 0..<8 where !current.isTerminal {
@@ -626,6 +749,9 @@ final class AppModel {
         }
         if current.isTerminal {
             previewGeneration &+= 1
+            if supportsHistory {
+                await refreshHistoryAfterWrite(instance: instance)
+            }
         }
     }
 
@@ -662,7 +788,10 @@ final class AppModel {
         displays = []
         dashboards = []
         jobs = []
+        historyItems = []
+        historyNextBeforeID = nil
         activityThumbnailData = [:]
+        historyPreviews = [:]
         displayPreviews = [:]
         dashboardPreviews = [:]
         dashboardOrderIDs = []
@@ -696,7 +825,10 @@ final class AppModel {
             displays = []
             dashboards = []
             jobs = []
+            historyItems = []
+            historyNextBeforeID = nil
             activityThumbnailData = [:]
+            historyPreviews = [:]
             displayPreviews = [:]
             dashboardPreviews = [:]
             dashboardOrderIDs = []
@@ -789,6 +921,25 @@ final class AppModel {
             if showErrors {
                 lastError = error.localizedDescription
             }
+        }
+    }
+
+    private func refreshHistoryAfterWrite(instance: TesseraeInstance) async {
+        do {
+            let history = try await activeClient.fetchHistory(
+                beforeID: nil,
+                limit: 30,
+                instance: instance
+            )
+            guard activeInstance?.id == instance.id else {
+                return
+            }
+            historyItems = history.items
+            historyNextBeforeID = history.nextBeforeID
+        } catch {
+            // The Job remains visible as the immediate activity record. A
+            // later pull-to-refresh can reconcile eventually consistent
+            // server History without turning a successful send into an error.
         }
     }
 

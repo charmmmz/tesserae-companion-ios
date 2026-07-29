@@ -121,6 +121,13 @@ private final class ShareComposerModel: ObservableObject {
         displays.first { selectedDeviceIDs.contains($0.id) }
     }
 
+    var fitModes: [ImageFitMode] {
+        let advertised = snapshot?.capabilities?.limits.imageFitModes
+            ?? ImageFitMode.legacyModes
+        let modes = ImageFitMode.allCases.filter(advertised.contains)
+        return modes.isEmpty ? ImageFitMode.legacyModes : modes
+    }
+
     func load() async {
         do {
             try await queueStore.purge(
@@ -155,6 +162,9 @@ private final class ShareComposerModel: ObservableObject {
             )
 
             self.snapshot = snapshot
+            if !fitModes.contains(fit) {
+                fit = fitModes.first ?? .fit
+            }
             imageData = loaded.data
             imageByteCount = loaded.data.count
             previewImage = UIImage(data: loaded.data)
@@ -492,13 +502,51 @@ private struct ShareComposerView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Layout")
                 .font(.headline)
-            Picker("Layout", selection: $model.fit) {
-                Text("Fit").tag(ImageFitMode.fit)
-                Text("Fill").tag(ImageFitMode.fill)
+            HStack(spacing: 10) {
+                Picker("Layout", selection: $model.fit) {
+                    ForEach(primaryFitModes, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                if !advancedFitModes.isEmpty {
+                    Menu {
+                        ForEach(advancedFitModes, id: \.self) { mode in
+                            Button {
+                                model.fit = mode
+                            } label: {
+                                if model.fit == mode {
+                                    Label(mode.displayName, systemImage: "checkmark")
+                                } else {
+                                    Text(mode.displayName)
+                                }
+                            }
+                        }
+                    } label: {
+                        Label(
+                            advancedFitModes.contains(model.fit)
+                                ? model.fit.displayName
+                                : "More",
+                            systemImage: "ellipsis.circle"
+                        )
+                    }
+                    .buttonStyle(.bordered)
+                }
             }
-            .pickerStyle(.segmented)
+            Text(model.fit.helpText)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
         }
         .tesseraeCard()
+    }
+
+    private var primaryFitModes: [ImageFitMode] {
+        model.fitModes.filter { $0 != .stretch && $0 != .center }
+    }
+
+    private var advancedFitModes: [ImageFitMode] {
+        model.fitModes.filter { $0 == .stretch || $0 == .center }
     }
 
     private var displaysCard: some View {

@@ -67,6 +67,9 @@ struct SendView: View {
             .padding(16)
         }
         .task {
+            if !availableFitModes.contains(fitMode) {
+                fitMode = availableFitModes.first ?? .fit
+            }
             if selectedDeviceIDs.isEmpty {
                 selectedDeviceIDs = Set(model.displays.prefix(1).map(\.id))
             }
@@ -192,12 +195,39 @@ struct SendView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Image Fit")
                 .font(.headline)
-            Picker("Image Fit", selection: $fitMode) {
-                ForEach(ImageFitMode.allCases, id: \.self) { mode in
-                    Text(mode == .fit ? "Fit" : "Fill").tag(mode)
+            HStack(spacing: 10) {
+                Picker("Image Fit", selection: $fitMode) {
+                    ForEach(primaryFitModes, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                if !advancedFitModes.isEmpty {
+                    Menu {
+                        ForEach(advancedFitModes, id: \.self) { mode in
+                            Button {
+                                fitMode = mode
+                            } label: {
+                                if fitMode == mode {
+                                    Label(mode.displayName, systemImage: "checkmark")
+                                } else {
+                                    Text(mode.displayName)
+                                }
+                            }
+                        }
+                    } label: {
+                        Label(
+                            advancedFitModes.contains(fitMode)
+                                ? fitMode.displayName
+                                : "More",
+                            systemImage: "ellipsis.circle"
+                        )
+                        .labelStyle(.titleAndIcon)
+                    }
+                    .buttonStyle(.bordered)
                 }
             }
-            .pickerStyle(.segmented)
             Text(fitDescription)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
@@ -292,9 +322,22 @@ struct SendView: View {
     }
 
     private var fitDescription: String {
-        fitMode == .fit
-            ? String(localized: "Show the whole image with space around it.")
-            : String(localized: "Fill the display and crop the edges.")
+        fitMode.helpText
+    }
+
+    private var availableFitModes: [ImageFitMode] {
+        let advertised = model.capabilities?.limits.imageFitModes
+            ?? ImageFitMode.legacyModes
+        let modes = ImageFitMode.allCases.filter(advertised.contains)
+        return modes.isEmpty ? ImageFitMode.legacyModes : modes
+    }
+
+    private var primaryFitModes: [ImageFitMode] {
+        availableFitModes.filter { $0 != .stretch && $0 != .center }
+    }
+
+    private var advancedFitModes: [ImageFitMode] {
+        availableFitModes.filter { $0 == .stretch || $0 == .center }
     }
 
     private func load(_ item: PhotosPickerItem?) async {

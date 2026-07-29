@@ -6,9 +6,30 @@ Tesserae Companion are recorded here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 App releases follow [Semantic Versioning](https://semver.org/) where
 practical. The planned App Store release 1.0.0 focuses on the accepted native
-Companion surface; History and resend remain follow-ups.
+Companion surface; History and resend remain optional, server-gated
+capabilities.
 
 ## [Unreleased]
+
+### Added
+
+- OpenAPI 0.4.0 optional `history` capability with cursor-paginated canonical
+  History, ETag-backed composition previews, idempotent resend to original
+  targets, fit-mode metadata, and exact Job-to-History correlation.
+- Server-advertised `limits.image_fit_modes` with all five Tesserae modes and
+  a backward-compatible Fit/Fill fallback when the field is absent.
+- Capability-gated server History in Activity, including composition
+  thumbnails, pull-to-refresh, pagination, resend, and correlation-based
+  replacement of short-lived local Job progress.
+
+### Changed
+
+- Tightened the device-preview contract to the device-specific viewable result
+  after image fit and panel geometry, while keeping History previews as source
+  compositions used to identify what was sent.
+- Send and Share now expose Fit, Fill, and Blur as primary layouts,
+  Stretch and Center as advanced choices, and simulate all five using the same
+  geometry as Tesserae's server renderer.
 
 ## [0.2.0] - 2026-07-29
 
