@@ -53,6 +53,7 @@ private final class ShareComposerModel: ObservableObject {
     private var queuedRequest: SharedImageRequest?
 
     private let stateStore: any CompanionStateStoring
+    private let sendPreferences: any CompanionSendPreferencesStoring
     private let queueStore: any ShareQueueStoring
     private let activityThumbnails: any ActivityThumbnailStoring
     private let credentials: any CredentialStoring
@@ -86,6 +87,9 @@ private final class ShareComposerModel: ObservableObject {
         }()
 
         stateStore = UserDefaultsCompanionStateStore(suiteName: appGroup)
+        sendPreferences = UserDefaultsCompanionSendPreferencesStore(
+            suiteName: appGroup
+        )
         queueStore = FileShareQueueStore(directoryURL: containerURL)
         activityThumbnails = FileActivityThumbnailStore(
             directoryURL: containerURL
@@ -162,7 +166,22 @@ private final class ShareComposerModel: ObservableObject {
             )
 
             self.snapshot = snapshot
-            if !fitModes.contains(fit) {
+            let savedPreferences = try? await sendPreferences.preferences(
+                for: snapshot.activeInstance.id
+            )
+            let availableDeviceIDs = Set(snapshot.displays.map(\.id))
+            let preferredDeviceIDs = Set(savedPreferences?.deviceIDs ?? [])
+                .intersection(availableDeviceIDs)
+            if !preferredDeviceIDs.isEmpty {
+                selectedDeviceIDs = preferredDeviceIDs
+            } else {
+                selectedDeviceIDs = Set(snapshot.displays.prefix(1).map(\.id))
+            }
+            if let preferredFit = savedPreferences?.imageFitMode,
+               fitModes.contains(preferredFit)
+            {
+                fit = preferredFit
+            } else if !fitModes.contains(fit) {
                 fit = fitModes.first ?? .fit
             }
             imageData = loaded.data
@@ -170,7 +189,6 @@ private final class ShareComposerModel: ObservableObject {
             previewImage = UIImage(data: loaded.data)
             contentType = loaded.contentType
             fileName = loaded.fileName
-            selectedDeviceIDs = Set(snapshot.displays.prefix(1).map(\.id))
             phase = .ready
         } catch {
             errorMessage = error.localizedDescription
@@ -188,6 +206,7 @@ private final class ShareComposerModel: ObservableObject {
         }
         phase = .submitting
         errorMessage = nil
+        await savePreferences()
 
         let request = queuedRequest ?? SharedImageRequest(
             instanceID: snapshot.activeInstance.id,
@@ -236,7 +255,8 @@ private final class ShareComposerModel: ObservableObject {
                     capabilities: snapshot.capabilities,
                     displays: snapshot.displays,
                     dashboards: snapshot.dashboards,
-                    jobs: jobs
+                    jobs: jobs,
+                    activityClearedBefore: snapshot.activityClearedBefore
                 )
             )
             try await queueStore.remove(submitting)
@@ -257,6 +277,17 @@ private final class ShareComposerModel: ObservableObject {
             ].joined(separator: " ")
             phase = .failed
         }
+    }
+
+    func savePreferences() async {
+        guard let snapshot, !selectedDeviceIDs.isEmpty else { return }
+        try? await sendPreferences.save(
+            CompanionSendPreferences(
+                instanceID: snapshot.activeInstance.id,
+                deviceIDs: Array(selectedDeviceIDs),
+                imageFitMode: fit
+            )
+        )
     }
 
     func complete() {
@@ -406,6 +437,14 @@ private struct ShareComposerView: View {
             }
         }
         .tint(TesseraeTheme.accent)
+        .onChange(of: model.selectedDeviceIDs) {
+            guard model.phase == .ready else { return }
+            Task { await model.savePreferences() }
+        }
+        .onChange(of: model.fit) {
+            guard model.phase == .ready else { return }
+            Task { await model.savePreferences() }
+        }
     }
 
     private var composer: some View {

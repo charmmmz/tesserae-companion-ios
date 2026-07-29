@@ -5,70 +5,261 @@ import UIKit
 
 struct ActivityView: View {
     @Environment(AppModel.self) private var model
+    @State private var expandedQueuedImageID: String?
     @State private var expandedJobID: String?
     @State private var expandedHistoryID: String?
 
     var body: some View {
-        Group {
-            if visibleJobs.isEmpty && model.historyItems.isEmpty {
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                ForEach(model.queuedImageRequests) { request in
+                    queuedImageCard(request)
+                }
+                ForEach(visibleJobs) { job in
+                    activityCard(job)
+                }
+                ForEach(model.historyItems) { item in
+                    historyCard(item)
+                }
+                if model.historyNextBeforeID != nil {
+                    Button {
+                        Task { await model.loadMoreHistory() }
+                    } label: {
+                        if model.isLoadingMoreHistory {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            Label(
+                                "Load Older Activity",
+                                systemImage: "clock.badge.plus"
+                            )
+                            .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(model.isLoadingMoreHistory)
+                }
+            }
+            .padding(16)
+        }
+        .overlay {
+            if model.queuedImageRequests.isEmpty
+                && visibleJobs.isEmpty
+                && model.historyItems.isEmpty
+            {
                 ContentUnavailableView(
                     "No Activity Yet",
                     systemImage: "clock.arrow.circlepath",
                     description: Text("Dashboard and photo sends will appear here.")
                 )
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(visibleJobs) { job in
-                            activityCard(job)
-                        }
-                        ForEach(model.historyItems) { item in
-                            historyCard(item)
-                        }
-                        if model.historyNextBeforeID != nil {
-                            Button {
-                                Task { await model.loadMoreHistory() }
-                            } label: {
-                                if model.isLoadingMoreHistory {
-                                    ProgressView()
-                                        .frame(maxWidth: .infinity)
-                                } else {
-                                    Label(
-                                        "Load Older Activity",
-                                        systemImage: "clock.badge.plus"
-                                    )
-                                    .frame(maxWidth: .infinity)
-                                }
-                            }
-                            .buttonStyle(.bordered)
-                            .disabled(model.isLoadingMoreHistory)
-                        }
-                    }
-                    .padding(16)
-                }
             }
         }
         .refreshable {
-            await model.refresh()
+            model.startActivityRefresh()
         }
         .tesseraeScreenBackground()
+    }
+
+    private func queuedImageCard(
+        _ request: SharedImageRequest
+    ) -> some View {
+        let thumbnail = model.queuedImagePreviewData[request.id]
+            .flatMap {
+                ActivityPhotoCache.shared.image(
+                    for: "queued-\(request.id)",
+                    data: $0
+                )
+            }
+        let isExpanded = expandedQueuedImageID == request.id
+        let isActive = model.activeQueuedImageRequestIDs.contains(request.id)
+
+        return VStack(alignment: .leading, spacing: 12) {
+            Button {
+                guard thumbnail != nil else { return }
+                withAnimation(.smooth(duration: 0.28)) {
+                    expandedQueuedImageID = isExpanded ? nil : request.id
+                }
+            } label: {
+                HStack(alignment: .center, spacing: 13) {
+                    queuedImageArtwork(thumbnail)
+
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("Queued photo")
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+
+                        Text(model.displayNames(for: request.deviceIDs))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+
+                        HStack(spacing: 6) {
+                            Text("File")
+                            Text("·")
+                            Text(request.fit.displayName)
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+
+                        Text(
+                            request.createdAt,
+                            format: .dateTime
+                                .month(.abbreviated)
+                                .day()
+                                .hour()
+                                .minute()
+                        )
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.tertiary)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    VStack(alignment: .trailing, spacing: 12) {
+                        Label(
+                            queuedImageStatusLabel(request),
+                            systemImage: queuedImageStatusSymbol(request)
+                        )
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(queuedImageStatusColor(request))
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 6)
+                        .background(
+                            queuedImageStatusColor(request).opacity(0.11),
+                            in: Capsule()
+                        )
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if let thumbnail, isExpanded {
+                expandedPhoto(thumbnail)
+                    .transition(.opacity)
+            }
+
+            if let lastError = request.lastError,
+               request.status == .failed
+            {
+                Text(lastError)
+                    .font(.caption)
+                    .foregroundStyle(TesseraeTheme.terracotta)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Divider()
+
+            HStack(spacing: 12) {
+                Button {
+                    Task { await model.retryQueuedImage(request) }
+                } label: {
+                    Label(
+                        isActive ? "Retrying…" : "Retry",
+                        systemImage: "arrow.clockwise"
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(TesseraeTheme.accent)
+                .disabled(isActive || model.connectionMode != .live)
+
+                Button(role: .destructive) {
+                    Task { await model.discardQueuedImage(request) }
+                } label: {
+                    Label("Discard", systemImage: "trash")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .disabled(isActive)
+            }
+            .font(.subheadline.weight(.semibold))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .tesseraeCard()
+        .clipShape(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+        )
+        .task(id: request.id) {
+            await model.loadQueuedImagePreview(request)
+        }
+        .accessibilityIdentifier("queued-image-card-\(request.id)")
+    }
+
+    @ViewBuilder
+    private func queuedImageArtwork(_ thumbnail: UIImage?) -> some View {
+        if let thumbnail {
+            Image(uiImage: thumbnail)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 76, height: 88)
+                .clipShape(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(.white.opacity(0.18), lineWidth: 1)
+                }
+                .accessibilityLabel("Queued photo preview")
+        } else {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(TesseraeTheme.ochre.opacity(0.11))
+                Image(systemName: "photo.badge.clock")
+                    .font(.title2)
+                    .foregroundStyle(TesseraeTheme.ochre)
+            }
+            .frame(width: 58, height: 64)
+            .accessibilityHidden(true)
+        }
+    }
+
+    private func queuedImageStatusLabel(
+        _ request: SharedImageRequest
+    ) -> String {
+        switch request.status {
+        case .queued:
+            String(localized: "Waiting")
+        case .submitting:
+            String(localized: "Sending")
+        case .failed:
+            String(localized: "Failed")
+        }
+    }
+
+    private func queuedImageStatusSymbol(
+        _ request: SharedImageRequest
+    ) -> String {
+        switch request.status {
+        case .queued:
+            "clock"
+        case .submitting:
+            "arrow.triangle.2.circlepath"
+        case .failed:
+            "exclamationmark.triangle.fill"
+        }
+    }
+
+    private func queuedImageStatusColor(
+        _ request: SharedImageRequest
+    ) -> Color {
+        switch request.status {
+        case .queued, .submitting:
+            TesseraeTheme.ochre
+        case .failed:
+            TesseraeTheme.terracotta
+        }
     }
 
     private var visibleJobs: [PushJob] {
         guard model.supportsHistory else {
             return model.jobs
         }
-        let historyIDs = Set(model.historyItems.map(\.id))
-        return model.jobs.filter { job in
-            guard job.isTerminal else {
-                return true
-            }
-            if let correlated = job.result?.historyEventIDs,
-               correlated.contains(where: historyIDs.contains) {
-                return false
-            }
-            return Date().timeIntervalSince(job.createdAt) < 120
-        }
+        return ActivityReconciliation.visibleJobs(
+            model.jobs,
+            historyItems: model.historyItems
+        )
     }
 
     @ViewBuilder
@@ -174,15 +365,6 @@ struct ActivityView: View {
                         statusColor(job).opacity(0.11),
                         in: Capsule()
                     )
-
-                    if thumbnail != nil {
-                        Image(systemName: "chevron.down")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(.secondary)
-                            .rotationEffect(
-                                .degrees(isExpanded ? 180 : 0)
-                            )
-                    }
                 }
             }
 
@@ -214,82 +396,117 @@ struct ActivityView: View {
             )
         }
         let isExpanded = expandedHistoryID == item.id
+        let isResending = model.activeOperationIDs.contains(
+            "history-\(item.id)"
+        )
 
         return VStack(alignment: .leading, spacing: isExpanded ? 14 : 10) {
-            Button {
-                guard preview != nil else { return }
-                withAnimation(.smooth(duration: 0.28)) {
-                    expandedHistoryID = isExpanded ? nil : item.id
-                }
-            } label: {
-                HStack(alignment: .center, spacing: 13) {
-                    historyArtwork(item, preview: preview)
-
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(item.label)
-                            .font(.headline)
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                        Text(model.displayNames(for: item.deviceIDs))
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                        if let error = item.error {
-                            Text(error)
-                                .font(.caption)
-                                .foregroundStyle(TesseraeTheme.terracotta)
-                                .lineLimit(isExpanded ? nil : 2)
-                        }
-                        HStack(spacing: 6) {
-                            Text(item.source.replacingOccurrences(
-                                of: "_",
-                                with: " "
-                            ).capitalized)
-                            if let fit = item.fit {
-                                Text("·")
-                                Text(fit.displayName)
-                            }
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        Text(
-                            item.createdAt,
-                            format: .dateTime
-                                .month(.abbreviated)
-                                .day()
-                                .hour()
-                                .minute()
-                        )
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.tertiary)
+            HStack(alignment: .center, spacing: 10) {
+                Button {
+                    guard preview != nil else { return }
+                    withAnimation(.smooth(duration: 0.28)) {
+                        expandedHistoryID = isExpanded ? nil : item.id
                     }
+                } label: {
+                    HStack(alignment: .center, spacing: 13) {
+                        historyArtwork(item, preview: preview)
 
-                    Spacer(minLength: 8)
-
-                    VStack(alignment: .trailing, spacing: 12) {
-                        Label(
-                            historyStatusLabel(item),
-                            systemImage: historyStatusSymbol(item)
-                        )
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(historyStatusColor(item))
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 6)
-                        .background(
-                            historyStatusColor(item).opacity(0.11),
-                            in: Capsule()
-                        )
-                        if preview != nil {
-                            Image(systemName: "chevron.down")
-                                .font(.caption.weight(.bold))
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(item.label)
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                            Text(model.displayNames(for: item))
+                                .font(.subheadline)
                                 .foregroundStyle(.secondary)
-                                .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                                .lineLimit(2)
+                            if let error = item.error {
+                                Text(error)
+                                    .font(.caption)
+                                    .foregroundStyle(TesseraeTheme.terracotta)
+                                    .lineLimit(isExpanded ? nil : 2)
+                            }
+                            HStack(spacing: 6) {
+                                Text(item.source.replacingOccurrences(
+                                    of: "_",
+                                    with: " "
+                                ).capitalized)
+                                if let fit = item.fit {
+                                    Text("·")
+                                    Text(fit.displayName)
+                                }
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            Text(
+                                item.createdAt,
+                                format: .dateTime
+                                    .month(.abbreviated)
+                                    .day()
+                                    .hour()
+                                    .minute()
+                            )
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.tertiary)
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("history-card-\(item.id)")
+
+                VStack(alignment: .trailing, spacing: 10) {
+                    Label(
+                        historyStatusLabel(item),
+                        systemImage: historyStatusSymbol(item)
+                    )
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(historyStatusColor(item))
+                    .frame(width: 112)
+                    .padding(.vertical, 6)
+                    .background(
+                        historyStatusColor(item).opacity(0.11),
+                        in: Capsule()
+                    )
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier(
+                        "history-status-\(item.id)"
+                    )
+
+                    if item.resendable {
+                        Button {
+                            Task { await model.resend(item) }
+                        } label: {
+                            HStack(spacing: 5) {
+                                if isResending {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Image(systemName: "arrow.clockwise")
+                                }
+                                Text("Resend")
+                            }
+                            .font(.caption.weight(.semibold))
+                            .frame(width: 112)
+                            .padding(.vertical, 6)
+                            .background(
+                                TesseraeTheme.accent.opacity(0.11),
+                                in: Capsule()
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(TesseraeTheme.accent)
+                        .disabled(isResending)
+                        .accessibilityLabel(
+                            isResending ? "Resending…" : "Resend"
+                        )
+                        .accessibilityIdentifier(
+                            "history-resend-\(item.id)"
+                        )
+                    }
+                }
             }
-            .buttonStyle(.plain)
 
             if let preview, isExpanded {
                 VStack(alignment: .leading, spacing: 8) {
@@ -300,27 +517,6 @@ struct ActivityView: View {
                 }
                 .transition(.opacity)
             }
-
-            if item.resendable {
-                Divider()
-                Button {
-                    Task { await model.resend(item) }
-                } label: {
-                    Label(
-                        model.activeOperationIDs.contains("history-\(item.id)")
-                            ? "Resending…"
-                            : "Resend to Original Displays",
-                        systemImage: "arrow.clockwise"
-                    )
-                    .font(.subheadline.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(TesseraeTheme.accent)
-                .disabled(
-                    model.activeOperationIDs.contains("history-\(item.id)")
-                )
-            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .tesseraeCard()
@@ -330,7 +526,6 @@ struct ActivityView: View {
         .task(id: model.previewGeneration) {
             await model.loadHistoryPreview(item)
         }
-        .accessibilityIdentifier("history-card-\(item.id)")
     }
 
     @ViewBuilder
@@ -560,7 +755,7 @@ private struct ActivityFittedPhotoLayout: Layout {
 }
 
 @MainActor
-private final class ActivityPhotoCache {
+final class ActivityPhotoCache {
     static let shared = ActivityPhotoCache()
 
     private let images = NSCache<NSString, UIImage>()
@@ -577,11 +772,13 @@ private final class ActivityPhotoCache {
 
         guard
             let source = CGImageSourceCreateWithData(data as CFData, nil),
-            let cgImage = CGImageSourceCreateImageAtIndex(
+            let cgImage = CGImageSourceCreateThumbnailAtIndex(
                 source,
                 0,
                 [
-                    kCGImageSourceShouldCache: true,
+                    kCGImageSourceCreateThumbnailFromImageAlways: true,
+                    kCGImageSourceThumbnailMaxPixelSize: 800,
+                    kCGImageSourceCreateThumbnailWithTransform: true,
                     kCGImageSourceShouldCacheImmediately: true,
                 ] as CFDictionary
             )
@@ -592,5 +789,13 @@ private final class ActivityPhotoCache {
         let image = UIImage(cgImage: cgImage)
         images.setObject(image, forKey: cacheKey)
         return image
+    }
+
+    func remove(key: String) {
+        images.removeObject(forKey: key as NSString)
+    }
+
+    func removeAll() {
+        images.removeAllObjects()
     }
 }

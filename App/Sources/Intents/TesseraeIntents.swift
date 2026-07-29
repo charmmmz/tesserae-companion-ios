@@ -76,6 +76,9 @@ struct TesseraeDisplayQuery: EntityQuery {
 enum TesseraeIntentFit: String, AppEnum {
     case fit
     case fill
+    case blur
+    case stretch
+    case center
 
     static let typeDisplayRepresentation = TypeDisplayRepresentation(
         name: "Image Layout"
@@ -83,12 +86,18 @@ enum TesseraeIntentFit: String, AppEnum {
     static let caseDisplayRepresentations: [TesseraeIntentFit: DisplayRepresentation] = [
         .fit: "Fit",
         .fill: "Fill",
+        .blur: "Blur",
+        .stretch: "Stretch",
+        .center: "Center",
     ]
 
     var modelValue: ImageFitMode {
         switch self {
         case .fit: .fit
         case .fill: .fill
+        case .blur: .blur
+        case .stretch: .stretch
+        case .center: .center
         }
     }
 }
@@ -185,6 +194,7 @@ struct SendImageToTesseraeIntent: AppIntent {
         try TesseraeIntentRuntime.validate(
             data: image.data,
             contentType: contentType,
+            fit: layout.modelValue,
             capabilities: snapshot.capabilities
         )
         let request = SharedImageRequest(
@@ -337,14 +347,24 @@ private enum TesseraeIntentRuntime {
         _ job: PushJob,
         in snapshot: CompanionSnapshot
     ) async throws {
-        let jobs = [job] + snapshot.jobs.filter { $0.id != job.id }
+        let retainedJobs = snapshot.jobs.filter { existing in
+            guard existing.id != job.id else {
+                return false
+            }
+            guard let activityClearedBefore = snapshot.activityClearedBefore else {
+                return true
+            }
+            return existing.createdAt > activityClearedBefore
+        }
+        let jobs = [job] + retainedJobs
         try await stateStore().save(
             CompanionSnapshot(
                 activeInstance: snapshot.activeInstance,
                 capabilities: snapshot.capabilities,
                 displays: snapshot.displays,
                 dashboards: snapshot.dashboards,
-                jobs: jobs
+                jobs: jobs,
+                activityClearedBefore: snapshot.activityClearedBefore
             )
         )
     }
@@ -352,6 +372,7 @@ private enum TesseraeIntentRuntime {
     static func validate(
         data: Data,
         contentType: String,
+        fit: ImageFitMode,
         capabilities: ServerCapabilities?
     ) throws {
         guard let capabilities else { return }
@@ -360,6 +381,9 @@ private enum TesseraeIntentRuntime {
         }
         guard capabilities.limits.imageContentTypes.contains(contentType) else {
             throw TesseraeIntentError.unsupportedImage
+        }
+        guard capabilities.limits.imageFitModes.contains(fit) else {
+            throw TesseraeIntentError.unsupportedImageLayout(fit.displayName)
         }
     }
 
@@ -385,6 +409,7 @@ private enum TesseraeIntentError: Error, LocalizedError {
     case notPaired
     case queuedForRetry(String)
     case unsupportedImage
+    case unsupportedImageLayout(String)
 
     var errorDescription: String? {
         switch self {
@@ -402,6 +427,8 @@ private enum TesseraeIntentError: Error, LocalizedError {
             "\(message) The image is queued for retry in Tesserae Companion."
         case .unsupportedImage:
             "The Tesserae server does not accept this image format."
+        case let .unsupportedImageLayout(layout):
+            "The Tesserae server does not support the \(layout) image layout."
         }
     }
 }

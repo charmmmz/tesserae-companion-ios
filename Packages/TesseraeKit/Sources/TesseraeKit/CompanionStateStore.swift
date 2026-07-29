@@ -9,6 +9,7 @@ public struct CompanionSnapshot: Codable, Hashable, Sendable {
     public let displays: [DisplaySummary]
     public let dashboards: [DashboardSummary]
     public let jobs: [PushJob]
+    public let activityClearedBefore: Date?
     public let updatedAt: Date
 
     public init(
@@ -18,6 +19,7 @@ public struct CompanionSnapshot: Codable, Hashable, Sendable {
         displays: [DisplaySummary],
         dashboards: [DashboardSummary],
         jobs: [PushJob],
+        activityClearedBefore: Date? = nil,
         updatedAt: Date = Date()
     ) {
         self.schemaVersion = schemaVersion
@@ -26,6 +28,7 @@ public struct CompanionSnapshot: Codable, Hashable, Sendable {
         self.displays = displays
         self.dashboards = dashboards
         self.jobs = jobs
+        self.activityClearedBefore = activityClearedBefore
         self.updatedAt = updatedAt
     }
 

@@ -10,12 +10,16 @@ final class CompanionStateStoreTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let store = UserDefaultsCompanionStateStore(suiteName: suiteName)
+        let activityClearedBefore = Date(
+            timeIntervalSince1970: 1_722_160_700
+        )
         let snapshot = CompanionSnapshot(
             activeInstance: fixtureInstance,
             capabilities: nil,
             displays: [],
             dashboards: [],
             jobs: [],
+            activityClearedBefore: activityClearedBefore,
             updatedAt: Date(timeIntervalSince1970: 1_722_160_800)
         )
 
@@ -23,6 +27,7 @@ final class CompanionStateStoreTests: XCTestCase {
         let restored = try await store.load()
 
         XCTAssertEqual(restored, snapshot)
+        XCTAssertEqual(restored?.activityClearedBefore, activityClearedBefore)
 
         try await store.clear()
         let cleared = try await store.load()

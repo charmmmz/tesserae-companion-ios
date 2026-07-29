@@ -14,6 +14,7 @@ struct SendView: View {
     @State private var fitMode: ImageFitMode = .fit
     @State private var selectedDeviceIDs: Set<String> = []
     @State private var previewDeviceID: String?
+    @State private var didLoadSendPreferences = false
     @State private var sentConfirmationPresented = false
     private let previewSlotHeight: CGFloat = 310
 
@@ -66,16 +67,16 @@ struct SendView: View {
             }
             .padding(16)
         }
-        .task {
-            if !availableFitModes.contains(fitMode) {
-                fitMode = availableFitModes.first ?? .fit
-            }
-            if selectedDeviceIDs.isEmpty {
-                selectedDeviceIDs = Set(model.displays.prefix(1).map(\.id))
-            }
-            if previewDeviceID == nil {
-                previewDeviceID = selectedDeviceIDs.first
-                    ?? model.displays.first?.id
+        .task(id: sendPreferenceContextID) {
+            await loadSendPreferences()
+        }
+        .onChange(of: sendPreferenceSelection) { _, selection in
+            guard didLoadSendPreferences else { return }
+            Task {
+                await model.saveSendPreferences(
+                    deviceIDs: selection.deviceIDs,
+                    fit: selection.fit
+                )
             }
         }
         .onChange(of: pickerItem) { _, newItem in
@@ -340,6 +341,48 @@ struct SendView: View {
         availableFitModes.filter { $0 == .stretch || $0 == .center }
     }
 
+    private var sendPreferenceContextID: String {
+        [
+            model.activeInstance?.id ?? "none",
+            model.displays.map(\.id).sorted().joined(separator: ","),
+            availableFitModes.map(\.rawValue).joined(separator: ","),
+        ].joined(separator: "|")
+    }
+
+    private var sendPreferenceSelection: SendPreferenceSelection {
+        SendPreferenceSelection(
+            deviceIDs: Array(selectedDeviceIDs).sorted(),
+            fit: fitMode
+        )
+    }
+
+    private func loadSendPreferences() async {
+        didLoadSendPreferences = false
+        let availableIDs = Set(model.displays.map(\.id))
+        let preferences = await model.savedSendPreferences()
+        let preferredIDs = Set(preferences?.deviceIDs ?? [])
+            .intersection(availableIDs)
+
+        if !preferredIDs.isEmpty {
+            selectedDeviceIDs = preferredIDs
+        } else {
+            selectedDeviceIDs = Set(model.displays.prefix(1).map(\.id))
+        }
+
+        if let preferredFit = preferences?.imageFitMode,
+           availableFitModes.contains(preferredFit)
+        {
+            fitMode = preferredFit
+        } else if !availableFitModes.contains(fitMode) {
+            fitMode = availableFitModes.first ?? .fit
+        }
+
+        previewDeviceID = model.displays.first {
+            selectedDeviceIDs.contains($0.id)
+        }?.id ?? model.displays.first?.id
+        didLoadSendPreferences = true
+    }
+
     private func load(_ item: PhotosPickerItem?) async {
         guard let item else {
             imageData = nil
@@ -380,4 +423,9 @@ struct SendView: View {
             model.capabilities?.limits.imageMaxEdge ?? displayMaxEdge
         )
     }
+}
+
+private struct SendPreferenceSelection: Equatable {
+    let deviceIDs: [String]
+    let fit: ImageFitMode
 }
