@@ -73,6 +73,10 @@ private struct DisplayCard: View {
                     presentation: display.hardwarePresentation
                 )
 
+                if display.hasPendingRender == true {
+                    pendingBadge
+                }
+
                 HStack(spacing: 12) {
                     metric(
                         "battery.75percent",
@@ -106,7 +110,7 @@ private struct DisplayCard: View {
                 state: preview,
                 placeholderSystemName: display.previewSymbol,
                 placeholderLabel: "Display preview placeholder, \(display.panel.width) by \(display.panel.height), \(display.panel.orientation)",
-                imageLabel: "Latest device-specific preview for \(display.name)",
+                imageLabel: "Last-served device preview for \(display.name)",
                 accessibilityIdentifier: "display-preview-\(display.id)",
                 placeholderDetail: "\(display.panel.width) × \(display.panel.height)"
             )
@@ -124,6 +128,15 @@ private struct DisplayCard: View {
     private func metric(_ symbol: String, _ value: String) -> some View {
         Label(value, systemImage: symbol)
             .labelStyle(.titleAndIcon)
+    }
+
+    private var pendingBadge: some View {
+        Label("Update pending", systemImage: "arrow.triangle.2.circlepath")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(TesseraeTheme.ochre)
+            .accessibilityHint(
+                "A newer frame is waiting for this display to wake and fetch it."
+            )
     }
 
 }
@@ -256,14 +269,30 @@ private struct DisplayDetailView: View {
 
     private var currentScreenCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Current Screen", systemImage: "display")
-                .font(.headline)
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Label("Current Screen", systemImage: "display")
+                    .font(.headline)
+
+                Spacer(minLength: 8)
+
+                if currentDisplay.hasPendingRender == true {
+                    Label(
+                        "Update pending",
+                        systemImage: "arrow.triangle.2.circlepath"
+                    )
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(TesseraeTheme.ochre)
+                    .accessibilityHint(
+                        "A newer frame is waiting for this display to wake and fetch it."
+                    )
+                }
+            }
 
             PreviewArtwork(
                 state: model.displayPreviews[currentDisplay.id],
                 placeholderSystemName: currentDisplay.previewSymbol,
                 placeholderLabel: "Display preview placeholder, \(currentDisplay.panel.width) by \(currentDisplay.panel.height), \(currentDisplay.panel.orientation)",
-                imageLabel: "Latest device-specific preview for \(currentDisplay.name)",
+                imageLabel: "Last-served device preview for \(currentDisplay.name)",
                 accessibilityIdentifier: "display-detail-preview-\(currentDisplay.id)",
                 placeholderDetail: "\(currentDisplay.panel.width) × \(currentDisplay.panel.height)"
             )

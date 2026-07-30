@@ -58,6 +58,11 @@ device-specific viewable result after image fit and panel geometry rather than
 the source composition. Older edge servers may continue to return the
 composition until they adopt the updated semantic.
 
+OpenAPI 0.4.1 further defines that preview as the last full frame served to a
+REST polling device and adds optional `has_pending_render` metadata. Clients
+that connect to an older server decode the missing field as unknown and keep
+the existing preview behavior.
+
 These additions are not part of `CompanionCompatibility.requiredFeatures`.
 The app must continue to pair with a base 0.2-compatible server, hide History,
 and limit image sending to Fit/Fill when the extension fields are absent.
