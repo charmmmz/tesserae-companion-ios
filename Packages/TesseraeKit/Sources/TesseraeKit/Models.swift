@@ -319,6 +319,7 @@ public struct DisplaySummary: Codable, Identifiable, Hashable, Sendable {
     public let batteryPercent: Int?
     public let rssiDBM: Int?
     public let firmwareVersion: String?
+    public let hasPendingRender: Bool?
 
     public init(
         id: String,
@@ -329,7 +330,8 @@ public struct DisplaySummary: Codable, Identifiable, Hashable, Sendable {
         lastSeenAt: Date? = nil,
         batteryPercent: Int? = nil,
         rssiDBM: Int? = nil,
-        firmwareVersion: String? = nil
+        firmwareVersion: String? = nil,
+        hasPendingRender: Bool? = nil
     ) {
         self.id = id
         self.name = name
@@ -340,6 +342,7 @@ public struct DisplaySummary: Codable, Identifiable, Hashable, Sendable {
         self.batteryPercent = batteryPercent
         self.rssiDBM = rssiDBM
         self.firmwareVersion = firmwareVersion
+        self.hasPendingRender = hasPendingRender
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -352,6 +355,7 @@ public struct DisplaySummary: Codable, Identifiable, Hashable, Sendable {
         case batteryPercent
         case rssiDBM = "rssiDbm"
         case firmwareVersion
+        case hasPendingRender
     }
 }
 

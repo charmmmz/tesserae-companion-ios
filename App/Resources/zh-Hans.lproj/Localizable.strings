@@ -32,6 +32,8 @@
 "Unknown" = "未知";
 "Custom display" = "自定义显示屏";
 "Current Screen" = "当前画面";
+"Update pending" = "有画面待更新";
+"A newer frame is waiting for this display to wake and fetch it." = "较新的画面正在等待显示屏下次唤醒后获取。";
 "Connection & Power" = "连接与电源";
 "Last Seen" = "最后在线";
 "Battery" = "电量";

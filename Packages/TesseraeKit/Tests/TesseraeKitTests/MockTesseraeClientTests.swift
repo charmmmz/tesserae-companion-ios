@@ -235,6 +235,8 @@ final class MockTesseraeClientTests: XCTestCase {
         XCTAssertEqual(pairRequest.client.installationID, "A1B2C3D4-E5F6-47A8-9012-3456789ABCDE")
         XCTAssertEqual(pairResponse.tokenID, "ct_01JABCDEF")
         XCTAssertEqual(devices.devices.first?.rssiDBM, -54)
+        XCTAssertEqual(devices.devices.first?.hasPendingRender, true)
+        XCTAssertEqual(devices.devices.last?.hasPendingRender, false)
         XCTAssertEqual(dashboards.dashboards.first?.deviceIDs, ["picpak-kitchen"])
         XCTAssertEqual(dashboardPush.deviceIDs, ["picpak-kitchen"])
         XCTAssertEqual(imagePush.fit, .blur)
@@ -327,6 +329,34 @@ final class MockTesseraeClientTests: XCTestCase {
         XCTAssertEqual(webpageJSON["viewport_w"] as? Int, 1_280)
         XCTAssertEqual(webpageJSON["override_quiet_hours"] as? Bool, false)
         XCTAssertNil(webpageJSON["viewportW"])
+    }
+
+    func testOlderDeviceResponseMayOmitPendingRender() throws {
+        let data = Data(
+            """
+            {
+              "devices": [{
+                "id": "legacy",
+                "name": "Legacy",
+                "kind": "pico_bin_client",
+                "panel": {
+                  "width": 800,
+                  "height": 480,
+                  "gamut": "bw",
+                  "orientation": "landscape"
+                },
+                "freshness": "unknown"
+              }]
+            }
+            """.utf8
+        )
+
+        let response = try TesseraeJSON.decoder().decode(
+            DevicesResponse.self,
+            from: data
+        )
+
+        XCTAssertNil(response.devices.first?.hasPendingRender)
     }
 
     private func decode<T: Decodable>(

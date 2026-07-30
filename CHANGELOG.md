@@ -19,6 +19,11 @@ capabilities.
 - Contract fixtures and stateful fixture-server coverage for remote-image
   fetches, one-render webpage fan-out, blocked private destinations, and the
   new Job kinds.
+- OpenAPI 0.4.1 and Display cards now use the device's last-served full-frame
+  preview and show an `Update pending` badge when Tesserae has rendered a newer
+  frame that a sleeping REST display has not fetched yet. Older servers remain
+  compatible, and transports without a served signal continue to show
+  server-latest.
 - Display cards now open a native details view with a larger current-screen
   preview, freshness and last-seen information, power and signal telemetry,
   hardware identity, firmware, and panel characteristics.

@@ -43,7 +43,7 @@ outside this contract.
 | `POST` | `/api/app/v1/pair` | Redeem a single-use Companion pairing code |
 | `DELETE` | `/api/app/v1/session` | Revoke the presented client token |
 | `GET` | `/api/app/v1/devices` | List stable display targets and lightweight status |
-| `GET` | `/api/app/v1/devices/{device_id}/preview` | Read the latest device-specific logical preview |
+| `GET` | `/api/app/v1/devices/{device_id}/preview` | Read the last-served device-specific logical preview |
 | `GET` | `/api/app/v1/dashboards` | List saved dashboards without forcing renders |
 | `GET` | `/api/app/v1/dashboards/{dashboard_id}/preview` | Read or prepare an on-demand cached preview |
 | `POST` | `/api/app/v1/dashboards/{dashboard_id}/push` | Push to bindings or explicit targets |
@@ -162,17 +162,24 @@ the shared primitive rather than inheriting an operator `allow_local` setting.
 Display status exposes raw `last_seen_at` plus optional server-derived
 `fresh`, `stale`, or `unknown`. It does not promise generic
 online/sleeping/offline truth because many e-ink devices intentionally sleep.
+REST devices may also include `has_pending_render`: `true` means Tesserae has
+rendered a newer full frame than the one most recently handed to the device.
+Older compatible servers omit the field, and transports without a reliable
+served signal report `false`.
 
 Dashboard lists contain stable IDs, names, kind, bound device IDs, and an
 optional web-management URL. Listing dashboards never triggers preview
 renders.
 
 When the capability probe advertises `previews`, the device endpoint returns
-the latest device-specific viewable PNG with a content-addressed ETag. Image
-fit and panel geometry must already be applied. Renderer-specific palette and
-quantisation should be represented when the renderer can expose a reusable
-PNG from that stage. It is still not a guarantee that a newer on-glass patch
-or overlay is included. It returns `404` when no retained preview is available.
+the last-served device-specific viewable PNG for REST polling devices, with a
+content-addressed ETag. This represents the last full frame handed out by
+`/frame`, not proof that the physical refresh completed. MQTT and push
+transports fall back to the latest server render. Image fit and panel geometry
+must already be applied. Renderer-specific palette and quantisation should be
+represented when the renderer can expose a reusable PNG from that stage. It is
+still not a guarantee that a newer on-glass patch or overlay is included. It
+returns `404` when no retained served preview is available.
 
 The Dashboard endpoint returns a cached composition PNG, or `202` with
 `Retry-After` while the server prepares one in the background. An optional
@@ -200,8 +207,9 @@ A History preview always answers **what content was sent**. A dashboard
 composition is already rendered at panel dimensions and is therefore close to
 WYSIWYG before renderer-specific processing. A photo/file/URL composition is
 the input image and does not represent its later Fit/Fill/Blur/Stretch/Center
-or device treatment. The device preview answers **what was prepared for that
-particular display**.
+or device treatment. The device preview answers **what full frame was most
+recently served to that particular display**, while `has_pending_render`
+indicates that a newer server render is waiting for its next wake.
 
 V1 resend targets only the original device snapshot. It reuses the stored fit
 mode when one exists, records a new History row rather than mutating the
@@ -269,7 +277,7 @@ internal web routes.
 
 The client includes a live `URLSession` transport and the base write path has
 been verified against an edge Tesserae server and physical display. Contract
-0.4.0 and 0.5.0 extensions remain capability-gated until their matching server
+0.4.1 and 0.5.0 extensions remain capability-gated until their matching server
 implementations and compatibility evidence are recorded.
 
 ## Contract checks
@@ -294,7 +302,7 @@ pairing through publish polling.
 ## Remaining decisions
 
 - first stable Tesserae release containing the base contract;
-- first edge and stable Tesserae revisions implementing contract 0.4.0;
+- first edge and stable Tesserae revisions implementing contract 0.4.1;
 - first edge and stable Tesserae revisions implementing contract 0.5.0;
 - the exact reusable PNG stage each packed renderer exposes as its
   device-specific preview.

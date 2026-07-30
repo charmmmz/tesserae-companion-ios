@@ -91,7 +91,8 @@ public actor MockTesseraeClient: TesseraeServing {
                 lastSeenAt: .now.addingTimeInterval(-90),
                 batteryPercent: 86,
                 rssiDBM: -54,
-                firmwareVersion: "1.8.0"
+                firmwareVersion: "1.8.0",
+                hasPendingRender: true
             ),
             DisplaySummary(
                 id: "e1004-desk",
@@ -107,7 +108,8 @@ public actor MockTesseraeClient: TesseraeServing {
                 lastSeenAt: .now.addingTimeInterval(-7_200),
                 batteryPercent: 61,
                 rssiDBM: -67,
-                firmwareVersion: "1.8.0"
+                firmwareVersion: "1.8.0",
+                hasPendingRender: false
             ),
         ]
     }

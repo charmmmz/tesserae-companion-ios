@@ -535,7 +535,7 @@ final class TesseraeCompanionUITests: XCTestCase {
             .matching(
                 NSPredicate(
                     format: "label BEGINSWITH %@",
-                    "Latest device-specific preview"
+                    "Last-served device preview"
                 )
             )
             .firstMatch
