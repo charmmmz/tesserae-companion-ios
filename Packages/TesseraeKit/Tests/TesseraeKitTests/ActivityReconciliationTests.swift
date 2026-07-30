@@ -78,6 +78,24 @@ struct ActivityReconciliationTests {
         )
     }
 
+    @Test("Link Jobs reconcile with their canonical History source")
+    func linkSources() {
+        let imageURLJob = pushJob(id: "job-url", kind: .imageURLPush)
+        let webpageJob = pushJob(id: "job-webpage", kind: .webpagePush)
+        let history = [
+            historyItem(id: "48", source: "url"),
+            historyItem(id: "49", source: "webpage"),
+        ]
+
+        #expect(
+            ActivityReconciliation.visibleJobs(
+                [imageURLJob, webpageJob],
+                historyItems: history,
+                now: now.addingTimeInterval(10)
+            ).isEmpty
+        )
+    }
+
     @Test("Fetched button History resolves one matching display name")
     func fetchedDisplayFallback() {
         let history = historyItem(
@@ -124,12 +142,13 @@ struct ActivityReconciliationTests {
 
     private func pushJob(
         id: String,
+        kind: PushJobKind = .dashboardPush,
         createdAt: Date? = nil,
         historyEventIDs: [String]? = nil
     ) -> PushJob {
         PushJob(
             id: id,
-            kind: .dashboardPush,
+            kind: kind,
             status: .succeeded,
             label: "Emby Poster · Canvas QA",
             targetDeviceIDs: ["living-room"],

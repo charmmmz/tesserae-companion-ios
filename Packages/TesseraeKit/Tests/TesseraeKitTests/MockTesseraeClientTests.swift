@@ -150,9 +150,24 @@ final class MockTesseraeClientTests: XCTestCase {
             fixture: "image-push-request.json",
             decoder: decoder
         )
+        let imageURLPush = try decode(
+            ImageURLPushRequest.self,
+            fixture: "image-url-push-request.json",
+            decoder: decoder
+        )
+        let webpagePush = try decode(
+            WebpagePushRequest.self,
+            fixture: "webpage-push-request.json",
+            decoder: decoder
+        )
         let history = try decode(
             HistoryResponse.self,
             fixture: "history-response.json",
+            decoder: decoder
+        )
+        let linkHistory = try decode(
+            HistoryResponse.self,
+            fixture: "history-link-response.json",
             decoder: decoder
         )
         let historyResendRequest = try decode(
@@ -185,6 +200,21 @@ final class MockTesseraeClientTests: XCTestCase {
             fixture: "job-history-resend.json",
             decoder: decoder
         )
+        let imageURLPublished = try decode(
+            JobResponse.self,
+            fixture: "job-image-url-published.json",
+            decoder: decoder
+        )
+        let webpagePublished = try decode(
+            JobResponse.self,
+            fixture: "job-webpage-published.json",
+            decoder: decoder
+        )
+        let webpageBlocked = try decode(
+            JobResponse.self,
+            fixture: "job-webpage-blocked.json",
+            decoder: decoder
+        )
         let error = try decode(
             APIErrorResponse.self,
             fixture: "error-response.json",
@@ -200,20 +230,30 @@ final class MockTesseraeClientTests: XCTestCase {
             extendedCapabilities.limits.imageFitModes,
             ImageFitMode.allCases
         )
+        XCTAssertTrue(extendedCapabilities.features.contains("image_url_push"))
+        XCTAssertTrue(extendedCapabilities.features.contains("webpage_push"))
         XCTAssertEqual(pairRequest.client.installationID, "A1B2C3D4-E5F6-47A8-9012-3456789ABCDE")
         XCTAssertEqual(pairResponse.tokenID, "ct_01JABCDEF")
         XCTAssertEqual(devices.devices.first?.rssiDBM, -54)
         XCTAssertEqual(dashboards.dashboards.first?.deviceIDs, ["picpak-kitchen"])
         XCTAssertEqual(dashboardPush.deviceIDs, ["picpak-kitchen"])
         XCTAssertEqual(imagePush.fit, .blur)
+        XCTAssertEqual(imageURLPush.url.host, "images.example.com")
+        XCTAssertEqual(imageURLPush.fit, .fill)
+        XCTAssertEqual(webpagePush.viewportW, 1_280)
+        XCTAssertEqual(webpagePush.deviceIDs.count, 2)
         XCTAssertEqual(history.items.first?.fit, .blur)
         XCTAssertEqual(history.nextBeforeID, "history_0100")
+        XCTAssertEqual(linkHistory.items.map(\.source), ["webpage", "url"])
         XCTAssertFalse(historyResendRequest.overrideQuietHours)
         XCTAssertEqual(accepted.job.status, .accepted)
         XCTAssertEqual(published.job.result?.status, .published)
         XCTAssertEqual(quiet.job.result?.status, .quiet)
         XCTAssertEqual(failed.job.error?.code, "render_failed")
         XCTAssertEqual(historyResend.job.kind, .historyResend)
+        XCTAssertEqual(imageURLPublished.job.kind, .imageURLPush)
+        XCTAssertEqual(webpagePublished.job.kind, .webpagePush)
+        XCTAssertEqual(webpageBlocked.job.error?.code, "url_blocked")
         XCTAssertEqual(
             historyResend.job.result?.historyEventIDs,
             ["history_0103"]
@@ -255,19 +295,38 @@ final class MockTesseraeClientTests: XCTestCase {
 
     func testRequestModelsEncodeSnakeCaseKeys() throws {
         let encoder = TesseraeJSON.encoder()
-        let request = DashboardPushRequest(
+        let dashboardRequest = DashboardPushRequest(
             deviceIDs: ["picpak-kitchen"],
             overrideQuietHours: true
         )
-
-        let data = try encoder.encode(request)
-        let json = try XCTUnwrap(
-            JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let webpageRequest = WebpagePushRequest(
+            url: try XCTUnwrap(URL(string: "https://example.com/news")),
+            deviceIDs: ["picpak-kitchen"],
+            fit: .fit,
+            viewportW: 1_280
         )
 
-        XCTAssertEqual(json["device_ids"] as? [String], ["picpak-kitchen"])
-        XCTAssertEqual(json["override_quiet_hours"] as? Bool, true)
-        XCTAssertNil(json["deviceIds"])
+        let dashboardJSON = try XCTUnwrap(
+            JSONSerialization.jsonObject(
+                with: encoder.encode(dashboardRequest)
+            ) as? [String: Any]
+        )
+        let webpageJSON = try XCTUnwrap(
+            JSONSerialization.jsonObject(
+                with: encoder.encode(webpageRequest)
+            ) as? [String: Any]
+        )
+
+        XCTAssertEqual(
+            dashboardJSON["device_ids"] as? [String],
+            ["picpak-kitchen"]
+        )
+        XCTAssertEqual(dashboardJSON["override_quiet_hours"] as? Bool, true)
+        XCTAssertNil(dashboardJSON["deviceIds"])
+        XCTAssertEqual(webpageJSON["url"] as? String, "https://example.com/news")
+        XCTAssertEqual(webpageJSON["viewport_w"] as? Int, 1_280)
+        XCTAssertEqual(webpageJSON["override_quiet_hours"] as? Bool, false)
+        XCTAssertNil(webpageJSON["viewportW"])
     }
 
     private func decode<T: Decodable>(

@@ -1,0 +1,10 @@
+{
+  "url": "https://example.com/news",
+  "device_ids": [
+    "picpak-kitchen",
+    "e1004-desk"
+  ],
+  "fit": "fit",
+  "viewport_w": 1280,
+  "override_quiet_hours": false
+}

@@ -671,6 +671,10 @@ struct ActivityView: View {
         switch kind {
         case .imagePush:
             String(localized: "Photo")
+        case .imageURLPush:
+            String(localized: "Image URL")
+        case .webpagePush:
+            String(localized: "Webpage")
         case .dashboardPush:
             String(localized: "Dashboard")
         case .historyResend:

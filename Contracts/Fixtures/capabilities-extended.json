@@ -17,7 +17,9 @@
     "image_push",
     "jobs",
     "previews",
-    "history"
+    "history",
+    "image_url_push",
+    "webpage_push"
   ],
   "limits": {
     "image_upload_bytes": 26214400,

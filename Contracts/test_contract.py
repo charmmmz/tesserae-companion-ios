@@ -22,13 +22,19 @@ CASES = {
     "dashboards-response.json": "DashboardsResponse",
     "dashboard-push-request.json": "DashboardPushRequest",
     "image-push-request.json": "ImagePushRequest",
+    "image-url-push-request.json": "ImageURLPushRequest",
+    "webpage-push-request.json": "WebpagePushRequest",
     "history-response.json": "HistoryResponse",
+    "history-link-response.json": "HistoryResponse",
     "history-resend-request.json": "HistoryResendRequest",
     "job-accepted.json": "JobResponse",
     "job-published.json": "JobResponse",
     "job-quiet.json": "JobResponse",
     "job-failed.json": "JobResponse",
     "job-history-resend.json": "JobResponse",
+    "job-image-url-published.json": "JobResponse",
+    "job-webpage-published.json": "JobResponse",
+    "job-webpage-blocked.json": "JobResponse",
     "error-response.json": "ErrorResponse",
 }
 
@@ -65,7 +71,7 @@ def _json_schema(value: Any) -> Any:
 
 def test_openapi_shape_and_operation_ids_are_stable() -> None:
     assert SPEC["openapi"] == "3.0.3"
-    assert SPEC["info"]["version"] == "0.4.0"
+    assert SPEC["info"]["version"] == "0.5.0"
     assert set(SPEC["paths"]) == {
         "/api/app/v1",
         "/api/app/v1/pair",
@@ -76,6 +82,8 @@ def test_openapi_shape_and_operation_ids_are_stable() -> None:
         "/api/app/v1/dashboards/{dashboard_id}/preview",
         "/api/app/v1/dashboards/{dashboard_id}/push",
         "/api/app/v1/images",
+        "/api/app/v1/image-urls",
+        "/api/app/v1/webpages",
         "/api/app/v1/jobs/{job_id}",
         "/api/app/v1/history",
         "/api/app/v1/history/{history_id}/preview",
@@ -123,6 +131,8 @@ def test_all_write_operations_require_idempotency_key() -> None:
     write_operations = [
         paths["/api/app/v1/dashboards/{dashboard_id}/push"]["post"],
         paths["/api/app/v1/images"]["post"],
+        paths["/api/app/v1/image-urls"]["post"],
+        paths["/api/app/v1/webpages"]["post"],
         paths["/api/app/v1/history/{history_id}/resend"]["post"],
     ]
     for operation in write_operations:
@@ -175,6 +185,8 @@ def test_extended_capabilities_advertise_history_and_all_image_fit_modes() -> No
         "center",
     ]
     assert "history" in extension["features"]
+    assert "image_url_push" in extension["features"]
+    assert "webpage_push" in extension["features"]
     assert SPEC["components"]["schemas"]["ImageFitMode"]["enum"] == [
         "fit",
         "fill",
@@ -182,6 +194,80 @@ def test_extended_capabilities_advertise_history_and_all_image_fit_modes() -> No
         "stretch",
         "center",
     ]
+
+
+def test_link_push_contract_keeps_routes_and_failures_distinct() -> None:
+    paths = SPEC["paths"]
+    image_url = paths["/api/app/v1/image-urls"]["post"]
+    webpage = paths["/api/app/v1/webpages"]["post"]
+
+    assert image_url["requestBody"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/ImageURLPushRequest"
+    }
+    assert webpage["requestBody"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/WebpagePushRequest"
+    }
+    assert image_url["operationId"] != webpage["operationId"]
+    assert "strict Companion URL policy" in image_url["description"]
+    assert "manual Server preview" in webpage["description"]
+
+    kinds = SPEC["components"]["schemas"]["Job"]["properties"]["kind"]["enum"]
+    assert "image_url_push" in kinds
+    assert "webpage_push" in kinds
+
+
+def test_webpage_uses_one_bounded_logical_viewport_render() -> None:
+    request = SPEC["components"]["schemas"]["WebpagePushRequest"]
+    viewport = request["properties"]["viewport_w"]
+
+    assert "viewport_w" not in request["required"]
+    assert viewport == {
+        "description": (
+            "Optional advanced logical browser width. The server defaults to "
+            "1280 and owns the logical capture height. It renders once at that "
+            "logical size and does not re-render for each target display."
+        ),
+        "type": "integer",
+        "minimum": 200,
+        "maximum": 4096,
+        "default": 1280,
+    }
+
+
+def test_link_sources_use_strict_public_network_policy() -> None:
+    remote_url = SPEC["components"]["schemas"]["RemoteSourceURL"]
+
+    assert remote_url["pattern"] == r"^https?://[^\s]+$"
+    assert remote_url["format"] == "uri"
+    for refused in ("private", "loopback", "link-local"):
+        assert refused in remote_url["description"]
+    assert "cannot override" in remote_url["description"]
+
+
+def test_link_history_identifies_source_compositions() -> None:
+    history = json.loads((FIXTURES / "history-link-response.json").read_text())
+    webpage, image_url = history["items"]
+
+    assert webpage["source"] == "webpage"
+    assert webpage["preview_available"] is True
+    assert webpage["resendable"] is True
+    assert image_url["source"] == "url"
+    assert image_url["fit"] == "fill"
+
+    image_job = json.loads(
+        (FIXTURES / "job-image-url-published.json").read_text()
+    )["job"]
+    webpage_job = json.loads(
+        (FIXTURES / "job-webpage-published.json").read_text()
+    )["job"]
+    blocked_job = json.loads(
+        (FIXTURES / "job-webpage-blocked.json").read_text()
+    )["job"]
+
+    assert image_job["result"]["history_event_ids"]
+    assert webpage_job["result"]["history_event_ids"]
+    assert blocked_job["status"] == "failed"
+    assert blocked_job["error"]["code"] == "url_blocked"
 
 
 def test_history_contract_keeps_composition_preview_and_resend_correlatable() -> None:
