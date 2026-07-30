@@ -11,7 +11,7 @@ It is a community-built client, not the official Tesserae app.
 ## Project status
 
 - Product status: live-connected internal beta candidate
-- Document version: 0.4.0
+- Document version: 0.5.0
 - Planned first App Store release: 1.0.0
 - Included product scope: native V1 plus Share Sheet and Shortcuts integrations
 - iOS implementation: native Swift and SwiftUI
@@ -85,8 +85,9 @@ python3 Contracts/fixture_server.py --port 8765
 In the app, enter `http://127.0.0.1:8765` and any six-digit pairing code.
 The fixture server is stateful enough to test capability probing, pairing,
 authenticated lists, idempotent Dashboard and History resend writes, image
-multipart uploads, History pagination/preview, and Job polling. It is
-development infrastructure, not a Tesserae server.
+multipart uploads, remote-image and webpage Job contracts, strict URL-policy
+rejection, History pagination/preview, and Job polling. It is development
+infrastructure, not a Tesserae server.
 
 Run the OpenAPI fixture checks with a Python environment containing the
 small dependencies in `Contracts/requirements.txt`:
@@ -113,7 +114,7 @@ provisioning profiles.
 - final icon, store metadata, privacy-policy hosting, and archive validation
   before any TestFlight upload;
 - live server implementation and physical validation of the optional
-  History/resend contract.
+  History/resend, image-URL, and webpage contracts.
 
 The Share Extension is implemented against the proposed contract: it loads one
 still image, validates server-advertised limits, selects targets and a

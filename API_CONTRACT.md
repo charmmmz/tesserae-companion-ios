@@ -2,8 +2,8 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Implemented base contract with accepted optional extensions |
-| Contract version | 0.4.0 |
+| Status | Implemented base contract with accepted additive contract fixtures |
+| Contract version | 0.5.0 |
 | Namespace | `/api/app/v1` |
 | Authentication | Revocable per-client Companion bearer token |
 | Machine-readable source | [`Contracts/app-v1.openapi.yaml`](Contracts/app-v1.openapi.yaml) |
@@ -11,10 +11,13 @@
 
 This is the server surface used by the native Tesserae companion. It
 complements the web UI rather than replacing it. The five base features form
-the compatibility floor; `previews` and `history` are additive capabilities.
+the compatibility floor; `previews`, `history`, `image_url_push`, and
+`webpage_push` are additive capabilities.
 
-The proposal reflects the maintainer review in
-[Discussion #147](https://github.com/dmellok/tesserae/discussions/147).
+The proposal reflects the maintainer reviews in
+[Discussion #147](https://github.com/dmellok/tesserae/discussions/147),
+[Discussion #159](https://github.com/dmellok/tesserae/discussions/159), and
+[Discussion #160](https://github.com/dmellok/tesserae/discussions/160).
 Dashboard editing, plugin administration, schedules, firmware controls,
 History deletion/administration, and general server administration remain
 outside this contract.
@@ -27,7 +30,7 @@ outside this contract.
 - The unauthenticated capability probe exposes no display names, dashboard
   names, secrets, or other household content.
 - Authenticated calls use only `Authorization: Bearer <companion_token>`.
-- Dashboard and image writes require `Idempotency-Key`.
+- Every write requires `Idempotency-Key`.
 - Write responses are persisted asynchronous jobs and return `202 Accepted`.
 - Tesserae remains authoritative for target validation, rendering, quiet
   hours, publishing, and resource limits.
@@ -45,6 +48,8 @@ outside this contract.
 | `GET` | `/api/app/v1/dashboards/{dashboard_id}/preview` | Read or prepare an on-demand cached preview |
 | `POST` | `/api/app/v1/dashboards/{dashboard_id}/push` | Push to bindings or explicit targets |
 | `POST` | `/api/app/v1/images` | Upload one still image to explicit targets |
+| `POST` | `/api/app/v1/image-urls` | Fetch and send one public image URL |
+| `POST` | `/api/app/v1/webpages` | Render and send one public webpage |
 | `GET` | `/api/app/v1/jobs/{job_id}` | Poll job lifecycle and terminal outcome |
 | `GET` | `/api/app/v1/history` | List canonical push History with cursor pagination |
 | `GET` | `/api/app/v1/history/{history_id}/preview` | Read the retained composition thumbnail |
@@ -106,6 +111,52 @@ The maintainer accepted 24 hours as the initial server default for both
 records. Retention remains server-advertised rather than hard-coded so it can
 be tuned without an app release; clients must use the advertised values.
 
+Contract 0.5.0 adds two independently advertised capabilities:
+
+- `image_url_push` enables `POST /image-urls`;
+- `webpage_push` enables `POST /webpages`.
+
+Clients expose neither action unless its exact capability is present. Both
+routes use the existing image-fit vocabulary and do not change the five-feature
+compatibility floor.
+
+## Remote image URLs and webpages
+
+The two URL-backed actions remain separate because their failure modes,
+resource limits, and server machinery differ:
+
+- `/image-urls` fetches one remote still image, retains that fetched source as
+  the History composition, and then applies the selected fit to each target;
+- `/webpages` performs one top-level Chromium render, retains that screenshot
+  as the History composition, and then applies the selected fit to each target.
+
+Both routes fetch or render once per Job at a logical source size. Mixed target
+dimensions do not cause per-display webpage renders; the existing push fan-out
+adapts the one composition for each target group.
+
+`/webpages` accepts an optional advanced `viewport_w` from 200 through 4096
+logical pixels and defaults to 1280 when it is absent. The server owns the
+logical capture height; the first app UI does not need to expose either
+dimension.
+
+The Web UI's iframe remains a deliberately lightweight preview. A site may
+block that iframe with `X-Frame-Options` or CSP even though a top-level
+server-side Chromium render succeeds. The Web UI's optional manual Server
+preview and Companion `/webpages` must share one bounded rendering primitive,
+including its render queue, timeout, concurrency cap, and short cache:
+
+- a manual Web UI preview returns a PNG without publishing or writing History;
+- a Companion `/webpages` Job publishes to explicit targets and writes
+  canonical History.
+
+Sharing the rendering primitive does not merge the callers' trust policies.
+Current operator-driven Web UI fetches may allow same-host or private-network
+destinations. Companion bearer tokens must always use a strict public-network
+policy that refuses private, loopback, link-local, reserved, unspecified, and
+embedded-credential URLs, with equivalent redirect checks and no client
+override. A server adapter must therefore pass an explicit strict policy into
+the shared primitive rather than inheriting an operator `allow_local` setting.
+
 ## Display and dashboard reads
 
 Display status exposes raw `last_seen_at` plus optional server-derived
@@ -161,14 +212,14 @@ canonical rows without timestamp heuristics.
 
 ## Writes, quiet hours, and jobs
 
-All three writes accept:
+All five writes accept:
 
 - targets, with omitted dashboard targets meaning “use bindings”;
 - `override_quiet_hours`, defaulting to `false`;
 - a required `Idempotency-Key` header.
 
-For dashboard push, image push, and History resend, reuse of the same key and
-payload returns the original persisted Job.
+For dashboard push, image upload, image-URL push, webpage push, and History
+resend, reuse of the same key and payload returns the original persisted Job.
 
 The same credential, method, path, key, and payload returns the original job.
 Reusing a key with a different payload returns `409 idempotency_conflict`.
@@ -200,6 +251,8 @@ Job lifecycle and business outcome are intentionally separate:
   policy without refreshing the target.
 - A failed job has a stable machine `error.code` and safe diagnostic message.
 - A History resend Job uses `kind: history_resend`.
+- Remote-image and webpage Jobs use `kind: image_url_push` and
+  `kind: webpage_push`.
 - `history_event_ids`, when present, precisely correlate a terminal Job with
   the canonical History rows it created.
 
@@ -209,14 +262,15 @@ user-initiated Send/Share action may request an override.
 ## Client and server implementation boundary
 
 The server implementation should be a thin adapter over existing Tesserae
-stores and `PushManager`, not a second delivery pipeline. The iOS app does not
-use firmware tokens, the global webhook credential, Flask session cookies,
-privileged MCP, or internal web routes.
+stores, `PushManager`, and the shared bounded webpage-render primitive, not a
+second delivery or Chromium pipeline. The iOS app does not use firmware tokens,
+the global webhook credential, Flask session cookies, privileged MCP, or
+internal web routes.
 
 The client includes a live `URLSession` transport and the base write path has
 been verified against an edge Tesserae server and physical display. Contract
-0.4.0 extensions remain capability-gated until the matching server
-implementation and compatibility evidence are recorded.
+0.4.0 and 0.5.0 extensions remain capability-gated until their matching server
+implementations and compatibility evidence are recorded.
 
 ## Contract checks
 
@@ -231,8 +285,9 @@ swift test --package-path Packages/TesseraeKit
 The Python checks validate every fixture against its OpenAPI component,
 operation ID uniqueness, required endpoint coverage, Job/result separation,
 idempotency headers, image-fit fallback and expansion, History composition
-semantics, resend correlation, and the stateful local fixture server. Swift
-tests decode the same JSON files into `TesseraeKit` models. With
+semantics, resend correlation, strict URL policy, single-render webpage
+semantics, and the stateful local fixture server. Swift tests decode the same
+JSON files into `TesseraeKit` models. With
 `TESSERAE_FIXTURE_BASE_URL` set, they also exercise the live transport from
 pairing through publish polling.
 
@@ -240,5 +295,6 @@ pairing through publish polling.
 
 - first stable Tesserae release containing the base contract;
 - first edge and stable Tesserae revisions implementing contract 0.4.0;
+- first edge and stable Tesserae revisions implementing contract 0.5.0;
 - the exact reusable PNG stage each packed renderer exposes as its
   device-specific preview.
