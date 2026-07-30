@@ -13,6 +13,12 @@ capabilities.
 
 ### Added
 
+- OpenAPI 0.5.0 optional `image_url_push` and `webpage_push` capabilities with
+  separate idempotent asynchronous routes, strict public-network URL policy,
+  canonical History correlation, and a fixed logical webpage viewport.
+- Contract fixtures and stateful fixture-server coverage for remote-image
+  fetches, one-render webpage fan-out, blocked private destinations, and the
+  new Job kinds.
 - Display cards now open a native details view with a larger current-screen
   preview, freshness and last-seen information, power and signal telemetry,
   hardware identity, firmware, and panel characteristics.
@@ -40,6 +46,9 @@ capabilities.
 
 ### Changed
 
+- The Companion webpage contract now explicitly reuses the Web UI manual
+  Server preview's bounded Chromium queue, timeout, concurrency, and cache
+  primitive while retaining a stricter no-LAN Companion trust policy.
 - Display cards now show freshness using compact, accessible status glyphs
   beside the device name, distinguish states by both shape and colour, tighten
   hardware brand and model spacing, and omit the redundant orientation label.

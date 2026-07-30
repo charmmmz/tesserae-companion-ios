@@ -664,12 +664,16 @@ display model/transport, and observed outcome.
 | D-018 | 2026-07-29 | Advertise image fit modes from server limits; prioritise Fit/Fill/Blur and keep Stretch/Center in advanced UI. | Accepted by upstream maintainer |
 | D-019 | 2026-07-29 | Keep History thumbnails as source compositions, but make Displays use the device-specific post-fit preview. | Accepted by upstream maintainer |
 | D-020 | 2026-07-29 | Add canonical server History and idempotent resend to Activity as an optional capability without adding another tab or exposing History administration. | Accepted by upstream maintainer |
+| D-021 | 2026-07-30 | Add separate capability-gated image-URL and webpage Job routes; render or fetch once, then use existing per-target push fan-out. | Accepted by upstream maintainer |
+| D-022 | 2026-07-30 | Reuse one bounded webpage-render primitive for Web UI manual preview and Companion push while keeping Companion on a strict no-LAN URL policy. | Accepted by upstream maintainer |
 
 ## 17. Open questions for maintainer review
 
 1. Which Tesserae release should become the minimum supported version?
 2. Which edge and stable releases should first advertise the optional 0.4.0
    image-fit and History extensions?
+3. Which edge and stable releases should first advertise the optional 0.5.0
+   image-URL and webpage extensions?
 
 ## 18. Definition of release 1.0 done
 

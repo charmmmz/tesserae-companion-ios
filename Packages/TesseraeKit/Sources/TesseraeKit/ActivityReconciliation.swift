@@ -109,6 +109,10 @@ public enum ActivityReconciliation {
         switch kind {
         case .dashboardPush, .imagePush:
             "companion"
+        case .imageURLPush:
+            "url"
+        case .webpagePush:
+            "webpage"
         case .historyResend:
             "resend"
         }

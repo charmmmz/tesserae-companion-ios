@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
+import ipaddress
 import json
 import threading
 from dataclasses import dataclass
@@ -77,7 +78,7 @@ class FixtureState:
                 }
             )
             completed["job"]["result"]["device_ids"] = device_ids
-            if kind == "history_resend":
+            if kind in {"history_resend", "image_url_push", "webpage_push"}:
                 completed["job"]["result"]["history_event_ids"] = [
                     f"history_fixture_{self.sequence:04d}"
                 ]
@@ -216,6 +217,30 @@ class FixtureRequestHandler(BaseHTTPRequestHandler):
                 body=body,
             )
             return
+        if path in {"/api/app/v1/image-urls", "/api/app/v1/webpages"}:
+            payload = self.read_json()
+            if payload is None:
+                return
+            validated = self.validate_link_push_payload(
+                payload,
+                allow_viewport=path == "/api/app/v1/webpages",
+            )
+            if validated is None:
+                return
+            url, device_ids = validated
+            parsed = urlparse(url)
+            label = f"{parsed.hostname or ''}{parsed.path or '/'}"
+            self.accept_job(
+                kind=(
+                    "webpage_push"
+                    if path == "/api/app/v1/webpages"
+                    else "image_url_push"
+                ),
+                label=label,
+                device_ids=device_ids,
+                body=json.dumps(payload, sort_keys=True).encode(),
+            )
+            return
         if path.startswith("/api/app/v1/history/") and path.endswith("/resend"):
             payload = self.read_json()
             if payload is None:
@@ -300,6 +325,120 @@ class FixtureRequestHandler(BaseHTTPRequestHandler):
                 "Location": f"/api/app/v1/jobs/{job.accepted['job']['id']}",
                 "Retry-After": "1",
             },
+        )
+
+    def validate_link_push_payload(
+        self,
+        payload: dict[str, Any],
+        *,
+        allow_viewport: bool,
+    ) -> tuple[str, list[str]] | None:
+        allowed_keys = {
+            "url",
+            "device_ids",
+            "fit",
+            "override_quiet_hours",
+        }
+        if allow_viewport:
+            allowed_keys.add("viewport_w")
+        if unknown_keys := set(payload).difference(allowed_keys):
+            self.send_error_response(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_request",
+                f"Unexpected request fields: {', '.join(sorted(unknown_keys))}.",
+            )
+            return None
+
+        url = payload.get("url")
+        if not isinstance(url, str):
+            self.send_error_response(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_request",
+                "A public HTTP(S) URL is required.",
+            )
+            return None
+        parsed = urlparse(url)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+        ):
+            self.send_error_response(
+                HTTPStatus.BAD_REQUEST,
+                "url_blocked",
+                "The URL must be public HTTP(S) without embedded credentials.",
+            )
+            return None
+        if self.fixture_host_is_blocked(parsed.hostname):
+            self.send_error_response(
+                HTTPStatus.BAD_REQUEST,
+                "url_blocked",
+                "The URL is not permitted by the Companion network policy.",
+            )
+            return None
+
+        device_ids = payload.get("device_ids")
+        if (
+            not isinstance(device_ids, list)
+            or not device_ids
+            or any(not isinstance(item, str) or not item for item in device_ids)
+            or len(set(device_ids)) != len(device_ids)
+        ):
+            self.send_error_response(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_target",
+                "Select one or more unique display targets.",
+            )
+            return None
+
+        if payload.get("fit") not in {"fit", "fill", "blur", "stretch", "center"}:
+            self.send_error_response(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_request",
+                "Choose a server-advertised image fit mode.",
+            )
+            return None
+        if not isinstance(payload.get("override_quiet_hours"), bool):
+            self.send_error_response(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_request",
+                "override_quiet_hours is required.",
+            )
+            return None
+
+        if allow_viewport and "viewport_w" in payload:
+            viewport_w = payload["viewport_w"]
+            if (
+                not isinstance(viewport_w, int)
+                or isinstance(viewport_w, bool)
+                or not 200 <= viewport_w <= 4096
+            ):
+                self.send_error_response(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid_request",
+                    "viewport_w must be between 200 and 4096.",
+                )
+                return None
+
+        return url, device_ids
+
+    @staticmethod
+    def fixture_host_is_blocked(host: str) -> bool:
+        """Mirror obvious strict-policy cases without performing DNS in fixtures."""
+        if host.lower() in {"localhost", "localhost.localdomain"}:
+            return True
+        try:
+            address = ipaddress.ip_address(host)
+        except ValueError:
+            return False
+        return bool(
+            address.is_loopback
+            or address.is_private
+            or address.is_link_local
+            or address.is_reserved
+            or address.is_multicast
+            or address.is_unspecified
         )
 
     def authorized(self) -> bool:

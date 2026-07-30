@@ -482,6 +482,62 @@ public struct ImagePushRequest: Codable, Hashable, Sendable {
     }
 }
 
+public struct ImageURLPushRequest: Codable, Hashable, Sendable {
+    public let url: URL
+    public let deviceIDs: [String]
+    public let fit: ImageFitMode
+    public let overrideQuietHours: Bool
+
+    public init(
+        url: URL,
+        deviceIDs: [String],
+        fit: ImageFitMode,
+        overrideQuietHours: Bool = false
+    ) {
+        self.url = url
+        self.deviceIDs = deviceIDs
+        self.fit = fit
+        self.overrideQuietHours = overrideQuietHours
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case url
+        case deviceIDs = "deviceIds"
+        case fit
+        case overrideQuietHours
+    }
+}
+
+public struct WebpagePushRequest: Codable, Hashable, Sendable {
+    public let url: URL
+    public let deviceIDs: [String]
+    public let fit: ImageFitMode
+    public let viewportW: Int?
+    public let overrideQuietHours: Bool
+
+    public init(
+        url: URL,
+        deviceIDs: [String],
+        fit: ImageFitMode,
+        viewportW: Int? = nil,
+        overrideQuietHours: Bool = false
+    ) {
+        self.url = url
+        self.deviceIDs = deviceIDs
+        self.fit = fit
+        self.viewportW = viewportW
+        self.overrideQuietHours = overrideQuietHours
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case url
+        case deviceIDs = "deviceIds"
+        case fit
+        case viewportW
+        case overrideQuietHours
+    }
+}
+
 public struct HistoryResponse: Codable, Hashable, Sendable {
     public let items: [HistoryItem]
     public let nextBeforeID: String?
@@ -562,6 +618,8 @@ public struct HistoryResendRequest: Codable, Hashable, Sendable {
 public enum PushJobKind: String, Codable, Hashable, Sendable {
     case dashboardPush = "dashboard_push"
     case imagePush = "image_push"
+    case imageURLPush = "image_url_push"
+    case webpagePush = "webpage_push"
     case historyResend = "history_resend"
 }
 

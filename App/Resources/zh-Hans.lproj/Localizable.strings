@@ -89,6 +89,8 @@
 "No Activity Yet" = "暂无活动";
 "Dashboard and photo sends will appear here." = "发送仪表盘和照片的记录会显示在这里。";
 "Photo" = "照片";
+"Image URL" = "图片链接";
+"Webpage" = "网页";
 "Queued photo" = "待发送照片";
 "Queued photo preview" = "待发送照片预览";
 "File" = "文件";

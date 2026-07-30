@@ -57,6 +57,8 @@ def test_fixture_server_exercises_companion_vertical_slice():
             "center",
         ]
         assert "history" in capabilities["features"]
+        assert "image_url_push" in capabilities["features"]
+        assert "webpage_push" in capabilities["features"]
 
         status, pair = request(
             base_url,
@@ -120,6 +122,77 @@ def test_fixture_server_exercises_companion_vertical_slice():
         assert status == 200
         assert completed["job"]["status"] == "succeeded"
         assert completed["job"]["result"]["status"] == "published"
+
+        status, image_url = request(
+            base_url,
+            "/api/app/v1/image-urls",
+            method="POST",
+            payload={
+                "url": "https://images.example.com/poster.png",
+                "device_ids": ["picpak-kitchen"],
+                "fit": "fill",
+                "override_quiet_hours": False,
+            },
+            token=FIXTURE_TOKEN,
+            idempotency_key="fixture-image-url-key-0001",
+        )
+        assert status == 202
+        assert image_url["job"]["kind"] == "image_url_push"
+
+        status, fetched_image_url = request(
+            base_url,
+            f"/api/app/v1/jobs/{image_url['job']['id']}",
+            token=FIXTURE_TOKEN,
+        )
+        assert status == 200
+        assert fetched_image_url["job"]["result"]["history_event_ids"]
+
+        status, webpage = request(
+            base_url,
+            "/api/app/v1/webpages",
+            method="POST",
+            payload={
+                "url": "https://example.com/news",
+                "device_ids": ["picpak-kitchen", "e1004-desk"],
+                "fit": "fit",
+                "viewport_w": 1280,
+                "override_quiet_hours": False,
+            },
+            token=FIXTURE_TOKEN,
+            idempotency_key="fixture-webpage-key-0001",
+        )
+        assert status == 202
+        assert webpage["job"]["kind"] == "webpage_push"
+        assert webpage["job"]["target_device_ids"] == [
+            "picpak-kitchen",
+            "e1004-desk",
+        ]
+
+        status, rendered_webpage = request(
+            base_url,
+            f"/api/app/v1/jobs/{webpage['job']['id']}",
+            token=FIXTURE_TOKEN,
+        )
+        assert status == 200
+        assert rendered_webpage["job"]["result"]["history_event_ids"] == [
+            "history_fixture_0003",
+        ]
+
+        status, blocked = request(
+            base_url,
+            "/api/app/v1/webpages",
+            method="POST",
+            payload={
+                "url": "http://127.0.0.1:8765/admin",
+                "device_ids": ["picpak-kitchen"],
+                "fit": "fit",
+                "override_quiet_hours": False,
+            },
+            token=FIXTURE_TOKEN,
+            idempotency_key="fixture-webpage-key-0002",
+        )
+        assert status == 400
+        assert blocked["error"]["code"] == "url_blocked"
 
         status, history = request(
             base_url,

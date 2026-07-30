@@ -62,6 +62,29 @@ These additions are not part of `CompanionCompatibility.requiredFeatures`.
 The app must continue to pair with a base 0.2-compatible server, hide History,
 and limit image sending to Fit/Fill when the extension fields are absent.
 
+## Optional contract 0.5 extensions
+
+OpenAPI 0.5.0 adds two independently negotiated link-send extensions:
+
+- `image_url_push` gates `POST /api/app/v1/image-urls`;
+- `webpage_push` gates `POST /api/app/v1/webpages`.
+
+Neither is part of `CompanionCompatibility.requiredFeatures`. A client must
+hide each action independently when its capability is absent. The routes use
+separate Job kinds and share the existing fit-mode vocabulary.
+
+The webpage route performs one bounded top-level server render at a default
+logical width of 1280, then uses the normal push fan-out for mixed display
+dimensions. It shares the Web UI manual Server preview's render queue, timeout,
+concurrency, and short cache, but the callers keep different side effects:
+manual preview returns a PNG without History, while Companion publishes and
+records canonical History.
+
+Companion URL routes always use the strict public-network trust policy and
+cannot opt into the Web UI operator path's local-network allowance. Private,
+loopback, link-local, reserved, unspecified, embedded-credential, and
+equivalent redirect destinations are refused.
+
 ## Physical validation
 
 On 2026-07-28, a physical iPhone paired with a Tesserae `0.207.0` deployment
