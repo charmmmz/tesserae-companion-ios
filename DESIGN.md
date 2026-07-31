@@ -283,6 +283,7 @@ extension, intents, and tests.
 | Small cache | Codable files in App Group, actor-isolated |
 | Images | PhotosUI, Core Image/ImageIO, bounded JPEG/HEIF upload |
 | Reachability | Request-driven state plus `NWPathMonitor` as a hint |
+| Display status | Foreground-only 15-second polling while Displays is visible; Companion API v1 has no event subscription endpoint |
 | Shortcuts | App Intents and App Entities |
 | Logging | `OSLog`, privacy annotations for URLs/tokens/user content |
 | Dependencies | None for the foundation unless an icon package is approved |
@@ -601,7 +602,6 @@ Simulator success does not validate:
 
 - local-network privacy prompts;
 - Bonjour discovery on a real LAN;
-- Camera-based QR scanning;
 - Share Extension memory/time behaviour;
 - Shortcuts execution while the app is suspended;
 - final e-ink delivery.

@@ -29,7 +29,6 @@ SDK, analytics SDK, tracking, or telemetry.
 - Bonjour browsing is limited to the local network and only discovers
   `_tesserae._tcp` candidates. Discovery does not authenticate or pair a
   client.
-- Camera access is used only while the user opens the QR pairing scanner.
 
 The Tesserae server separately controls its own storage, logs, Job retention,
 and any data sources used by Dashboards. The current Companion contract asks
@@ -44,8 +43,7 @@ operators remain responsible for their own privacy policy and configuration.
 - The Tesserae administrator can revoke each paired client independently.
 - Deleting the app removes its private container. iOS and the server control
   deletion of their respective Keychain and server-side records.
-- Local Network and Camera permissions can be changed at any time in iOS
-  Settings.
+- Local Network permission can be changed at any time in iOS Settings.
 
 ## App Store privacy disclosure draft
 

@@ -116,11 +116,13 @@ provisioning profiles.
 - live server implementation and physical validation of the optional
   History/resend, image-URL, and webpage contracts.
 
-The Share Extension is implemented against the proposed contract: it loads one
-still image, validates server-advertised limits, selects targets and a
-server-advertised layout mode, then stores a protected retry record before
-uploading. An interrupted request is retried by the containing app with the
-same idempotency key and is purged after 24 hours.
+The Share Extension is implemented against the proposed contract: it accepts
+one still image or web URL, gates link actions against the server-advertised
+capabilities, selects targets and a server-advertised layout mode, then stores
+a protected retry record before submitting. Ordinary web URLs default to a
+Webpage Snapshot and can be switched to Image URL. An interrupted request is
+retried by the containing app with the same idempotency key and is purged after
+24 hours.
 
 Shortcuts can push a saved Dashboard, send one still image to selected
 displays, or open the paired Tesserae web UI. The image action uses the same

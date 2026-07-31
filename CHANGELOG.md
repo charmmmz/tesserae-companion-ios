@@ -13,6 +13,17 @@ capabilities.
 
 ### Added
 
+- TesseraeKit live and mock transports now submit remote image URLs and
+  webpages through the OpenAPI 0.5.0 asynchronous Job routes, ready for clients
+  to expose only when the corresponding optional capability is advertised.
+- Send now offers a Link source when supported by the connected server, with
+  separate Image URL and Webpage Snapshot actions and the existing display and
+  layout choices.
+- Activity identifies accepted link Jobs as Image URL or Webpage sends while
+  retaining the server-provided URL label.
+- The Share Extension now accepts one web URL, defaults ordinary links to a
+  Webpage Snapshot when supported, allows switching to Image URL, and retains
+  failed submissions for the app's 24-hour retry and discard flow.
 - OpenAPI 0.5.0 optional `image_url_push` and `webpage_push` capabilities with
   separate idempotent asynchronous routes, strict public-network URL policy,
   canonical History correlation, and a fixed logical webpage viewport.
@@ -20,10 +31,10 @@ capabilities.
   fetches, one-render webpage fan-out, blocked private destinations, and the
   new Job kinds.
 - OpenAPI 0.4.1 and Display cards now use the device's last-served full-frame
-  preview and show an `Update pending` badge when Tesserae has rendered a newer
-  frame that a sleeping REST display has not fetched yet. Older servers remain
-  compatible, and transports without a served signal continue to show
-  server-latest.
+  preview. A subtle preview-corner indicator and an explanatory detail status
+  show when Tesserae has rendered a newer frame that a sleeping REST display
+  has not fetched yet. Older servers remain compatible, and transports without
+  a served signal continue to show server-latest.
 - Display cards now open a native details view with a larger current-screen
   preview, freshness and last-seen information, power and signal telemetry,
   hardware identity, firmware, and panel characteristics.
@@ -51,20 +62,36 @@ capabilities.
 
 ### Changed
 
+- Activity now refreshes immediately when opened and every 15 seconds while it
+  remains visible in the foreground, so sends from the Tesserae web UI,
+  schedules, and other clients appear without a manual pull. Existing immutable
+  History thumbnails stay cached instead of being revalidated on every poll,
+  while completed in-app sends continue to reconcile immediately.
+- Display details now open directly as a large sheet instead of pushing a
+  separate navigation page. While Displays is visible and the app is in the
+  foreground, lightweight device status automatically refreshes every 15
+  seconds.
+- Display details present the `spectra_6`, `waveshare_e6`, and `e6` transport
+  identifiers as the hardware-neutral `Spectra 6 · 6-color` label.
 - The Companion webpage contract now explicitly reuses the Web UI manual
   Server preview's bounded Chromium queue, timeout, concurrency, and cache
   primitive while retaining a stricter no-LAN Companion trust policy.
 - Display cards now show freshness using compact, accessible status glyphs
   beside the device name, distinguish states by both shape and colour, tighten
   hardware brand and model spacing, and omit the redundant orientation label.
-- Settings now places the Disconnect action inside the Connection section so
-  connection status, storage details, and lifecycle control stay together.
+- Settings now places the icon-labelled Disconnect action directly below
+  connection status, ahead of the longer storage explanation.
+- Clear Local Activity now uses a system alert and keeps its server-retention
+  explanation there instead of repeating it below the Settings action.
 - Settings About now links directly to the Tesserae Companion GitHub repository
   instead of showing the redundant community-client label.
-- Activity cards no longer show redundant disclosure chevrons; tapping a card
-  with an available image still expands and collapses its preview.
-- History cards now use a compact `Resend` action aligned with the status pill
-  instead of a full-width action row.
+- Activity cards now follow the Displays and Dashboards layout with metadata on
+  the left, a consistent preview on the right, and a compact status glyph in
+  the preview's top-right corner. Previews use the target display's panel
+  dimensions, so rendered History and queued image fit modes reflect the
+  device's actual aspect ratio and resolution without artificial gaps.
+- History cards now use a content-width, filled `Resend` action matching the
+  Dashboard `Push` control.
 - Activity now follows foreground sends for up to 30 seconds and reconciles
   unfinished Jobs during refresh, preventing a stale Sending card from
   lingering beside its correlated Published server History entry.
@@ -76,8 +103,32 @@ capabilities.
   Stretch and Center as advanced choices, and simulate all five using the same
   geometry as Tesserae's server renderer.
 
+### Removed
+
+- QR pairing and its camera permission. Onboarding now supports Bonjour
+  discovery plus manual mDNS, IP, or reverse-proxy URL and one-time-code entry.
+
 ### Fixed
 
+- Activity now maps the complete set of server push, button, touch, and
+  condition History outcomes to compact semantic status glyphs, so successful
+  actions no longer appear as pending clocks and unknown future statuses remain
+  visibly neutral.
+- Completed sends now refresh device delivery state immediately. While Displays
+  remains visible, a change in pending state or `last_seen_at` revalidates that
+  display's ETag-backed last-served preview, so the pending indicator appears
+  after a render and the card advances after the panel wakes and fetches it.
+- Display preview refreshes can no longer become permanently stuck after a
+  device-list update cancels an in-flight request; active Displays polling now
+  revalidates each current-screen preview with its ETag every cycle.
+- Authenticated previews now bypass URLSession's independent response cache
+  and rely on the app's explicit ETag state, preventing an older cached body
+  from replacing a newer current-screen image after revalidation.
+- Display detail sheets no longer install a competing pull-to-refresh gesture;
+  their telemetry continues to follow the foreground Displays refresh cycle.
+- Cancelling an in-progress pull-to-refresh no longer marks a healthy Tesserae
+  connection offline or shows a misleading `Could not reach Tesserae:
+  cancelled` banner.
 - Activity now reconciles legacy or incomplete successful Companion Jobs with
   their canonical server History rows using a strict one-to-one match, avoiding
   duplicate cards when `history_event_ids` is unavailable.
