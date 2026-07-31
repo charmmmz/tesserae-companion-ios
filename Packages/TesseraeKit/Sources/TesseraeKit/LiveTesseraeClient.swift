@@ -144,13 +144,18 @@ public actor LiveTesseraeClient: TesseraeServing {
 
     public func fetchDevicePreview(
         id: String,
+        revision: String?,
         ifNoneMatch: String?,
         instance: TesseraeInstance
     ) async throws -> PreviewFetchResult {
+        let queryItems = revision.map {
+            [URLQueryItem(name: "revision", value: $0)]
+        } ?? []
         var request = try await authenticatedRequest(
             instance: instance,
             path: ["devices", id, "preview"],
             method: "GET",
+            queryItems: queryItems,
             accept: "image/png"
         )
         configurePreviewRequest(

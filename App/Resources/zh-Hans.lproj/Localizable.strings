@@ -33,6 +33,8 @@
 "Unknown" = "未知";
 "Custom display" = "自定义显示屏";
 "Current Screen" = "当前画面";
+"Next Screen" = "待显示画面";
+"Rendered" = "生成于";
 "Waiting for display refresh" = "待屏幕刷新";
 "The new frame will appear the next time this display wakes." = "新画面将在设备下次唤醒时显示。";
 "Connection & Power" = "连接与电源";

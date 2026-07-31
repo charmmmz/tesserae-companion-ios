@@ -13,6 +13,8 @@ capabilities.
 
 ### Added
 
+- Display details now distinguish the last-served Current Screen from the exact
+  pending Next Screen when a Tesserae 0.5.2 server retains that revision.
 - Dashboard cards now render the same Phosphor icon selected in Tesserae's web
   UI through the optional OpenAPI 0.5.1 `icon` field, including legacy-name
   normalization and a safe cube fallback for missing or unknown identifiers.

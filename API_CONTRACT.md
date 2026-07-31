@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Status | Implemented base contract with accepted additive contract fixtures |
-| Contract version | 0.5.1 |
+| Contract version | 0.5.2 |
 | Namespace | `/api/app/v1` |
 | Authentication | Revocable per-client Companion bearer token |
 | Machine-readable source | [`Contracts/app-v1.openapi.yaml`](Contracts/app-v1.openapi.yaml) |
@@ -126,6 +126,13 @@ Clients may normalize legacy aliases and must fall back safely when the field
 is absent, null, or unknown; this additive display metadata needs no separate
 capability.
 
+Contract 0.5.2 adds optional `pending_render` metadata to each Display. It
+identifies the exact retained revision waiting for that device and supplies an
+authenticated preview path. Passing its `revision` to the existing device
+preview endpoint returns that exact frame; omitting the query continues to
+return the last-served frame. This is additive metadata under `previews`, so
+older compatible servers can omit it without a separate capability.
+
 ## Remote image URLs and webpages
 
 The two URL-backed actions remain separate because their failure modes,
@@ -172,6 +179,12 @@ REST devices may also include `has_pending_render`: `true` means Tesserae has
 rendered a newer full frame than the one most recently handed to the device.
 Older compatible servers omit the field, and transports without a reliable
 served signal report `false`.
+
+When Tesserae retains that newer frame, `pending_render` identifies its opaque
+`revision`, optional render time, and authenticated preview URL. Clients use
+the revision with `GET /devices/{device_id}/preview?revision=...` to show a
+separate Next Screen without replacing the last-served Current Screen. The
+server returns `404` if that exact retained revision is no longer available.
 
 Dashboard lists contain stable IDs, names, kind, bound device IDs, and an
 optional web-management URL. Listing dashboards never triggers preview
@@ -311,5 +324,7 @@ pairing through publish polling.
 - first edge and stable Tesserae revisions implementing contract 0.4.1;
 - first edge and stable Tesserae revisions implementing contract 0.5.0;
 - first stable Tesserae revision including the additive 0.5.1 Dashboard icon;
+- first stable Tesserae revision including the additive 0.5.2 exact pending
+  preview metadata;
 - the exact reusable PNG stage each packed renderer exposes as its
   device-specific preview.

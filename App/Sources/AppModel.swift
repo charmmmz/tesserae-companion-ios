@@ -45,6 +45,7 @@ final class AppModel {
     private var isSynchronizingSharedState = false
     private var activityRefreshTask: Task<Void, Never>?
     private var displayPreviewRequestIDs: [String: UUID] = [:]
+    private var pendingDisplayPreviewRequestIDs: [String: UUID] = [:]
 
     var activeInstance: TesseraeInstance?
     var connectionMode: ConnectionMode?
@@ -65,6 +66,7 @@ final class AppModel {
     var queuedImagePreviewData: [String: Data] = [:]
     var historyPreviews: [String: PreviewImageState] = [:]
     var displayPreviews: [String: PreviewImageState] = [:]
+    var pendingDisplayPreviews: [String: PreviewImageState] = [:]
     var dashboardPreviews: [String: PreviewImageState] = [:]
     var previewGeneration = 0
     var displayPreviewGeneration = 0
@@ -220,6 +222,8 @@ final class AppModel {
             historyPreviews = [:]
             displayPreviews = [:]
             displayPreviewRequestIDs = [:]
+            pendingDisplayPreviews = [:]
+            pendingDisplayPreviewRequestIDs = [:]
             dashboardPreviews = [:]
             loadDashboardOrder(for: session.instance.id)
             if mode == .live {
@@ -347,11 +351,18 @@ final class AppModel {
                 displayPreviews = displayPreviews.filter {
                     displayIDs.contains($0.key)
                 }
+                let pendingPreviewKeys = Set(
+                    displays.compactMap(pendingDisplayPreviewKey)
+                )
+                pendingDisplayPreviews = pendingDisplayPreviews.filter {
+                    pendingPreviewKeys.contains($0.key)
+                }
                 dashboardPreviews = dashboardPreviews.filter {
                     dashboardIDs.contains($0.key)
                 }
             } else {
                 displayPreviews = [:]
+                pendingDisplayPreviews = [:]
                 dashboardPreviews = [:]
             }
             displayPreviewGeneration &+= 1
@@ -400,8 +411,15 @@ final class AppModel {
                 displayPreviews = displayPreviews.filter {
                     displayIDs.contains($0.key)
                 }
+                let pendingPreviewKeys = Set(
+                    refreshedDisplays.compactMap(pendingDisplayPreviewKey)
+                )
+                pendingDisplayPreviews = pendingDisplayPreviews.filter {
+                    pendingPreviewKeys.contains($0.key)
+                }
             } else {
                 displayPreviews = [:]
+                pendingDisplayPreviews = [:]
             }
             displayPreviewGeneration &+= 1
 
@@ -1217,6 +1235,7 @@ final class AppModel {
         do {
             let result = try await activeClient.fetchDevicePreview(
                 id: display.id,
+                revision: nil,
                 ifNoneMatch: previous.data == nil ? nil : previous.eTag,
                 instance: instance
             )
@@ -1256,6 +1275,100 @@ final class AppModel {
             )
             displayPreviewRequestIDs[display.id] = nil
         }
+    }
+
+    func pendingDisplayPreview(
+        for display: DisplaySummary
+    ) -> PreviewImageState? {
+        guard let key = pendingDisplayPreviewKey(display) else {
+            return nil
+        }
+        return pendingDisplayPreviews[key]
+    }
+
+    func loadPendingDisplayPreview(_ display: DisplaySummary) async {
+        guard
+            supportsPreviews,
+            let instance = activeInstance,
+            let pendingRender = display.pendingRender,
+            let key = pendingDisplayPreviewKey(display)
+        else {
+            return
+        }
+
+        let stored = pendingDisplayPreviews[key] ?? .idle
+        let previous = stored.phase == .loading
+            ? PreviewImageState(
+                data: stored.data,
+                eTag: stored.eTag,
+                phase: stored.data == nil ? .idle : .ready
+            )
+            : stored
+        let requestID = UUID()
+        pendingDisplayPreviewRequestIDs[key] = requestID
+        pendingDisplayPreviews[key] = PreviewImageState(
+            data: previous.data,
+            eTag: previous.eTag,
+            phase: .loading
+        )
+
+        do {
+            let result = try await activeClient.fetchDevicePreview(
+                id: display.id,
+                revision: pendingRender.revision,
+                ifNoneMatch: previous.data == nil ? nil : previous.eTag,
+                instance: instance
+            )
+            guard pendingDisplayPreviewRequestIDs[key] == requestID else {
+                return
+            }
+            guard
+                activeInstance?.id == instance.id,
+                displays.first(where: { $0.id == display.id })?
+                    .pendingRender?.revision == pendingRender.revision,
+                !Task.isCancelled
+            else {
+                pendingDisplayPreviews[key] = previous
+                pendingDisplayPreviewRequestIDs[key] = nil
+                return
+            }
+            apply(
+                result,
+                previous: previous,
+                to: &pendingDisplayPreviews,
+                key: key
+            )
+            pendingDisplayPreviewRequestIDs[key] = nil
+        } catch is CancellationError {
+            guard pendingDisplayPreviewRequestIDs[key] == requestID else {
+                return
+            }
+            finishCancelledPreview(
+                previous: previous,
+                in: &pendingDisplayPreviews,
+                key: key
+            )
+            pendingDisplayPreviewRequestIDs[key] = nil
+        } catch {
+            guard pendingDisplayPreviewRequestIDs[key] == requestID else {
+                return
+            }
+            finishFailedPreview(
+                previous: previous,
+                in: &pendingDisplayPreviews,
+                key: key
+            )
+            pendingDisplayPreviewRequestIDs[key] = nil
+        }
+    }
+
+    private func pendingDisplayPreviewKey(
+        _ display: DisplaySummary
+    ) -> String? {
+        guard let revision = display.pendingRender?.revision else {
+            return nil
+        }
+        return "\(display.id)|\(revision)"
     }
 
     func loadDashboardPreview(_ dashboard: DashboardSummary) async {
@@ -1472,6 +1585,8 @@ final class AppModel {
         historyPreviews = [:]
         displayPreviews = [:]
         displayPreviewRequestIDs = [:]
+        pendingDisplayPreviews = [:]
+        pendingDisplayPreviewRequestIDs = [:]
         dashboardPreviews = [:]
         dashboardOrderIDs = []
         activeClient = liveClient
@@ -1514,6 +1629,8 @@ final class AppModel {
             historyPreviews = [:]
             displayPreviews = [:]
             displayPreviewRequestIDs = [:]
+            pendingDisplayPreviews = [:]
+            pendingDisplayPreviewRequestIDs = [:]
             dashboardPreviews = [:]
             dashboardOrderIDs = []
             activeClient = liveClient

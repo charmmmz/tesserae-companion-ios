@@ -286,7 +286,16 @@ final class MockTesseraeClientTests: XCTestCase {
         XCTAssertEqual(pairResponse.tokenID, "ct_01JABCDEF")
         XCTAssertEqual(devices.devices.first?.rssiDBM, -54)
         XCTAssertEqual(devices.devices.first?.hasPendingRender, true)
+        XCTAssertEqual(
+            devices.devices.first?.pendingRender?.revision,
+            "a1b2c3d4e5f67890"
+        )
+        XCTAssertEqual(
+            devices.devices.first?.pendingRender?.previewURL,
+            "/api/app/v1/devices/picpak-kitchen/preview?revision=a1b2c3d4e5f67890"
+        )
         XCTAssertEqual(devices.devices.last?.hasPendingRender, false)
+        XCTAssertNil(devices.devices.last?.pendingRender)
         XCTAssertEqual(dashboards.dashboards.first?.deviceIDs, ["picpak-kitchen"])
         XCTAssertEqual(dashboards.dashboards.first?.iconName, "cooking-pot")
         XCTAssertNil(dashboards.dashboards.last?.iconName)
@@ -409,6 +418,7 @@ final class MockTesseraeClientTests: XCTestCase {
         )
 
         XCTAssertNil(response.devices.first?.hasPendingRender)
+        XCTAssertNil(response.devices.first?.pendingRender)
     }
 
     private func decode<T: Decodable>(

@@ -94,7 +94,12 @@ public actor MockTesseraeClient: TesseraeServing {
                 batteryPercent: 86,
                 rssiDBM: -54,
                 firmwareVersion: "1.8.0",
-                hasPendingRender: true
+                hasPendingRender: true,
+                pendingRender: PendingRender(
+                    revision: "pending-demo-kitchen",
+                    renderedAt: .now.addingTimeInterval(-30),
+                    previewURL: "/api/app/v1/devices/picpak-kitchen/preview?revision=pending-demo-kitchen"
+                )
             ),
             DisplaySummary(
                 id: "e1004-desk",
@@ -151,6 +156,7 @@ public actor MockTesseraeClient: TesseraeServing {
 
     public func fetchDevicePreview(
         id: String,
+        revision: String?,
         ifNoneMatch: String?,
         instance: TesseraeInstance
     ) async throws -> PreviewFetchResult {

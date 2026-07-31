@@ -8,6 +8,7 @@ public protocol TesseraeServing: Sendable {
     func fetchDashboards(instance: TesseraeInstance) async throws -> [DashboardSummary]
     func fetchDevicePreview(
         id: String,
+        revision: String?,
         ifNoneMatch: String?,
         instance: TesseraeInstance
     ) async throws -> PreviewFetchResult

@@ -313,6 +313,28 @@ public enum DisplayFreshness: String, Codable, Hashable, Sendable {
     case unknown
 }
 
+public struct PendingRender: Codable, Hashable, Sendable {
+    public let revision: String
+    public let renderedAt: Date?
+    public let previewURL: String
+
+    public init(
+        revision: String,
+        renderedAt: Date? = nil,
+        previewURL: String
+    ) {
+        self.revision = revision
+        self.renderedAt = renderedAt
+        self.previewURL = previewURL
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case revision
+        case renderedAt
+        case previewURL = "previewUrl"
+    }
+}
+
 public struct DisplaySummary: Codable, Identifiable, Hashable, Sendable {
     public let id: String
     public let name: String
@@ -324,6 +346,7 @@ public struct DisplaySummary: Codable, Identifiable, Hashable, Sendable {
     public let rssiDBM: Int?
     public let firmwareVersion: String?
     public let hasPendingRender: Bool?
+    public let pendingRender: PendingRender?
 
     public init(
         id: String,
@@ -335,7 +358,8 @@ public struct DisplaySummary: Codable, Identifiable, Hashable, Sendable {
         batteryPercent: Int? = nil,
         rssiDBM: Int? = nil,
         firmwareVersion: String? = nil,
-        hasPendingRender: Bool? = nil
+        hasPendingRender: Bool? = nil,
+        pendingRender: PendingRender? = nil
     ) {
         self.id = id
         self.name = name
@@ -347,6 +371,7 @@ public struct DisplaySummary: Codable, Identifiable, Hashable, Sendable {
         self.rssiDBM = rssiDBM
         self.firmwareVersion = firmwareVersion
         self.hasPendingRender = hasPendingRender
+        self.pendingRender = pendingRender
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -360,6 +385,7 @@ public struct DisplaySummary: Codable, Identifiable, Hashable, Sendable {
         case rssiDBM = "rssiDbm"
         case firmwareVersion
         case hasPendingRender
+        case pendingRender
     }
 }
 

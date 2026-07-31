@@ -15,6 +15,7 @@ final class PreviewClientTests: XCTestCase {
 
         let result = try await client.fetchDevicePreview(
             id: "display-one",
+            revision: nil,
             ifNoneMatch: nil,
             instance: instance
         )
@@ -62,6 +63,7 @@ final class PreviewClientTests: XCTestCase {
 
         let result = try await client.fetchDevicePreview(
             id: "display-one",
+            revision: nil,
             ifNoneMatch: "\"device-preview-digest\"",
             instance: instance
         )
@@ -76,6 +78,34 @@ final class PreviewClientTests: XCTestCase {
         XCTAssertEqual(
             request.cachePolicy,
             .reloadIgnoringLocalCacheData
+        )
+    }
+
+    func testDevicePreviewRequestsAnExactPendingRevision() async throws {
+        let transport = RecordingPreviewTransport(
+            response: TesseraeHTTPResponse(
+                data: Data("pending-png-data".utf8),
+                statusCode: 200,
+                headers: [:]
+            )
+        )
+        let client = try await makeClient(transport: transport)
+
+        _ = try await client.fetchDevicePreview(
+            id: "display-one",
+            revision: "pending-revision",
+            ifNoneMatch: nil,
+            instance: instance
+        )
+
+        let capturedRequest = await transport.lastRequest()
+        let request = try XCTUnwrap(capturedRequest)
+        XCTAssertEqual(
+            URLComponents(
+                url: try XCTUnwrap(request.url),
+                resolvingAgainstBaseURL: false
+            )?.queryItems,
+            [URLQueryItem(name: "revision", value: "pending-revision")]
         )
     }
 

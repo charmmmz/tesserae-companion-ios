@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Tesserae Companion API
-  version: 0.5.1
+  version: 0.5.2
   description: >-
     Companion API contract for community-built clients. Previews, History,
     resend, remote-image push, webpage push, and server-advertised image fit
@@ -85,13 +85,22 @@ paths:
     get:
       tags: [Displays]
       operationId: getCompanionDevicePreview
-      summary: Read the device's last-served viewable preview
+      summary: Read the device's last-served or exact pending preview
       parameters:
         - $ref: "#/components/parameters/IfNoneMatch"
+        - in: query
+          name: revision
+          required: false
+          description: >-
+            Exact pending-render revision advertised by the devices list.
+            Omit it to read the display's last-served preview.
+          schema:
+            type: string
       responses:
         "200":
           description: >-
-            For REST polling devices, the last viewable PNG served through the
+            With revision, the exact retained pending PNG. Without revision,
+            for REST polling devices, the last viewable PNG served through the
             device frame endpoint after image fit and device geometry have
             been applied. Other transports fall back to the latest server
             render. Renderer-specific palette and quantisation should be
@@ -717,6 +726,27 @@ components:
             True when a REST polling device has not yet fetched the server's
             latest render. False for transports without a reliable served
             signal. Absent on older compatible servers.
+        pending_render:
+          allOf:
+            - $ref: "#/components/schemas/PendingRender"
+          description: >-
+            Exact newer frame waiting for this REST polling display. Absent
+            when no retained pending preview exists or on older compatible
+            servers.
+    PendingRender:
+      type: object
+      additionalProperties: false
+      required: [revision, preview_url]
+      properties:
+        revision:
+          type: string
+        rendered_at:
+          type: string
+          format: date-time
+          nullable: true
+        preview_url:
+          type: string
+          description: Authenticated Companion path for this exact revision.
     Panel:
       type: object
       additionalProperties: false

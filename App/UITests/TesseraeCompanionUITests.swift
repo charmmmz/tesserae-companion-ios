@@ -172,6 +172,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Kitchen"].buttons["Close"].exists)
         XCTAssertFalse(app.navigationBars["Kitchen"].buttons["Displays"].exists)
         XCTAssertTrue(app.staticTexts["Current Screen"].exists)
+        XCTAssertTrue(app.staticTexts["Next Screen"].exists)
         XCTAssertTrue(
             app.descendants(matching: .any)[
                 "display-pending-status-picpak-kitchen"
@@ -181,6 +182,12 @@ final class TesseraeCompanionUITests: XCTestCase {
         assertPreview(
             app.descendants(matching: .any)[
                 "display-detail-preview-picpak-kitchen"
+            ],
+            hasAspectRatio: 800.0 / 480.0
+        )
+        assertPreview(
+            app.descendants(matching: .any)[
+                "display-detail-pending-preview-picpak-kitchen"
             ],
             hasAspectRatio: 800.0 / 480.0
         )
@@ -409,6 +416,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(detailNavigation.buttons["Close"].exists)
         XCTAssertFalse(detailNavigation.buttons["Displays"].exists)
         XCTAssertTrue(app.staticTexts["Current Screen"].exists)
+        XCTAssertTrue(app.staticTexts["Next Screen"].exists)
         XCTAssertTrue(app.staticTexts["Spectra 6 · 6-color"].exists)
         XCTAssertFalse(app.staticTexts["Waveshare E6"].exists)
 

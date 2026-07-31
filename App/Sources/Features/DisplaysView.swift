@@ -224,6 +224,14 @@ private struct DisplayDetailView: View {
             VStack(spacing: 14) {
                 currentScreenCard
 
+                if currentDisplay.pendingRender != nil {
+                    nextScreenCard
+                        .transition(
+                            .move(edge: .top)
+                                .combined(with: .opacity)
+                        )
+                }
+
                 detailCard(
                     "Connection & Power",
                     systemImage: "antenna.radiowaves.left.and.right"
@@ -342,6 +350,9 @@ private struct DisplayDetailView: View {
         ) {
             await model.loadDisplayPreview(currentDisplay)
         }
+        .task(id: currentDisplay.pendingRender?.revision) {
+            await model.loadPendingDisplayPreview(currentDisplay)
+        }
         .tesseraeScreenBackground()
     }
 
@@ -362,7 +373,9 @@ private struct DisplayDetailView: View {
             .frame(maxWidth: .infinity)
             .frame(maxHeight: 380)
 
-            if currentDisplay.hasPendingRender == true {
+            if currentDisplay.hasPendingRender == true,
+               currentDisplay.pendingRender == nil
+            {
                 pendingRefreshExplanation
                     .transition(
                         .move(edge: .top)
@@ -375,6 +388,43 @@ private struct DisplayDetailView: View {
             .easeInOut(duration: 0.22),
             value: currentDisplay.hasPendingRender
         )
+    }
+
+    private var nextScreenCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Next Screen", systemImage: "clock.arrow.circlepath")
+                    .font(.headline)
+                    .foregroundStyle(TesseraeTheme.ochre)
+
+                Spacer()
+
+                if let renderedAt = currentDisplay.pendingRender?.renderedAt {
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text("Rendered")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text(renderedAt, style: .relative)
+                            .font(.caption.weight(.medium))
+                    }
+                }
+            }
+
+            PreviewArtwork(
+                state: model.pendingDisplayPreview(for: currentDisplay),
+                placeholderSystemName: currentDisplay.previewSymbol,
+                placeholderLabel: "Pending display preview, \(currentDisplay.panel.width) by \(currentDisplay.panel.height), \(currentDisplay.panel.orientation)",
+                imageLabel: "Next device preview for \(currentDisplay.name)",
+                accessibilityIdentifier: "display-detail-pending-preview-\(currentDisplay.id)",
+                placeholderDetail: "\(currentDisplay.panel.width) × \(currentDisplay.panel.height)"
+            )
+            .aspectRatio(currentDisplay.panelAspectRatio, contentMode: .fit)
+            .frame(maxWidth: .infinity)
+            .frame(maxHeight: 380)
+
+            pendingRefreshExplanation
+        }
+        .tesseraeCard()
     }
 
     private var pendingRefreshExplanation: some View {

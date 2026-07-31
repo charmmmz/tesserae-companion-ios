@@ -668,6 +668,7 @@ display model/transport, and observed outcome.
 | D-021 | 2026-07-30 | Add separate capability-gated image-URL and webpage Job routes; render or fetch once, then use existing per-target push fan-out. | Accepted by upstream maintainer |
 | D-022 | 2026-07-30 | Reuse one bounded webpage-render primitive for Web UI manual preview and Companion push while keeping Companion on a strict no-LAN URL policy. | Accepted by upstream maintainer |
 | D-023 | 2026-07-31 | Carry bare Phosphor Dashboard identifiers through Companion API 0.5.1, normalize legacy aliases in the client, and fall back to `cube` for missing or unknown names. | Accepted by app maintainer |
+| D-024 | 2026-08-01 | Keep display cards and Current Screen tied to the last-served frame, and show an exact, separate Next Screen from optional Companion API 0.5.2 pending-render revision metadata. | Accepted by app maintainer |
 
 ## 17. Open questions for maintainer review
 
