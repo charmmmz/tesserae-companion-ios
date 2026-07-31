@@ -14,7 +14,9 @@ struct MainTabView: View {
     var body: some View {
         TabView(selection: $selection) {
             tabNavigation(title: "Displays") {
-                DisplaysView()
+                DisplaysView(
+                    isActive: selection == .displays && !settingsPresented
+                )
             }
             .tabItem { Label("Displays", systemImage: "rectangle.connected.to.line.below") }
             .tag(AppTab.displays)
@@ -32,7 +34,9 @@ struct MainTabView: View {
             .tag(AppTab.send)
 
             tabNavigation(title: "Activity") {
-                ActivityView()
+                ActivityView(
+                    isActive: selection == .activity && !settingsPresented
+                )
             }
             .tabItem { Label("Activity", systemImage: "clock.arrow.circlepath") }
             .tag(AppTab.activity)

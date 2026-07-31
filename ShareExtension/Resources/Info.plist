@@ -33,6 +33,8 @@
 			<dict>
 				<key>NSExtensionActivationSupportsImageWithMaxCount</key>
 				<integer>1</integer>
+				<key>NSExtensionActivationSupportsWebURLWithMaxCount</key>
+				<integer>1</integer>
 			</dict>
 		</dict>
 		<key>NSExtensionPointIdentifier</key>
@@ -41,7 +43,7 @@
 		<string>$(PRODUCT_MODULE_NAME).ShareViewController</string>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Connect to your paired Tesserae server to send this image.</string>
+	<string>Connect to your paired Tesserae server to send this shared item.</string>
 	<key>TesseraeAppGroupIdentifier</key>
 	<string>group.com.charmmmz.tesseraecompanion</string>
 	<key>TesseraeKeychainAccessGroup</key>

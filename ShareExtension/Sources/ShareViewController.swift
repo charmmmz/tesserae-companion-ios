@@ -37,6 +37,11 @@ private final class ShareComposerModel: ObservableObject {
         case failed
     }
 
+    enum ContentKind {
+        case image
+        case link
+    }
+
     @Published var phase: Phase = .loading
     @Published var snapshot: CompanionSnapshot?
     @Published var selectedDeviceIDs: Set<String> = []
@@ -44,6 +49,9 @@ private final class ShareComposerModel: ObservableObject {
     @Published var overrideQuietHours = false
     @Published var imageByteCount = 0
     @Published var previewImage: UIImage?
+    @Published var contentKind: ContentKind?
+    @Published var sharedURL: URL?
+    @Published var linkKind: LinkPushKind = .webpage
     @Published var errorMessage: String?
 
     private weak var extensionContext: NSExtensionContext?
@@ -51,10 +59,13 @@ private final class ShareComposerModel: ObservableObject {
     private var contentType = "image/jpeg"
     private var fileName = "shared-photo.jpg"
     private var queuedRequest: SharedImageRequest?
+    private var queuedLinkRequest: SharedLinkRequest?
+    private var failedRequestRetained = false
 
     private let stateStore: any CompanionStateStoring
     private let sendPreferences: any CompanionSendPreferencesStoring
     private let queueStore: any ShareQueueStoring
+    private let linkQueueStore: any LinkShareQueueStoring
     private let activityThumbnails: any ActivityThumbnailStoring
     private let credentials: any CredentialStoring
     private let client: any TesseraeServing
@@ -91,6 +102,7 @@ private final class ShareComposerModel: ObservableObject {
             suiteName: appGroup
         )
         queueStore = FileShareQueueStore(directoryURL: containerURL)
+        linkQueueStore = FileLinkShareQueueStore(directoryURL: containerURL)
         activityThumbnails = FileActivityThumbnailStore(
             directoryURL: containerURL
         )
@@ -116,7 +128,10 @@ private final class ShareComposerModel: ObservableObject {
 
     var canSend: Bool {
         phase == .ready
-            && imageData != nil
+            && (
+                contentKind == .image && imageData != nil
+                    || contentKind == .link && sharedURL != nil
+            )
             && !selectedDeviceIDs.isEmpty
             && snapshot != nil
     }
@@ -132,9 +147,17 @@ private final class ShareComposerModel: ObservableObject {
         return modes.isEmpty ? ImageFitMode.legacyModes : modes
     }
 
+    var supportedLinkKinds: [LinkPushKind] {
+        guard let capabilities = snapshot?.capabilities else { return [] }
+        return LinkPushKind.allCases.filter(capabilities.supports)
+    }
+
     func load() async {
         do {
             try await queueStore.purge(
+                expiredBefore: Date().addingTimeInterval(-24 * 60 * 60)
+            )
+            try await linkQueueStore.purge(
                 expiredBefore: Date().addingTimeInterval(-24 * 60 * 60)
             )
             guard let snapshot = try await stateStore.load() else {
@@ -149,21 +172,41 @@ private final class ShareComposerModel: ObservableObject {
                 throw ShareComposerError.noDisplays
             }
 
-            let displayMaxEdge = snapshot.displays
-                .map { max($0.panel.width, $0.panel.height) }
-                .max() ?? 2_048
-            let preparationMaxEdge = min(
-                displayMaxEdge,
-                snapshot.capabilities?.limits.imageMaxEdge ?? displayMaxEdge
-            )
-            let loaded = try await loadSharedImage(
-                maximumPixelSize: preparationMaxEdge
-            )
-            try validate(
-                data: loaded.data,
-                contentType: loaded.contentType,
-                capabilities: snapshot.capabilities
-            )
+            let availableLinkKinds = LinkPushKind.allCases.filter {
+                snapshot.capabilities?.supports($0) == true
+            }
+            if let url = try await loadSharedURLIfPresent() {
+                guard !availableLinkKinds.isEmpty else {
+                    throw ShareComposerError.linkUnsupported
+                }
+                sharedURL = url
+                contentKind = .link
+                linkKind = availableLinkKinds.contains(.webpage)
+                    ? .webpage
+                    : availableLinkKinds[0]
+            } else {
+                let displayMaxEdge = snapshot.displays
+                    .map { max($0.panel.width, $0.panel.height) }
+                    .max() ?? 2_048
+                let preparationMaxEdge = min(
+                    displayMaxEdge,
+                    snapshot.capabilities?.limits.imageMaxEdge ?? displayMaxEdge
+                )
+                let loaded = try await loadSharedImage(
+                    maximumPixelSize: preparationMaxEdge
+                )
+                try validate(
+                    data: loaded.data,
+                    contentType: loaded.contentType,
+                    capabilities: snapshot.capabilities
+                )
+                imageData = loaded.data
+                imageByteCount = loaded.data.count
+                previewImage = UIImage(data: loaded.data)
+                contentType = loaded.contentType
+                fileName = loaded.fileName
+                contentKind = .image
+            }
 
             self.snapshot = snapshot
             let savedPreferences = try? await sendPreferences.preferences(
@@ -184,11 +227,6 @@ private final class ShareComposerModel: ObservableObject {
             } else if !fitModes.contains(fit) {
                 fit = fitModes.first ?? .fit
             }
-            imageData = loaded.data
-            imageByteCount = loaded.data.count
-            previewImage = UIImage(data: loaded.data)
-            contentType = loaded.contentType
-            fileName = loaded.fileName
             phase = .ready
         } catch {
             errorMessage = error.localizedDescription
@@ -199,15 +237,60 @@ private final class ShareComposerModel: ObservableObject {
     func send() async {
         guard
             let snapshot,
-            let imageData,
             !selectedDeviceIDs.isEmpty
         else {
             return
         }
         phase = .submitting
         errorMessage = nil
+        failedRequestRetained = false
         await savePreferences()
 
+        do {
+            let job: PushJob
+            switch contentKind {
+            case .image:
+                guard let imageData else { return }
+                job = try await submitImage(
+                    imageData,
+                    snapshot: snapshot
+                )
+            case .link:
+                guard let sharedURL else { return }
+                job = try await submitLink(
+                    sharedURL,
+                    snapshot: snapshot
+                )
+            case nil:
+                return
+            }
+            let jobs = [job] + snapshot.jobs.filter { $0.id != job.id }
+            try await stateStore.save(
+                CompanionSnapshot(
+                    activeInstance: snapshot.activeInstance,
+                    capabilities: snapshot.capabilities,
+                    displays: snapshot.displays,
+                    dashboards: snapshot.dashboards,
+                    jobs: jobs,
+                    activityClearedBefore: snapshot.activityClearedBefore
+                )
+            )
+            phase = .accepted
+        } catch {
+            errorMessage = failedRequestRetained
+                ? [
+                    error.localizedDescription,
+                    queuedRetryMessage,
+                ].joined(separator: " ")
+                : error.localizedDescription
+            phase = .failed
+        }
+    }
+
+    private func submitImage(
+        _ imageData: Data,
+        snapshot: CompanionSnapshot
+    ) async throws -> PushJob {
         let request = queuedRequest ?? SharedImageRequest(
             instanceID: snapshot.activeInstance.id,
             fileName: fileName,
@@ -216,7 +299,6 @@ private final class ShareComposerModel: ObservableObject {
             deviceIDs: Array(selectedDeviceIDs).sorted(),
             overrideQuietHours: overrideQuietHours
         )
-
         do {
             if queuedRequest == nil {
                 try await queueStore.enqueue(
@@ -231,7 +313,6 @@ private final class ShareComposerModel: ObservableObject {
             )
             try await queueStore.update(submitting)
             queuedRequest = submitting
-
             let job = try await client.sendImage(
                 data: imageData,
                 fileName: submitting.fileName,
@@ -242,26 +323,15 @@ private final class ShareComposerModel: ObservableObject {
                 idempotencyKey: submitting.idempotencyKey,
                 instance: snapshot.activeInstance
             )
-            let jobs = [job] + snapshot.jobs.filter { $0.id != job.id }
             _ = try? await activityThumbnails.save(
                 imageData: imageData,
                 jobID: job.id,
                 instanceID: snapshot.activeInstance.id,
                 createdAt: job.createdAt
             )
-            try await stateStore.save(
-                CompanionSnapshot(
-                    activeInstance: snapshot.activeInstance,
-                    capabilities: snapshot.capabilities,
-                    displays: snapshot.displays,
-                    dashboards: snapshot.dashboards,
-                    jobs: jobs,
-                    activityClearedBefore: snapshot.activityClearedBefore
-                )
-            )
             try await queueStore.remove(submitting)
             queuedRequest = nil
-            phase = .accepted
+            return job
         } catch {
             let failed = request.updating(
                 status: .failed,
@@ -269,13 +339,122 @@ private final class ShareComposerModel: ObservableObject {
             )
             try? await queueStore.update(failed)
             queuedRequest = failed
-            errorMessage = [
-                error.localizedDescription,
-                String(
-                    localized: "The image is saved for up to 24 hours and the app will retry with the same request key."
-                ),
-            ].joined(separator: " ")
-            phase = .failed
+            failedRequestRetained = true
+            throw error
+        }
+    }
+
+    private func submitLink(
+        _ url: URL,
+        snapshot: CompanionSnapshot
+    ) async throws -> PushJob {
+        guard supportedLinkKinds.contains(linkKind) else {
+            throw ShareComposerError.linkUnsupported
+        }
+        let request = queuedLinkRequest ?? SharedLinkRequest(
+            instanceID: snapshot.activeInstance.id,
+            url: url,
+            kind: linkKind,
+            fit: fit,
+            deviceIDs: Array(selectedDeviceIDs).sorted(),
+            overrideQuietHours: overrideQuietHours
+        )
+        do {
+            if queuedLinkRequest == nil {
+                try await linkQueueStore.enqueue(request)
+                queuedLinkRequest = request
+            }
+            let submitting = request.updating(
+                status: .submitting,
+                error: nil
+            )
+            try await linkQueueStore.update(submitting)
+            queuedLinkRequest = submitting
+
+            let job: PushJob
+            switch submitting.kind {
+            case .imageURL:
+                job = try await client.sendImageURL(
+                    url: submitting.url,
+                    fit: submitting.fit,
+                    deviceIDs: submitting.deviceIDs,
+                    overrideQuietHours: submitting.overrideQuietHours,
+                    idempotencyKey: submitting.idempotencyKey,
+                    instance: snapshot.activeInstance
+                )
+            case .webpage:
+                job = try await client.sendWebpage(
+                    url: submitting.url,
+                    fit: submitting.fit,
+                    viewportW: nil,
+                    deviceIDs: submitting.deviceIDs,
+                    overrideQuietHours: submitting.overrideQuietHours,
+                    idempotencyKey: submitting.idempotencyKey,
+                    instance: snapshot.activeInstance
+                )
+            }
+            try await linkQueueStore.remove(submitting)
+            queuedLinkRequest = nil
+            return job
+        } catch {
+            if shouldRetainLinkRequest(after: error) {
+                let failed = request.updating(
+                    status: .failed,
+                    error: error.localizedDescription
+                )
+                try? await linkQueueStore.update(failed)
+                queuedLinkRequest = failed
+                failedRequestRetained = true
+            } else {
+                try? await linkQueueStore.remove(request)
+                queuedLinkRequest = nil
+            }
+            throw error
+        }
+    }
+
+    private func shouldRetainLinkRequest(after error: Error) -> Bool {
+        guard let clientError = error as? TesseraeClientError else {
+            return true
+        }
+        switch clientError {
+        case let .server(code, _, _):
+            return ![
+                "invalid_request",
+                "invalid_target",
+                "url_blocked",
+            ].contains(code)
+        case let .httpStatus(status):
+            return status == 408 || status == 429 || status >= 500
+        case .invalidPairingCode,
+             .invalidServerURL,
+             .missingFeatures,
+             .noTargets,
+             .pairingUnavailable:
+            return false
+        case .decoding,
+             .incompatibleServer,
+             .invalidResponse,
+             .missingCredential,
+             .transport,
+             .unauthorized,
+             .unavailable:
+            return true
+        }
+    }
+
+    private var queuedRetryMessage: String {
+        switch contentKind {
+        case .image:
+            String(
+                localized: "The image is saved for up to 24 hours and the app will retry with the same request key."
+            )
+        case .link:
+            String(
+                localized: "The link is saved for up to 24 hours and the app will retry with the same request key."
+            )
+        case nil:
+            ""
         }
     }
 
@@ -300,6 +479,44 @@ private final class ShareComposerModel: ObservableObject {
         )
     }
 
+    private func loadSharedURLIfPresent() async throws -> URL? {
+        guard let items = extensionContext?.inputItems as? [NSExtensionItem] else {
+            throw ShareComposerError.noSharedItem
+        }
+        let providers = items.flatMap { $0.attachments ?? [] }
+        guard let provider = providers.first(where: {
+            $0.hasItemConformingToTypeIdentifier(UTType.url.identifier)
+        }) else {
+            return nil
+        }
+
+        let url = try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<URL, Error>) in
+            provider.loadItem(
+                forTypeIdentifier: UTType.url.identifier,
+                options: nil
+            ) { item, error in
+                if let url = item as? URL {
+                    continuation.resume(returning: url)
+                } else {
+                    continuation.resume(
+                        throwing: error ?? ShareComposerError.invalidURL
+                    )
+                }
+            }
+        }
+        guard
+            let scheme = url.scheme?.lowercased(),
+            scheme == "http" || scheme == "https",
+            url.host() != nil,
+            url.user() == nil,
+            url.password() == nil
+        else {
+            throw ShareComposerError.invalidURL
+        }
+        return url
+    }
+
     private func loadSharedImage(
         maximumPixelSize: Int
     ) async throws -> (
@@ -308,7 +525,7 @@ private final class ShareComposerModel: ObservableObject {
         fileName: String
     ) {
         guard let items = extensionContext?.inputItems as? [NSExtensionItem] else {
-            throw ShareComposerError.noImage
+            throw ShareComposerError.noSharedItem
         }
         let providers = items.flatMap { item in
             item.attachments ?? []
@@ -316,7 +533,7 @@ private final class ShareComposerModel: ObservableObject {
         guard let provider = providers.first(where: {
             $0.hasItemConformingToTypeIdentifier(UTType.image.identifier)
         }) else {
-            throw ShareComposerError.noImage
+            throw ShareComposerError.noSharedItem
         }
 
         let type = provider.registeredTypeIdentifiers
@@ -396,12 +613,12 @@ private struct ShareComposerView: View {
             Group {
                 switch model.phase {
                 case .loading:
-                    ProgressView("Loading shared image…")
+                    ProgressView("Loading shared item…")
                 case .accepted:
                     ContentUnavailableView(
                         "Accepted by Tesserae",
                         systemImage: "checkmark.circle.fill",
-                        description: Text("The server will render and publish the image.")
+                        description: Text(acceptedDescription)
                     )
                 case .failed where model.snapshot == nil:
                     ContentUnavailableView(
@@ -409,7 +626,7 @@ private struct ShareComposerView: View {
                         systemImage: "iphone.and.arrow.forward",
                         description: Text(
                             model.errorMessage
-                                ?? String(localized: "Pair the app before sharing an image.")
+                                ?? String(localized: "Pair the app before sharing an item.")
                         )
                     )
                 default:
@@ -450,7 +667,7 @@ private struct ShareComposerView: View {
     private var composer: some View {
         ScrollView {
             VStack(spacing: 14) {
-                imageCard
+                contentCard
                 layoutCard
                 displaysCard
                 quietHoursCard
@@ -482,6 +699,18 @@ private struct ShareComposerView: View {
                 .disabled(!model.canSend && model.phase != .failed)
             }
             .padding(16)
+        }
+    }
+
+    @ViewBuilder
+    private var contentCard: some View {
+        switch model.contentKind {
+        case .image:
+            imageCard
+        case .link:
+            linkCard
+        case nil:
+            EmptyView()
         }
     }
 
@@ -533,6 +762,52 @@ private struct ShareComposerView: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 150)
             }
+        }
+        .tesseraeCard()
+    }
+
+    private var linkCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Link")
+                .font(.headline)
+
+            if let url = model.sharedURL {
+                Label {
+                    Text(url.absoluteString)
+                        .lineLimit(3)
+                        .textSelection(.enabled)
+                } icon: {
+                    Image(systemName: "link")
+                }
+                .font(.subheadline)
+            }
+
+            if model.supportedLinkKinds.count > 1 {
+                Picker("Link Action", selection: $model.linkKind) {
+                    ForEach(model.supportedLinkKinds, id: \.self) { kind in
+                        Text(linkKindName(kind)).tag(kind)
+                    }
+                }
+                .pickerStyle(.segmented)
+            } else if let kind = model.supportedLinkKinds.first {
+                Label(
+                    linkKindName(kind),
+                    systemImage: kind == .webpage
+                        ? "safari"
+                        : "photo.badge.arrow.down"
+                )
+                .font(.subheadline.weight(.semibold))
+            }
+
+            Text(linkKindHelp(model.linkKind))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            Text(
+                "No Safari cookies or browsing session are shared. Private and local addresses are blocked."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
         .tesseraeCard()
     }
@@ -633,11 +908,44 @@ private struct ShareComposerView: View {
                 "Override quiet hours",
                 isOn: $model.overrideQuietHours
             )
-            Text("Leave this off unless the image should be sent immediately.")
+            Text("Leave this off unless the shared item should be sent immediately.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
         .tesseraeCard()
+    }
+
+    private var acceptedDescription: String {
+        switch model.contentKind {
+        case .image:
+            String(localized: "The server will render and publish the image.")
+        case .link:
+            String(localized: "The server will fetch or render and publish the link.")
+        case nil:
+            String(localized: "The server accepted the shared item.")
+        }
+    }
+
+    private func linkKindName(_ kind: LinkPushKind) -> String {
+        switch kind {
+        case .imageURL:
+            String(localized: "Image URL")
+        case .webpage:
+            String(localized: "Webpage Snapshot")
+        }
+    }
+
+    private func linkKindHelp(_ kind: LinkPushKind) -> String {
+        switch kind {
+        case .imageURL:
+            String(
+                localized: "Fetch the link as an image, then apply the selected layout."
+            )
+        case .webpage:
+            String(
+                localized: "Render a desktop-width webpage snapshot, then apply the selected layout."
+            )
+        }
     }
 }
 
@@ -645,8 +953,11 @@ private enum ShareComposerError: Error, LocalizedError {
     case cancelled
     case imageDimensionsTooLarge(Int)
     case imageTooLarge(Int)
+    case invalidURL
+    case linkUnsupported
     case noDisplays
     case noImage
+    case noSharedItem
     case notPaired
     case unsupportedImageType(String)
 
@@ -662,6 +973,14 @@ private enum ShareComposerError: Error, LocalizedError {
             String(
                 localized: "This image exceeds the server upload limit of \(ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file))."
             )
+        case .invalidURL:
+            String(
+                localized: "The shared link is not a valid HTTP or HTTPS URL."
+            )
+        case .linkUnsupported:
+            String(
+                localized: "This Tesserae server does not support sharing links from iOS."
+            )
         case .noDisplays:
             String(
                 localized: "No Tesserae displays are available. Refresh the main app first."
@@ -669,6 +988,10 @@ private enum ShareComposerError: Error, LocalizedError {
         case .noImage:
             String(
                 localized: "The shared item does not contain one readable still image."
+            )
+        case .noSharedItem:
+            String(
+                localized: "The shared item does not contain one readable image or web link."
             )
         case .notPaired:
             String(

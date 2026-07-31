@@ -1,15 +1,29 @@
 import SwiftUI
 import TesseraeKit
 
+private struct DisplayPreviewRefreshID: Hashable {
+    let generation: Int
+    let hasPendingRender: Bool?
+    let lastSeenAt: Date?
+}
+
 struct DisplaysView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var selectedDisplay: DisplaySummary?
+
+    let isActive: Bool
+
+    private var shouldAutoRefresh: Bool {
+        isActive && scenePhase == .active
+    }
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 14) {
                 ForEach(model.displays) { display in
-                    NavigationLink {
-                        DisplayDetailView(display: display)
+                    Button {
+                        selectedDisplay = display
                     } label: {
                         DisplayCard(
                             display: display,
@@ -18,7 +32,11 @@ struct DisplaysView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("display-card-\(display.id)")
-                    .task(id: model.previewGeneration) {
+                    .task(
+                        id: display.previewRefreshID(
+                            generation: model.displayPreviewGeneration
+                        )
+                    ) {
                         await model.loadDisplayPreview(display)
                     }
                 }
@@ -35,14 +53,40 @@ struct DisplaysView: View {
                     Text("No displays were returned by this Tesserae server.")
                 } actions: {
                     Button("Refresh") {
-                        Task { await model.refresh() }
+                        Task { await model.refreshDisplays() }
                     }
                     .buttonStyle(.borderedProminent)
                 }
             }
         }
         .refreshable {
-            await model.refresh()
+            await model.refreshDisplays()
+        }
+        .sheet(item: $selectedDisplay) { display in
+            NavigationStack {
+                DisplayDetailView(display: display)
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .task(id: shouldAutoRefresh) {
+            guard shouldAutoRefresh else { return }
+
+            await model.refreshDisplays(
+                showErrors: false,
+                saveSnapshot: false
+            )
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(15))
+                } catch {
+                    return
+                }
+                await model.refreshDisplays(
+                    showErrors: false,
+                    saveSnapshot: false
+                )
+            }
         }
         .tesseraeScreenBackground()
     }
@@ -73,10 +117,6 @@ private struct DisplayCard: View {
                     presentation: display.hardwarePresentation
                 )
 
-                if display.hasPendingRender == true {
-                    pendingBadge
-                }
-
                 HStack(spacing: 12) {
                     metric(
                         "battery.75percent",
@@ -106,14 +146,33 @@ private struct DisplayCard: View {
         return ZStack {
             Color.clear
 
-            PreviewArtwork(
-                state: preview,
-                placeholderSystemName: display.previewSymbol,
-                placeholderLabel: "Display preview placeholder, \(display.panel.width) by \(display.panel.height), \(display.panel.orientation)",
-                imageLabel: "Last-served device preview for \(display.name)",
-                accessibilityIdentifier: "display-preview-\(display.id)",
-                placeholderDetail: "\(display.panel.width) × \(display.panel.height)"
-            )
+            ZStack(alignment: .topTrailing) {
+                PreviewArtwork(
+                    state: preview,
+                    placeholderSystemName: display.previewSymbol,
+                    placeholderLabel: "Display preview placeholder, \(display.panel.width) by \(display.panel.height), \(display.panel.orientation)",
+                    imageLabel: "Last-served device preview for \(display.name)",
+                    accessibilityIdentifier: "display-preview-\(display.id)",
+                    placeholderDetail: "\(display.panel.width) × \(display.panel.height)"
+                )
+
+                if display.hasPendingRender == true {
+                    PendingRenderGlyph()
+                        .offset(x: 6, y: -6)
+                        .transition(
+                            .scale(scale: 0.75)
+                                .combined(with: .opacity)
+                        )
+                        .accessibilityElement()
+                        .accessibilityLabel("Waiting for display refresh")
+                        .accessibilityHint(
+                            "The new frame will appear the next time this display wakes."
+                        )
+                        .accessibilityIdentifier(
+                            "display-pending-indicator-\(display.id)"
+                        )
+                }
+            }
             .frame(
                 width: CGFloat(previewSize.width),
                 height: CGFloat(previewSize.height)
@@ -123,6 +182,10 @@ private struct DisplayCard: View {
             width: previewCanvasSize.width,
             height: previewCanvasSize.height
         )
+        .animation(
+            .easeInOut(duration: 0.2),
+            value: display.hasPendingRender
+        )
     }
 
     private func metric(_ symbol: String, _ value: String) -> some View {
@@ -130,18 +193,25 @@ private struct DisplayCard: View {
             .labelStyle(.titleAndIcon)
     }
 
-    private var pendingBadge: some View {
-        Label("Update pending", systemImage: "arrow.triangle.2.circlepath")
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(TesseraeTheme.ochre)
-            .accessibilityHint(
-                "A newer frame is waiting for this display to wake and fetch it."
-            )
-    }
+}
 
+private struct PendingRenderGlyph: View {
+    var body: some View {
+        Image(systemName: "clock.arrow.circlepath")
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(TesseraeTheme.ochre)
+            .frame(width: 26, height: 26)
+            .background(.regularMaterial, in: Circle())
+            .overlay {
+                Circle()
+                    .stroke(TesseraeTheme.ochre.opacity(0.45), lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.14), radius: 4, y: 2)
+    }
 }
 
 private struct DisplayDetailView: View {
+    @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
     let display: DisplaySummary
 
@@ -258,10 +328,18 @@ private struct DisplayDetailView: View {
         }
         .navigationTitle(currentDisplay.name)
         .navigationBarTitleDisplayMode(.inline)
-        .refreshable {
-            await model.refresh()
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Close") {
+                    dismiss()
+                }
+            }
         }
-        .task(id: model.previewGeneration) {
+        .task(
+            id: currentDisplay.previewRefreshID(
+                generation: model.displayPreviewGeneration
+            )
+        ) {
             await model.loadDisplayPreview(currentDisplay)
         }
         .tesseraeScreenBackground()
@@ -269,24 +347,8 @@ private struct DisplayDetailView: View {
 
     private var currentScreenCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Label("Current Screen", systemImage: "display")
-                    .font(.headline)
-
-                Spacer(minLength: 8)
-
-                if currentDisplay.hasPendingRender == true {
-                    Label(
-                        "Update pending",
-                        systemImage: "arrow.triangle.2.circlepath"
-                    )
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(TesseraeTheme.ochre)
-                    .accessibilityHint(
-                        "A newer frame is waiting for this display to wake and fetch it."
-                    )
-                }
-            }
+            Label("Current Screen", systemImage: "display")
+                .font(.headline)
 
             PreviewArtwork(
                 state: model.displayPreviews[currentDisplay.id],
@@ -299,8 +361,49 @@ private struct DisplayDetailView: View {
             .aspectRatio(currentDisplay.panelAspectRatio, contentMode: .fit)
             .frame(maxWidth: .infinity)
             .frame(maxHeight: 380)
+
+            if currentDisplay.hasPendingRender == true {
+                pendingRefreshExplanation
+                    .transition(
+                        .move(edge: .top)
+                            .combined(with: .opacity)
+                    )
+            }
         }
         .tesseraeCard()
+        .animation(
+            .easeInOut(duration: 0.22),
+            value: currentDisplay.hasPendingRender
+        )
+    }
+
+    private var pendingRefreshExplanation: some View {
+        HStack(alignment: .top, spacing: 10) {
+            PendingRenderGlyph()
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Waiting for display refresh")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(TesseraeTheme.ochre)
+
+                Text(
+                    "The new frame will appear the next time this display wakes."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            TesseraeTheme.ochre.opacity(0.09),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier(
+            "display-pending-status-\(currentDisplay.id)"
+        )
     }
 
     private func detailCard<Content: View>(
@@ -336,6 +439,14 @@ private struct DisplayDetailView: View {
 }
 
 private extension DisplaySummary {
+    func previewRefreshID(generation: Int) -> DisplayPreviewRefreshID {
+        DisplayPreviewRefreshID(
+            generation: generation,
+            hasPendingRender: hasPendingRender,
+            lastSeenAt: lastSeenAt
+        )
+    }
+
     var freshnessLabel: String {
         switch freshness {
         case .fresh: String(localized: "Recently seen")
@@ -383,8 +494,13 @@ private extension DisplaySummary {
     }
 
     var gamutLabel: String {
-        panel.gamut
-            .replacingOccurrences(of: "_", with: " ")
-            .localizedCapitalized
+        switch panel.gamut.lowercased() {
+        case "spectra_6", "waveshare_e6", "e6":
+            String(localized: "Spectra 6 · 6-color")
+        default:
+            panel.gamut
+                .replacingOccurrences(of: "_", with: " ")
+                .localizedCapitalized
+        }
     }
 }

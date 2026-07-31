@@ -3,6 +3,16 @@ import Observation
 import TesseraeKit
 import UIKit
 
+private enum QueuedLinkSubmissionError: Error, LocalizedError {
+    case unsupported
+
+    var errorDescription: String? {
+        String(
+            localized: "This Tesserae server does not support the queued link action."
+        )
+    }
+}
+
 @MainActor
 @Observable
 final class AppModel {
@@ -28,11 +38,13 @@ final class AppModel {
     private let stateStore: any CompanionStateStoring
     private let sendPreferences: any CompanionSendPreferencesStoring
     private let shareQueue: any ShareQueueStoring
+    private let linkShareQueue: any LinkShareQueueStoring
     private let activityThumbnails: any ActivityThumbnailStoring
     private let discovery: any TesseraeDiscovering
     private var didAttemptRestore = false
     private var isSynchronizingSharedState = false
     private var activityRefreshTask: Task<Void, Never>?
+    private var displayPreviewRequestIDs: [String: UUID] = [:]
 
     var activeInstance: TesseraeInstance?
     var connectionMode: ConnectionMode?
@@ -49,20 +61,24 @@ final class AppModel {
     var activityClearedBefore: Date?
     var activityThumbnailData: [String: Data] = [:]
     var queuedImageRequests: [SharedImageRequest] = []
+    var queuedLinkRequests: [SharedLinkRequest] = []
     var queuedImagePreviewData: [String: Data] = [:]
     var historyPreviews: [String: PreviewImageState] = [:]
     var displayPreviews: [String: PreviewImageState] = [:]
     var dashboardPreviews: [String: PreviewImageState] = [:]
     var previewGeneration = 0
+    var displayPreviewGeneration = 0
     var dashboardOrderIDs: [String] = []
     var activeOperationIDs: Set<String> = []
     var isRefreshing = false
     var isDiscovering = false
     var isRestoringConnection = true
     var isRetryingSharedImages = false
+    var isRetryingSharedLinks = false
     var isLoadingMoreHistory = false
     var isClearingLocalActivity = false
     var activeQueuedImageRequestIDs: Set<String> = []
+    var activeQueuedLinkRequestIDs: Set<String> = []
     var lastError: String?
 
     var supportsPreviews: Bool {
@@ -73,6 +89,11 @@ final class AppModel {
         capabilities?.features.contains("history") == true
     }
 
+    var supportedLinkPushKinds: [LinkPushKind] {
+        guard let capabilities else { return [] }
+        return LinkPushKind.allCases.filter(capabilities.supports)
+    }
+
     init(
         liveClient: any TesseraeServing,
         demoClient: any TesseraeServing,
@@ -80,6 +101,7 @@ final class AppModel {
         stateStore: any CompanionStateStoring,
         sendPreferences: any CompanionSendPreferencesStoring,
         shareQueue: any ShareQueueStoring,
+        linkShareQueue: any LinkShareQueueStoring,
         activityThumbnails: any ActivityThumbnailStoring,
         discovery: any TesseraeDiscovering
     ) {
@@ -90,6 +112,7 @@ final class AppModel {
         self.stateStore = stateStore
         self.sendPreferences = sendPreferences
         self.shareQueue = shareQueue
+        self.linkShareQueue = linkShareQueue
         self.activityThumbnails = activityThumbnails
         self.discovery = discovery
     }
@@ -189,12 +212,14 @@ final class AppModel {
             )
             activityThumbnailData = [:]
             queuedImageRequests = []
+            queuedLinkRequests = []
             queuedImagePreviewData = [:]
             historyItems = []
             historyNextBeforeID = nil
             activityClearedBefore = nil
             historyPreviews = [:]
             displayPreviews = [:]
+            displayPreviewRequestIDs = [:]
             dashboardPreviews = [:]
             loadDashboardOrder(for: session.instance.id)
             if mode == .live {
@@ -202,7 +227,9 @@ final class AppModel {
             }
             await refresh(probeCapabilities: false)
             await reloadQueuedImages()
+            await reloadQueuedLinks()
             await retryPendingSharedImages()
+            await retryPendingSharedLinks()
         } catch {
             lastError = error.localizedDescription
         }
@@ -240,6 +267,7 @@ final class AppModel {
             jobs = retainedActivityJobs(snapshot.jobs)
             await reloadActivityThumbnails(instanceID: snapshot.activeInstance.id)
             await reloadQueuedImages()
+            await reloadQueuedLinks()
 
             let currentCapabilities = try await liveClient.probe(
                 baseURL: snapshot.activeInstance.baseURL
@@ -253,6 +281,9 @@ final class AppModel {
                 probeCapabilities: false
             )
             await retryPendingSharedImages()
+            await retryPendingSharedLinks()
+        } catch is CancellationError {
+            return
         } catch let error as TesseraeClientError {
             await handleConnectionError(error)
         } catch {
@@ -323,10 +354,13 @@ final class AppModel {
                 displayPreviews = [:]
                 dashboardPreviews = [:]
             }
+            displayPreviewGeneration &+= 1
             previewGeneration &+= 1
             if connectionMode == .live {
                 await persistSnapshot(showErrors: showErrors)
             }
+        } catch is CancellationError {
+            return
         } catch let error as TesseraeClientError {
             await handleConnectionError(error)
         } catch {
@@ -336,7 +370,66 @@ final class AppModel {
         }
     }
 
-    func refreshActivity(showErrors: Bool = true) async {
+    func refreshDisplays(
+        showErrors: Bool = true,
+        saveSnapshot: Bool = true
+    ) async {
+        guard
+            let currentInstance = activeInstance,
+            !isRefreshing
+        else {
+            return
+        }
+        isRefreshing = true
+        defer { isRefreshing = false }
+
+        do {
+            let refreshedDisplays = try await activeClient.fetchDisplays(
+                instance: currentInstance
+            )
+            guard activeInstance?.id == currentInstance.id else {
+                return
+            }
+
+            displays = refreshedDisplays
+            connectionHealth = .connected
+            connectionNotice = nil
+
+            if supportsPreviews {
+                let displayIDs = Set(refreshedDisplays.map(\.id))
+                displayPreviews = displayPreviews.filter {
+                    displayIDs.contains($0.key)
+                }
+            } else {
+                displayPreviews = [:]
+            }
+            displayPreviewGeneration &+= 1
+
+            if connectionMode == .live, saveSnapshot {
+                await persistSnapshot(showErrors: showErrors)
+            }
+        } catch is CancellationError {
+            return
+        } catch let error as TesseraeClientError {
+            if showErrors
+                || error == .unauthorized
+                || error == .missingCredential
+            {
+                await handleConnectionError(error)
+            }
+        } catch {
+            if showErrors {
+                connectionHealth = .offline
+                connectionNotice = error.localizedDescription
+                lastError = nil
+            }
+        }
+    }
+
+    func refreshActivity(
+        showErrors: Bool = true,
+        saveSnapshot: Bool = true
+    ) async {
         guard
             let currentInstance = activeInstance,
             !isRefreshing
@@ -347,6 +440,7 @@ final class AppModel {
         defer { isRefreshing = false }
 
         await reloadQueuedImages(showErrors: showErrors)
+        await reloadQueuedLinks(showErrors: showErrors)
 
         do {
             if supportsHistory {
@@ -373,16 +467,24 @@ final class AppModel {
             }
             connectionHealth = .connected
             connectionNotice = nil
-            previewGeneration &+= 1
-            if connectionMode == .live {
+            if connectionMode == .live, saveSnapshot {
                 await persistSnapshot(showErrors: showErrors)
             }
+        } catch is CancellationError {
+            return
         } catch let error as TesseraeClientError {
-            await handleConnectionError(error)
+            if showErrors
+                || error == .unauthorized
+                || error == .missingCredential
+            {
+                await handleConnectionError(error)
+            }
         } catch {
-            connectionHealth = .offline
-            connectionNotice = error.localizedDescription
-            lastError = nil
+            if showErrors {
+                connectionHealth = .offline
+                connectionNotice = error.localizedDescription
+                lastError = nil
+            }
         }
     }
 
@@ -507,6 +609,56 @@ final class AppModel {
         }
     }
 
+    func sendLink(
+        url: URL,
+        kind: LinkPushKind,
+        fit: ImageFitMode,
+        deviceIDs: [String]
+    ) async -> Bool {
+        guard let activeInstance else { return false }
+        guard supportedLinkPushKinds.contains(kind) else {
+            lastError = String(
+                localized: "This Tesserae server does not support the selected link action."
+            )
+            return false
+        }
+        activeOperationIDs.insert("link")
+        defer { activeOperationIDs.remove("link") }
+
+        do {
+            let idempotencyKey = UUID().uuidString
+            let job: PushJob
+            switch kind {
+            case .imageURL:
+                job = try await activeClient.sendImageURL(
+                    url: url,
+                    fit: fit,
+                    deviceIDs: deviceIDs,
+                    overrideQuietHours: false,
+                    idempotencyKey: idempotencyKey,
+                    instance: activeInstance
+                )
+            case .webpage:
+                job = try await activeClient.sendWebpage(
+                    url: url,
+                    fit: fit,
+                    viewportW: nil,
+                    deviceIDs: deviceIDs,
+                    overrideQuietHours: false,
+                    idempotencyKey: idempotencyKey,
+                    instance: activeInstance
+                )
+            }
+            jobs.insert(job, at: 0)
+            await persistSnapshot()
+            await updateUntilTerminal(job, instance: activeInstance)
+            return true
+        } catch {
+            await presentOperationError(error)
+            return false
+        }
+    }
+
     func loadMoreHistory() async {
         guard
             supportsHistory,
@@ -613,6 +765,28 @@ final class AppModel {
         }
     }
 
+    func retryPendingSharedLinks() async {
+        guard
+            connectionMode == .live,
+            connectionHealth == .connected,
+            let activeInstance,
+            !isRetryingSharedLinks
+        else {
+            return
+        }
+
+        isRetryingSharedLinks = true
+        defer { isRetryingSharedLinks = false }
+
+        await reloadQueuedLinks()
+        for request in queuedLinkRequests {
+            _ = await submitQueuedLink(
+                request,
+                instance: activeInstance
+            )
+        }
+    }
+
     func reloadQueuedImages(showErrors: Bool = false) async {
         guard let activeInstance else {
             queuedImageRequests = []
@@ -637,6 +811,31 @@ final class AppModel {
             queuedImagePreviewData = queuedImagePreviewData.filter {
                 retainedIDs.contains($0.key)
             }
+        } catch {
+            if showErrors {
+                connectionNotice = error.localizedDescription
+            }
+        }
+    }
+
+    func reloadQueuedLinks(showErrors: Bool = false) async {
+        guard let activeInstance else {
+            queuedLinkRequests = []
+            return
+        }
+
+        do {
+            try await linkShareQueue.purge(
+                expiredBefore: Date().addingTimeInterval(-24 * 60 * 60)
+            )
+            queuedLinkRequests = try await linkShareQueue.requests()
+                .filter { $0.instanceID == activeInstance.id }
+                .sorted {
+                    if $0.createdAt != $1.createdAt {
+                        return $0.createdAt > $1.createdAt
+                    }
+                    return $0.id < $1.id
+                }
         } catch {
             if showErrors {
                 connectionNotice = error.localizedDescription
@@ -687,6 +886,34 @@ final class AppModel {
         do {
             try await shareQueue.remove(request)
             removeQueuedImageFromView(request.id)
+        } catch {
+            connectionNotice = error.localizedDescription
+        }
+    }
+
+    func retryQueuedLink(_ request: SharedLinkRequest) async {
+        guard
+            connectionMode == .live,
+            let activeInstance,
+            request.instanceID == activeInstance.id
+        else {
+            return
+        }
+
+        _ = await submitQueuedLink(request, instance: activeInstance)
+    }
+
+    func discardQueuedLink(_ request: SharedLinkRequest) async {
+        guard
+            !activeQueuedLinkRequestIDs.contains(request.id),
+            queuedLinkRequests.contains(where: { $0.id == request.id })
+        else {
+            return
+        }
+
+        do {
+            try await linkShareQueue.remove(request)
+            queuedLinkRequests.removeAll { $0.id == request.id }
         } catch {
             connectionNotice = error.localizedDescription
         }
@@ -765,6 +992,89 @@ final class AppModel {
         }
     }
 
+    @discardableResult
+    private func submitQueuedLink(
+        _ request: SharedLinkRequest,
+        instance: TesseraeInstance
+    ) async -> Bool {
+        guard
+            request.instanceID == instance.id,
+            !activeQueuedLinkRequestIDs.contains(request.id)
+        else {
+            return false
+        }
+
+        activeQueuedLinkRequestIDs.insert(request.id)
+        defer { activeQueuedLinkRequestIDs.remove(request.id) }
+
+        let submitting = request.updating(
+            status: .submitting,
+            error: nil
+        )
+
+        do {
+            try await linkShareQueue.update(submitting)
+            upsertQueuedLink(submitting)
+
+            guard capabilities?.supports(submitting.kind) == true else {
+                throw QueuedLinkSubmissionError.unsupported
+            }
+
+            let job: PushJob
+            switch submitting.kind {
+            case .imageURL:
+                job = try await liveClient.sendImageURL(
+                    url: submitting.url,
+                    fit: submitting.fit,
+                    deviceIDs: submitting.deviceIDs,
+                    overrideQuietHours: submitting.overrideQuietHours,
+                    idempotencyKey: submitting.idempotencyKey,
+                    instance: instance
+                )
+            case .webpage:
+                job = try await liveClient.sendWebpage(
+                    url: submitting.url,
+                    fit: submitting.fit,
+                    viewportW: nil,
+                    deviceIDs: submitting.deviceIDs,
+                    overrideQuietHours: submitting.overrideQuietHours,
+                    idempotencyKey: submitting.idempotencyKey,
+                    instance: instance
+                )
+            }
+            try await linkShareQueue.remove(submitting)
+            if activeInstance?.id == instance.id {
+                if !jobs.contains(where: { $0.id == job.id }) {
+                    jobs.insert(job, at: 0)
+                }
+                queuedLinkRequests.removeAll { $0.id == submitting.id }
+                connectionHealth = .connected
+                connectionNotice = nil
+                await persistSnapshot(showErrors: false)
+
+                Task { [weak self] in
+                    await self?.updateUntilTerminal(job, instance: instance)
+                }
+            }
+            return true
+        } catch {
+            let failed = submitting.updating(
+                status: .failed,
+                error: error.localizedDescription
+            )
+            try? await linkShareQueue.update(failed)
+            upsertQueuedLink(failed)
+
+            if let clientError = error as? TesseraeClientError,
+               clientError == .unauthorized
+                    || clientError == .missingCredential
+            {
+                await handleConnectionError(clientError)
+            }
+            return false
+        }
+    }
+
     private func upsertQueuedImage(_ request: SharedImageRequest) {
         if let index = queuedImageRequests.firstIndex(
             where: { $0.id == request.id }
@@ -774,6 +1084,22 @@ final class AppModel {
             queuedImageRequests.append(request)
         }
         queuedImageRequests.sort {
+            if $0.createdAt != $1.createdAt {
+                return $0.createdAt > $1.createdAt
+            }
+            return $0.id < $1.id
+        }
+    }
+
+    private func upsertQueuedLink(_ request: SharedLinkRequest) {
+        if let index = queuedLinkRequests.firstIndex(
+            where: { $0.id == request.id }
+        ) {
+            queuedLinkRequests[index] = request
+        } else {
+            queuedLinkRequests.append(request)
+        }
+        queuedLinkRequests.sort {
             if $0.createdAt != $1.createdAt {
                 return $0.createdAt > $1.createdAt
             }
@@ -826,6 +1152,7 @@ final class AppModel {
                 await updateUntilTerminal(job, instance: activeInstance)
             }
             await retryPendingSharedImages()
+            await retryPendingSharedLinks()
         } catch {
             connectionNotice = error.localizedDescription
         }
@@ -871,10 +1198,16 @@ final class AppModel {
         guard supportsPreviews, let instance = activeInstance else {
             return
         }
-        let previous = displayPreviews[display.id] ?? .idle
-        guard previous.phase != .loading else {
-            return
-        }
+        let stored = displayPreviews[display.id] ?? .idle
+        let previous = stored.phase == .loading
+            ? PreviewImageState(
+                data: stored.data,
+                eTag: stored.eTag,
+                phase: stored.data == nil ? .idle : .ready
+            )
+            : stored
+        let requestID = UUID()
+        displayPreviewRequestIDs[display.id] = requestID
         displayPreviews[display.id] = PreviewImageState(
             data: previous.data,
             eTag: previous.eTag,
@@ -887,7 +1220,12 @@ final class AppModel {
                 ifNoneMatch: previous.data == nil ? nil : previous.eTag,
                 instance: instance
             )
+            guard displayPreviewRequestIDs[display.id] == requestID else {
+                return
+            }
             guard activeInstance?.id == instance.id, !Task.isCancelled else {
+                displayPreviews[display.id] = previous
+                displayPreviewRequestIDs[display.id] = nil
                 return
             }
             apply(
@@ -896,18 +1234,27 @@ final class AppModel {
                 to: &displayPreviews,
                 key: display.id
             )
+            displayPreviewRequestIDs[display.id] = nil
         } catch is CancellationError {
+            guard displayPreviewRequestIDs[display.id] == requestID else {
+                return
+            }
             finishCancelledPreview(
                 previous: previous,
                 in: &displayPreviews,
                 key: display.id
             )
+            displayPreviewRequestIDs[display.id] = nil
         } catch {
+            guard displayPreviewRequestIDs[display.id] == requestID else {
+                return
+            }
             finishFailedPreview(
                 previous: previous,
                 in: &displayPreviews,
                 key: display.id
             )
+            displayPreviewRequestIDs[display.id] = nil
         }
     }
 
@@ -1042,6 +1389,10 @@ final class AppModel {
             }
         }
         if current.isTerminal {
+            await refreshDisplays(
+                showErrors: false,
+                saveSnapshot: false
+            )
             previewGeneration &+= 1
             if supportsHistory {
                 await refreshHistoryAfterWrite(instance: instance)
@@ -1116,9 +1467,11 @@ final class AppModel {
         activityClearedBefore = nil
         activityThumbnailData = [:]
         queuedImageRequests = []
+        queuedLinkRequests = []
         queuedImagePreviewData = [:]
         historyPreviews = [:]
         displayPreviews = [:]
+        displayPreviewRequestIDs = [:]
         dashboardPreviews = [:]
         dashboardOrderIDs = []
         activeClient = liveClient
@@ -1156,9 +1509,11 @@ final class AppModel {
             activityClearedBefore = nil
             activityThumbnailData = [:]
             queuedImageRequests = []
+            queuedLinkRequests = []
             queuedImagePreviewData = [:]
             historyPreviews = [:]
             displayPreviews = [:]
+            displayPreviewRequestIDs = [:]
             dashboardPreviews = [:]
             dashboardOrderIDs = []
             activeClient = liveClient
@@ -1270,6 +1625,10 @@ final class AppModel {
             let retainedHistory = retainedHistoryPage(history)
             historyItems = retainedHistory.items
             historyNextBeforeID = retainedHistory.nextBeforeID
+            let historyIDs = Set(retainedHistory.items.map(\.id))
+            historyPreviews = historyPreviews.filter {
+                historyIDs.contains($0.key)
+            }
         } catch {
             // The Job remains visible as the immediate activity record. A
             // later pull-to-refresh can reconcile eventually consistent

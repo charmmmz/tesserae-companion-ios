@@ -28,7 +28,6 @@ targets:
         CFBundleDisplayName: Tesserae Companion
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        NSCameraUsageDescription: Scan a Tesserae pairing QR code containing the local server address and a short-lived one-time code.
         NSBonjourServices:
           - _tesserae._tcp
         NSLocalNetworkUsageDescription: Discover and connect to your Tesserae server on the local network.
@@ -74,7 +73,7 @@ targets:
         CFBundleDisplayName: Send to Tesserae
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        NSLocalNetworkUsageDescription: Connect to your paired Tesserae server to send this image.
+        NSLocalNetworkUsageDescription: Connect to your paired Tesserae server to send this shared item.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         TesseraeAppGroupIdentifier: group.com.charmmmz.tesseraecompanion
@@ -85,6 +84,7 @@ targets:
           NSExtensionAttributes:
             NSExtensionActivationRule:
               NSExtensionActivationSupportsImageWithMaxCount: 1
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
     dependencies:
       - package: TesseraeKit
     settings:

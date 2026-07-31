@@ -6,39 +6,61 @@ import UniformTypeIdentifiers
 
 struct SendView: View {
     @Environment(AppModel.self) private var model
+    @State private var source: SendSource = .photo
     @State private var pickerItem: PhotosPickerItem?
     @State private var isPhotoPickerPresented = false
     @State private var imageData: Data?
     @State private var previewImage: UIImage?
     @State private var imageContentType = "image/jpeg"
+    @State private var linkText = ""
+    @State private var linkKind: LinkPushKind = .webpage
     @State private var fitMode: ImageFitMode = .fit
     @State private var selectedDeviceIDs: Set<String> = []
     @State private var previewDeviceID: String?
     @State private var didLoadSendPreferences = false
     @State private var sentConfirmationPresented = false
+    @State private var sentConfirmationMessage = ""
     private let previewSlotHeight: CGFloat = 310
 
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                imagePickerCard
+                if supportsLinks {
+                    sourceCard
+                }
+                if source == .photo {
+                    imagePickerCard
+                } else {
+                    linkCard
+                }
                 fitCard
                 targetCard
 
                 Button {
-                    guard let imageData else { return }
                     Task {
-                        let sent = await model.sendImage(
-                            data: imageData,
-                            fit: fitMode,
-                            deviceIDs: Array(selectedDeviceIDs),
-                            contentType: imageContentType
-                        )
+                        let sent: Bool
+                        switch source {
+                        case .photo:
+                            guard let imageData else { return }
+                            sent = await model.sendImage(
+                                data: imageData,
+                                fit: fitMode,
+                                deviceIDs: Array(selectedDeviceIDs),
+                                contentType: imageContentType
+                            )
+                        case .link:
+                            guard let linkURL else { return }
+                            sent = await model.sendLink(
+                                url: linkURL,
+                                kind: linkKind,
+                                fit: fitMode,
+                                deviceIDs: Array(selectedDeviceIDs)
+                            )
+                        }
                         if sent {
+                            sentConfirmationMessage = confirmationMessage
                             sentConfirmationPresented = true
-                            self.imageData = nil
-                            previewImage = nil
-                            pickerItem = nil
+                            clearSubmittedSource()
                         }
                     }
                 } label: {
@@ -60,7 +82,7 @@ struct SendView: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 .disabled(
-                    imageData == nil
+                    !sourceIsReady
                         || selectedDeviceIDs.isEmpty
                         || isSending
                 )
@@ -69,6 +91,9 @@ struct SendView: View {
         }
         .task(id: sendPreferenceContextID) {
             await loadSendPreferences()
+        }
+        .task(id: supportedLinkKindsID) {
+            normalizeLinkSelection()
         }
         .onChange(of: sendPreferenceSelection) { _, selection in
             guard didLoadSendPreferences else { return }
@@ -92,9 +117,72 @@ struct SendView: View {
         .alert("Sent", isPresented: $sentConfirmationPresented) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("Tesserae accepted the image. Follow its progress in Activity.")
+            Text(sentConfirmationMessage)
         }
         .tesseraeScreenBackground()
+    }
+
+    private var sourceCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Source")
+                .font(.headline)
+            Picker("Source", selection: $source) {
+                Label("Photo", systemImage: "photo")
+                    .tag(SendSource.photo)
+                Label("Link", systemImage: "link")
+                    .tag(SendSource.link)
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("send-source-picker")
+        }
+        .tesseraeCard()
+    }
+
+    private var linkCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Link")
+                .font(.headline)
+
+            TextField("https://example.com", text: $linkText)
+                .textInputAutocapitalization(.never)
+                .keyboardType(.URL)
+                .autocorrectionDisabled()
+                .textFieldStyle(.roundedBorder)
+                .accessibilityIdentifier("send-link-url")
+
+            if supportedLinkKinds.count > 1 {
+                Picker("Link Action", selection: $linkKind) {
+                    ForEach(supportedLinkKinds, id: \.self) { kind in
+                        Text(kind.displayName).tag(kind)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("send-link-action-picker")
+            } else if let onlyKind = supportedLinkKinds.first {
+                Label(onlyKind.displayName, systemImage: onlyKind.systemImage)
+                    .font(.subheadline.weight(.semibold))
+            }
+
+            Text(linkKind.helpText)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            Text(
+                "Tesserae fetches the public link without Safari cookies. Private and local addresses are blocked."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            if !linkText.isEmpty, linkURL == nil {
+                Label(
+                    "Enter a valid public HTTP or HTTPS URL.",
+                    systemImage: "exclamationmark.triangle"
+                )
+                .font(.footnote)
+                .foregroundStyle(TesseraeTheme.terracotta)
+            }
+        }
+        .tesseraeCard()
     }
 
     private var imagePickerCard: some View {
@@ -307,7 +395,58 @@ struct SendView: View {
     }
 
     private var isSending: Bool {
-        model.activeOperationIDs.contains("image")
+        model.activeOperationIDs.contains(
+            source == .photo ? "image" : "link"
+        )
+    }
+
+    private var sourceIsReady: Bool {
+        switch source {
+        case .photo:
+            imageData != nil
+        case .link:
+            linkURL != nil && supportedLinkKinds.contains(linkKind)
+        }
+    }
+
+    private var linkURL: URL? {
+        let trimmed = linkText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard
+            let url = URL(string: trimmed),
+            let scheme = url.scheme?.lowercased(),
+            scheme == "http" || scheme == "https",
+            url.host() != nil,
+            url.user() == nil,
+            url.password() == nil
+        else {
+            return nil
+        }
+        return url
+    }
+
+    private var supportsLinks: Bool {
+        !supportedLinkKinds.isEmpty
+    }
+
+    private var supportedLinkKinds: [LinkPushKind] {
+        model.supportedLinkPushKinds
+    }
+
+    private var supportedLinkKindsID: String {
+        supportedLinkKinds.map(\.capability).joined(separator: ",")
+    }
+
+    private var confirmationMessage: String {
+        switch source {
+        case .photo:
+            String(
+                localized: "Tesserae accepted the image. Follow its progress in Activity."
+            )
+        case .link:
+            String(
+                localized: "Tesserae accepted the link. Follow its progress in Activity."
+            )
+        }
     }
 
     private var previewDisplay: DisplaySummary? {
@@ -383,6 +522,27 @@ struct SendView: View {
         didLoadSendPreferences = true
     }
 
+    private func normalizeLinkSelection() {
+        guard supportsLinks else {
+            source = .photo
+            return
+        }
+        if !supportedLinkKinds.contains(linkKind) {
+            linkKind = supportedLinkKinds.first ?? .webpage
+        }
+    }
+
+    private func clearSubmittedSource() {
+        switch source {
+        case .photo:
+            imageData = nil
+            previewImage = nil
+            pickerItem = nil
+        case .link:
+            linkText = ""
+        }
+    }
+
     private func load(_ item: PhotosPickerItem?) async {
         guard let item else {
             imageData = nil
@@ -422,6 +582,44 @@ struct SendView: View {
             displayMaxEdge,
             model.capabilities?.limits.imageMaxEdge ?? displayMaxEdge
         )
+    }
+}
+
+private enum SendSource: Hashable {
+    case photo
+    case link
+}
+
+private extension LinkPushKind {
+    var displayName: String {
+        switch self {
+        case .imageURL:
+            String(localized: "Image URL")
+        case .webpage:
+            String(localized: "Webpage Snapshot")
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .imageURL:
+            "photo.badge.arrow.down"
+        case .webpage:
+            "safari"
+        }
+    }
+
+    var helpText: String {
+        switch self {
+        case .imageURL:
+            String(
+                localized: "Fetch the link as an image, then apply the selected layout."
+            )
+        case .webpage:
+            String(
+                localized: "Render a desktop-width webpage snapshot, then apply the selected layout."
+            )
+        }
     }
 }
 

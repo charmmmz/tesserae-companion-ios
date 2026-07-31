@@ -37,16 +37,22 @@ struct SettingsView: View {
 
                 Section("Connection") {
                     LabeledContent("Status", value: connectionStatus)
-                    Text(connectionDescription)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
 
-                    Button("Disconnect", role: .destructive) {
+                    Button(role: .destructive) {
                         Task {
                             await model.disconnect()
                             dismiss()
                         }
+                    } label: {
+                        Label(
+                            "Disconnect",
+                            systemImage: "link.badge.minus"
+                        )
                     }
+
+                    Text(connectionDescription)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
 
                 Section {
@@ -78,10 +84,6 @@ struct SettingsView: View {
                     }
                 } header: {
                     Text("Local Storage")
-                } footer: {
-                    Text(
-                        "Clears Activity on this iPhone, including locally displayed server History. Tesserae server History is not deleted."
-                    )
                 }
 
                 Section {
@@ -109,10 +111,9 @@ struct SettingsView: View {
                     Button("Done") { dismiss() }
                 }
             }
-            .confirmationDialog(
+            .alert(
                 "Clear Local Activity?",
-                isPresented: $clearActivityConfirmationPresented,
-                titleVisibility: .visible
+                isPresented: $clearActivityConfirmationPresented
             ) {
                 Button("Clear Local Activity", role: .destructive) {
                     Task {

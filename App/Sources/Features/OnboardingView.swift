@@ -5,7 +5,6 @@ import UIKit
 struct OnboardingView: View {
     @Environment(AppModel.self) private var model
     @State private var manualSetupPresented = false
-    @State private var scannerPresented = false
     @State private var manualServerAddress: String?
     @State private var manualPairingCode: String?
 
@@ -98,14 +97,14 @@ struct OnboardingView: View {
                                         discoveryError,
                                         systemImage: "wifi.exclamationmark"
                                     )
-                                    Text("If Local Network access is off, enable it in iOS Settings. QR and manual connection remain available.")
+                                    Text("If Local Network access is off, enable it in iOS Settings. You can still enter the server address manually.")
                                 }
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                             } else if !model.isDiscovering
                                 && model.discoveredInstances.isEmpty
                             {
-                                Text("No server found. QR and manual connection still work across discovery failures.")
+                                Text("No server found. Manual connection still works when discovery is unavailable.")
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
                             }
@@ -114,15 +113,6 @@ struct OnboardingView: View {
                     }
 
                     VStack(spacing: 12) {
-                        Button {
-                            scannerPresented = true
-                        } label: {
-                            Label("Scan Pairing QR", systemImage: "qrcode.viewfinder")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-
                         Button("Enter Server Address") {
                             manualServerAddress = nil
                             manualPairingCode = nil
@@ -160,22 +150,6 @@ struct OnboardingView: View {
                     initialServerAddress: manualServerAddress,
                     initialPairingCode: manualPairingCode
                 )
-            }
-            .sheet(isPresented: $scannerPresented) {
-                PairingScannerView { value in
-                    do {
-                        let payload = try PairingPayloadCodec.decode(value)
-                        manualServerAddress = payload.baseURL.absoluteString
-                        manualPairingCode = payload.code
-                        scannerPresented = false
-                        Task { @MainActor in
-                            try? await Task.sleep(for: .milliseconds(250))
-                            manualSetupPresented = true
-                        }
-                    } catch {
-                        model.lastError = error.localizedDescription
-                    }
-                }
             }
             .task {
                 if model.discoveredInstances.isEmpty {

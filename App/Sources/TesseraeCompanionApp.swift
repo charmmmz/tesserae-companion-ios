@@ -11,6 +11,7 @@ struct TesseraeCompanionApp: App {
         let stateStore: any CompanionStateStoring
         let sendPreferences: any CompanionSendPreferencesStoring
         let shareQueue: any ShareQueueStoring
+        let linkShareQueue: any LinkShareQueueStoring
         let activityThumbnails: any ActivityThumbnailStoring
         let discovery: any TesseraeDiscovering
         let demoLatency: Duration
@@ -29,6 +30,7 @@ struct TesseraeCompanionApp: App {
             stateStore = InMemoryCompanionStateStore()
             sendPreferences = InMemoryCompanionSendPreferencesStore()
             shareQueue = InMemoryShareQueueStore()
+            linkShareQueue = InMemoryLinkShareQueueStore()
             activityThumbnails = InMemoryActivityThumbnailStore()
             discovery = StaticDiscoveryService(results: [])
         } else {
@@ -43,6 +45,9 @@ struct TesseraeCompanionApp: App {
                 suiteName: AppConfiguration.appGroupIdentifier
             )
             shareQueue = FileShareQueueStore(
+                directoryURL: AppConfiguration.sharedContainerURL
+            )
+            linkShareQueue = FileLinkShareQueueStore(
                 directoryURL: AppConfiguration.sharedContainerURL
             )
             activityThumbnails = FileActivityThumbnailStore(
@@ -62,6 +67,9 @@ struct TesseraeCompanionApp: App {
             suiteName: AppConfiguration.appGroupIdentifier
         )
         shareQueue = FileShareQueueStore(
+            directoryURL: AppConfiguration.sharedContainerURL
+        )
+        linkShareQueue = FileLinkShareQueueStore(
             directoryURL: AppConfiguration.sharedContainerURL
         )
         activityThumbnails = FileActivityThumbnailStore(
@@ -85,6 +93,7 @@ struct TesseraeCompanionApp: App {
                 stateStore: stateStore,
                 sendPreferences: sendPreferences,
                 shareQueue: shareQueue,
+                linkShareQueue: linkShareQueue,
                 activityThumbnails: activityThumbnails,
                 discovery: discovery
             )

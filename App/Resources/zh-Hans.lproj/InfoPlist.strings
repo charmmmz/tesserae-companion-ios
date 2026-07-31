@@ -1,3 +1,2 @@
 "CFBundleDisplayName" = "Tesserae 伴侣";
-"NSCameraUsageDescription" = "扫描 Tesserae 配对二维码，其中仅包含局域网服务器地址和短期有效的一次性配对码。";
 "NSLocalNetworkUsageDescription" = "在局域网中发现并连接你的 Tesserae 服务器。";

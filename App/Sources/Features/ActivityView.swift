@@ -5,15 +5,26 @@ import UIKit
 
 struct ActivityView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var scenePhase
     @State private var expandedQueuedImageID: String?
     @State private var expandedJobID: String?
     @State private var expandedHistoryID: String?
+    private let previewCanvasSize = CGSize(width: 112, height: 118)
+
+    let isActive: Bool
+
+    private var shouldAutoRefresh: Bool {
+        isActive && scenePhase == .active
+    }
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 12) {
                 ForEach(model.queuedImageRequests) { request in
                     queuedImageCard(request)
+                }
+                ForEach(model.queuedLinkRequests) { request in
+                    queuedLinkCard(request)
                 }
                 ForEach(visibleJobs) { job in
                     activityCard(job)
@@ -44,20 +55,181 @@ struct ActivityView: View {
         }
         .overlay {
             if model.queuedImageRequests.isEmpty
+                && model.queuedLinkRequests.isEmpty
                 && visibleJobs.isEmpty
                 && model.historyItems.isEmpty
             {
                 ContentUnavailableView(
                     "No Activity Yet",
                     systemImage: "clock.arrow.circlepath",
-                    description: Text("Dashboard and photo sends will appear here.")
+                    description: Text(
+                        "Dashboard, photo, and link sends will appear here."
+                    )
                 )
             }
         }
         .refreshable {
             model.startActivityRefresh()
         }
+        .task(id: shouldAutoRefresh) {
+            guard shouldAutoRefresh else { return }
+
+            await model.refreshActivity(
+                showErrors: false,
+                saveSnapshot: false
+            )
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(15))
+                } catch {
+                    return
+                }
+                await model.refreshActivity(
+                    showErrors: false,
+                    saveSnapshot: false
+                )
+            }
+        }
         .tesseraeScreenBackground()
+    }
+
+    private func queuedLinkCard(
+        _ request: SharedLinkRequest
+    ) -> some View {
+        let isActive = model.activeQueuedLinkRequestIDs.contains(request.id)
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 14) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(request.url.host() ?? request.url.absoluteString)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+
+                    Text(model.displayNames(for: request.deviceIDs))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+
+                    HStack(spacing: 6) {
+                        Text(fallbackTitle(request.jobKind))
+                        Text("·")
+                        Text(request.fit.displayName)
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+
+                    Text(
+                        request.createdAt,
+                        format: .dateTime
+                            .month(.abbreviated)
+                            .day()
+                            .hour()
+                            .minute()
+                    )
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.tertiary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                queuedLinkArtwork(request)
+            }
+
+            if let lastError = request.lastError,
+               request.status == .failed
+            {
+                Text(lastError)
+                    .font(.caption)
+                    .foregroundStyle(TesseraeTheme.terracotta)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Divider()
+
+            HStack(spacing: 12) {
+                Button {
+                    Task { await model.retryQueuedLink(request) }
+                } label: {
+                    Label(
+                        isActive ? "Retrying…" : "Retry",
+                        systemImage: "arrow.clockwise"
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(TesseraeTheme.accent)
+                .disabled(isActive || model.connectionMode != .live)
+
+                Button(role: .destructive) {
+                    Task { await model.discardQueuedLink(request) }
+                } label: {
+                    Label("Discard", systemImage: "trash")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .disabled(isActive)
+            }
+            .font(.subheadline.weight(.semibold))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .tesseraeCard()
+        .accessibilityIdentifier("queued-link-card-\(request.id)")
+    }
+
+    private func queuedLinkArtwork(
+        _ request: SharedLinkRequest
+    ) -> some View {
+        cardPreview(
+            image: nil,
+            panel: previewPanel(for: request.deviceIDs),
+            fit: request.fit,
+            placeholderSystemName: artworkSymbol(request.jobKind),
+            tint: TesseraeTheme.ochre,
+            accessibilityLabel: "Queued link preview placeholder",
+            accessibilityIdentifier: "queued-link-preview-\(request.id)",
+            statusLabel: queuedLinkStatusLabel(request),
+            statusSymbol: queuedLinkStatusSymbol(request),
+            statusColor: queuedLinkStatusColor(request),
+            statusAccessibilityIdentifier:
+                "queued-link-status-\(request.id)"
+        )
+    }
+
+    private func queuedLinkStatusLabel(
+        _ request: SharedLinkRequest
+    ) -> String {
+        switch request.status {
+        case .queued:
+            String(localized: "Waiting")
+        case .submitting:
+            String(localized: "Sending")
+        case .failed:
+            String(localized: "Failed")
+        }
+    }
+
+    private func queuedLinkStatusSymbol(
+        _ request: SharedLinkRequest
+    ) -> String {
+        switch request.status {
+        case .queued:
+            "clock"
+        case .submitting:
+            "arrow.triangle.2.circlepath"
+        case .failed:
+            "exclamationmark.triangle.fill"
+        }
+    }
+
+    private func queuedLinkStatusColor(
+        _ request: SharedLinkRequest
+    ) -> Color {
+        switch request.status {
+        case .queued, .submitting:
+            TesseraeTheme.ochre
+        case .failed:
+            TesseraeTheme.terracotta
+        }
     }
 
     private func queuedImageCard(
@@ -80,9 +252,7 @@ struct ActivityView: View {
                     expandedQueuedImageID = isExpanded ? nil : request.id
                 }
             } label: {
-                HStack(alignment: .center, spacing: 13) {
-                    queuedImageArtwork(thumbnail)
-
+                HStack(alignment: .center, spacing: 14) {
                     VStack(alignment: .leading, spacing: 5) {
                         Text("Queued photo")
                             .font(.headline)
@@ -113,23 +283,9 @@ struct ActivityView: View {
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.tertiary)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-                    Spacer(minLength: 8)
-
-                    VStack(alignment: .trailing, spacing: 12) {
-                        Label(
-                            queuedImageStatusLabel(request),
-                            systemImage: queuedImageStatusSymbol(request)
-                        )
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(queuedImageStatusColor(request))
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 6)
-                        .background(
-                            queuedImageStatusColor(request).opacity(0.11),
-                            in: Capsule()
-                        )
-                    }
+                    queuedImageArtwork(request, thumbnail: thumbnail)
                 }
                 .contentShape(Rectangle())
             }
@@ -187,32 +343,26 @@ struct ActivityView: View {
         .accessibilityIdentifier("queued-image-card-\(request.id)")
     }
 
-    @ViewBuilder
-    private func queuedImageArtwork(_ thumbnail: UIImage?) -> some View {
-        if let thumbnail {
-            Image(uiImage: thumbnail)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 76, height: 88)
-                .clipShape(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(.white.opacity(0.18), lineWidth: 1)
-                }
-                .accessibilityLabel("Queued photo preview")
-        } else {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(TesseraeTheme.ochre.opacity(0.11))
-                Image(systemName: "photo.badge.clock")
-                    .font(.title2)
-                    .foregroundStyle(TesseraeTheme.ochre)
-            }
-            .frame(width: 58, height: 64)
-            .accessibilityHidden(true)
-        }
+    private func queuedImageArtwork(
+        _ request: SharedImageRequest,
+        thumbnail: UIImage?
+    ) -> some View {
+        cardPreview(
+            image: thumbnail,
+            panel: previewPanel(for: request.deviceIDs),
+            fit: request.fit,
+            placeholderSystemName: "photo.badge.clock",
+            tint: TesseraeTheme.ochre,
+            accessibilityLabel: thumbnail == nil
+                ? "Queued photo preview placeholder"
+                : "Queued photo preview",
+            accessibilityIdentifier: "queued-image-preview-\(request.id)",
+            statusLabel: queuedImageStatusLabel(request),
+            statusSymbol: queuedImageStatusSymbol(request),
+            statusColor: queuedImageStatusColor(request),
+            statusAccessibilityIdentifier:
+                "queued-image-status-\(request.id)"
+        )
     }
 
     private func queuedImageStatusLabel(
@@ -313,12 +463,7 @@ struct ActivityView: View {
         isExpanded: Bool
     ) -> some View {
         VStack(alignment: .leading, spacing: isExpanded ? 14 : 0) {
-            HStack(alignment: .center, spacing: 13) {
-                leadingArtwork(
-                    job,
-                    thumbnail: thumbnail
-                )
-
+            HStack(alignment: .center, spacing: 14) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(job.label ?? fallbackTitle(job.kind))
                         .font(.headline)
@@ -329,6 +474,15 @@ struct ActivityView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
+
+                    if let sourceLabel = linkSourceLabel(job.kind) {
+                        Label(
+                            sourceLabel,
+                            systemImage: artworkSymbol(job.kind)
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                    }
 
                     if let failure = job.error {
                         Text(failure.message)
@@ -348,24 +502,9 @@ struct ActivityView: View {
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.tertiary)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-                Spacer(minLength: 8)
-
-                VStack(alignment: .trailing, spacing: 12) {
-                    Label(
-                        statusLabel(job),
-                        systemImage: statusSymbol(job)
-                    )
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(statusColor(job))
-                    .labelStyle(.titleAndIcon)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 6)
-                    .background(
-                        statusColor(job).opacity(0.11),
-                        in: Capsule()
-                    )
-                }
+                jobArtwork(job, thumbnail: thumbnail)
             }
 
             if let thumbnail, isExpanded {
@@ -400,79 +539,45 @@ struct ActivityView: View {
             "history-\(item.id)"
         )
 
-        return VStack(alignment: .leading, spacing: isExpanded ? 14 : 10) {
-            HStack(alignment: .center, spacing: 10) {
-                Button {
-                    guard preview != nil else { return }
-                    withAnimation(.smooth(duration: 0.28)) {
-                        expandedHistoryID = isExpanded ? nil : item.id
-                    }
-                } label: {
-                    HStack(alignment: .center, spacing: 13) {
-                        historyArtwork(item, preview: preview)
-
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(item.label)
-                                .font(.headline)
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
-                            Text(model.displayNames(for: item))
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                            if let error = item.error {
-                                Text(error)
-                                    .font(.caption)
-                                    .foregroundStyle(TesseraeTheme.terracotta)
-                                    .lineLimit(isExpanded ? nil : 2)
-                            }
-                            HStack(spacing: 6) {
-                                Text(item.source.replacingOccurrences(
-                                    of: "_",
-                                    with: " "
-                                ).capitalized)
-                                if let fit = item.fit {
-                                    Text("·")
-                                    Text(fit.displayName)
-                                }
-                            }
+        return VStack(alignment: .leading, spacing: isExpanded ? 14 : 0) {
+            HStack(alignment: .center, spacing: 14) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(item.label)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Text(model.displayNames(for: item))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                    if let error = item.error {
+                        Text(error)
                             .font(.caption)
-                            .foregroundStyle(.tertiary)
-                            Text(
-                                item.createdAt,
-                                format: .dateTime
-                                    .month(.abbreviated)
-                                    .day()
-                                    .hour()
-                                    .minute()
-                            )
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(TesseraeTheme.terracotta)
+                            .lineLimit(isExpanded ? nil : 2)
+                    }
+                    HStack(spacing: 6) {
+                        Text(item.source.replacingOccurrences(
+                            of: "_",
+                            with: " "
+                        ).capitalized)
+                        if let fit = item.fit {
+                            Text("·")
+                            Text(fit.displayName)
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("history-card-\(item.id)")
-
-                VStack(alignment: .trailing, spacing: 10) {
-                    Label(
-                        historyStatusLabel(item),
-                        systemImage: historyStatusSymbol(item)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    Text(
+                        item.createdAt,
+                        format: .dateTime
+                            .month(.abbreviated)
+                            .day()
+                            .hour()
+                            .minute()
                     )
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(historyStatusColor(item))
-                    .frame(width: 112)
-                    .padding(.vertical, 6)
-                    .background(
-                        historyStatusColor(item).opacity(0.11),
-                        in: Capsule()
-                    )
-                    .accessibilityElement(children: .combine)
-                    .accessibilityIdentifier(
-                        "history-status-\(item.id)"
-                    )
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.tertiary)
 
                     if item.resendable {
                         Button {
@@ -481,22 +586,18 @@ struct ActivityView: View {
                             HStack(spacing: 5) {
                                 if isResending {
                                     ProgressView()
-                                        .controlSize(.small)
+                                        .controlSize(.mini)
                                 } else {
                                     Image(systemName: "arrow.clockwise")
                                 }
                                 Text("Resend")
                             }
                             .font(.caption.weight(.semibold))
-                            .frame(width: 112)
-                            .padding(.vertical, 6)
-                            .background(
-                                TesseraeTheme.accent.opacity(0.11),
-                                in: Capsule()
-                            )
+                            .foregroundStyle(.white)
                         }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(TesseraeTheme.accent)
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .fixedSize()
                         .disabled(isResending)
                         .accessibilityLabel(
                             isResending ? "Resending…" : "Resend"
@@ -506,6 +607,26 @@ struct ActivityView: View {
                         )
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Button {
+                    guard preview != nil else { return }
+                    withAnimation(.smooth(duration: 0.28)) {
+                        expandedHistoryID = isExpanded ? nil : item.id
+                    }
+                } label: {
+                    historyArtwork(item, preview: preview)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("history-card-\(item.id)")
+                .accessibilityValue(
+                    isExpanded ? Text("Expanded") : Text("Collapsed")
+                )
+                .accessibilityHint(
+                    isExpanded
+                        ? Text("Collapse composition preview")
+                        : Text("Expand composition preview")
+                )
             }
 
             if let preview, isExpanded {
@@ -533,66 +654,264 @@ struct ActivityView: View {
         _ item: HistoryItem,
         preview: UIImage?
     ) -> some View {
-        if let preview {
-            Image(uiImage: preview)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 76, height: 88)
-                .clipShape(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                )
-                .accessibilityLabel("Sent composition preview")
-        } else {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(TesseraeTheme.accent.opacity(0.11))
-                Image(
-                    systemName: item.fit == nil
-                        ? "rectangle.grid.2x2"
-                        : "photo"
-                )
-                .font(.title2)
-                .foregroundStyle(TesseraeTheme.accent)
-            }
-            .frame(width: 58, height: 64)
-            .accessibilityHidden(true)
-        }
+        let status = historyStatusPresentation(item)
+
+        cardPreview(
+            image: preview,
+            panel: previewPanel(for: item),
+            fit: nil,
+            placeholderSystemName: item.fit == nil
+                ? "rectangle.grid.2x2"
+                : "photo",
+            tint: TesseraeTheme.accent,
+            accessibilityLabel: preview == nil
+                ? "Sent composition preview placeholder"
+                : "Sent composition preview",
+            accessibilityIdentifier: "history-preview-\(item.id)",
+            statusLabel: status.label,
+            statusSymbol: status.symbol,
+            statusColor: status.color,
+            statusAccessibilityIdentifier: "history-status-\(item.id)"
+        )
     }
 
-    @ViewBuilder
-    private func leadingArtwork(
+    private func jobArtwork(
         _ job: PushJob,
         thumbnail: UIImage?
     ) -> some View {
-        if let thumbnail {
-            Image(uiImage: thumbnail)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 76, height: 88)
+        cardPreview(
+            image: thumbnail,
+            panel: previewPanel(for: job.targetDeviceIDs),
+            fit: nil,
+            placeholderSystemName: artworkSymbol(job.kind),
+            tint: TesseraeTheme.accent,
+            accessibilityLabel: thumbnail == nil
+                ? "Activity preview placeholder"
+                : "Sent photo preview",
+            accessibilityIdentifier: "activity-preview-\(job.id)",
+            statusLabel: statusLabel(job),
+            statusSymbol: statusSymbol(job),
+            statusColor: statusColor(job),
+            statusAccessibilityIdentifier: "activity-status-\(job.id)"
+        )
+    }
+
+    private func cardPreview(
+        image: UIImage?,
+        panel: PanelProfile?,
+        fit: ImageFitMode?,
+        placeholderSystemName: String,
+        tint: Color,
+        accessibilityLabel: String,
+        accessibilityIdentifier: String,
+        statusLabel: String,
+        statusSymbol: String,
+        statusColor: Color,
+        statusAccessibilityIdentifier: String
+    ) -> some View {
+        let fittedSize = previewSize(for: panel)
+
+        return ZStack {
+            Color.clear
+                .accessibilityHidden(true)
+
+            ZStack(alignment: .topTrailing) {
+                ZStack {
+                    RoundedRectangle(
+                        cornerRadius: 12,
+                        style: .continuous
+                    )
+                    .fill(Color.primary.opacity(0.055))
+
+                    if let image {
+                        previewImage(
+                            image,
+                            panel: panel,
+                            fit: fit,
+                            size: fittedSize
+                        )
+                    } else {
+                        VStack(spacing: 4) {
+                            Image(systemName: placeholderSystemName)
+                                .font(.title2)
+
+                            if let panel {
+                                Text(
+                                    "\(panel.width) × \(panel.height)"
+                                )
+                                .font(.caption2.monospaced())
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.68)
+                            }
+                        }
+                        .padding(5)
+                        .foregroundStyle(tint)
+                    }
+                }
+                .frame(
+                    width: fittedSize.width,
+                    height: fittedSize.height
+                )
                 .clipShape(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(
+                        cornerRadius: 12,
+                        style: .continuous
+                    )
                 )
                 .overlay {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(.white.opacity(0.18), lineWidth: 1)
+                    RoundedRectangle(
+                        cornerRadius: 12,
+                        style: .continuous
+                    )
+                    .stroke(.white.opacity(0.16), lineWidth: 1)
                 }
-                .accessibilityIdentifier("activity-photo-thumbnail")
-                .accessibilityLabel("Sent photo preview")
-        } else {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(TesseraeTheme.accent.opacity(0.11))
-                Image(
-                    systemName: job.kind == .imagePush
-                        ? "photo"
-                        : "rectangle.grid.2x2"
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(accessibilityLabel))
+                .accessibilityValue(
+                    panel.map {
+                        Text("\($0.width) by \($0.height)")
+                    } ?? Text("")
                 )
-                .font(.title2)
-                .foregroundStyle(TesseraeTheme.accent)
+                .accessibilityIdentifier(accessibilityIdentifier)
+
+                compactStatus(
+                    label: statusLabel,
+                    symbol: statusSymbol,
+                    color: statusColor
+                )
+                .padding(6)
+                .accessibilityIdentifier(
+                    statusAccessibilityIdentifier
+                )
             }
-            .frame(width: 58, height: 64)
-            .accessibilityHidden(true)
+            .frame(
+                width: fittedSize.width,
+                height: fittedSize.height
+            )
         }
+        .frame(
+            width: previewCanvasSize.width,
+            height: previewCanvasSize.height
+        )
+    }
+
+    @ViewBuilder
+    private func previewImage(
+        _ image: UIImage,
+        panel: PanelProfile?,
+        fit: ImageFitMode?,
+        size: CGSize
+    ) -> some View {
+        if let panel, let fit {
+            ZStack(alignment: .topLeading) {
+                Color.white
+
+                if fit == .blur {
+                    Image(uiImage: image)
+                        .resizable()
+                        .interpolation(.none)
+                        .scaledToFill()
+                        .frame(width: size.width, height: size.height)
+                        .blur(
+                            radius: max(
+                                2,
+                                min(size.width, size.height) / 16
+                            )
+                        )
+                        .clipped()
+                }
+
+                let sourceWidth = image.size.width * image.scale
+                let sourceHeight = image.size.height * image.scale
+                let rect = fit.previewRect(
+                    sourceWidth: sourceWidth,
+                    sourceHeight: sourceHeight,
+                    canvasWidth: size.width,
+                    canvasHeight: size.height,
+                    targetPixelWidth: Double(panel.width),
+                    targetPixelHeight: Double(panel.height)
+                )
+
+                Image(uiImage: image)
+                    .resizable()
+                    .interpolation(.none)
+                    .frame(
+                        width: max(0, rect.width),
+                        height: max(0, rect.height)
+                    )
+                    .offset(x: rect.x, y: rect.y)
+            }
+            .frame(
+                width: size.width,
+                height: size.height,
+                alignment: .topLeading
+            )
+            .clipped()
+        } else {
+            Image(uiImage: image)
+                .resizable()
+                .interpolation(.none)
+                .scaledToFill()
+                .frame(width: size.width, height: size.height)
+                .clipped()
+        }
+    }
+
+    private func previewSize(for panel: PanelProfile?) -> CGSize {
+        guard let panel else {
+            return previewCanvasSize
+        }
+
+        let size = panel.fittedPreviewSize(
+            maxWidth: previewCanvasSize.width,
+            maxHeight: previewCanvasSize.height
+        )
+        return CGSize(width: size.width, height: size.height)
+    }
+
+    private func previewPanel(
+        for deviceIDs: [String]
+    ) -> PanelProfile? {
+        deviceIDs.lazy.compactMap { id in
+            model.displays.first(where: { $0.id == id })?.panel
+        }.first
+    }
+
+    private func previewPanel(
+        for item: HistoryItem
+    ) -> PanelProfile? {
+        if let panel = previewPanel(for: item.deviceIDs) {
+            return panel
+        }
+
+        guard item.deviceIDs.isEmpty, item.source == "button" else {
+            return nil
+        }
+
+        let matchingDisplays = model.displays.filter {
+            $0.name.compare(
+                item.label,
+                options: [.caseInsensitive, .diacriticInsensitive]
+            ) == .orderedSame
+        }
+        guard matchingDisplays.count == 1 else {
+            return nil
+        }
+        return matchingDisplays[0].panel
+    }
+
+    private func compactStatus(
+        label: String,
+        symbol: String,
+        color: Color
+    ) -> some View {
+        Image(systemName: symbol)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(color)
+            .frame(width: 24, height: 24)
+            .background(.thinMaterial, in: Circle())
+            .accessibilityLabel(Text(label))
+            .allowsHitTesting(false)
     }
 
     private func expandedPhoto(_ thumbnail: UIImage) -> some View {
@@ -628,42 +947,169 @@ struct ActivityView: View {
         return String(localized: "Rendered dashboard composition")
     }
 
-    private func historyStatusLabel(_ item: HistoryItem) -> String {
-        switch item.status {
-        case "sent", "published", "succeeded":
-            String(localized: "Published")
-        case "quiet":
-            String(localized: "Quiet")
-        case "failed", "error":
-            String(localized: "Failed")
-        default:
-            item.status.replacingOccurrences(of: "_", with: " ").capitalized
-        }
-    }
+    private func historyStatusPresentation(
+        _ item: HistoryItem
+    ) -> HistoryStatusPresentation {
+        let rawStatus = item.status.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        let status = rawStatus.lowercased()
 
-    private func historyStatusSymbol(_ item: HistoryItem) -> String {
-        switch item.status {
+        return switch status {
         case "sent", "published", "succeeded":
-            "checkmark.circle.fill"
+            HistoryStatusPresentation(
+                label: String(localized: "Published"),
+                symbol: "checkmark.circle.fill",
+                color: TesseraeTheme.accent
+            )
+        case "dispatched":
+            HistoryStatusPresentation(
+                label: String(localized: "Dispatched"),
+                symbol: "checkmark.circle.fill",
+                color: TesseraeTheme.accent
+            )
+        case "webhook_dispatched":
+            HistoryStatusPresentation(
+                label: String(localized: "Webhook Triggered"),
+                symbol: "paperplane.fill",
+                color: TesseraeTheme.accent
+            )
+        case "ha_dispatched":
+            HistoryStatusPresentation(
+                label: String(localized: "Home Assistant Triggered"),
+                symbol: "house.fill",
+                color: TesseraeTheme.accent
+            )
+        case "fetched":
+            HistoryStatusPresentation(
+                label: String(localized: "Refresh Requested"),
+                symbol: "arrow.down.circle.fill",
+                color: TesseraeTheme.accent
+            )
+        case "no_change":
+            HistoryStatusPresentation(
+                label: String(localized: "Already Current"),
+                symbol: "checkmark.circle",
+                color: TesseraeTheme.accent
+            )
+        case "passed":
+            HistoryStatusPresentation(
+                label: String(localized: "Passed"),
+                symbol: "checkmark.circle.fill",
+                color: TesseraeTheme.accent
+            )
         case "quiet":
-            "moon.fill"
+            HistoryStatusPresentation(
+                label: String(localized: "Quiet"),
+                symbol: "moon.fill",
+                color: .indigo
+            )
+        case "busy":
+            HistoryStatusPresentation(
+                label: String(localized: "Busy"),
+                symbol: "clock.fill",
+                color: TesseraeTheme.ochre
+            )
+        case "held":
+            HistoryStatusPresentation(
+                label: String(localized: "Held"),
+                symbol: "pause.circle.fill",
+                color: TesseraeTheme.ochre
+            )
+        case "deduped":
+            HistoryStatusPresentation(
+                label: String(localized: "Duplicate Ignored"),
+                symbol: "doc.on.doc.fill",
+                color: .secondary
+            )
+        case "noop":
+            HistoryStatusPresentation(
+                label: String(localized: "No Action"),
+                symbol: "minus.circle.fill",
+                color: .secondary
+            )
+        case "superseded":
+            HistoryStatusPresentation(
+                label: String(localized: "Superseded"),
+                symbol: "arrow.right.circle.fill",
+                color: .secondary
+            )
+        case "unmapped":
+            HistoryStatusPresentation(
+                label: String(localized: "Unmapped"),
+                symbol: "questionmark.circle.fill",
+                color: TesseraeTheme.ochre
+            )
+        case "unbound":
+            HistoryStatusPresentation(
+                label: String(localized: "No Displays"),
+                symbol: "rectangle.slash",
+                color: TesseraeTheme.ochre
+            )
+        case "not_found":
+            HistoryStatusPresentation(
+                label: String(localized: "Not Found"),
+                symbol: "magnifyingglass",
+                color: TesseraeTheme.ochre
+            )
+        case "no_frame":
+            HistoryStatusPresentation(
+                label: String(localized: "No Current Frame"),
+                symbol: "rectangle.slash",
+                color: TesseraeTheme.ochre
+            )
+        case "no_target":
+            HistoryStatusPresentation(
+                label: String(localized: "No Action Here"),
+                symbol: "scope",
+                color: TesseraeTheme.ochre
+            )
+        case "stale":
+            HistoryStatusPresentation(
+                label: String(localized: "Outdated Frame"),
+                symbol: "clock.fill",
+                color: TesseraeTheme.ochre
+            )
+        case "blocked":
+            HistoryStatusPresentation(
+                label: String(localized: "Blocked"),
+                symbol: "hand.raised.fill",
+                color: TesseraeTheme.ochre
+            )
+        case "shifted":
+            HistoryStatusPresentation(
+                label: String(localized: "Adjusted"),
+                symbol: "arrow.left.arrow.right.circle.fill",
+                color: .indigo
+            )
+        case "fallback":
+            HistoryStatusPresentation(
+                label: String(localized: "Fallback Used"),
+                symbol: "arrow.turn.down.right",
+                color: .indigo
+            )
         case "failed", "error":
-            "exclamationmark.triangle.fill"
+            HistoryStatusPresentation(
+                label: String(localized: "Failed"),
+                symbol: "exclamationmark.triangle.fill",
+                color: TesseraeTheme.terracotta
+            )
+        case "ha_failed":
+            HistoryStatusPresentation(
+                label: String(localized: "Home Assistant Failed"),
+                symbol: "exclamationmark.triangle.fill",
+                color: TesseraeTheme.terracotta
+            )
         default:
-            "clock"
-        }
-    }
-
-    private func historyStatusColor(_ item: HistoryItem) -> Color {
-        switch item.status {
-        case "sent", "published", "succeeded":
-            TesseraeTheme.accent
-        case "quiet":
-            .indigo
-        case "failed", "error":
-            TesseraeTheme.terracotta
-        default:
-            TesseraeTheme.ochre
+            HistoryStatusPresentation(
+                label: rawStatus.isEmpty
+                    ? String(localized: "Unknown")
+                    : rawStatus
+                        .replacingOccurrences(of: "_", with: " ")
+                        .capitalized,
+                symbol: "questionmark.circle.fill",
+                color: .secondary
+            )
         }
     }
 
@@ -679,6 +1125,30 @@ struct ActivityView: View {
             String(localized: "Dashboard")
         case .historyResend:
             String(localized: "Resent item")
+        }
+    }
+
+    private func linkSourceLabel(_ kind: PushJobKind) -> String? {
+        switch kind {
+        case .imageURLPush, .webpagePush:
+            fallbackTitle(kind)
+        case .dashboardPush, .imagePush, .historyResend:
+            nil
+        }
+    }
+
+    private func artworkSymbol(_ kind: PushJobKind) -> String {
+        switch kind {
+        case .imagePush:
+            "photo"
+        case .imageURLPush:
+            "photo.badge.arrow.down"
+        case .webpagePush:
+            "safari"
+        case .dashboardPush:
+            "rectangle.grid.2x2"
+        case .historyResend:
+            "arrow.clockwise"
         }
     }
 
@@ -716,6 +1186,12 @@ struct ActivityView: View {
         case .failed: TesseraeTheme.terracotta
         }
     }
+}
+
+private struct HistoryStatusPresentation {
+    let label: String
+    let symbol: String
+    let color: Color
 }
 
 private struct ActivityFittedPhotoLayout: Layout {

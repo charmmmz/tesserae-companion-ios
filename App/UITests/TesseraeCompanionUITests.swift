@@ -6,6 +6,18 @@ final class TesseraeCompanionUITests: XCTestCase {
         continueAfterFailure = false
     }
 
+    func testOnboardingOffersDiscoveryAndManualConnectionWithoutQR() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launch()
+
+        XCTAssertTrue(
+            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(app.buttons["Enter Server Address"].exists)
+        XCTAssertFalse(app.buttons["Scan Pairing QR"].exists)
+    }
+
     func testDisplayManufacturerBadges() {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
@@ -65,6 +77,71 @@ final class TesseraeCompanionUITests: XCTestCase {
         add(screenshot)
     }
 
+    func testDemoActivityUsesCompactPreviewCards() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_COLOR_SCHEME"] = "dark"
+        app.launch()
+
+        XCTAssertTrue(
+            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
+        )
+        app.buttons["Explore with Demo Data"].tap()
+        app.tabBars.firstMatch.buttons["Activity"].tap()
+
+        let historyStatus = app.descendants(matching: .any)[
+            "history-status-history-demo-photo"
+        ]
+        let historyPreview = app.descendants(matching: .any)[
+            "history-preview-history-demo-photo"
+        ]
+        let historyResend = app.buttons[
+            "history-resend-history-demo-photo"
+        ]
+        XCTAssertTrue(historyStatus.waitForExistence(timeout: 3))
+        XCTAssertEqual(historyStatus.label, "Published")
+        XCTAssertEqual(
+            app.descendants(matching: .any)[
+                "history-status-history-demo-dashboard"
+            ].label,
+            "Dispatched"
+        )
+        XCTAssertTrue(historyPreview.exists)
+        XCTAssertTrue(historyResend.exists)
+        assertPreview(
+            historyPreview,
+            hasAspectRatio: 1_200.0 / 1_600.0
+        )
+        assertPreview(
+            app.descendants(matching: .any)[
+                "history-preview-history-demo-dashboard"
+            ],
+            hasAspectRatio: 800.0 / 480.0
+        )
+
+        let sharedPhotoTitle = app.staticTexts["Shared Photo"].firstMatch
+        XCTAssertGreaterThan(
+            historyPreview.frame.minX,
+            sharedPhotoTitle.frame.maxX
+        )
+        XCTAssertGreaterThan(
+            historyStatus.frame.midX,
+            historyPreview.frame.midX
+        )
+        XCTAssertLessThan(
+            historyStatus.frame.midY,
+            historyPreview.frame.midY
+        )
+        XCTAssertLessThan(historyResend.frame.width, 112)
+        XCTAssertEqual(historyResend.label, "Resend")
+        XCTAssertFalse(app.buttons["Resend to Original Displays"].exists)
+
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Activity Compact Cards Dark"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
     func testDemoJourneyAcrossMainTabs() {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
@@ -80,6 +157,11 @@ final class TesseraeCompanionUITests: XCTestCase {
             app.descendants(matching: .any)["display-preview-picpak-kitchen"],
             hasAspectRatio: 800.0 / 480.0
         )
+        XCTAssertTrue(
+            app.descendants(matching: .any)[
+                "display-pending-indicator-picpak-kitchen"
+            ].exists
+        )
 
         let kitchenCard = app.buttons["display-card-picpak-kitchen"]
         XCTAssertTrue(kitchenCard.exists)
@@ -87,7 +169,14 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(
             app.navigationBars["Kitchen"].waitForExistence(timeout: 2)
         )
+        XCTAssertTrue(app.navigationBars["Kitchen"].buttons["Close"].exists)
+        XCTAssertFalse(app.navigationBars["Kitchen"].buttons["Displays"].exists)
         XCTAssertTrue(app.staticTexts["Current Screen"].exists)
+        XCTAssertTrue(
+            app.descendants(matching: .any)[
+                "display-pending-status-picpak-kitchen"
+            ].exists
+        )
         XCTAssertTrue(app.staticTexts["800 × 480"].exists)
         assertPreview(
             app.descendants(matching: .any)[
@@ -95,7 +184,10 @@ final class TesseraeCompanionUITests: XCTestCase {
             ],
             hasAspectRatio: 800.0 / 480.0
         )
-        app.navigationBars["Kitchen"].buttons["Displays"].tap()
+        app.navigationBars["Kitchen"].buttons["Close"].tap()
+        XCTAssertTrue(
+            app.staticTexts["Kitchen"].waitForExistence(timeout: 2)
+        )
 
         let deskPreview = app.descendants(matching: .any)["display-preview-e1004-desk"]
         for _ in 0..<4 where !deskPreview.exists {
@@ -166,22 +258,42 @@ final class TesseraeCompanionUITests: XCTestCase {
 
         tabBar.buttons["Activity"].tap()
         XCTAssertTrue(app.staticTexts["Shared Photo"].waitForExistence(timeout: 2))
-        XCTAssertTrue(app.staticTexts["Published"].exists)
         let historyStatus = app.descendants(matching: .any)[
             "history-status-history-demo-photo"
+        ]
+        let historyPreview = app.descendants(matching: .any)[
+            "history-preview-history-demo-photo"
         ]
         let historyResend = app.buttons[
             "history-resend-history-demo-photo"
         ]
         XCTAssertTrue(historyStatus.exists)
+        XCTAssertEqual(historyStatus.label, "Published")
+        XCTAssertTrue(historyPreview.exists)
         XCTAssertTrue(historyResend.exists)
-        XCTAssertEqual(
-            historyResend.frame.width,
-            historyStatus.frame.width,
-            accuracy: 1
+        let sharedPhotoTitle = app.staticTexts["Shared Photo"].firstMatch
+        XCTAssertGreaterThan(
+            historyPreview.frame.minX,
+            sharedPhotoTitle.frame.maxX
         )
+        XCTAssertGreaterThan(
+            historyStatus.frame.midX,
+            historyPreview.frame.midX
+        )
+        XCTAssertLessThan(
+            historyStatus.frame.midY,
+            historyPreview.frame.midY
+        )
+        XCTAssertLessThan(historyResend.frame.width, 112)
         XCTAssertEqual(historyResend.label, "Resend")
         XCTAssertFalse(app.buttons["Resend to Original Displays"].exists)
+
+        let compactActivityScreenshot = XCTAttachment(
+            screenshot: app.screenshot()
+        )
+        compactActivityScreenshot.name = "Activity Compact Cards"
+        compactActivityScreenshot.lifetime = .keepAlways
+        add(compactActivityScreenshot)
 
         let collapsedCard = app.buttons.matching(
             NSPredicate(
@@ -230,9 +342,14 @@ final class TesseraeCompanionUITests: XCTestCase {
             app.swipeUp()
         }
         XCTAssertTrue(clearLocalActivityButton.isHittable)
+        XCTAssertFalse(
+            app.staticTexts[
+                "Clears Activity on this iPhone, including locally displayed server History. Tesserae server History is not deleted."
+            ].exists
+        )
         clearLocalActivityButton.tap()
 
-        let confirmation = app.sheets.firstMatch
+        let confirmation = app.alerts["Clear Local Activity?"]
         XCTAssertTrue(confirmation.waitForExistence(timeout: 2))
         confirmation.buttons["Clear Local Activity"].tap()
         XCTAssertTrue(
@@ -271,6 +388,73 @@ final class TesseraeCompanionUITests: XCTestCase {
                 )
             ).firstMatch.exists
         )
+    }
+
+    func testDisplayDetailsOpenAsSheet() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launch()
+
+        XCTAssertTrue(
+            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
+        )
+        app.buttons["Explore with Demo Data"].tap()
+
+        let kitchenCard = app.buttons["display-card-picpak-kitchen"]
+        XCTAssertTrue(kitchenCard.waitForExistence(timeout: 3))
+        kitchenCard.tap()
+
+        let detailNavigation = app.navigationBars["Kitchen"]
+        XCTAssertTrue(detailNavigation.waitForExistence(timeout: 2))
+        XCTAssertTrue(detailNavigation.buttons["Close"].exists)
+        XCTAssertFalse(detailNavigation.buttons["Displays"].exists)
+        XCTAssertTrue(app.staticTexts["Current Screen"].exists)
+        XCTAssertTrue(app.staticTexts["Spectra 6 · 6-color"].exists)
+        XCTAssertFalse(app.staticTexts["Waveshare E6"].exists)
+
+        detailNavigation.buttons["Close"].tap()
+        XCTAssertTrue(kitchenCard.waitForExistence(timeout: 2))
+    }
+
+    func testDemoSendSupportsLinkActions() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launch()
+
+        XCTAssertTrue(
+            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
+        )
+        app.buttons["Explore with Demo Data"].tap()
+        app.tabBars.firstMatch.buttons["Send"].tap()
+
+        XCTAssertTrue(app.buttons["Link"].waitForExistence(timeout: 2))
+        app.buttons["Link"].tap()
+        XCTAssertTrue(app.buttons["Image URL"].exists)
+        XCTAssertTrue(app.buttons["Webpage Snapshot"].exists)
+
+        let linkField = app.textFields["send-link-url"]
+        XCTAssertTrue(linkField.exists)
+        linkField.tap()
+        linkField.typeText("https://example.com/news")
+
+        let sendButton = app.buttons["Send to Displays"]
+        XCTAssertTrue(sendButton.isEnabled)
+        sendButton.tap()
+
+        let sentAlert = app.alerts["Sent"]
+        XCTAssertTrue(sentAlert.waitForExistence(timeout: 3))
+        XCTAssertTrue(
+            sentAlert.staticTexts[
+                "Tesserae accepted the link. Follow its progress in Activity."
+            ].exists
+        )
+        sentAlert.buttons["OK"].tap()
+
+        app.tabBars.firstMatch.buttons["Activity"].tap()
+        XCTAssertTrue(
+            app.staticTexts["example.com/news"].waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(app.staticTexts["Webpage"].exists)
     }
 
     func testSlowActivityRefreshReturnsListToRestingPosition() {
@@ -481,7 +665,14 @@ final class TesseraeCompanionUITests: XCTestCase {
 
         tabBar.buttons["Activity"].tap()
         XCTAssertTrue(app.staticTexts["Shared Photo"].waitForExistence(timeout: 2))
-        XCTAssertTrue(app.staticTexts["Published"].exists)
+        XCTAssertTrue(
+            app.descendants(matching: .any).matching(
+                NSPredicate(
+                    format: "identifier BEGINSWITH %@",
+                    "history-status-"
+                )
+            ).firstMatch.exists
+        )
     }
 
     func testManualConnectionAgainstFixtureServer() throws {
