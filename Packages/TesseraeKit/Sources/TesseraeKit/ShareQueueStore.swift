@@ -106,13 +106,13 @@ public enum ShareQueueStoreError: Error, Equatable, LocalizedError, Sendable {
         case .unavailable:
             "Shared Tesserae transfer storage is unavailable."
         case .invalidRequestID:
-            "The shared image request identifier is invalid."
+            "The shared Tesserae request identifier is invalid."
         case .missingImage:
             "The shared image is no longer available."
         case .reading:
-            "A queued Tesserae image could not be read."
+            "A queued Tesserae item could not be read."
         case .writing:
-            "The shared image could not be queued for Tesserae."
+            "The shared item could not be queued for Tesserae."
         }
     }
 }

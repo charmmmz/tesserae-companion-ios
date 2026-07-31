@@ -40,6 +40,14 @@ final class PreviewClientTests: XCTestCase {
             request.value(forHTTPHeaderField: "Accept"),
             "image/png"
         )
+        XCTAssertEqual(
+            request.cachePolicy,
+            .reloadIgnoringLocalCacheData
+        )
+        XCTAssertEqual(
+            request.value(forHTTPHeaderField: "Cache-Control"),
+            "no-cache"
+        )
     }
 
     func testDevicePreviewRevalidatesWithETagAndHandles304() async throws {
@@ -64,6 +72,10 @@ final class PreviewClientTests: XCTestCase {
         XCTAssertEqual(
             request.value(forHTTPHeaderField: "If-None-Match"),
             "\"device-preview-digest\""
+        )
+        XCTAssertEqual(
+            request.cachePolicy,
+            .reloadIgnoringLocalCacheData
         )
     }
 
@@ -93,6 +105,10 @@ final class PreviewClientTests: XCTestCase {
                 resolvingAgainstBaseURL: false
             )?.queryItems,
             [URLQueryItem(name: "device_id", value: "display-one")]
+        )
+        XCTAssertEqual(
+            request.value(forHTTPHeaderField: "Cache-Control"),
+            "no-cache"
         )
     }
 

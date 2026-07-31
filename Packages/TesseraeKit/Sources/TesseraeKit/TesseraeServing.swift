@@ -50,6 +50,23 @@ public protocol TesseraeServing: Sendable {
         idempotencyKey: String,
         instance: TesseraeInstance
     ) async throws -> PushJob
+    func sendImageURL(
+        url: URL,
+        fit: ImageFitMode,
+        deviceIDs: [String],
+        overrideQuietHours: Bool,
+        idempotencyKey: String,
+        instance: TesseraeInstance
+    ) async throws -> PushJob
+    func sendWebpage(
+        url: URL,
+        fit: ImageFitMode,
+        viewportW: Int?,
+        deviceIDs: [String],
+        overrideQuietHours: Bool,
+        idempotencyKey: String,
+        instance: TesseraeInstance
+    ) async throws -> PushJob
     func fetchJob(id: String, instance: TesseraeInstance) async throws -> PushJob
 }
 

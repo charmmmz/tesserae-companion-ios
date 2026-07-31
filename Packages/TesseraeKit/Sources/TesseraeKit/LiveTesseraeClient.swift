@@ -152,9 +152,10 @@ public actor LiveTesseraeClient: TesseraeServing {
             method: "GET",
             accept: "image/png"
         )
-        if let ifNoneMatch {
-            request.setValue(ifNoneMatch, forHTTPHeaderField: "If-None-Match")
-        }
+        configurePreviewRequest(
+            &request,
+            ifNoneMatch: ifNoneMatch
+        )
         return try await previewResponse(
             for: request,
             allowsPreparing: false
@@ -177,9 +178,10 @@ public actor LiveTesseraeClient: TesseraeServing {
             queryItems: queryItems,
             accept: "image/png"
         )
-        if let ifNoneMatch {
-            request.setValue(ifNoneMatch, forHTTPHeaderField: "If-None-Match")
-        }
+        configurePreviewRequest(
+            &request,
+            ifNoneMatch: ifNoneMatch
+        )
         return try await previewResponse(
             for: request,
             allowsPreparing: true
@@ -221,9 +223,10 @@ public actor LiveTesseraeClient: TesseraeServing {
             method: "GET",
             accept: "image/png"
         )
-        if let ifNoneMatch {
-            request.setValue(ifNoneMatch, forHTTPHeaderField: "If-None-Match")
-        }
+        configurePreviewRequest(
+            &request,
+            ifNoneMatch: ifNoneMatch
+        )
         return try await previewResponse(
             for: request,
             allowsPreparing: false
@@ -314,6 +317,70 @@ public actor LiveTesseraeClient: TesseraeServing {
             method: "POST",
             body: body,
             contentType: "multipart/form-data; boundary=\(boundary)"
+        )
+        request.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
+        let response: JobResponse = try await perform(
+            request,
+            expectedStatusCodes: [202]
+        )
+        return response.job
+    }
+
+    public func sendImageURL(
+        url: URL,
+        fit: ImageFitMode,
+        deviceIDs: [String],
+        overrideQuietHours: Bool,
+        idempotencyKey: String,
+        instance: TesseraeInstance
+    ) async throws -> PushJob {
+        guard !deviceIDs.isEmpty else {
+            throw TesseraeClientError.noTargets
+        }
+        let body = ImageURLPushRequest(
+            url: url,
+            deviceIDs: deviceIDs,
+            fit: fit,
+            overrideQuietHours: overrideQuietHours
+        )
+        var request = try await authenticatedRequest(
+            instance: instance,
+            path: ["image-urls"],
+            method: "POST",
+            body: TesseraeJSON.encoder().encode(body)
+        )
+        request.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
+        let response: JobResponse = try await perform(
+            request,
+            expectedStatusCodes: [202]
+        )
+        return response.job
+    }
+
+    public func sendWebpage(
+        url: URL,
+        fit: ImageFitMode,
+        viewportW: Int?,
+        deviceIDs: [String],
+        overrideQuietHours: Bool,
+        idempotencyKey: String,
+        instance: TesseraeInstance
+    ) async throws -> PushJob {
+        guard !deviceIDs.isEmpty else {
+            throw TesseraeClientError.noTargets
+        }
+        let body = WebpagePushRequest(
+            url: url,
+            deviceIDs: deviceIDs,
+            fit: fit,
+            viewportW: viewportW,
+            overrideQuietHours: overrideQuietHours
+        )
+        var request = try await authenticatedRequest(
+            instance: instance,
+            path: ["webpages"],
+            method: "POST",
+            body: TesseraeJSON.encoder().encode(body)
         )
         request.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
         let response: JobResponse = try await perform(
@@ -490,12 +557,34 @@ public actor LiveTesseraeClient: TesseraeServing {
         }
     }
 
+    private func configurePreviewRequest(
+        _ request: inout URLRequest,
+        ifNoneMatch: String?
+    ) {
+        // PreviewImageState owns the response bytes and ETag. Letting
+        // URLSession.shared cache the same authenticated URL creates a second
+        // cache with an independent validator; a synthesized cached 200 after
+        // a 304 can then replace newer preview bytes with an older body.
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+        if let ifNoneMatch {
+            request.setValue(ifNoneMatch, forHTTPHeaderField: "If-None-Match")
+        }
+    }
+
     private func response(for request: URLRequest) async throws -> TesseraeHTTPResponse {
         do {
             return try await transport.send(request)
         } catch let error as TesseraeClientError {
             throw error
         } catch {
+            let nsError = error as NSError
+            let isCancelledURLRequest =
+                nsError.domain == NSURLErrorDomain
+                    && nsError.code == NSURLErrorCancelled
+            if error is CancellationError || isCancelledURLRequest {
+                throw CancellationError()
+            }
             throw TesseraeClientError.transport(error.localizedDescription)
         }
     }

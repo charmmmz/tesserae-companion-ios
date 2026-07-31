@@ -18,10 +18,14 @@ final class MockTesseraeClientTests: XCTestCase {
         XCTAssertEqual(capabilities.product, "tesserae")
         XCTAssertTrue(capabilities.features.contains("dashboard_push"))
         XCTAssertTrue(capabilities.features.contains("image_push"))
+        XCTAssertTrue(capabilities.features.contains("image_url_push"))
+        XCTAssertTrue(capabilities.features.contains("webpage_push"))
         XCTAssertEqual(capabilities.limits.imageMaxEdge, 8_192)
         XCTAssertTrue(capabilities.limits.imageContentTypes.contains("image/heic"))
         XCTAssertEqual(capabilities.limits.imageFitModes, ImageFitMode.allCases)
         XCTAssertTrue(capabilities.features.contains("history"))
+        XCTAssertTrue(capabilities.supports(.imageURL))
+        XCTAssertTrue(capabilities.supports(.webpage))
     }
 
     func testPairRejectsNonSixDigitCode() async {
@@ -105,6 +109,52 @@ final class MockTesseraeClientTests: XCTestCase {
         )
 
         XCTAssertEqual(first.id, retry.id)
+    }
+
+    func testMockLinkPushesProduceCorrelatableJobs() async throws {
+        let client = MockTesseraeClient(latency: .zero)
+        let session = try await client.pair(
+            baseURL: baseURL,
+            code: "123456",
+            clientName: "Test iPhone"
+        )
+
+        let imageURL = try await client.sendImageURL(
+            url: try XCTUnwrap(URL(string: "https://images.example.com/photo.jpg")),
+            fit: .fill,
+            deviceIDs: ["picpak-kitchen"],
+            overrideQuietHours: false,
+            idempotencyKey: "mock-image-url-0001",
+            instance: session.instance
+        )
+        let webpage = try await client.sendWebpage(
+            url: try XCTUnwrap(URL(string: "https://example.com/news")),
+            fit: .fit,
+            viewportW: 1_280,
+            deviceIDs: ["e1004-desk"],
+            overrideQuietHours: false,
+            idempotencyKey: "mock-webpage-00001",
+            instance: session.instance
+        )
+        let completedImageURL = try await client.fetchJob(
+            id: imageURL.id,
+            instance: session.instance
+        )
+        let completedWebpage = try await client.fetchJob(
+            id: webpage.id,
+            instance: session.instance
+        )
+
+        XCTAssertEqual(imageURL.kind, .imageURLPush)
+        XCTAssertEqual(webpage.kind, .webpagePush)
+        XCTAssertEqual(
+            completedImageURL.result?.historyEventIDs,
+            ["history-demo-image-url"]
+        )
+        XCTAssertEqual(
+            completedWebpage.result?.historyEventIDs,
+            ["history-demo-webpage"]
+        )
     }
 
     func testContractFixturesDecodeIntoSwiftModels() throws {

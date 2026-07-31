@@ -114,6 +114,10 @@ public struct ServerCapabilities: Codable, Hashable, Sendable {
         case limits
         case webURL = "webUrl"
     }
+
+    public func supports(_ linkPushKind: LinkPushKind) -> Bool {
+        features.contains(linkPushKind.capability)
+    }
 }
 
 public struct TesseraeInstance: Codable, Identifiable, Hashable, Sendable {
@@ -445,6 +449,20 @@ public enum ImageFitMode: String, Codable, CaseIterable, Hashable, Sendable {
             "Stretch the image to the display, changing its proportions."
         case .center:
             "Keep the image at its prepared pixel size and clip or pad around it."
+        }
+    }
+}
+
+public enum LinkPushKind: String, Codable, CaseIterable, Hashable, Sendable {
+    case imageURL = "image_url"
+    case webpage
+
+    public var capability: String {
+        switch self {
+        case .imageURL:
+            "image_url_push"
+        case .webpage:
+            "webpage_push"
         }
     }
 }

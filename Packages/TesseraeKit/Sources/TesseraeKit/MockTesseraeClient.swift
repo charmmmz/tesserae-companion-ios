@@ -21,9 +21,11 @@ public actor MockTesseraeClient: TesseraeServing {
                 "dashboards",
                 "dashboard_push",
                 "image_push",
+                "image_url_push",
                 "jobs",
                 "previews",
                 "history",
+                "webpage_push",
             ],
             limits: CompanionLimits(
                 imageUploadBytes: 26_214_400,
@@ -185,10 +187,10 @@ public actor MockTesseraeClient: TesseraeServing {
             HistoryItem(
                 id: "history-demo-dashboard",
                 createdAt: .now.addingTimeInterval(-3_600),
-                source: "scheduler",
+                source: "button",
                 label: "Pantry",
                 deviceIDs: ["picpak-kitchen"],
-                status: "sent",
+                status: "dispatched",
                 durationSeconds: 2.4,
                 previewAvailable: true,
                 resendable: true
@@ -282,6 +284,57 @@ public actor MockTesseraeClient: TesseraeServing {
         )
     }
 
+    public func sendImageURL(
+        url: URL,
+        fit: ImageFitMode,
+        deviceIDs: [String],
+        overrideQuietHours: Bool,
+        idempotencyKey: String,
+        instance: TesseraeInstance
+    ) async throws -> PushJob {
+        guard !deviceIDs.isEmpty else {
+            throw TesseraeClientError.noTargets
+        }
+        return try await acceptJob(
+            kind: .imageURLPush,
+            label: linkLabel(for: url),
+            deviceIDs: deviceIDs,
+            overrideQuietHours: overrideQuietHours,
+            idempotencyKey: idempotencyKey,
+            resultReason: fit.rawValue,
+            historyEventIDs: ["history-demo-image-url"]
+        )
+    }
+
+    public func sendWebpage(
+        url: URL,
+        fit: ImageFitMode,
+        viewportW: Int?,
+        deviceIDs: [String],
+        overrideQuietHours: Bool,
+        idempotencyKey: String,
+        instance: TesseraeInstance
+    ) async throws -> PushJob {
+        guard !deviceIDs.isEmpty else {
+            throw TesseraeClientError.noTargets
+        }
+        let renderSummary = [
+            fit.rawValue,
+            viewportW.map { "\($0)px viewport" },
+        ]
+        .compactMap(\.self)
+        .joined(separator: " · ")
+        return try await acceptJob(
+            kind: .webpagePush,
+            label: linkLabel(for: url),
+            deviceIDs: deviceIDs,
+            overrideQuietHours: overrideQuietHours,
+            idempotencyKey: idempotencyKey,
+            resultReason: renderSummary,
+            historyEventIDs: ["history-demo-webpage"]
+        )
+    }
+
     public func fetchJob(id: String, instance: TesseraeInstance) async throws -> PushJob {
         try await pause()
         guard let job = completedJobs[id] else {
@@ -333,6 +386,12 @@ public actor MockTesseraeClient: TesseraeServing {
         jobsByIdempotencyKey[idempotencyKey] = accepted
         completedJobs[id] = completed
         return accepted
+    }
+
+    private func linkLabel(for url: URL) -> String {
+        let host = url.host() ?? url.absoluteString
+        let path = url.path.isEmpty ? "/" : url.path
+        return "\(host)\(path)"
     }
 
     private func pause() async throws {

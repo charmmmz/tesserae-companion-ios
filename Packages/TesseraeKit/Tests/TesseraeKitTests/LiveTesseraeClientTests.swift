@@ -24,6 +24,8 @@ final class LiveTesseraeClientTests: XCTestCase {
         XCTAssertEqual(capabilities.api.version, 1)
         XCTAssertTrue(capabilities.features.contains("jobs"))
         XCTAssertTrue(capabilities.features.contains("history"))
+        XCTAssertTrue(capabilities.features.contains("image_url_push"))
+        XCTAssertTrue(capabilities.features.contains("webpage_push"))
         XCTAssertEqual(
             capabilities.limits.imageFitModes,
             ImageFitMode.allCases
@@ -72,6 +74,29 @@ final class LiveTesseraeClientTests: XCTestCase {
         )
         XCTAssertEqual(image.kind, .imagePush)
         XCTAssertEqual(image.status, .accepted)
+
+        let imageURL = try await client.sendImageURL(
+            url: try XCTUnwrap(URL(string: "https://images.example.com/photo.jpg")),
+            fit: .fill,
+            deviceIDs: ["picpak-kitchen"],
+            overrideQuietHours: false,
+            idempotencyKey: "swift-image-url-test-0001",
+            instance: session.instance
+        )
+        XCTAssertEqual(imageURL.kind, .imageURLPush)
+        XCTAssertEqual(imageURL.status, .accepted)
+
+        let webpage = try await client.sendWebpage(
+            url: try XCTUnwrap(URL(string: "https://example.com/news")),
+            fit: .fit,
+            viewportW: 1_280,
+            deviceIDs: ["picpak-kitchen"],
+            overrideQuietHours: false,
+            idempotencyKey: "swift-webpage-test-00001",
+            instance: session.instance
+        )
+        XCTAssertEqual(webpage.kind, .webpagePush)
+        XCTAssertEqual(webpage.status, .accepted)
 
         let history = try await client.fetchHistory(
             beforeID: nil,
