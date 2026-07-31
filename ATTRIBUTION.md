@@ -44,6 +44,17 @@ The App Icon uses Tesserae's official tessellated mark from
 outer background is extended to the edge so iOS can apply its platform mask
 without transparent pixels.
 
+## Phosphor Icons
+
+Dashboard icons are rendered with
+[Phosphor Icons for Web](https://github.com/phosphor-icons/web), version 2.1.2.
+Phosphor is copyright Phosphor Icons and contributors and is distributed
+under the MIT License. The app vendors only the regular TTF and a compact
+identifier-to-glyph map, rather than all six Swift asset-catalog weights. The
+font is used only for Dashboard imagery selected by the Tesserae server;
+native app controls continue to use Apple SF Symbols. The complete licence
+text is in `ThirdPartyNotices/Phosphor.txt`.
+
 ## Compatible-hardware marks
 
 The app bundles unmodified manufacturer marks solely to identify compatible

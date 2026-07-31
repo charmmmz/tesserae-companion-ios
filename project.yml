@@ -28,6 +28,8 @@ targets:
         CFBundleDisplayName: Tesserae
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UIAppFonts:
+          - Phosphor.ttf
         NSBonjourServices:
           - _tesserae._tcp
         NSLocalNetworkUsageDescription: Discover and connect to your Tesserae server on the local network.

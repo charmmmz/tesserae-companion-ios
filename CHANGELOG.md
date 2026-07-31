@@ -13,6 +13,9 @@ capabilities.
 
 ### Added
 
+- Dashboard cards now render the same Phosphor icon selected in Tesserae's web
+  UI through the optional OpenAPI 0.5.1 `icon` field, including legacy-name
+  normalization and a safe cube fallback for missing or unknown identifiers.
 - TesseraeKit live and mock transports now submit remote image URLs and
   webpages through the OpenAPI 0.5.0 asynchronous Job routes, ready for clients
   to expose only when the corresponding optional capability is advertised.

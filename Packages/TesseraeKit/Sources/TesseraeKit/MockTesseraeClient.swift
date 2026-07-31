@@ -123,6 +123,7 @@ public actor MockTesseraeClient: TesseraeServing {
                 id: "morning",
                 name: "Morning",
                 kind: .grid,
+                iconName: "sun-horizon",
                 deviceIDs: ["e1004-desk"],
                 updatedAt: .now.addingTimeInterval(-3_600),
                 webURL: "/pages/morning"
@@ -131,6 +132,7 @@ public actor MockTesseraeClient: TesseraeServing {
                 id: "pantry",
                 name: "Pantry",
                 kind: .canvas,
+                iconName: "cooking-pot",
                 deviceIDs: ["picpak-kitchen"],
                 updatedAt: .now.addingTimeInterval(-900),
                 webURL: "/pages/pantry"
@@ -139,6 +141,7 @@ public actor MockTesseraeClient: TesseraeServing {
                 id: "photo-frame",
                 name: "Photo Frame",
                 kind: .grid,
+                iconName: "image",
                 deviceIDs: ["picpak-kitchen", "e1004-desk"],
                 updatedAt: .now.addingTimeInterval(-86_400),
                 webURL: "/pages/photo-frame"

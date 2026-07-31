@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Status | Implemented base contract with accepted additive contract fixtures |
-| Contract version | 0.5.0 |
+| Contract version | 0.5.1 |
 | Namespace | `/api/app/v1` |
 | Authentication | Revocable per-client Companion bearer token |
 | Machine-readable source | [`Contracts/app-v1.openapi.yaml`](Contracts/app-v1.openapi.yaml) |
@@ -119,6 +119,12 @@ Contract 0.5.0 adds two independently advertised capabilities:
 Clients expose neither action unless its exact capability is present. Both
 routes use the existing image-fit vocabulary and do not change the five-feature
 compatibility floor.
+
+Contract 0.5.1 adds an optional nullable `icon` property to each Dashboard.
+It carries the same bare Phosphor identifier stored by Tesserae's web UI.
+Clients may normalize legacy aliases and must fall back safely when the field
+is absent, null, or unknown; this additive display metadata needs no separate
+capability.
 
 ## Remote image URLs and webpages
 
@@ -304,5 +310,6 @@ pairing through publish polling.
 - first stable Tesserae release containing the base contract;
 - first edge and stable Tesserae revisions implementing contract 0.4.1;
 - first edge and stable Tesserae revisions implementing contract 0.5.0;
+- first stable Tesserae revision including the additive 0.5.1 Dashboard icon;
 - the exact reusable PNG stage each packed renderer exposes as its
   device-specific preview.

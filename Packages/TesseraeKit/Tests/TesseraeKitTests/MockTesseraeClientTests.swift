@@ -288,6 +288,8 @@ final class MockTesseraeClientTests: XCTestCase {
         XCTAssertEqual(devices.devices.first?.hasPendingRender, true)
         XCTAssertEqual(devices.devices.last?.hasPendingRender, false)
         XCTAssertEqual(dashboards.dashboards.first?.deviceIDs, ["picpak-kitchen"])
+        XCTAssertEqual(dashboards.dashboards.first?.iconName, "cooking-pot")
+        XCTAssertNil(dashboards.dashboards.last?.iconName)
         XCTAssertEqual(dashboardPush.deviceIDs, ["picpak-kitchen"])
         XCTAssertEqual(imagePush.fit, .blur)
         XCTAssertEqual(imageURLPush.url.host, "images.example.com")

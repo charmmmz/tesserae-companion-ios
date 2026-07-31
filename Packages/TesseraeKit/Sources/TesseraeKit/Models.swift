@@ -380,6 +380,7 @@ public struct DashboardSummary: Codable, Identifiable, Hashable, Sendable {
     public let id: String
     public let name: String
     public let kind: DashboardKind
+    public let iconName: String?
     public let deviceIDs: [String]
     public let updatedAt: Date?
     public let webURL: String?
@@ -388,6 +389,7 @@ public struct DashboardSummary: Codable, Identifiable, Hashable, Sendable {
         id: String,
         name: String,
         kind: DashboardKind,
+        iconName: String? = nil,
         deviceIDs: [String],
         updatedAt: Date? = nil,
         webURL: String? = nil
@@ -395,6 +397,7 @@ public struct DashboardSummary: Codable, Identifiable, Hashable, Sendable {
         self.id = id
         self.name = name
         self.kind = kind
+        self.iconName = iconName
         self.deviceIDs = deviceIDs
         self.updatedAt = updatedAt
         self.webURL = webURL
@@ -404,6 +407,7 @@ public struct DashboardSummary: Codable, Identifiable, Hashable, Sendable {
         case id
         case name
         case kind
+        case iconName = "icon"
         case deviceIDs = "deviceIds"
         case updatedAt
         case webURL = "webUrl"

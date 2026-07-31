@@ -129,6 +129,7 @@ public actor LiveTesseraeClient: TesseraeServing {
                 id: dashboard.id,
                 name: dashboard.name,
                 kind: dashboard.kind,
+                iconName: dashboard.iconName,
                 deviceIDs: dashboard.deviceIDs,
                 updatedAt: dashboard.updatedAt,
                 webURL: try dashboard.webURL.map {

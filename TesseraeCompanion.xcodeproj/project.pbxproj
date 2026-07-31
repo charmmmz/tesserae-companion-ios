@@ -10,6 +10,7 @@
 		04BA9B524B9B033C0098349C /* TesseraeTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD8060E9227692A0914DB946 /* TesseraeTheme.swift */; };
 		059821755403DD0ADCC646A0 /* TesseraeKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A7EA7E4D096679EEEC58B6C /* TesseraeKit */; };
 		28315FF4BF85AAE536A42F85 /* TesseraePanelImagePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 135374B71848FF0E87F4A6D3 /* TesseraePanelImagePreview.swift */; };
+		2DB239AB23E1BEDF30BF73EA /* PhosphorRegularGlyphs.json in Resources */ = {isa = PBXBuildFile; fileRef = 5CCA51F737B4F27E6617E7E4 /* PhosphorRegularGlyphs.json */; };
 		3046E3D5594FAAD50F5E1467 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = DF8B7156D9BACE5476E42EA4 /* Localizable.strings */; };
 		33FF49B7B32BF243F0EE5DE9 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = AEF28EF26B0AF20FD40F858C /* PrivacyInfo.xcprivacy */; };
 		34687E78EE655E20CD4768D8 /* SendView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F71FB166C88F622C1873E39 /* SendView.swift */; };
@@ -26,11 +27,13 @@
 		65EC60FE0E110924626C640A /* DisplayHardwareBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36574431BF8F9CAB78DF3088 /* DisplayHardwareBadge.swift */; };
 		66ED4DBFBDA5C24CE79DA230 /* AppShortcuts.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = AD24891D7CDB0886913F3675 /* AppShortcuts.xcstrings */; };
 		6934735274B0175C7C2D2AF8 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F548F3379CFFB93726CD704 /* MainTabView.swift */; };
+		6FD2A3368ED54597304902DB /* PhosphorDashboardIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 025F289A1CFEF8C9B59D15E0 /* PhosphorDashboardIcon.swift */; };
 		7640D052F916B7D073F4D161 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = DA70B355A13002C7B64EA149 /* Localizable.strings */; };
 		7947C5ABEA598A1D59C57C68 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8FE0A6BC06BC1C26FD5AD93A /* Assets.xcassets */; };
 		7C7957F03F775B5E9B059BE2 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B2A5670FEC5BD4923C95159E /* PrivacyInfo.xcprivacy */; };
 		923B54BBAA318026F2C29769 /* PreviewArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61AF530D779237A174E117C6 /* PreviewArtwork.swift */; };
 		A39325FC03A45BD076B23270 /* TesseraeCompanionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F7B082A4F4C920F49545310 /* TesseraeCompanionUITests.swift */; };
+		ADE2EF08AEC3F760A31BA858 /* Phosphor.ttf in Resources */ = {isa = PBXBuildFile; fileRef = CB98E98A7C6727AE8FE4694E /* Phosphor.ttf */; };
 		BCC58FB96478BC3992F3946E /* ActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1A411679F997EDCC5BDFF5 /* ActivityView.swift */; };
 		CA3CCC0682447B674710FFE9 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 0580CE81ECB940408B4B84B9 /* InfoPlist.strings */; };
 		DF2314E330D5BC6AA639C723 /* TesseraeShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 6F532D2BC8A0893B35702D88 /* TesseraeShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -73,6 +76,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		025F289A1CFEF8C9B59D15E0 /* PhosphorDashboardIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhosphorDashboardIcon.swift; sourceTree = "<group>"; };
 		0580CE81ECB940408B4B84B9 /* InfoPlist.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = InfoPlist.strings; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		135374B71848FF0E87F4A6D3 /* TesseraePanelImagePreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TesseraePanelImagePreview.swift; sourceTree = "<group>"; };
 		1595109BA73E8D8DE2555D38 /* TesseraeCompanion.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TesseraeCompanion.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -81,6 +85,7 @@
 		36574431BF8F9CAB78DF3088 /* DisplayHardwareBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayHardwareBadge.swift; sourceTree = "<group>"; };
 		4EA5F074B206DD2FF54C9767 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		4F548F3379CFFB93726CD704 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+		5CCA51F737B4F27E6617E7E4 /* PhosphorRegularGlyphs.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = PhosphorRegularGlyphs.json; sourceTree = "<group>"; };
 		61AF530D779237A174E117C6 /* PreviewArtwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewArtwork.swift; sourceTree = "<group>"; };
 		68D757E72A99A23D9A75B361 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		6BD9BF482144BDCB753B7EF6 /* PreviewImageState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewImageState.swift; sourceTree = "<group>"; };
@@ -95,6 +100,7 @@
 		AEF28EF26B0AF20FD40F858C /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		B285D6042818DD9ECF798800 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		B2A5670FEC5BD4923C95159E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		CB98E98A7C6727AE8FE4694E /* Phosphor.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Phosphor.ttf; sourceTree = "<group>"; };
 		CF3B64DA50FECFA7A4514489 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		D1E10BE2603FB01EFAAE4419 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		DA70B355A13002C7B64EA149 /* Localizable.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = Localizable.strings; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
@@ -165,6 +171,7 @@
 			isa = PBXGroup;
 			children = (
 				36574431BF8F9CAB78DF3088 /* DisplayHardwareBadge.swift */,
+				025F289A1CFEF8C9B59D15E0 /* PhosphorDashboardIcon.swift */,
 			);
 			path = DesignSystem;
 			sourceTree = "<group>";
@@ -213,6 +220,7 @@
 				0580CE81ECB940408B4B84B9 /* InfoPlist.strings */,
 				DF8B7156D9BACE5476E42EA4 /* Localizable.strings */,
 				B2A5670FEC5BD4923C95159E /* PrivacyInfo.xcprivacy */,
+				D9A6825AF0F087C61452C6F3 /* Phosphor */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -223,6 +231,15 @@
 				E350791E94991CE131813063 /* TesseraeKit */,
 			);
 			path = Packages;
+			sourceTree = "<group>";
+		};
+		D9A6825AF0F087C61452C6F3 /* Phosphor */ = {
+			isa = PBXGroup;
+			children = (
+				CB98E98A7C6727AE8FE4694E /* Phosphor.ttf */,
+				5CCA51F737B4F27E6617E7E4 /* PhosphorRegularGlyphs.json */,
+			);
+			path = Phosphor;
 			sourceTree = "<group>";
 		};
 		DF851628CBA704E4C7FEC2F0 /* SharedUI */ = {
@@ -388,6 +405,8 @@
 				7947C5ABEA598A1D59C57C68 /* Assets.xcassets in Resources */,
 				CA3CCC0682447B674710FFE9 /* InfoPlist.strings in Resources */,
 				3046E3D5594FAAD50F5E1467 /* Localizable.strings in Resources */,
+				ADE2EF08AEC3F760A31BA858 /* Phosphor.ttf in Resources */,
+				2DB239AB23E1BEDF30BF73EA /* PhosphorRegularGlyphs.json in Resources */,
 				7C7957F03F775B5E9B059BE2 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -435,6 +454,7 @@
 				3F29C92C8E5B97327E3D0265 /* DisplaysView.swift in Sources */,
 				6934735274B0175C7C2D2AF8 /* MainTabView.swift in Sources */,
 				5EC9A7DAA43DC020D3D5DE6D /* OnboardingView.swift in Sources */,
+				6FD2A3368ED54597304902DB /* PhosphorDashboardIcon.swift in Sources */,
 				923B54BBAA318026F2C29769 /* PreviewArtwork.swift in Sources */,
 				F49FCB7C12E28E8AB7DF788B /* PreviewImageState.swift in Sources */,
 				4F63438E4356B972B7A4600D /* RootView.swift in Sources */,

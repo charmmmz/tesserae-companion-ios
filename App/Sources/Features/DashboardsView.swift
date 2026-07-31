@@ -97,10 +97,14 @@ struct DashboardsView: View {
     private func dashboardCard(_ dashboard: DashboardSummary) -> some View {
         HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 9) {
-                Text(dashboard.name)
-                    .font(.headline)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.82)
+                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                    dashboardIcon(dashboard)
+
+                    Text(dashboard.name)
+                        .font(.headline)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.82)
+                }
 
                 Text(dashboard.kind.rawValue.capitalized)
                     .font(.caption.monospaced())
@@ -142,6 +146,10 @@ struct DashboardsView: View {
             dashboardPreview(dashboard)
         }
         .tesseraeCard()
+    }
+
+    private func dashboardIcon(_ dashboard: DashboardSummary) -> some View {
+        PhosphorDashboardIcon(name: dashboard.canonicalIconName, size: 19)
     }
 
     private func dashboardPreview(

@@ -35,6 +35,10 @@
 	<string>group.com.charmmmz.tesseraecompanion</string>
 	<key>TesseraeKeychainAccessGroup</key>
 	<string>$(AppIdentifierPrefix)com.charmmmz.tesseraecompanion.shared</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Phosphor.ttf</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>

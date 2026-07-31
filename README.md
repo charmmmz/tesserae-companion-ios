@@ -11,7 +11,7 @@ It is a community-built client, not the official Tesserae app.
 ## Project status
 
 - Product status: live-connected internal beta candidate
-- Document version: 0.5.0
+- Document version: 0.5.1
 - Planned first App Store release: 1.0.0
 - Included product scope: native V1 plus Share Sheet and Shortcuts integrations
 - iOS implementation: native Swift and SwiftUI

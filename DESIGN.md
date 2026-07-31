@@ -226,8 +226,8 @@ include an icon and label, never colour alone.
   the iOS system font.
 - Use JetBrains Mono only for device identifiers, versions, dimensions,
   and diagnostic values.
-- Prefer Phosphor's Swift icons if the dependency is healthy and the
-  licence is confirmed; otherwise map the same concepts to SF Symbols.
+- Use Phosphor Swift for server-selected Dashboard icons so identifiers match
+  the web UI; keep SF Symbols for native navigation and controls.
 - Keep native control behaviour, hit targets, focus, and accessibility
   semantics even when the surface styling follows Tesserae.
 
@@ -287,7 +287,7 @@ extension, intents, and tests.
 | Display status | Foreground-only 15-second polling while Displays is visible; Companion API v1 has no event subscription endpoint |
 | Shortcuts | App Intents and App Entities |
 | Logging | `OSLog`, privacy annotations for URLs/tokens/user content |
-| Dependencies | None for the foundation unless an icon package is approved |
+| Dependencies | Local TesseraeKit plus the regular Phosphor 2.1.2 icon font for server-selected Dashboard icons |
 
 The networking layer is protocol-driven so mocked contract fixtures can
 exercise every feature without a running server.
@@ -667,6 +667,7 @@ display model/transport, and observed outcome.
 | D-020 | 2026-07-29 | Add canonical server History and idempotent resend to Activity as an optional capability without adding another tab or exposing History administration. | Accepted by upstream maintainer |
 | D-021 | 2026-07-30 | Add separate capability-gated image-URL and webpage Job routes; render or fetch once, then use existing per-target push fan-out. | Accepted by upstream maintainer |
 | D-022 | 2026-07-30 | Reuse one bounded webpage-render primitive for Web UI manual preview and Companion push while keeping Companion on a strict no-LAN URL policy. | Accepted by upstream maintainer |
+| D-023 | 2026-07-31 | Carry bare Phosphor Dashboard identifiers through Companion API 0.5.1, normalize legacy aliases in the client, and fall back to `cube` for missing or unknown names. | Accepted by app maintainer |
 
 ## 17. Open questions for maintainer review
 
