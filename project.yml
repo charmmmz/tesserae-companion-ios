@@ -25,7 +25,7 @@ targets:
     info:
       path: App/Resources/Info.plist
       properties:
-        CFBundleDisplayName: Tesserae Companion
+        CFBundleDisplayName: Tesserae
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSBonjourServices:

@@ -177,7 +177,8 @@ matching Tesserae release and minimum compatible version are recorded.
 
 ## Naming and App Store position
 
-- App name: **Tesserae Companion**
+- App Store name: **Tesserae Companion**
+- Installed home-screen name: **Tesserae**
 - Store description: **A community-built companion client for Tesserae**
 - Publisher: the companion app maintainer's Apple Developer account
 - Official status: always described as community-built, never official

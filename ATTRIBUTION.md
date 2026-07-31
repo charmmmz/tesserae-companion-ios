@@ -39,6 +39,11 @@ Tesserae Companion is distributed under the Apache License 2.0. See
 repository's original code and documentation; it does not grant rights to
 Tesserae names, logos, or other marks.
 
+The App Icon uses Tesserae's official tessellated mark from
+`static/brand/icon.svg`. Its geometry and colours are preserved; only the
+outer background is extended to the edge so iOS can apply its platform mask
+without transparent pixels.
+
 ## Compatible-hardware marks
 
 The app bundles unmodified manufacturer marks solely to identify compatible

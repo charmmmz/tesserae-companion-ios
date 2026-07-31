@@ -62,6 +62,9 @@ capabilities.
 
 ### Changed
 
+- The App Icon now uses the official Tesserae tessellated mark. The App Store
+  product name remains **Tesserae Companion**, while the shorter installed
+  home-screen name is now **Tesserae**.
 - Activity now refreshes immediately when opened and every 15 seconds while it
   remains visible in the foreground, so sends from the Tesserae web UI,
   schedules, and other clients appear without a manual pull. Existing immutable

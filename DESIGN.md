@@ -192,11 +192,12 @@ native iOS.
 ### 5.1 Brand position
 
 - Product name: **Tesserae Companion**
+- Installed home-screen name: **Tesserae**
 - Descriptor: **Community-built client for Tesserae**
 - Avoid “official”, “by Tesserae”, or language implying maintainer
   ownership.
-- App icon direction: the Tesserae tessellated mark with a subtle
-  companion distinction. Final use requires maintainer approval.
+- App icon: the official Tesserae tessellated mark, adapted only to provide
+  the opaque edge-to-edge source required for the iOS platform mask.
 
 ### 5.2 Core visual tokens
 
