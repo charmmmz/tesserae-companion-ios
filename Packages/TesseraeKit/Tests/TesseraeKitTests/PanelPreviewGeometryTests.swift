@@ -148,4 +148,55 @@ final class PanelPreviewGeometryTests: XCTestCase {
             .zero
         )
     }
+
+    func testFramingResolvesWideSourceForPortraitTarget() {
+        let crop = ImageFraming(
+            focusX: 0.62,
+            focusY: 0.38,
+            zoom: 1.35
+        ).resolvedCrop(
+            sourceWidth: 1_600,
+            sourceHeight: 1_200,
+            targetWidth: 1_200,
+            targetHeight: 1_600
+        )
+
+        XCTAssertEqual(crop.x, 0.411667, accuracy: 0.000_001)
+        XCTAssertEqual(crop.y, 0.00963, accuracy: 0.000_001)
+        XCTAssertEqual(crop.width, 0.416667, accuracy: 0.000_001)
+        XCTAssertEqual(crop.height, 0.740741, accuracy: 0.000_001)
+    }
+
+    func testFramingResolvesIndependentlyForMixedTargetAspects() {
+        let framing = ImageFraming(focusX: 0.5, focusY: 0.5, zoom: 1)
+        let portrait = framing.resolvedCrop(
+            sourceWidth: 1_600,
+            sourceHeight: 1_200,
+            targetWidth: 1_200,
+            targetHeight: 1_600
+        )
+        let landscape = framing.resolvedCrop(
+            sourceWidth: 1_600,
+            sourceHeight: 1_200,
+            targetWidth: 1_600,
+            targetHeight: 1_200
+        )
+
+        XCTAssertEqual(portrait.width, 0.5625, accuracy: 0.000_001)
+        XCTAssertEqual(portrait.height, 1, accuracy: 0.000_001)
+        XCTAssertEqual(landscape, .full)
+    }
+
+    func testFramingClampsFocusAtSourceEdges() {
+        let crop = ImageFraming(focusX: 1.2, focusY: -0.2, zoom: 2)
+            .resolvedCrop(
+                sourceWidth: 1_600,
+                sourceHeight: 1_200,
+                targetWidth: 1_200,
+                targetHeight: 1_600
+            )
+
+        XCTAssertEqual(crop.x + crop.width, 1, accuracy: 0.000_001)
+        XCTAssertEqual(crop.y, 0, accuracy: 0.000_001)
+    }
 }

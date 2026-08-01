@@ -27,6 +27,7 @@ public struct CompanionLimits: Codable, Hashable, Sendable {
     public let imageMaxEdge: Int
     public let imageContentTypes: [String]
     public let imageFitModes: [ImageFitMode]
+    public let imageFramingMaxZoom: Double?
     public let jobRetentionSeconds: Int
     public let idempotencyRetentionSeconds: Int
 
@@ -35,6 +36,7 @@ public struct CompanionLimits: Codable, Hashable, Sendable {
         imageMaxEdge: Int,
         imageContentTypes: [String],
         imageFitModes: [ImageFitMode] = ImageFitMode.legacyModes,
+        imageFramingMaxZoom: Double? = nil,
         jobRetentionSeconds: Int,
         idempotencyRetentionSeconds: Int
     ) {
@@ -42,6 +44,7 @@ public struct CompanionLimits: Codable, Hashable, Sendable {
         self.imageMaxEdge = imageMaxEdge
         self.imageContentTypes = imageContentTypes
         self.imageFitModes = imageFitModes
+        self.imageFramingMaxZoom = imageFramingMaxZoom
         self.jobRetentionSeconds = jobRetentionSeconds
         self.idempotencyRetentionSeconds = idempotencyRetentionSeconds
     }
@@ -51,6 +54,7 @@ public struct CompanionLimits: Codable, Hashable, Sendable {
         case imageMaxEdge
         case imageContentTypes
         case imageFitModes
+        case imageFramingMaxZoom
         case jobRetentionSeconds
         case idempotencyRetentionSeconds
     }
@@ -67,6 +71,10 @@ public struct CompanionLimits: Codable, Hashable, Sendable {
             [ImageFitMode].self,
             forKey: .imageFitModes
         ) ?? ImageFitMode.legacyModes
+        imageFramingMaxZoom = try container.decodeIfPresent(
+            Double.self,
+            forKey: .imageFramingMaxZoom
+        )
         jobRetentionSeconds = try container.decode(
             Int.self,
             forKey: .jobRetentionSeconds
@@ -117,6 +125,11 @@ public struct ServerCapabilities: Codable, Hashable, Sendable {
 
     public func supports(_ linkPushKind: LinkPushKind) -> Bool {
         features.contains(linkPushKind.capability)
+    }
+
+    public var supportsImageFraming: Bool {
+        features.contains("image_framing")
+            && (limits.imageFramingMaxZoom ?? 0) >= 1
     }
 }
 
@@ -483,6 +496,79 @@ public enum ImageFitMode: String, Codable, CaseIterable, Hashable, Sendable {
     }
 }
 
+public struct ImageFraming: Codable, Hashable, Sendable {
+    public let focusX: Double
+    public let focusY: Double
+    public let zoom: Double
+
+    public init(focusX: Double, focusY: Double, zoom: Double) {
+        self.focusX = focusX
+        self.focusY = focusY
+        self.zoom = zoom
+    }
+
+    /// Resolves the normalized source crop described by the Companion 0.6
+    /// contract for one target panel. The server performs the same operation
+    /// before its existing Fill path and owns final pixel rounding.
+    public func resolvedCrop(
+        sourceWidth: Double,
+        sourceHeight: Double,
+        targetWidth: Double,
+        targetHeight: Double
+    ) -> NormalizedImageCrop {
+        guard
+            sourceWidth > 0,
+            sourceHeight > 0,
+            targetWidth > 0,
+            targetHeight > 0
+        else {
+            return .full
+        }
+
+        let sourceAspect = sourceWidth / sourceHeight
+        let targetAspect = targetWidth / targetHeight
+        let baseWidth: Double
+        let baseHeight: Double
+        if sourceAspect >= targetAspect {
+            baseWidth = targetAspect / sourceAspect
+            baseHeight = 1
+        } else {
+            baseWidth = 1
+            baseHeight = sourceAspect / targetAspect
+        }
+
+        let safeZoom = max(zoom, 1)
+        let width = baseWidth / safeZoom
+        let height = baseHeight / safeZoom
+        let safeFocusX = min(max(focusX, 0), 1)
+        let safeFocusY = min(max(focusY, 0), 1)
+        let x = min(max(safeFocusX - width / 2, 0), 1 - width)
+        let y = min(max(safeFocusY - height / 2, 0), 1 - height)
+        return NormalizedImageCrop(x: x, y: y, width: width, height: height)
+    }
+}
+
+public struct NormalizedImageCrop: Equatable, Hashable, Sendable {
+    public let x: Double
+    public let y: Double
+    public let width: Double
+    public let height: Double
+
+    public init(x: Double, y: Double, width: Double, height: Double) {
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+    }
+
+    public static let full = NormalizedImageCrop(
+        x: 0,
+        y: 0,
+        width: 1,
+        height: 1
+    )
+}
+
 public enum LinkPushKind: String, Codable, CaseIterable, Hashable, Sendable {
     case imageURL = "image_url"
     case webpage
@@ -515,21 +601,25 @@ public struct DashboardPushRequest: Codable, Hashable, Sendable {
 public struct ImagePushRequest: Codable, Hashable, Sendable {
     public let deviceIDs: [String]
     public let fit: ImageFitMode
+    public let framing: ImageFraming?
     public let overrideQuietHours: Bool
 
     public init(
         deviceIDs: [String],
         fit: ImageFitMode,
+        framing: ImageFraming? = nil,
         overrideQuietHours: Bool = false
     ) {
         self.deviceIDs = deviceIDs
         self.fit = fit
+        self.framing = framing
         self.overrideQuietHours = overrideQuietHours
     }
 
     private enum CodingKeys: String, CodingKey {
         case deviceIDs = "deviceIds"
         case fit
+        case framing
         case overrideQuietHours
     }
 }
@@ -617,6 +707,7 @@ public struct HistoryItem: Codable, Identifiable, Hashable, Sendable {
     public let previewAvailable: Bool
     public let resendable: Bool
     public let fit: ImageFitMode?
+    public let framing: ImageFraming?
 
     public init(
         id: String,
@@ -629,7 +720,8 @@ public struct HistoryItem: Codable, Identifiable, Hashable, Sendable {
         error: String? = nil,
         previewAvailable: Bool,
         resendable: Bool,
-        fit: ImageFitMode? = nil
+        fit: ImageFitMode? = nil,
+        framing: ImageFraming? = nil
     ) {
         self.id = id
         self.createdAt = createdAt
@@ -642,6 +734,7 @@ public struct HistoryItem: Codable, Identifiable, Hashable, Sendable {
         self.previewAvailable = previewAvailable
         self.resendable = resendable
         self.fit = fit
+        self.framing = framing
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -656,6 +749,7 @@ public struct HistoryItem: Codable, Identifiable, Hashable, Sendable {
         case previewAvailable
         case resendable
         case fit
+        case framing
     }
 }
 

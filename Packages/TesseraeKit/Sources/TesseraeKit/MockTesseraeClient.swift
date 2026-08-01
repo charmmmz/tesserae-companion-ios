@@ -271,6 +271,7 @@ public actor MockTesseraeClient: TesseraeServing {
         fileName: String,
         contentType: String,
         fit: ImageFitMode,
+        framing: ImageFraming?,
         deviceIDs: [String],
         overrideQuietHours: Bool,
         idempotencyKey: String,
@@ -289,7 +290,15 @@ public actor MockTesseraeClient: TesseraeServing {
             deviceIDs: deviceIDs,
             overrideQuietHours: overrideQuietHours,
             idempotencyKey: idempotencyKey,
-            resultReason: "\(fit.rawValue) · \(data.count) bytes"
+            resultReason: [
+                fit.rawValue,
+                framing.map {
+                    "focus \($0.focusX),\($0.focusY) · \($0.zoom)x"
+                },
+                "\(data.count) bytes",
+            ]
+            .compactMap(\.self)
+            .joined(separator: " · ")
         )
     }
 

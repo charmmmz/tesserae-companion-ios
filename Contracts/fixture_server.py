@@ -10,6 +10,8 @@ import ipaddress
 import json
 import threading
 from dataclasses import dataclass
+from email.parser import BytesParser
+from email.policy import default as email_policy
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -106,7 +108,7 @@ class FixtureRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         path = urlparse(self.path).path.rstrip("/")
         if path == "/api/app/v1":
-            self.send_fixture("capabilities-extended.json")
+            self.send_fixture("capabilities-framing.json")
             return
         if not self.authorized():
             return
@@ -203,17 +205,16 @@ class FixtureRequestHandler(BaseHTTPRequestHandler):
                     "Expected a multipart image request.",
                 )
                 return
-            if b'name="request"' not in body or b'name="image"' not in body:
-                self.send_error_response(
-                    HTTPStatus.BAD_REQUEST,
-                    "invalid_request",
-                    "Both request and image parts are required.",
-                )
+            payload = self.parse_image_multipart(content_type, body)
+            if payload is None:
+                return
+            device_ids = self.validate_image_push_payload(payload)
+            if device_ids is None:
                 return
             self.accept_job(
                 kind="image_push",
                 label="Shared Photo",
-                device_ids=["picpak-kitchen"],
+                device_ids=device_ids,
                 body=body,
             )
             return
@@ -422,6 +423,137 @@ class FixtureRequestHandler(BaseHTTPRequestHandler):
                 return None
 
         return url, device_ids
+
+    def parse_image_multipart(
+        self,
+        content_type: str,
+        body: bytes,
+    ) -> dict[str, Any] | None:
+        envelope = (
+            f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n".encode()
+            + body
+        )
+        message = BytesParser(policy=email_policy).parsebytes(envelope)
+        if not message.is_multipart():
+            self.send_error_response(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_request",
+                "The multipart image request is invalid.",
+            )
+            return None
+
+        request_payload: dict[str, Any] | None = None
+        has_image = False
+        for part in message.iter_parts():
+            name = part.get_param("name", header="content-disposition")
+            part_body = part.get_payload(decode=True) or b""
+            if name == "image":
+                has_image = bool(part_body)
+            elif name == "request":
+                try:
+                    decoded = json.loads(part_body)
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    decoded = None
+                if isinstance(decoded, dict):
+                    request_payload = decoded
+
+        if not has_image or request_payload is None:
+            self.send_error_response(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_request",
+                "Both request and image parts are required.",
+            )
+            return None
+        return request_payload
+
+    def validate_image_push_payload(
+        self,
+        payload: dict[str, Any],
+    ) -> list[str] | None:
+        allowed_keys = {
+            "device_ids",
+            "fit",
+            "framing",
+            "override_quiet_hours",
+        }
+        if unknown_keys := set(payload).difference(allowed_keys):
+            self.send_error_response(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_request",
+                f"Unexpected request fields: {', '.join(sorted(unknown_keys))}.",
+            )
+            return None
+
+        device_ids = payload.get("device_ids")
+        if (
+            not isinstance(device_ids, list)
+            or not device_ids
+            or any(not isinstance(item, str) or not item for item in device_ids)
+            or len(set(device_ids)) != len(device_ids)
+        ):
+            self.send_error_response(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_target",
+                "Select one or more unique display targets.",
+            )
+            return None
+
+        fit = payload.get("fit")
+        if fit not in {"fit", "fill", "blur", "stretch", "center"}:
+            self.send_error_response(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_request",
+                "Choose a server-advertised image fit mode.",
+            )
+            return None
+        if not isinstance(payload.get("override_quiet_hours"), bool):
+            self.send_error_response(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_request",
+                "override_quiet_hours is required.",
+            )
+            return None
+
+        framing = payload.get("framing")
+        if framing is None:
+            return device_ids
+        if fit != "fill" or not isinstance(framing, dict):
+            self.send_error_response(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_framing",
+                "Image framing is accepted only with Fill.",
+            )
+            return None
+        if set(framing) != {"focus_x", "focus_y", "zoom"}:
+            self.send_error_response(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_framing",
+                "Framing requires only focus_x, focus_y, and zoom.",
+            )
+            return None
+
+        focus_x = framing.get("focus_x")
+        focus_y = framing.get("focus_y")
+        zoom = framing.get("zoom")
+        values = (focus_x, focus_y, zoom)
+        if any(
+            not isinstance(value, (int, float)) or isinstance(value, bool)
+            for value in values
+        ):
+            self.send_error_response(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_framing",
+                "Framing values must be numbers.",
+            )
+            return None
+        if not 0 <= focus_x <= 1 or not 0 <= focus_y <= 1 or not 1 <= zoom <= 8:
+            self.send_error_response(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_framing",
+                "Framing exceeds the advertised normalized focus or zoom limits.",
+            )
+            return None
+        return device_ids
 
     @staticmethod
     def fixture_host_is_blocked(host: str) -> bool:

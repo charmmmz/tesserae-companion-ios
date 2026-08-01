@@ -46,6 +46,7 @@ public protocol TesseraeServing: Sendable {
         fileName: String,
         contentType: String,
         fit: ImageFitMode,
+        framing: ImageFraming?,
         deviceIDs: [String],
         overrideQuietHours: Bool,
         idempotencyKey: String,
@@ -69,6 +70,33 @@ public protocol TesseraeServing: Sendable {
         instance: TesseraeInstance
     ) async throws -> PushJob
     func fetchJob(id: String, instance: TesseraeInstance) async throws -> PushJob
+}
+
+public extension TesseraeServing {
+    /// Backward-compatible unframed upload used by the existing app, Share
+    /// Extension, and App Intents until their editing surfaces adopt 0.6.
+    func sendImage(
+        data: Data,
+        fileName: String,
+        contentType: String,
+        fit: ImageFitMode,
+        deviceIDs: [String],
+        overrideQuietHours: Bool,
+        idempotencyKey: String,
+        instance: TesseraeInstance
+    ) async throws -> PushJob {
+        try await sendImage(
+            data: data,
+            fileName: fileName,
+            contentType: contentType,
+            fit: fit,
+            framing: nil,
+            deviceIDs: deviceIDs,
+            overrideQuietHours: overrideQuietHours,
+            idempotencyKey: idempotencyKey,
+            instance: instance
+        )
+    }
 }
 
 public enum TesseraeClientError: Error, Equatable, LocalizedError, Sendable {

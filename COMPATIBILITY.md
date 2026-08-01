@@ -90,6 +90,28 @@ cannot opt into the Web UI operator path's local-network allowance. Private,
 loopback, link-local, reserved, unspecified, embedded-credential, and
 equivalent redirect destinations are refused.
 
+## Proposed contract 0.6 image framing
+
+OpenAPI 0.6.0 proposes one independently negotiated extension for manual photo
+composition:
+
+- `image_framing` gates normalized `focus_x`, `focus_y`, and `zoom` metadata on
+  `POST /api/app/v1/images`;
+- `limits.image_framing_max_zoom` supplies the editor's upper bound and is
+  required whenever the feature is advertised;
+- framing is Fill-only and its absence retains the existing centered Fill
+  behavior;
+- Tesserae resolves the same intent independently for every target aspect
+  ratio, persists it with canonical History, and preserves it on resend.
+
+This feature is not part of `CompanionCompatibility.requiredFeatures`. Current
+servers remain compatible, and current app sends continue to omit framing.
+Upstream PR [#175](https://github.com/dmellok/tesserae/pull/175) merged the
+renderer-level normalized `SourceCrop` primitive, but not the Companion API
+capability, request validation, adapter, History persistence, or resend path.
+The contract fixture is therefore forward-looking and must not be treated as
+evidence that an existing Tesserae release supports interactive framing.
+
 ## Physical validation
 
 On 2026-07-28, a physical iPhone paired with a Tesserae `0.207.0` deployment

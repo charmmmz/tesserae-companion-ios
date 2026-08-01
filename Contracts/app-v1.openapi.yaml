@@ -1,12 +1,13 @@
 openapi: 3.0.3
 info:
   title: Tesserae Companion API
-  version: 0.5.2
+  version: 0.6.0
   description: >-
     Companion API contract for community-built clients. Previews, History,
     resend, remote-image push, webpage push, and server-advertised image fit
     modes are optional additive extensions over the five-feature compatibility
-    floor.
+    floor. Image framing is a proposed additive extension for server-resolved
+    drag and pinch composition across mixed target geometries.
 servers:
   - url: /
 tags:
@@ -570,6 +571,7 @@ components:
               - history
               - image_url_push
               - webpage_push
+              - image_framing
         limits:
           $ref: "#/components/schemas/Limits"
         web_url:
@@ -611,6 +613,13 @@ components:
           uniqueItems: true
           items:
             $ref: "#/components/schemas/ImageFitMode"
+        image_framing_max_zoom:
+          description: >-
+            Maximum zoom accepted inside ImageFraming. A server advertising
+            image_framing must publish this limit so clients do not hard-code
+            an editor range.
+          type: number
+          minimum: 1
         job_retention_seconds:
           type: integer
           minimum: 60
@@ -828,9 +837,51 @@ components:
             type: string
         fit:
           $ref: "#/components/schemas/ImageFitMode"
+        framing:
+          description: >-
+            Optional server-resolved composition intent. It is accepted only
+            with fit=fill and when image_framing is advertised. The same intent
+            is resolved independently for every target panel, so mixed target
+            aspect ratios do not share one fixed crop rectangle. Omit it for
+            the existing centered Fill behavior.
+          allOf:
+            - $ref: "#/components/schemas/ImageFraming"
         override_quiet_hours:
           type: boolean
           default: false
+    ImageFraming:
+      description: >-
+        Normalized subject framing resolved independently for each target. Let
+        source_aspect be source_width/source_height and target_aspect be
+        target_width/target_height. Ordinary Fill exposes a normalized source
+        crop of target_aspect/source_aspect by 1 when the source is wider than
+        the target, otherwise 1 by source_aspect/target_aspect. Divide both crop
+        dimensions by zoom, center that rectangle on focus_x/focus_y, then
+        clamp its origin so the rectangle remains inside [0,1]. The resulting
+        rectangle feeds the server's SourceCrop primitive before the existing
+        Fill operation. Pixel rounding and the minimum non-empty crop remain
+        server-owned.
+      type: object
+      additionalProperties: false
+      required: [focus_x, focus_y, zoom]
+      properties:
+        focus_x:
+          description: Horizontal subject focus in normalized source-image space
+          type: number
+          minimum: 0
+          maximum: 1
+        focus_y:
+          description: Vertical subject focus in normalized source-image space
+          type: number
+          minimum: 0
+          maximum: 1
+        zoom:
+          description: >-
+            Scale relative to the minimum Fill scale. 1 is ordinary Fill;
+            larger values crop more tightly and must not exceed the server's
+            advertised limits.image_framing_max_zoom.
+          type: number
+          minimum: 1
     RemoteSourceURL:
       description: >-
         Absolute HTTP(S) URL without embedded credentials. Companion-triggered
@@ -950,6 +1001,14 @@ components:
           description: Original image fit mode when the source was arbitrary media
           allOf:
             - $ref: "#/components/schemas/ImageFitMode"
+          nullable: true
+        framing:
+          description: >-
+            Original normalized framing intent when the image was sent with
+            image_framing. The server retains enough original or resolved
+            framing state for a faithful resend to the target snapshot.
+          allOf:
+            - $ref: "#/components/schemas/ImageFraming"
           nullable: true
     HistoryResendRequest:
       type: object

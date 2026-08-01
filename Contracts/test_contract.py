@@ -16,12 +16,14 @@ CASES = {
     "capabilities.json": "Capabilities",
     "capabilities-previews.json": "Capabilities",
     "capabilities-extended.json": "Capabilities",
+    "capabilities-framing.json": "Capabilities",
     "pair-request.json": "PairingRequest",
     "pair-response.json": "PairingResponse",
     "devices-response.json": "DevicesResponse",
     "dashboards-response.json": "DashboardsResponse",
     "dashboard-push-request.json": "DashboardPushRequest",
     "image-push-request.json": "ImagePushRequest",
+    "image-push-request-basic.json": "ImagePushRequest",
     "image-url-push-request.json": "ImageURLPushRequest",
     "webpage-push-request.json": "WebpagePushRequest",
     "history-response.json": "HistoryResponse",
@@ -71,7 +73,7 @@ def _json_schema(value: Any) -> Any:
 
 def test_openapi_shape_and_operation_ids_are_stable() -> None:
     assert SPEC["openapi"] == "3.0.3"
-    assert SPEC["info"]["version"] == "0.5.2"
+    assert SPEC["info"]["version"] == "0.6.0"
     assert set(SPEC["paths"]) == {
         "/api/app/v1",
         "/api/app/v1/pair",
@@ -217,6 +219,44 @@ def test_extended_capabilities_advertise_history_and_all_image_fit_modes() -> No
     ]
 
 
+def test_image_framing_is_independently_gated_and_fill_only() -> None:
+    base = json.loads((FIXTURES / "capabilities-extended.json").read_text())
+    framing_capabilities = json.loads(
+        (FIXTURES / "capabilities-framing.json").read_text()
+    )
+    basic = json.loads(
+        (FIXTURES / "image-push-request-basic.json").read_text()
+    )
+    framed = json.loads((FIXTURES / "image-push-request.json").read_text())
+
+    assert "image_framing" not in base["features"]
+    assert "image_framing_max_zoom" not in base["limits"]
+    assert "image_framing" in framing_capabilities["features"]
+    assert framing_capabilities["limits"]["image_framing_max_zoom"] == 8
+
+    assert "framing" not in basic
+    assert framed["fit"] == "fill"
+    assert framed["framing"] == {
+        "focus_x": 0.62,
+        "focus_y": 0.38,
+        "zoom": 1.35,
+    }
+
+    request = SPEC["components"]["schemas"]["ImagePushRequest"]
+    description = request["properties"]["framing"]["description"]
+    assert "fit=fill" in description
+    assert "resolved independently" in description
+    assert "centered Fill" in description
+
+    schema = SPEC["components"]["schemas"]["ImageFraming"]
+    assert schema["required"] == ["focus_x", "focus_y", "zoom"]
+    assert schema["properties"]["focus_x"]["minimum"] == 0
+    assert schema["properties"]["focus_x"]["maximum"] == 1
+    assert schema["properties"]["focus_y"]["minimum"] == 0
+    assert schema["properties"]["focus_y"]["maximum"] == 1
+    assert schema["properties"]["zoom"]["minimum"] == 1
+
+
 def test_link_push_contract_keeps_routes_and_failures_distinct() -> None:
     paths = SPEC["paths"]
     image_url = paths["/api/app/v1/image-urls"]["post"]
@@ -297,7 +337,12 @@ def test_history_contract_keeps_composition_preview_and_resend_correlatable() ->
     resend = json.loads((FIXTURES / "job-history-resend.json").read_text())["job"]
 
     assert photo["preview_available"] is True
-    assert photo["fit"] == "blur"
+    assert photo["fit"] == "fill"
+    assert photo["framing"] == {
+        "focus_x": 0.62,
+        "focus_y": 0.38,
+        "zoom": 1.35,
+    }
     assert resend["kind"] == "history_resend"
     assert resend["result"]["history_event_ids"]
 

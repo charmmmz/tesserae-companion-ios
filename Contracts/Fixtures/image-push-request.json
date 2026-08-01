@@ -1,7 +1,13 @@
 {
   "device_ids": [
-    "picpak-kitchen"
+    "picpak-kitchen",
+    "e1004-desk"
   ],
-  "fit": "blur",
+  "fit": "fill",
+  "framing": {
+    "focus_x": 0.62,
+    "focus_y": 0.38,
+    "zoom": 1.35
+  },
   "override_quiet_hours": false
 }

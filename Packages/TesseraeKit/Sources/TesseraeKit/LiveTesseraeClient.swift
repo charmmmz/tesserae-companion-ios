@@ -295,6 +295,7 @@ public actor LiveTesseraeClient: TesseraeServing {
         fileName: String,
         contentType: String,
         fit: ImageFitMode,
+        framing: ImageFraming?,
         deviceIDs: [String],
         overrideQuietHours: Bool,
         idempotencyKey: String,
@@ -308,6 +309,7 @@ public actor LiveTesseraeClient: TesseraeServing {
         let metadata = ImagePushRequest(
             deviceIDs: deviceIDs,
             fit: fit,
+            framing: framing,
             overrideQuietHours: overrideQuietHours
         )
         let body = try multipartBody(

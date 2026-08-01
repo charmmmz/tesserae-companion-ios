@@ -72,6 +72,24 @@ Companion release.
 | V1-10 | Read-only previews | Lazily show the latest full display composition and cached Dashboard visuals when the server advertises `previews`; retain aspect-correct placeholders otherwise. |
 | V1-11 | Canonical Activity | When the server advertises `history`, merge canonical push History, composition thumbnails, pagination, and resend into Activity without adding another top-level tab. |
 
+### Post-1.0 photo framing roadmap
+
+Manual photo composition is split into independently reviewable layers:
+
+1. **Contract foundation (0.6 proposal):** carry normalized focus and zoom,
+   gate it with `image_framing`, and define mixed-target resolution precisely.
+2. **Tesserae adapter:** validate the request, resolve one `SourceCrop` per
+   target using the renderer primitive merged in upstream PR #175, and retain
+   enough state for History and resend.
+3. **Native editor:** when the capability is present, add drag and pinch
+   gestures to the in-app photo preview and send the normalized intent. Keep
+   the current layout-only flow on older servers; Share Sheet and Shortcuts may
+   remain centered Fill initially.
+
+This keeps rendering server-authoritative while allowing a single user framing
+choice to work across portrait and landscape displays. Rotation remains a
+later extension rather than part of the first framing slice.
+
 ### Native integrations included in release 1.0
 
 | ID | Capability | Acceptance summary |
@@ -669,6 +687,7 @@ display model/transport, and observed outcome.
 | D-022 | 2026-07-30 | Reuse one bounded webpage-render primitive for Web UI manual preview and Companion push while keeping Companion on a strict no-LAN URL policy. | Accepted by upstream maintainer |
 | D-023 | 2026-07-31 | Carry bare Phosphor Dashboard identifiers through Companion API 0.5.1, normalize legacy aliases in the client, and fall back to `cube` for missing or unknown names. | Accepted by app maintainer |
 | D-024 | 2026-08-01 | Keep display cards and Current Screen tied to the last-served frame, and show an exact, separate Next Screen from optional Companion API 0.5.2 pending-render revision metadata. | Accepted by app maintainer |
+| D-025 | 2026-08-01 | Propose capability-gated normalized photo focus and zoom, resolved by Tesserae into a separate SourceCrop for each target; stage the contract and server adapter before enabling native drag/pinch UI. | Proposed for upstream maintainer review |
 
 ## 17. Open questions for maintainer review
 
@@ -677,6 +696,8 @@ display model/transport, and observed outcome.
    image-fit and History extensions?
 3. Which edge and stable releases should first advertise the optional 0.5.0
    image-URL and webpage extensions?
+4. Should Companion API 0.6 adopt the proposed `image_framing` focus/zoom
+   contract and make the advertised maximum zoom mandatory?
 
 ## 18. Definition of release 1.0 done
 

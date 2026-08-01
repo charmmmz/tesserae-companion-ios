@@ -170,6 +170,11 @@ final class MockTesseraeClientTests: XCTestCase {
             fixture: "capabilities-extended.json",
             decoder: decoder
         )
+        let framingCapabilities = try decode(
+            ServerCapabilities.self,
+            fixture: "capabilities-framing.json",
+            decoder: decoder
+        )
         let pairRequest = try decode(
             PairingRequest.self,
             fixture: "pair-request.json",
@@ -198,6 +203,11 @@ final class MockTesseraeClientTests: XCTestCase {
         let imagePush = try decode(
             ImagePushRequest.self,
             fixture: "image-push-request.json",
+            decoder: decoder
+        )
+        let basicImagePush = try decode(
+            ImagePushRequest.self,
+            fixture: "image-push-request-basic.json",
             decoder: decoder
         )
         let imageURLPush = try decode(
@@ -282,6 +292,11 @@ final class MockTesseraeClientTests: XCTestCase {
         )
         XCTAssertTrue(extendedCapabilities.features.contains("image_url_push"))
         XCTAssertTrue(extendedCapabilities.features.contains("webpage_push"))
+        XCTAssertNil(extendedCapabilities.limits.imageFramingMaxZoom)
+        XCTAssertFalse(extendedCapabilities.supportsImageFraming)
+        XCTAssertTrue(framingCapabilities.features.contains("image_framing"))
+        XCTAssertEqual(framingCapabilities.limits.imageFramingMaxZoom, 8)
+        XCTAssertTrue(framingCapabilities.supportsImageFraming)
         XCTAssertEqual(pairRequest.client.installationID, "A1B2C3D4-E5F6-47A8-9012-3456789ABCDE")
         XCTAssertEqual(pairResponse.tokenID, "ct_01JABCDEF")
         XCTAssertEqual(devices.devices.first?.rssiDBM, -54)
@@ -300,12 +315,20 @@ final class MockTesseraeClientTests: XCTestCase {
         XCTAssertEqual(dashboards.dashboards.first?.iconName, "cooking-pot")
         XCTAssertNil(dashboards.dashboards.last?.iconName)
         XCTAssertEqual(dashboardPush.deviceIDs, ["picpak-kitchen"])
-        XCTAssertEqual(imagePush.fit, .blur)
+        XCTAssertEqual(imagePush.fit, .fill)
+        XCTAssertEqual(
+            imagePush.framing,
+            ImageFraming(focusX: 0.62, focusY: 0.38, zoom: 1.35)
+        )
+        XCTAssertEqual(imagePush.deviceIDs.count, 2)
+        XCTAssertEqual(basicImagePush.fit, .blur)
+        XCTAssertNil(basicImagePush.framing)
         XCTAssertEqual(imageURLPush.url.host, "images.example.com")
         XCTAssertEqual(imageURLPush.fit, .fill)
         XCTAssertEqual(webpagePush.viewportW, 1_280)
         XCTAssertEqual(webpagePush.deviceIDs.count, 2)
-        XCTAssertEqual(history.items.first?.fit, .blur)
+        XCTAssertEqual(history.items.first?.fit, .fill)
+        XCTAssertEqual(history.items.first?.framing, imagePush.framing)
         XCTAssertEqual(history.nextBeforeID, "history_0100")
         XCTAssertEqual(linkHistory.items.map(\.source), ["webpage", "url"])
         XCTAssertFalse(historyResendRequest.overrideQuietHours)
@@ -368,6 +391,11 @@ final class MockTesseraeClientTests: XCTestCase {
             fit: .fit,
             viewportW: 1_280
         )
+        let imageRequest = ImagePushRequest(
+            deviceIDs: ["picpak-kitchen"],
+            fit: .fill,
+            framing: ImageFraming(focusX: 0.62, focusY: 0.38, zoom: 1.35)
+        )
 
         let dashboardJSON = try XCTUnwrap(
             JSONSerialization.jsonObject(
@@ -377,6 +405,11 @@ final class MockTesseraeClientTests: XCTestCase {
         let webpageJSON = try XCTUnwrap(
             JSONSerialization.jsonObject(
                 with: encoder.encode(webpageRequest)
+            ) as? [String: Any]
+        )
+        let imageJSON = try XCTUnwrap(
+            JSONSerialization.jsonObject(
+                with: encoder.encode(imageRequest)
             ) as? [String: Any]
         )
 
@@ -390,6 +423,13 @@ final class MockTesseraeClientTests: XCTestCase {
         XCTAssertEqual(webpageJSON["viewport_w"] as? Int, 1_280)
         XCTAssertEqual(webpageJSON["override_quiet_hours"] as? Bool, false)
         XCTAssertNil(webpageJSON["viewportW"])
+        let framingJSON = try XCTUnwrap(
+            imageJSON["framing"] as? [String: Double]
+        )
+        XCTAssertEqual(framingJSON["focus_x"], 0.62)
+        XCTAssertEqual(framingJSON["focus_y"], 0.38)
+        XCTAssertEqual(framingJSON["zoom"], 1.35)
+        XCTAssertNil(framingJSON["focusX"])
     }
 
     func testOlderDeviceResponseMayOmitPendingRender() throws {

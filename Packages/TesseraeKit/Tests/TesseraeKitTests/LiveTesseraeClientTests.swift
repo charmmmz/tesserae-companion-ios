@@ -26,6 +26,8 @@ final class LiveTesseraeClientTests: XCTestCase {
         XCTAssertTrue(capabilities.features.contains("history"))
         XCTAssertTrue(capabilities.features.contains("image_url_push"))
         XCTAssertTrue(capabilities.features.contains("webpage_push"))
+        XCTAssertTrue(capabilities.features.contains("image_framing"))
+        XCTAssertEqual(capabilities.limits.imageFramingMaxZoom, 8)
         XCTAssertEqual(
             capabilities.limits.imageFitModes,
             ImageFitMode.allCases
@@ -67,6 +69,11 @@ final class LiveTesseraeClientTests: XCTestCase {
             fileName: "fixture.jpg",
             contentType: "image/jpeg",
             fit: .fill,
+            framing: ImageFraming(
+                focusX: 0.62,
+                focusY: 0.38,
+                zoom: 1.35
+            ),
             deviceIDs: ["picpak-kitchen"],
             overrideQuietHours: false,
             idempotencyKey: "swift-image-test-0000001",
@@ -104,7 +111,11 @@ final class LiveTesseraeClientTests: XCTestCase {
             instance: session.instance
         )
         let photo = try XCTUnwrap(history.items.first)
-        XCTAssertEqual(photo.fit, .blur)
+        XCTAssertEqual(photo.fit, .fill)
+        XCTAssertEqual(
+            photo.framing,
+            ImageFraming(focusX: 0.62, focusY: 0.38, zoom: 1.35)
+        )
 
         let preview = try await client.fetchHistoryPreview(
             id: photo.id,
