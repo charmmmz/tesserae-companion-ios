@@ -14,9 +14,10 @@ struct OnboardingView: View {
                 VStack(spacing: 28) {
                     Spacer(minLength: 32)
 
-                    Image(systemName: "square.grid.3x3.square")
-                        .font(.system(size: 62, weight: .medium))
-                        .foregroundStyle(TesseraeTheme.accent)
+                    Image("TesseraeLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 88, height: 88)
                         .accessibilityHidden(true)
 
                     VStack(spacing: 10) {

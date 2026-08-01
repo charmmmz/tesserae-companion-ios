@@ -6,6 +6,7 @@ public enum DisplayHardwareBrand: String, CaseIterable, Hashable, Sendable {
     case trmnl
     case waveshare
     case picPak
+    case xteink
 
     public var displayName: String {
         switch self {
@@ -19,6 +20,8 @@ public enum DisplayHardwareBrand: String, CaseIterable, Hashable, Sendable {
             "Waveshare"
         case .picPak:
             "PicPak"
+        case .xteink:
+            "Xteink"
         }
     }
 }
@@ -64,6 +67,14 @@ public struct DisplayHardwarePresentation: Equatable, Hashable, Sendable {
             self.init(brand: .waveshare, modelName: "13.3″ Spectra E6")
         case "picpak", "picpak_client", "picpak_4_2":
             self.init(brand: .picPak, modelName: "PicPak 4.2″")
+        case "xteink_x3":
+            self.init(brand: .xteink, modelName: "X3")
+        case "xteink_x4":
+            self.init(brand: .xteink, modelName: "X4")
+        case "xteink_x4_gray":
+            self.init(brand: .xteink, modelName: "X4 · 4-level grayscale")
+        case "xteink_x4_pro":
+            self.init(brand: .xteink, modelName: "X4 Pro")
         case "circuitpython_generic":
             self.init(brand: nil, modelName: "CircuitPython")
         case "esp32_client", "esp32_bw_client":
@@ -101,6 +112,9 @@ public struct DisplayHardwarePresentation: Equatable, Hashable, Sendable {
         }
         if kind.hasPrefix("picpak_") {
             return .picPak
+        }
+        if kind.hasPrefix("xteink_") {
+            return .xteink
         }
         return nil
     }

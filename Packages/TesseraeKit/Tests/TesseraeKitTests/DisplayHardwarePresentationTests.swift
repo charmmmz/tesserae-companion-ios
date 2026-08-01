@@ -9,6 +9,10 @@ final class DisplayHardwarePresentationTests: XCTestCase {
             ("trmnl_x", .trmnl, "TRMNL X"),
             ("waveshare_photopainter_73", .waveshare, "PhotoPainter 7.3″"),
             ("picpak_4_2", .picPak, "PicPak 4.2″"),
+            ("xteink_x3", .xteink, "X3"),
+            ("xteink_x4", .xteink, "X4"),
+            ("xteink_x4_gray", .xteink, "X4 · 4-level grayscale"),
+            ("xteink_x4_pro", .xteink, "X4 Pro"),
         ]
 
         for (kind, brand, modelName) in expected {
@@ -51,12 +55,17 @@ final class DisplayHardwarePresentationTests: XCTestCase {
     }
 
     func testFutureVendorSKUCanStillShowTheVendorWithoutExposingRawKind() {
-        let presentation = DisplayHardwarePresentation(
-            kind: "waveshare_future_panel"
-        )
+        let expected: [(String, DisplayHardwareBrand)] = [
+            ("waveshare_future_panel", .waveshare),
+            ("xteink_future_panel", .xteink),
+        ]
 
-        XCTAssertEqual(presentation.brand, .waveshare)
-        XCTAssertNil(presentation.modelName)
+        for (kind, brand) in expected {
+            let presentation = DisplayHardwarePresentation(kind: kind)
+
+            XCTAssertEqual(presentation.brand, brand, kind)
+            XCTAssertNil(presentation.modelName, kind)
+        }
     }
 
     func testUnknownKindFallsBackWithoutInventingABrand() {

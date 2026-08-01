@@ -39,10 +39,10 @@ Tesserae Companion is distributed under the Apache License 2.0. See
 repository's original code and documentation; it does not grant rights to
 Tesserae names, logos, or other marks.
 
-The App Icon uses Tesserae's official tessellated mark from
-`static/brand/icon.svg`. Its geometry and colours are preserved; only the
-outer background is extended to the edge so iOS can apply its platform mask
-without transparent pixels.
+The App Icon and Onboarding cover use Tesserae's official tessellated mark
+from `static/brand/icon.svg`. The Onboarding asset preserves its geometry and
+colours exactly; only the App Icon's outer background is extended to the edge
+so iOS can apply its platform mask without transparent pixels.
 
 ## Phosphor Icons
 
@@ -63,8 +63,9 @@ the property of its respective owner and is not covered by this repository's
 Apache-2.0 licence. Their presence does not imply sponsorship or endorsement
 of Tesserae Companion.
 
-The bundled source files were retrieved from the owners' current official
-sites on 2026-07-29:
+The first five bundled source files below were retrieved from the owners'
+current official sites on 2026-07-29; later additions include their retrieval
+date:
 
 - Seeed Studio colour and white wordmarks; the white wordmark is rendered with
   the official Seeed Green sampled from the colour asset in dark appearance:
@@ -77,3 +78,5 @@ sites on 2026-07-29:
   [official store header asset](https://www.waveshare.com/media/eternal/venedor/default/logo.png)
 - PicPak red wordmark:
   [official shop header asset](https://cdn.shopify.com/s/files/1/0674/8569/6246/files/Vector.svg?v=1774110422)
+- Xteink black-and-orange wordmark, retrieved 2026-08-01:
+  [official shop header asset](https://www.xteink.com/cdn/shop/files/logo_pc.png?v=1784536352&width=760)

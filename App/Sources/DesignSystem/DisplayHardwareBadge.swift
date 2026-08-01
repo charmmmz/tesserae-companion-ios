@@ -74,14 +74,17 @@ private extension DisplayHardwareBrand {
             "BrandWaveshare"
         case .picPak:
             "BrandPicPak"
+        case .xteink:
+            "BrandXteink"
         }
     }
 
     func renderingMode(for colorScheme: ColorScheme) -> Image.TemplateRenderingMode {
         switch (self, colorScheme) {
-        case (.seeedStudio, .dark), (.trmnl, _):
+        case (.seeedStudio, .dark), (.xteink, .dark), (.trmnl, _):
             .template
-        case (.seeedStudio, _), (.pimoroni, _), (.waveshare, _), (.picPak, _):
+        case (.seeedStudio, _), (.pimoroni, _), (.waveshare, _), (.picPak, _),
+            (.xteink, _):
             .original
         }
     }
@@ -97,13 +100,17 @@ private extension DisplayHardwareBrand {
     var logoWidth: CGFloat {
         switch self {
         case .seeedStudio:
-            58
-        case .pimoroni, .trmnl:
-            22
+            78
+        case .pimoroni:
+            18
+        case .trmnl:
+            20
         case .waveshare:
             66
         case .picPak:
-            58
+            52
+        case .xteink:
+            68
         }
     }
 
@@ -111,8 +118,8 @@ private extension DisplayHardwareBrand {
         switch self {
         case .seeedStudio:
             // The official PNG includes transparent space before the wordmark.
-            -3.5
-        case .pimoroni, .trmnl, .waveshare, .picPak:
+            -4.5
+        case .pimoroni, .trmnl, .waveshare, .picPak, .xteink:
             0
         }
     }
