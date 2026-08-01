@@ -14,7 +14,7 @@ SDK, analytics SDK, tracking, or telemetry.
   App Group container.
 - Photos selected in the app, Share Sheet, or Shortcuts are sent directly to
   the user's selected Tesserae instance. They do not pass through a service
-  operated by the companion app maintainer.
+  operated by the iOS app maintainer.
 - Display and Dashboard preview PNGs are fetched directly from that instance
   only when it advertises the optional feature. The app keeps them in memory
   with their ETags and does not write them to the App Group or photo library.

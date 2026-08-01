@@ -23,7 +23,7 @@ struct OnboardingView: View {
                     VStack(spacing: 10) {
                         Text("Tesserae Companion")
                             .font(.largeTitle.bold())
-                        Text("A community-built client for the small, everyday actions around your displays.")
+                        Text("The official Tesserae app for quick, everyday display tasks on iPhone.")
                             .font(.title3)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)

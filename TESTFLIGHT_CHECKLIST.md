@@ -59,8 +59,8 @@ or approved.
       Store icon.
 - [ ] Prepare English and Simplified Chinese descriptions, keywords, release
       notes, support text, and screenshots for each supported iPhone size.
-- [ ] Confirm the community-built, non-official Tesserae attribution in the
-      listing.
+- [ ] Confirm the official iOS app designation, Tesserae attribution, and
+      publisher details in the listing.
 - [ ] Set marketing version and monotonically increasing build number for the
       beta candidate.
 

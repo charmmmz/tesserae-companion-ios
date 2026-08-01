@@ -2,13 +2,13 @@
 
 ## Beta description
 
-Tesserae Companion is a community-built iPhone client for a self-hosted
-Tesserae server. This beta focuses on native tasks that are awkward in a web
-app: local discovery, QR pairing, quick Dashboard pushes, one-photo sharing,
-and Shortcuts.
+Tesserae Companion is the official Tesserae app for iPhone. It connects
+directly to your self-hosted Tesserae server and focuses on native tasks that
+are awkward in a web app: local discovery, quick Dashboard pushes, photo
+sharing, and Shortcuts.
 
-It is not the official Tesserae app. Dashboard editing and server
-administration remain in Tesserae's web interface.
+Dashboard editing and server administration remain in Tesserae's web
+interface.
 
 ## What to test
 

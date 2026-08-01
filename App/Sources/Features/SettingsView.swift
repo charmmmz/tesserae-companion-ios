@@ -87,6 +87,12 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    LabeledContent(
+                        "Product",
+                        value: String(localized: "Official Tesserae iOS app")
+                    )
+                    LabeledContent("App Version", value: appVersion)
+
                     Link(
                         destination: URL(
                             string: "https://github.com/charmmmz/tesserae-companion-ios"
@@ -97,7 +103,6 @@ struct SettingsView: View {
                             value: "charmmmz/tesserae-companion-ios"
                         )
                     }
-                    LabeledContent("Framework", value: "0.1.0")
                 } header: {
                     Text("About")
                 }
@@ -146,6 +151,17 @@ struct SettingsView: View {
         case .requiresPairing:
             String(localized: "Pair again")
         }
+    }
+
+    private var appVersion: String {
+        let version = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleShortVersionString"
+        ) as? String ?? "—"
+        let build = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleVersion"
+        ) as? String ?? ""
+
+        return build.isEmpty ? version : "\(version) (\(build))"
     }
 
     private var apiMode: String {

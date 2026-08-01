@@ -1,16 +1,17 @@
 # Tesserae Companion
 
-Tesserae Companion is a native iOS companion for
+Tesserae Companion is the official native iOS app for
 [Tesserae](https://github.com/dmellok/tesserae). It is intended to make
 the small, frequent interactions around a household's displays feel at
 home on iPhone: finding the server, checking displays, sending a saved
 dashboard, sharing a photo, and running the same actions from Shortcuts.
 
-It is a community-built client, not the official Tesserae app.
+The app is maintained in this public repository and works directly with the
+user's own Tesserae server.
 
 ## Project status
 
-- Product status: live-connected internal beta candidate
+- Product status: official iOS app, live-connected internal beta candidate
 - Document version: 0.6.0
 - Planned first App Store release: 1.0.0
 - Included product scope: native V1 plus Share Sheet and Shortcuts integrations
@@ -142,8 +143,8 @@ capability gates and validation evidence.
 
 The iOS app lives in the public
 [`charmmmz/tesserae-companion-ios`](https://github.com/charmmmz/tesserae-companion-ios)
-repository because it has an independent Xcode, signing, App Store, issue, and
-release lifecycle.
+repository because it has a separate Xcode, signing, App Store, issue, and
+release lifecycle from the Tesserae server.
 The Tesserae server repository should own only the server implementation,
 server-facing OpenAPI integration, and server contract tests.
 
@@ -179,16 +180,17 @@ matching Tesserae release and minimum compatible version are recorded.
 
 - App Store name: **Tesserae Companion**
 - Installed home-screen name: **Tesserae**
-- Store description: **A community-built companion client for Tesserae**
-- Publisher: the companion app maintainer's Apple Developer account
-- Official status: always described as community-built, never official
+- Store description: **The official iOS companion for Tesserae**
+- Publisher: the current iOS app maintainer's Apple Developer account
+- Official status: designated by Tesserae's maintainer as the official native
+  iOS app
 
-Tesserae's maintainer has granted permission to use the Tesserae name and
-mark for **Tesserae Companion**, subject to the community-built, privacy,
-advertising, data-use, and web-feature boundaries recorded in
+Tesserae's maintainer has designated **Tesserae Companion** as the official
+iOS app and granted permission to use the Tesserae name and mark, subject to
+the privacy, advertising, data-use, and web-feature boundaries recorded in
 [`ATTRIBUTION.md`](ATTRIBUTION.md).
 
-If maintenance stops, the companion maintainer will give advance public
+If maintenance stops, the iOS app maintainer will give advance public
 notice and first seek to transfer the repository and App Store listing to a
 mutually acceptable successor. If no responsible successor is available,
 new distribution will stop rather than leave an unmaintained listing in

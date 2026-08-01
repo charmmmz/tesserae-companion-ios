@@ -14,6 +14,11 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(
             app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
         )
+        XCTAssertTrue(
+            app.staticTexts[
+                "The official Tesserae app for quick, everyday display tasks on iPhone."
+            ].exists
+        )
         XCTAssertTrue(app.buttons["Enter Server Address"].exists)
         XCTAssertFalse(app.buttons["Scan Pairing QR"].exists)
     }

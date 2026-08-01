@@ -1,5 +1,5 @@
 "Tesserae Companion" = "Tesserae 伴侣";
-"A community-built client for the small, everyday actions around your displays." = "一个由社区构建的客户端，让显示屏的日常操作更简单。";
+"The official Tesserae app for quick, everyday display tasks on iPhone." = "Tesserae 官方 iOS App，轻松完成显示屏的日常操作。";
 "Find your server" = "查找服务器";
 "Discover on your local network or enter an address." = "在局域网中发现，或手动输入地址。";
 "Send what matters" = "发送重要内容";
@@ -166,9 +166,9 @@
 "Clear Local Activity?" = "要清除本地活动记录吗？";
 "Local Activity was cleared." = "本地活动记录已清除。";
 "This clears the Activity list for this Tesserae instance and hides existing server History on this iPhone. Server History remains available in Tesserae." = "这会清空此 Tesserae 实例在本机的活动列表，并在此 iPhone 上隐藏现有的服务器历史记录。服务器历史记录仍可在 Tesserae 中查看。";
-"Client" = "客户端";
-"Community-built" = "社区构建";
-"Framework" = "框架版本";
+"Product" = "产品";
+"Official Tesserae iOS app" = "Tesserae 官方 iOS App";
+"App Version" = "App 版本";
 "GitHub Repository" = "GitHub 仓库";
 "About" = "关于";
 "Settings" = "设置";

@@ -1,10 +1,11 @@
 Tesserae Companion
 Copyright 2026 Tesserae Companion contributors
 
-Tesserae Companion is an independent, community-built client for Tesserae.
-It is not the official Tesserae application and is not published by
-Tesserae's maintainer.
+Tesserae Companion is the official native iOS app for Tesserae. Its source,
+signing, and release operations are maintained in a separate public iOS
+repository.
 
 Tesserae is distributed separately under the GNU Affero General Public
-License v3.0 or later. The Tesserae name is used descriptively; this NOTICE
-does not grant rights to Tesserae names, logos, or other marks.
+License v3.0 or later. The Tesserae name and mark are used with the
+maintainer's permission under the terms recorded in ATTRIBUTION.md; this
+NOTICE does not independently grant rights to them.

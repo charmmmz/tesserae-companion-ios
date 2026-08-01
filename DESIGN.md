@@ -2,9 +2,9 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Maintainer-aligned implementation draft |
-| Document version | 0.3.0 |
-| Last updated | 2026-07-28 |
+| Status | Official iOS app implementation draft |
+| Document version | 0.4.0 |
+| Last updated | 2026-08-01 |
 | App name | Tesserae Companion |
 | Planned first release | 1.0.0, focused on the accepted native Companion surface |
 | Client | Native iOS, Swift 6, SwiftUI |
@@ -45,8 +45,9 @@ delivery.
 5. **Safe contracts over convenient internals.** Do not ship against
    Flask session scraping, internal editor JSON, or the privileged MCP
    API.
-6. **Honest community identity.** The app must always identify itself as
-   community-built rather than official.
+6. **Clear official identity.** Describe Tesserae Companion as the official
+   native iOS app while keeping its separate repository, publisher, licence,
+   and operating responsibilities explicit.
 
 ## 2. Scope
 
@@ -194,7 +195,7 @@ Settings is presented from the instance switcher and contains:
 - web management;
 - connection diagnostics;
 - token removal/re-pair;
-- About, community-client disclosure, privacy, acknowledgements, and
+- About, official-app identity, privacy, acknowledgements, and
   version compatibility.
 
 On compact widths, the four areas use a native `TabView`. The app does not
@@ -211,9 +212,10 @@ native iOS.
 
 - Product name: **Tesserae Companion**
 - Installed home-screen name: **Tesserae**
-- Descriptor: **Community-built client for Tesserae**
-- Avoid “official”, “by Tesserae”, or language implying maintainer
-  ownership.
+- Descriptor: **The official iOS companion for Tesserae**
+- Use “official” only for the native iOS app designation; do not imply that
+  the Tesserae server maintainer directly owns the Apple account, signs the
+  binary, or publishes from the server repository.
 - App icon: the official Tesserae tessellated mark, adapted only to provide
   the opaque edge-to-edge source required for the iOS platform mask.
 
@@ -643,12 +645,13 @@ display model/transport, and observed outcome.
 
 ## 15. Governance and maintenance
 
-- The companion maintainer owns the iOS repository and App Store account.
+- The iOS app maintainer owns the iOS repository and App Store account and
+  operates them under Tesserae's official-app designation and brand terms.
 - Tesserae's maintainer owns the server implementation and final shape of
   upstream APIs.
 - Contract changes require review from both sides before either client or
   server treats them as stable.
-- If the companion maintainer steps back, they will give notice and make
+- If the iOS app maintainer steps back, they will give notice and make
   a practical transfer or successor-maintenance path available.
 - The maintainer will first seek to transfer the repository and App Store
   listing to a mutually acceptable successor. If none is available, new
@@ -664,7 +667,7 @@ display model/transport, and observed outcome.
 | ID | Date | Decision | Status |
 | --- | --- | --- | --- |
 | D-001 | 2026-07-26 | Build a companion, not a mobile copy of Tesserae admin/Canvas. | Accepted in maintainer conversation |
-| D-002 | 2026-07-26 | Name the app Tesserae Companion and label it community-built. | Accepted by upstream maintainer |
+| D-002 | 2026-07-26 | Name the app Tesserae Companion and label it community-built. | Historical; identity clause superseded by D-026 |
 | D-003 | 2026-07-26 | Use native Swift 6 and SwiftUI. | Accepted by app maintainer |
 | D-004 | 2026-07-28 | Keep first stable integration focused; History, resend, and previews do not block release 1.0. | Accepted in upstream maintainer review |
 | D-005 | 2026-07-28 | Require a scoped `/api/app/v1`; do not depend on MCP, firmware tokens, or admin internals. | Accepted in upstream maintainer review |
@@ -678,7 +681,7 @@ display model/transport, and observed outcome.
 | D-013 | 2026-07-28 | Use `com.charmmmz.tesseraecompanion` with a `.share` extension, shared App Group, and shared Keychain access group. | Accepted by app maintainer |
 | D-014 | 2026-07-28 | Develop the live client against a stateful local contract server until upstream `/api/app/v1` ships. | Accepted by app maintainer |
 | D-015 | 2026-07-28 | Use 24 hours as the initial server-advertised Job and idempotency retention default. | Accepted by upstream maintainer |
-| D-016 | 2026-07-28 | Use the Tesserae name and mark under the community-built, advertising, analytics, data-use, and free-web-feature terms in `ATTRIBUTION.md`. | Accepted by upstream maintainer |
+| D-016 | 2026-07-28 | Use the Tesserae name and mark under the community-built, advertising, analytics, data-use, and free-web-feature terms in `ATTRIBUTION.md`. | Accepted; identity clause superseded by D-026 |
 | D-017 | 2026-07-28 | Treat authenticated read-only previews as an optional additive capability with ETag revalidation and placeholder fallback. | Implemented upstream and in the client |
 | D-018 | 2026-07-29 | Advertise image fit modes from server limits; prioritise Fit/Fill/Blur and keep Stretch/Center in advanced UI. | Accepted by upstream maintainer |
 | D-019 | 2026-07-29 | Keep History thumbnails as source compositions, but make Displays use the device-specific post-fit preview. | Accepted by upstream maintainer |
@@ -688,6 +691,7 @@ display model/transport, and observed outcome.
 | D-023 | 2026-07-31 | Carry bare Phosphor Dashboard identifiers through Companion API 0.5.1, normalize legacy aliases in the client, and fall back to `cube` for missing or unknown names. | Accepted by app maintainer |
 | D-024 | 2026-08-01 | Keep display cards and Current Screen tied to the last-served frame, and show an exact, separate Next Screen from optional Companion API 0.5.2 pending-render revision metadata. | Accepted by app maintainer |
 | D-025 | 2026-08-01 | Propose capability-gated normalized photo focus and zoom, resolved by Tesserae into a separate SourceCrop for each target; stage the contract and server adapter before enabling native drag/pinch UI. | Proposed for upstream maintainer review |
+| D-026 | 2026-07-31 | Designate Tesserae Companion as the official native iOS app while retaining the existing privacy, advertising, data-use, free-web-feature, repository, and publishing boundaries. | Accepted by both maintainers |
 
 ## 17. Open questions for maintainer review
 
