@@ -295,7 +295,7 @@ final class MockTesseraeClientTests: XCTestCase {
         XCTAssertNil(extendedCapabilities.limits.imageFramingMaxZoom)
         XCTAssertFalse(extendedCapabilities.supportsImageFraming)
         XCTAssertTrue(framingCapabilities.features.contains("image_framing"))
-        XCTAssertEqual(framingCapabilities.limits.imageFramingMaxZoom, 8)
+        XCTAssertEqual(framingCapabilities.limits.imageFramingMaxZoom, 4)
         XCTAssertTrue(framingCapabilities.supportsImageFraming)
         XCTAssertEqual(pairRequest.client.installationID, "A1B2C3D4-E5F6-47A8-9012-3456789ABCDE")
         XCTAssertEqual(pairResponse.tokenID, "ct_01JABCDEF")

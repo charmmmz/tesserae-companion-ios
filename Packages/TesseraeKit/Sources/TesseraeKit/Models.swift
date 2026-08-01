@@ -497,8 +497,11 @@ public enum ImageFitMode: String, Codable, CaseIterable, Hashable, Sendable {
 }
 
 public struct ImageFraming: Codable, Hashable, Sendable {
+    /// Horizontal subject focus in the orientation-normalized source image.
     public let focusX: Double
+    /// Vertical subject focus in the orientation-normalized source image.
     public let focusY: Double
+    /// Scale relative to ordinary Fill, bounded by the advertised server limit.
     public let zoom: Double
 
     public init(focusX: Double, focusY: Double, zoom: Double) {
@@ -508,7 +511,8 @@ public struct ImageFraming: Codable, Hashable, Sendable {
     }
 
     /// Resolves the normalized source crop described by the Companion 0.6
-    /// contract for one target panel. The server performs the same operation
+    /// contract for one target panel. Source dimensions must describe the
+    /// orientation-normalized image. The server performs the same operation
     /// before its existing Fill path and owns final pixel rounding.
     public func resolvedCrop(
         sourceWidth: Double,

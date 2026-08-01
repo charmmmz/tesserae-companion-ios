@@ -546,7 +546,7 @@ class FixtureRequestHandler(BaseHTTPRequestHandler):
                 "Framing values must be numbers.",
             )
             return None
-        if not 0 <= focus_x <= 1 or not 0 <= focus_y <= 1 or not 1 <= zoom <= 8:
+        if not 0 <= focus_x <= 1 or not 0 <= focus_y <= 1 or not 1 <= zoom <= 4:
             self.send_error_response(
                 HTTPStatus.BAD_REQUEST,
                 "invalid_framing",

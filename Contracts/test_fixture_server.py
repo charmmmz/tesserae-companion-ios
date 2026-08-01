@@ -99,7 +99,7 @@ def test_fixture_server_exercises_companion_vertical_slice():
             "stretch",
             "center",
         ]
-        assert capabilities["limits"]["image_framing_max_zoom"] == 8
+        assert capabilities["limits"]["image_framing_max_zoom"] == 4
         assert "image_framing" in capabilities["features"]
         assert "history" in capabilities["features"]
         assert "image_url_push" in capabilities["features"]
@@ -339,6 +339,24 @@ def test_fixture_server_exercises_companion_vertical_slice():
         )
         assert status == 400
         assert invalid_framing["error"]["code"] == "invalid_framing"
+
+        status, excessive_zoom = image_request(
+            base_url,
+            {
+                "device_ids": ["picpak-kitchen"],
+                "fit": "fill",
+                "framing": {
+                    "focus_x": 0.5,
+                    "focus_y": 0.5,
+                    "zoom": 4.01,
+                },
+                "override_quiet_hours": False,
+            },
+            token=FIXTURE_TOKEN,
+            idempotency_key="fixture-framing-zoom-over-4",
+        )
+        assert status == 400
+        assert excessive_zoom["error"]["code"] == "invalid_framing"
     finally:
         server.shutdown()
         server.server_close()

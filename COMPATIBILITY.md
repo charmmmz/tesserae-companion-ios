@@ -90,19 +90,21 @@ cannot opt into the Web UI operator path's local-network allowance. Private,
 loopback, link-local, reserved, unspecified, embedded-credential, and
 equivalent redirect destinations are refused.
 
-## Proposed contract 0.6 image framing
+## Accepted contract 0.6 image framing
 
-OpenAPI 0.6.0 proposes one independently negotiated extension for manual photo
+OpenAPI 0.6.0 defines one independently negotiated extension for manual photo
 composition:
 
 - `image_framing` gates normalized `focus_x`, `focus_y`, and `zoom` metadata on
   `POST /api/app/v1/images`;
 - `limits.image_framing_max_zoom` supplies the editor's upper bound and is
-  required whenever the feature is advertised;
+  required whenever the feature is advertised; the accepted initial value is
+  `4`;
 - framing is Fill-only and its absence retains the existing centered Fill
   behavior;
 - Tesserae resolves the same intent independently for every target aspect
-  ratio, persists it with canonical History, and preserves it on resend.
+  ratio and returns the original intent with canonical History for reproduction
+  or re-targeting; resolved rectangles remain server-internal.
 
 This feature is not part of `CompanionCompatibility.requiredFeatures`. Current
 servers remain compatible, and current app sends continue to omit framing.
@@ -111,6 +113,12 @@ renderer-level normalized `SourceCrop` primitive, but not the Companion API
 capability, request validation, adapter, History persistence, or resend path.
 The contract fixture is therefore forward-looking and must not be treated as
 evidence that an existing Tesserae release supports interactive framing.
+
+Coordinates use the EXIF-orientation-normalized source image as displayed.
+Tesserae 0.225.0 normalizes orientation before applying `SourceCrop`, and the
+Companion normalizes non-upright upload pixels as well. The shared rotated-EXIF
+fixture guards against resolving the crop against the stored landscape buffer
+of a visually portrait image.
 
 ## Physical validation
 

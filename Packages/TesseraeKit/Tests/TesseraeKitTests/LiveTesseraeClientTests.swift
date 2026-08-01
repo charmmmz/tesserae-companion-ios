@@ -27,7 +27,7 @@ final class LiveTesseraeClientTests: XCTestCase {
         XCTAssertTrue(capabilities.features.contains("image_url_push"))
         XCTAssertTrue(capabilities.features.contains("webpage_push"))
         XCTAssertTrue(capabilities.features.contains("image_framing"))
-        XCTAssertEqual(capabilities.limits.imageFramingMaxZoom, 8)
+        XCTAssertEqual(capabilities.limits.imageFramingMaxZoom, 4)
         XCTAssertEqual(
             capabilities.limits.imageFitModes,
             ImageFitMode.allCases

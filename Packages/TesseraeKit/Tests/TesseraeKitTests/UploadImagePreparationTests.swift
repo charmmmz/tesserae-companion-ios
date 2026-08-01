@@ -6,6 +6,63 @@ import UniformTypeIdentifiers
 import XCTest
 
 final class UploadImagePreparationTests: XCTestCase {
+    func testEXIFRightFixtureResolvesCropInOrientationNormalizedSpace() throws {
+        let fixtureURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appending(
+                path: "../../../../Contracts/Fixtures/image-framing-exif-rotate-90.json"
+            )
+            .standardizedFileURL
+        let fixture = try TesseraeJSON.decoder().decode(
+            EXIFFramingFixture.self,
+            from: Data(contentsOf: fixtureURL)
+        )
+        let input = try XCTUnwrap(Data(base64Encoded: fixture.jpegBase64))
+
+        let source = try imageProperties(in: input)
+        XCTAssertEqual(source.width, fixture.rawSource.width)
+        XCTAssertEqual(source.height, fixture.rawSource.height)
+        XCTAssertEqual(source.orientation, fixture.rawSource.exifOrientation)
+
+        let prepared = try UploadImagePreparer.prepare(
+            data: input,
+            fallbackContentType: fixture.contentType
+        )
+        XCTAssertEqual(prepared.pixelWidth, fixture.normalizedSource.width)
+        XCTAssertEqual(prepared.pixelHeight, fixture.normalizedSource.height)
+        XCTAssertEqual(
+            try imageProperties(in: prepared.data).orientation,
+            fixture.normalizedSource.exifOrientation
+        )
+
+        let crop = fixture.framing.resolvedCrop(
+            sourceWidth: Double(prepared.pixelWidth),
+            sourceHeight: Double(prepared.pixelHeight),
+            targetWidth: Double(fixture.target.width),
+            targetHeight: Double(fixture.target.height)
+        )
+        XCTAssertEqual(crop.x, fixture.expectedCrop.x, accuracy: 0.000_001)
+        XCTAssertEqual(crop.y, fixture.expectedCrop.y, accuracy: 0.000_001)
+        XCTAssertEqual(
+            crop.width,
+            fixture.expectedCrop.width,
+            accuracy: 0.000_001
+        )
+        XCTAssertEqual(
+            crop.height,
+            fixture.expectedCrop.height,
+            accuracy: 0.000_001
+        )
+
+        let rawBufferCrop = fixture.framing.resolvedCrop(
+            sourceWidth: Double(fixture.rawSource.width),
+            sourceHeight: Double(fixture.rawSource.height),
+            targetWidth: Double(fixture.target.width),
+            targetHeight: Double(fixture.target.height)
+        )
+        XCTAssertGreaterThan(abs(rawBufferCrop.x - crop.x), 0.01)
+    }
+
     func testRotatesEXIFRightImageIntoUprightPixels() throws {
         let input = try jpeg(
             width: 4,
@@ -111,6 +168,12 @@ final class UploadImagePreparationTests: XCTestCase {
     }
 
     private func orientation(in data: Data) throws -> Int {
+        try imageProperties(in: data).orientation
+    }
+
+    private func imageProperties(
+        in data: Data
+    ) throws -> (width: Int, height: Int, orientation: Int) {
         guard
             let source = CGImageSourceCreateWithData(data as CFData, nil),
             let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil)
@@ -118,6 +181,37 @@ final class UploadImagePreparationTests: XCTestCase {
         else {
             throw UploadImagePreparationError.decoding
         }
-        return (properties[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1
+        let width = (properties[kCGImagePropertyPixelWidth] as? NSNumber)?.intValue ?? 0
+        let height = (properties[kCGImagePropertyPixelHeight] as? NSNumber)?.intValue ?? 0
+        let orientation = (properties[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1
+        return (width, height, orientation)
     }
+}
+
+private struct EXIFFramingFixture: Decodable {
+    let contentType: String
+    let jpegBase64: String
+    let rawSource: EXIFSourceDescription
+    let normalizedSource: EXIFSourceDescription
+    let target: FixturePixelSize
+    let framing: ImageFraming
+    let expectedCrop: FixtureNormalizedCrop
+}
+
+private struct EXIFSourceDescription: Decodable {
+    let width: Int
+    let height: Int
+    let exifOrientation: Int
+}
+
+private struct FixturePixelSize: Decodable {
+    let width: Int
+    let height: Int
+}
+
+private struct FixtureNormalizedCrop: Decodable {
+    let x: Double
+    let y: Double
+    let width: Double
+    let height: Double
 }
