@@ -96,6 +96,60 @@ struct ActivityReconciliationTests {
         )
     }
 
+    @Test("A failed Job replaces its targetless server History row")
+    func failedJobKeepsTargetIdentity() {
+        let message = "dashboard targets none of the requested device(s)"
+        let history = historyItem(
+            id: "50",
+            deviceIDs: [],
+            label: "Album Art · Canvas",
+            status: "failed",
+            error: message
+        )
+        let job = failedPushJob(
+            id: "job-failed",
+            label: "Album Art · Canvas",
+            error: message
+        )
+
+        #expect(
+            ActivityReconciliation.visibleJobs(
+                [job],
+                historyItems: [history],
+                now: now.addingTimeInterval(10)
+            ).map(\.id) == ["job-failed"]
+        )
+        #expect(
+            ActivityReconciliation.visibleHistoryItems(
+                [history],
+                jobs: [job]
+            ).isEmpty
+        )
+    }
+
+    @Test("Different failed operations remain visible")
+    func failedJobRejectsLooseMatch() {
+        let history = historyItem(
+            id: "51",
+            deviceIDs: [],
+            label: "Album Art · Canvas",
+            status: "failed",
+            error: "render timed out"
+        )
+        let job = failedPushJob(
+            id: "job-other-failure",
+            label: "Album Art · Canvas",
+            error: "dashboard targets none of the requested device(s)"
+        )
+
+        #expect(
+            ActivityReconciliation.visibleHistoryItems(
+                [history],
+                jobs: [job]
+            ).map(\.id) == ["51"]
+        )
+    }
+
     @Test("Fetched button History resolves one matching display name")
     func fetchedDisplayFallback() {
         let history = historyItem(
@@ -162,13 +216,35 @@ struct ActivityReconciliationTests {
         )
     }
 
+    private func failedPushJob(
+        id: String,
+        label: String,
+        error: String,
+        createdAt: Date? = nil
+    ) -> PushJob {
+        PushJob(
+            id: id,
+            kind: .dashboardPush,
+            status: .failed,
+            label: label,
+            targetDeviceIDs: ["blue-picpak"],
+            createdAt: createdAt ?? now,
+            updatedAt: (createdAt ?? now).addingTimeInterval(1),
+            error: PushJobFailure(
+                code: "render_failed",
+                message: error
+            )
+        )
+    }
+
     private func historyItem(
         id: String,
         createdAt: Date? = nil,
         source: String = "companion",
         deviceIDs: [String] = ["living-room"],
         label: String = "Emby Poster · Canvas QA",
-        status: String = "sent"
+        status: String = "sent",
+        error: String? = nil
     ) -> HistoryItem {
         HistoryItem(
             id: id,
@@ -177,6 +253,7 @@ struct ActivityReconciliationTests {
             label: label,
             deviceIDs: deviceIDs,
             status: status,
+            error: error,
             previewAvailable: true,
             resendable: true
         )

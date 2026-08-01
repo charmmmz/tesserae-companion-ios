@@ -29,7 +29,7 @@ struct ActivityView: View {
                 ForEach(visibleJobs) { job in
                     activityCard(job)
                 }
-                ForEach(model.historyItems) { item in
+                ForEach(visibleHistoryItems) { item in
                     historyCard(item)
                 }
                 if model.historyNextBeforeID != nil {
@@ -57,7 +57,7 @@ struct ActivityView: View {
             if model.queuedImageRequests.isEmpty
                 && model.queuedLinkRequests.isEmpty
                 && visibleJobs.isEmpty
-                && model.historyItems.isEmpty
+                && visibleHistoryItems.isEmpty
             {
                 ContentUnavailableView(
                     "No Activity Yet",
@@ -409,6 +409,16 @@ struct ActivityView: View {
         return ActivityReconciliation.visibleJobs(
             model.jobs,
             historyItems: model.historyItems
+        )
+    }
+
+    private var visibleHistoryItems: [HistoryItem] {
+        guard model.supportsHistory else {
+            return model.historyItems
+        }
+        return ActivityReconciliation.visibleHistoryItems(
+            model.historyItems,
+            jobs: model.jobs
         )
     }
 

@@ -61,6 +61,41 @@ public enum ActivityReconciliation {
         }
     }
 
+    public static func visibleHistoryItems(
+        _ historyItems: [HistoryItem],
+        jobs: [PushJob],
+        legacyCorrelationWindow: TimeInterval = 120
+    ) -> [HistoryItem] {
+        var reconciledHistoryIDs = Set<String>()
+
+        let failedJobs = jobs
+            .filter { $0.status == .failed }
+            .sorted { $0.createdAt > $1.createdAt }
+
+        for job in failedJobs {
+            let candidate = historyItems
+                .filter {
+                    !reconciledHistoryIDs.contains($0.id)
+                        && failedMatch(
+                            job,
+                            historyItem: $0,
+                            window: legacyCorrelationWindow
+                        )
+                }
+                .min {
+                    abs($0.createdAt.timeIntervalSince(job.createdAt))
+                        < abs($1.createdAt.timeIntervalSince(job.createdAt))
+                }
+
+            guard let candidate else { continue }
+            reconciledHistoryIDs.insert(candidate.id)
+        }
+
+        return historyItems.filter {
+            !reconciledHistoryIDs.contains($0.id)
+        }
+    }
+
     public static func displayNames(
         for item: HistoryItem,
         from displays: [DisplaySummary]
@@ -103,6 +138,33 @@ public enum ActivityReconciliation {
         return true
     }
 
+    private static func failedMatch(
+        _ job: PushJob,
+        historyItem: HistoryItem,
+        window: TimeInterval
+    ) -> Bool {
+        guard
+            failedHistoryStatuses.contains(historyItem.status),
+            historyItem.source == expectedHistorySource(for: job.kind),
+            equivalentLabel(job.label, historyItem.label),
+            !job.targetDeviceIDs.isEmpty,
+            historyItem.deviceIDs.isEmpty
+                || Set(job.targetDeviceIDs) == Set(historyItem.deviceIDs),
+            abs(historyItem.createdAt.timeIntervalSince(job.createdAt))
+                <= window
+        else {
+            return false
+        }
+
+        guard
+            let jobError = job.error?.message,
+            let historyError = historyItem.error
+        else {
+            return true
+        }
+        return equivalentLabel(jobError, historyError)
+    }
+
     private static func expectedHistorySource(
         for kind: PushJobKind
     ) -> String {
@@ -135,5 +197,10 @@ public enum ActivityReconciliation {
         "published",
         "succeeded",
         "no_change",
+    ])
+
+    private static let failedHistoryStatuses = Set([
+        "failed",
+        "error",
     ])
 }
