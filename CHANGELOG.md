@@ -11,6 +11,21 @@ capabilities.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-01
+
+### Changed
+
+- Tesserae Companion now presents itself as Tesserae's official native iOS
+  app across onboarding, Settings, repository identity, attribution, and beta
+  metadata while keeping the **Tesserae Companion** App Store name and
+  **Tesserae** home-screen name.
+- Settings About now shows the official product status and the installed app
+  version and build instead of a stale framework placeholder.
+- The original name-and-mark agreement is retained as project history, with
+  the later official-app designation superseding only its former
+  community-built identity requirement; the privacy, advertising, data-use,
+  free-web-feature, repository, and publishing boundaries remain explicit.
+
 ## [0.3.0] - 2026-08-01
 
 ### Added
@@ -368,7 +383,8 @@ capabilities.
 - Required Keychain storage, scoped credentials, revocation, redacted
   diagnostics, direct-to-instance photo transfer, and idempotent writes.
 
-[Unreleased]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/charmmmz/tesserae-companion-ios/releases/tag/v0.2.0
 [0.1.0]: https://github.com/charmmmz/tesserae-companion-ios/commit/6519c5c

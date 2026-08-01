@@ -489,7 +489,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/Resources/TesseraeShare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 3MSS7DJGVR;
 				INFOPLIST_FILE = ShareExtension/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -497,7 +497,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 0.3.0;
+				MARKETING_VERSION = 0.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.charmmmz.tesseraecompanion.share;
 				PRODUCT_NAME = TesseraeShare;
 				SDKROOT = iphoneos;
@@ -577,7 +577,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/Resources/TesseraeShare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 3MSS7DJGVR;
 				INFOPLIST_FILE = ShareExtension/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -585,7 +585,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 0.3.0;
+				MARKETING_VERSION = 0.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.charmmmz.tesseraecompanion.share;
 				PRODUCT_NAME = TesseraeShare;
 				SDKROOT = iphoneos;
@@ -604,14 +604,14 @@
 				CODE_SIGN_ENTITLEMENTS = App/Resources/TesseraeCompanion.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 3MSS7DJGVR;
 				INFOPLIST_FILE = App/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.3.0;
+				MARKETING_VERSION = 0.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.charmmmz.tesseraecompanion;
 				PRODUCT_NAME = "Tesserae Companion";
 				SDKROOT = iphoneos;
@@ -725,14 +725,14 @@
 				CODE_SIGN_ENTITLEMENTS = App/Resources/TesseraeCompanion.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 3MSS7DJGVR;
 				INFOPLIST_FILE = App/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.3.0;
+				MARKETING_VERSION = 0.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.charmmmz.tesseraecompanion;
 				PRODUCT_NAME = "Tesserae Companion";
 				SDKROOT = iphoneos;
