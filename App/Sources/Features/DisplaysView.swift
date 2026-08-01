@@ -211,26 +211,28 @@ private struct PendingRenderGlyph: View {
 }
 
 private struct DisplayDetailView: View {
+    private enum ScreenPage: Hashable {
+        case current
+        case next
+    }
+
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
+    @State private var selectedScreenPage: ScreenPage = .current
     let display: DisplaySummary
 
     private var currentDisplay: DisplaySummary {
         model.displays.first(where: { $0.id == display.id }) ?? display
     }
 
+    private var visibleScreenPage: ScreenPage {
+        currentDisplay.pendingRender == nil ? .current : selectedScreenPage
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
-                currentScreenCard
-
-                if currentDisplay.pendingRender != nil {
-                    nextScreenCard
-                        .transition(
-                            .move(edge: .top)
-                                .combined(with: .opacity)
-                        )
-                }
+                screenCarouselCard
 
                 detailCard(
                     "Connection & Power",
@@ -353,25 +355,38 @@ private struct DisplayDetailView: View {
         .task(id: currentDisplay.pendingRender?.revision) {
             await model.loadPendingDisplayPreview(currentDisplay)
         }
+        .onChange(of: currentDisplay.pendingRender?.revision) { _, revision in
+            if revision == nil {
+                selectedScreenPage = .current
+            }
+        }
         .tesseraeScreenBackground()
     }
 
-    private var currentScreenCard: some View {
+    private var screenCarouselCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Current Screen", systemImage: "display")
-                .font(.headline)
+            screenPageHeader
 
-            PreviewArtwork(
-                state: model.displayPreviews[currentDisplay.id],
-                placeholderSystemName: currentDisplay.previewSymbol,
-                placeholderLabel: "Display preview placeholder, \(currentDisplay.panel.width) by \(currentDisplay.panel.height), \(currentDisplay.panel.orientation)",
-                imageLabel: "Last-served device preview for \(currentDisplay.name)",
-                accessibilityIdentifier: "display-detail-preview-\(currentDisplay.id)",
-                placeholderDetail: "\(currentDisplay.panel.width) × \(currentDisplay.panel.height)"
-            )
+            TabView(selection: $selectedScreenPage) {
+                currentScreenPreview
+                    .tag(ScreenPage.current)
+
+                if currentDisplay.pendingRender != nil {
+                    nextScreenPreview
+                        .tag(ScreenPage.next)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
             .aspectRatio(currentDisplay.panelAspectRatio, contentMode: .fit)
             .frame(maxWidth: .infinity)
             .frame(maxHeight: 380)
+            .accessibilityIdentifier(
+                "display-screen-carousel-\(currentDisplay.id)"
+            )
+
+            if currentDisplay.pendingRender != nil {
+                screenPageIndicator
+            }
 
             if currentDisplay.hasPendingRender == true,
                currentDisplay.pendingRender == nil
@@ -386,18 +401,26 @@ private struct DisplayDetailView: View {
         .tesseraeCard()
         .animation(
             .easeInOut(duration: 0.22),
-            value: currentDisplay.hasPendingRender
+            value: visibleScreenPage
         )
     }
 
-    private var nextScreenCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
+    private var screenPageHeader: some View {
+        ZStack(alignment: .leading) {
+            Label("Current Screen", systemImage: "display")
+                .font(.headline)
+                .opacity(visibleScreenPage == .current ? 1 : 0)
+                .accessibilityHidden(visibleScreenPage != .current)
+
+            HStack(spacing: 10) {
                 Label("Next Screen", systemImage: "clock.arrow.circlepath")
                     .font(.headline)
                     .foregroundStyle(TesseraeTheme.ochre)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .layoutPriority(1)
 
-                Spacer()
+                Spacer(minLength: 8)
 
                 if let renderedAt = currentDisplay.pendingRender?.renderedAt {
                     VStack(alignment: .trailing, spacing: 1) {
@@ -407,24 +430,86 @@ private struct DisplayDetailView: View {
                         Text(renderedAt, style: .relative)
                             .font(.caption.weight(.medium))
                     }
+                    .fixedSize(horizontal: true, vertical: false)
                 }
             }
-
-            PreviewArtwork(
-                state: model.pendingDisplayPreview(for: currentDisplay),
-                placeholderSystemName: currentDisplay.previewSymbol,
-                placeholderLabel: "Pending display preview, \(currentDisplay.panel.width) by \(currentDisplay.panel.height), \(currentDisplay.panel.orientation)",
-                imageLabel: "Next device preview for \(currentDisplay.name)",
-                accessibilityIdentifier: "display-detail-pending-preview-\(currentDisplay.id)",
-                placeholderDetail: "\(currentDisplay.panel.width) × \(currentDisplay.panel.height)"
-            )
-            .aspectRatio(currentDisplay.panelAspectRatio, contentMode: .fit)
             .frame(maxWidth: .infinity)
-            .frame(maxHeight: 380)
-
-            pendingRefreshExplanation
+            .opacity(visibleScreenPage == .next ? 1 : 0)
+            .accessibilityHidden(visibleScreenPage != .next)
         }
-        .tesseraeCard()
+        .frame(maxWidth: .infinity, minHeight: 40, maxHeight: 40, alignment: .leading)
+        .animation(.easeInOut(duration: 0.18), value: visibleScreenPage)
+    }
+
+    private var currentScreenPreview: some View {
+        PreviewArtwork(
+            state: model.displayPreviews[currentDisplay.id],
+            placeholderSystemName: currentDisplay.previewSymbol,
+            placeholderLabel: "Display preview placeholder, \(currentDisplay.panel.width) by \(currentDisplay.panel.height), \(currentDisplay.panel.orientation)",
+            imageLabel: "Last-served device preview for \(currentDisplay.name)",
+            accessibilityIdentifier: "display-detail-preview-\(currentDisplay.id)",
+            placeholderDetail: "\(currentDisplay.panel.width) × \(currentDisplay.panel.height)"
+        )
+    }
+
+    private var nextScreenPreview: some View {
+        PreviewArtwork(
+            state: model.pendingDisplayPreview(for: currentDisplay),
+            placeholderSystemName: currentDisplay.previewSymbol,
+            placeholderLabel: "Pending display preview, \(currentDisplay.panel.width) by \(currentDisplay.panel.height), \(currentDisplay.panel.orientation)",
+            imageLabel: "Next device preview for \(currentDisplay.name)",
+            accessibilityIdentifier: "display-detail-pending-preview-\(currentDisplay.id)",
+            placeholderDetail: "\(currentDisplay.panel.width) × \(currentDisplay.panel.height)"
+        )
+    }
+
+    private var screenPageIndicator: some View {
+        HStack(spacing: 7) {
+            screenPageIndicatorButton(
+                page: .current,
+                label: "Current Screen"
+            )
+            screenPageIndicatorButton(
+                page: .next,
+                label: "Next Screen"
+            )
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityIdentifier(
+            "display-screen-page-indicator-\(currentDisplay.id)"
+        )
+    }
+
+    private func screenPageIndicatorButton(
+        page: ScreenPage,
+        label: LocalizedStringKey
+    ) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                selectedScreenPage = page
+            }
+        } label: {
+            ZStack {
+                Capsule()
+                    .fill(
+                        visibleScreenPage == page
+                            ? TesseraeTheme.accent
+                            : Color.secondary.opacity(0.28)
+                    )
+                    .frame(
+                        width: visibleScreenPage == page ? 20 : 7,
+                        height: 7
+                    )
+                    .animation(
+                        .easeInOut(duration: 0.2),
+                        value: visibleScreenPage
+                    )
+            }
+            .frame(width: 28, height: 20)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(label))
     }
 
     private var pendingRefreshExplanation: some View {

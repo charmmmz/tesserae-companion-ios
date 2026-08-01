@@ -172,8 +172,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Kitchen"].buttons["Close"].exists)
         XCTAssertFalse(app.navigationBars["Kitchen"].buttons["Displays"].exists)
         XCTAssertTrue(app.staticTexts["Current Screen"].exists)
-        XCTAssertTrue(app.staticTexts["Next Screen"].exists)
-        XCTAssertTrue(
+        XCTAssertFalse(
             app.descendants(matching: .any)[
                 "display-pending-status-picpak-kitchen"
             ].exists
@@ -184,6 +183,14 @@ final class TesseraeCompanionUITests: XCTestCase {
                 "display-detail-preview-picpak-kitchen"
             ],
             hasAspectRatio: 800.0 / 480.0
+        )
+        let screenCarousel = app.descendants(matching: .any)[
+            "display-screen-carousel-picpak-kitchen"
+        ]
+        XCTAssertTrue(screenCarousel.exists)
+        screenCarousel.swipeLeft()
+        XCTAssertTrue(
+            app.staticTexts["Next Screen"].waitForExistence(timeout: 2)
         )
         assertPreview(
             app.descendants(matching: .any)[
@@ -234,11 +241,31 @@ final class TesseraeCompanionUITests: XCTestCase {
         let pantryPushButton = app.buttons["dashboard-push-pantry"]
         XCTAssertTrue(pantryPushButton.exists)
         pantryPushButton.tap()
-        XCTAssertTrue(
-            app.navigationBars["Push Dashboard"].waitForExistence(timeout: 2)
+        let pushDashboardNavigation = app.navigationBars["Push Dashboard"]
+        XCTAssertTrue(pushDashboardNavigation.waitForExistence(timeout: 2))
+        XCTAssertLessThan(
+            pushDashboardNavigation.frame.minY,
+            app.frame.height * 0.2,
+            "Dashboard Push should open at the large sheet detent."
         )
-        XCTAssertTrue(app.staticTexts["Dashboard binding"].exists)
+        XCTAssertTrue(app.staticTexts["Bound Displays"].exists)
+        XCTAssertTrue(
+            app.descendants(matching: .any)[
+                "dashboard-push-device-picpak-kitchen"
+            ].exists
+        )
+        XCTAssertFalse(
+            app.descendants(matching: .any)[
+                "dashboard-push-device-e1004-desk"
+            ].exists
+        )
         XCTAssertTrue(app.buttons["Push to Selected Displays"].isEnabled)
+        let dashboardPushScreenshot = XCTAttachment(
+            screenshot: app.screenshot()
+        )
+        dashboardPushScreenshot.name = "Bound Dashboard Push Sheet"
+        dashboardPushScreenshot.lifetime = .keepAlways
+        add(dashboardPushScreenshot)
         app.buttons["Cancel"].tap()
         XCTAssertTrue(pantryPushButton.waitForExistence(timeout: 2))
 
@@ -416,7 +443,11 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(detailNavigation.buttons["Close"].exists)
         XCTAssertFalse(detailNavigation.buttons["Displays"].exists)
         XCTAssertTrue(app.staticTexts["Current Screen"].exists)
-        XCTAssertTrue(app.staticTexts["Next Screen"].exists)
+        XCTAssertTrue(
+            app.descendants(matching: .any)[
+                "display-screen-page-indicator-picpak-kitchen"
+            ].exists
+        )
         XCTAssertTrue(app.staticTexts["Spectra 6 · 6-color"].exists)
         XCTAssertFalse(app.staticTexts["Waveshare E6"].exists)
 

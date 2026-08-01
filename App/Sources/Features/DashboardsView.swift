@@ -310,6 +310,7 @@ private struct DashboardPushSheet: View {
 
     @State private var selectedDeviceIDs: Set<String> = []
     @State private var didLoadInitialSelection = false
+    @State private var selectedDetent: PresentationDetent = .large
 
     var body: some View {
         NavigationStack {
@@ -319,7 +320,7 @@ private struct DashboardPushSheet: View {
                         Text(dashboard.name)
                             .font(.title3.weight(.semibold))
                         Text(
-                            "Choose where to send this render. Dashboard bindings are not changed."
+                            "Choose one or more displays already bound to this dashboard."
                         )
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -329,63 +330,72 @@ private struct DashboardPushSheet: View {
 
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Text("Displays")
+                            Text("Bound Displays")
                                 .font(.headline)
                             Spacer()
                             if !boundDeviceIDs.isEmpty {
-                                Button("Use Bindings") {
+                                Button("Select All") {
                                     selectedDeviceIDs = boundDeviceIDs
                                 }
                                 .font(.caption.weight(.semibold))
                             }
                         }
 
-                        ForEach(model.displays) { display in
-                            Button {
-                                if selectedDeviceIDs.contains(display.id) {
-                                    selectedDeviceIDs.remove(display.id)
-                                } else {
-                                    selectedDeviceIDs.insert(display.id)
-                                }
-                            } label: {
-                                HStack(spacing: 10) {
-                                    Image(
-                                        systemName: selectedDeviceIDs.contains(
-                                            display.id
+                        if boundDisplays.isEmpty {
+                            ContentUnavailableView {
+                                Label(
+                                    "No Bound Displays",
+                                    systemImage: "rectangle.badge.xmark"
+                                )
+                            } description: {
+                                Text(
+                                    "Bind this dashboard to at least one display in Tesserae before pushing it from the app."
+                                )
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                        } else {
+                            ForEach(boundDisplays) { display in
+                                Button {
+                                    if selectedDeviceIDs.contains(display.id) {
+                                        selectedDeviceIDs.remove(display.id)
+                                    } else {
+                                        selectedDeviceIDs.insert(display.id)
+                                    }
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        Image(
+                                            systemName: selectedDeviceIDs.contains(
+                                                display.id
+                                            )
+                                                ? "checkmark.circle.fill"
+                                                : "circle"
                                         )
-                                            ? "checkmark.circle.fill"
-                                            : "circle"
-                                    )
-                                    .foregroundStyle(
-                                        selectedDeviceIDs.contains(display.id)
-                                            ? TesseraeTheme.accent
-                                            : .secondary
-                                    )
+                                        .foregroundStyle(
+                                            selectedDeviceIDs.contains(display.id)
+                                                ? TesseraeTheme.accent
+                                                : .secondary
+                                        )
 
-                                    VStack(alignment: .leading, spacing: 3) {
                                         Text(display.name)
                                             .foregroundStyle(.primary)
-                                        if dashboard.deviceIDs.contains(
-                                            display.id
-                                        ) {
-                                            Text("Dashboard binding")
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                        }
+
+                                        Spacer()
+
+                                        Text(
+                                            "\(display.panel.width)×\(display.panel.height)"
+                                        )
+                                        .font(.caption.monospaced())
+                                        .foregroundStyle(.secondary)
                                     }
-
-                                    Spacer()
-
-                                    Text(
-                                        "\(display.panel.width)×\(display.panel.height)"
-                                    )
-                                    .font(.caption.monospaced())
-                                    .foregroundStyle(.secondary)
+                                    .contentShape(Rectangle())
+                                    .padding(.vertical, 7)
                                 }
-                                .contentShape(Rectangle())
-                                .padding(.vertical, 7)
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier(
+                                    "dashboard-push-device-\(display.id)"
+                                )
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                     .tesseraeCard()
@@ -432,33 +442,27 @@ private struct DashboardPushSheet: View {
             }
             .tesseraeScreenBackground()
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents(
+            [.medium, .large],
+            selection: $selectedDetent
+        )
+        .presentationDragIndicator(.visible)
+    }
+
+    private var boundDisplays: [DisplaySummary] {
+        let boundIDs = Set(dashboard.deviceIDs)
+        return model.displays.filter { boundIDs.contains($0.id) }
     }
 
     private var boundDeviceIDs: Set<String> {
-        let availableIDs = Set(model.displays.map(\.id))
-        return Set(dashboard.deviceIDs).intersection(availableIDs)
+        Set(boundDisplays.map(\.id))
     }
 
     private func loadInitialSelection() async {
         guard !didLoadInitialSelection else { return }
         didLoadInitialSelection = true
 
-        if !boundDeviceIDs.isEmpty {
-            selectedDeviceIDs = boundDeviceIDs
-            return
-        }
-
-        let availableIDs = Set(model.displays.map(\.id))
-        if let preferences = await model.savedSendPreferences() {
-            let preferred = Set(preferences.deviceIDs)
-                .intersection(availableIDs)
-            if !preferred.isEmpty {
-                selectedDeviceIDs = preferred
-                return
-            }
-        }
-        selectedDeviceIDs = Set(model.displays.prefix(1).map(\.id))
+        selectedDeviceIDs = boundDeviceIDs
     }
 }
 

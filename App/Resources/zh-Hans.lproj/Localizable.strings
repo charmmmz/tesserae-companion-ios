@@ -180,9 +180,11 @@
 "Dashboards" = "仪表盘";
 "Push to Selected Displays" = "发送到所选显示屏";
 "Sending…" = "正在发送…";
-"Use Bindings" = "使用绑定";
-"Dashboard binding" = "仪表盘绑定";
-"Choose where to send this render. Dashboard bindings are not changed." = "选择本次画面发送到哪些显示屏；不会更改仪表盘原有绑定。";
+"Bound Displays" = "已绑定显示屏";
+"Select All" = "全选";
+"Choose one or more displays already bound to this dashboard." = "选择一个或多个已绑定到此仪表盘的显示屏。";
+"No Bound Displays" = "没有已绑定的显示屏";
+"Bind this dashboard to at least one display in Tesserae before pushing it from the app." = "请先在 Tesserae 中为此仪表盘绑定至少一台显示屏，再从 App 发送。";
 "Send" = "发送";
 "Activity" = "活动";
 "Restoring Tesserae connection…" = "正在恢复 Tesserae 连接…";
