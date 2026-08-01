@@ -11,10 +11,20 @@ capabilities.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-01
+
 ### Added
 
+- A proposed OpenAPI 0.6.0 `image_framing` capability now carries normalized
+  photo focus and zoom for server-resolved Fill composition across mixed
+  display aspect ratios, with contract fixtures and TesseraeKit transport
+  models. Existing servers and unframed sends remain unchanged.
+- Display hardware branding now recognizes Tesserae's Xteink X3, X4, X4
+  grayscale, and X4 Pro device kinds.
 - Display details now distinguish the last-served Current Screen from the exact
-  pending Next Screen when a Tesserae 0.5.2 server retains that revision.
+  pending Next Screen in one swipeable preview carousel when a Tesserae 0.5.2
+  server retains that revision, with a stable header that does not shift the
+  preview while swiping between screens.
 - Dashboard cards now render the same Phosphor icon selected in Tesserae's web
   UI through the optional OpenAPI 0.5.1 `icon` field, including legacy-name
   normalization and a safe cube fallback for missing or unknown identifiers.
@@ -67,6 +77,13 @@ capabilities.
 
 ### Changed
 
+- Dashboard Push now lists only displays bound to that Dashboard, opens at the
+  full-height sheet detent by default, and uses clearer bound-display wording.
+- Onboarding now uses Tesserae's official tessellated logo instead of a generic
+  system grid symbol.
+- Hardware brand marks now use per-brand optical sizing, reducing the visual
+  weight mismatch between compact glyphs and wordmarks such as Seeed Studio,
+  PicPak, Waveshare, and Xteink.
 - The App Icon now uses the official Tesserae tessellated mark. The App Store
   product name remains **Tesserae Companion**, while the shorter installed
   home-screen name is now **Tesserae**.
@@ -118,6 +135,9 @@ capabilities.
 
 ### Fixed
 
+- Failed Dashboard sends no longer appear twice in Activity when the server
+  emits both a target-aware Companion Job and a targetless History row; the
+  retained card keeps the selected display name and error details.
 - Activity now maps the complete set of server push, button, touch, and
   condition History outcomes to compact semantic status glyphs, so successful
   actions no longer appear as pending clocks and unknown future statuses remain
@@ -348,6 +368,7 @@ capabilities.
 - Required Keychain storage, scoped credentials, revocation, redacted
   diagnostics, direct-to-instance photo transfer, and idempotent writes.
 
-[Unreleased]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/charmmmz/tesserae-companion-ios/releases/tag/v0.2.0
 [0.1.0]: https://github.com/charmmmz/tesserae-companion-ios/commit/6519c5c
