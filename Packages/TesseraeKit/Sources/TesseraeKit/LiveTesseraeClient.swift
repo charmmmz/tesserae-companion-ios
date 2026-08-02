@@ -398,6 +398,51 @@ public actor LiveTesseraeClient: TesseraeServing {
         return response.job
     }
 
+    public func fetchPersonalDataStatus(
+        instance: TesseraeInstance
+    ) async throws -> PersonalDataStatusResponse {
+        let request = try await authenticatedRequest(
+            instance: instance,
+            path: ["personal-data", "status"],
+            method: "GET"
+        )
+        return try await perform(
+            request,
+            expectedStatusCodes: [200]
+        )
+    }
+
+    public func putRemindersFridgeSnapshot(
+        _ snapshot: RemindersFridgeSnapshot,
+        instance: TesseraeInstance
+    ) async throws -> PersonalDataSourceStatus {
+        let request = try await authenticatedRequest(
+            instance: instance,
+            path: ["personal-data", snapshot.sourceID.rawValue],
+            method: "PUT",
+            body: TesseraeJSON.encoder().encode(snapshot)
+        )
+        return try await perform(
+            request,
+            expectedStatusCodes: [200]
+        )
+    }
+
+    public func deletePersonalData(
+        sourceID: PersonalDataSourceID,
+        instance: TesseraeInstance
+    ) async throws {
+        let request = try await authenticatedRequest(
+            instance: instance,
+            path: ["personal-data", sourceID.rawValue],
+            method: "DELETE"
+        )
+        _ = try await performWithoutBody(
+            request,
+            expectedStatusCodes: [204]
+        )
+    }
+
     public func fetchJob(id: String, instance: TesseraeInstance) async throws -> PushJob {
         let request = try await authenticatedRequest(
             instance: instance,

@@ -112,6 +112,25 @@ capability, request validation, adapter, History persistence, or resend path.
 The contract fixture is therefore forward-looking and must not be treated as
 evidence that an existing Tesserae release supports interactive framing.
 
+## Proposed contract 0.7 Reminders snapshot bridge
+
+OpenAPI 0.7.0 proposes `personal_data_reminders` as an independent optional
+capability. It adds a `personal_data:write` Companion scope and a strict
+`reminders.fridge` snapshot under the single `/api/app/v1/personal-data`
+family. Existing servers remain compatible because the app must hide the
+integration unless the exact capability and retention limits are advertised.
+
+The contract, synthetic fixtures, Swift models, and URLSession transport are
+reviewable ahead of implementation. They are not evidence that EventKit access,
+background sync, a server snapshot store, or a bundled widget exists yet. The
+first server adapter and fresh/stale/expired widget remain upstream-owned after
+contract review; the native permission and sync surface remains client-owned.
+
+Snapshot ingestion does not create a Job, rerender a dashboard, publish to a
+display, or write History. Existing schedules, rotations, decks, and manual
+pushes continue to control rendering until upstream's unified scheduling work
+defines a change-driven trigger model.
+
 ## Physical validation
 
 On 2026-07-28, a physical iPhone paired with a Tesserae `0.207.0` deployment

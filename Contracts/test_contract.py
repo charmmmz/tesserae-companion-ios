@@ -73,11 +73,13 @@ def _json_schema(value: Any) -> Any:
 
 def test_openapi_shape_and_operation_ids_are_stable() -> None:
     assert SPEC["openapi"] == "3.0.3"
-    assert SPEC["info"]["version"] == "0.6.0"
+    assert SPEC["info"]["version"] == "0.7.0"
     assert set(SPEC["paths"]) == {
         "/api/app/v1",
         "/api/app/v1/pair",
         "/api/app/v1/session",
+        "/api/app/v1/personal-data/status",
+        "/api/app/v1/personal-data/{source_id}",
         "/api/app/v1/devices",
         "/api/app/v1/devices/{device_id}/preview",
         "/api/app/v1/dashboards",

@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Status | Implemented base contract plus proposed capability-gated extensions |
-| Contract version | 0.6.0 |
+| Contract version | 0.7.0 |
 | Namespace | `/api/app/v1` |
 | Authentication | Revocable per-client Companion bearer token |
 | Machine-readable source | [`Contracts/app-v1.openapi.yaml`](Contracts/app-v1.openapi.yaml) |
@@ -12,12 +12,14 @@
 This is the server surface used by the native Tesserae companion. It
 complements the web UI rather than replacing it. The five base features form
 the compatibility floor; `previews`, `history`, `image_url_push`,
-`webpage_push`, and `image_framing` are additive capabilities.
+`webpage_push`, `image_framing`, and `personal_data_reminders` are additive
+capabilities.
 
 The proposal reflects the maintainer reviews in
 [Discussion #147](https://github.com/dmellok/tesserae/discussions/147),
-[Discussion #159](https://github.com/dmellok/tesserae/discussions/159), and
-[Discussion #160](https://github.com/dmellok/tesserae/discussions/160).
+[Discussion #159](https://github.com/dmellok/tesserae/discussions/159),
+[Discussion #160](https://github.com/dmellok/tesserae/discussions/160), and
+[Discussion #176](https://github.com/dmellok/tesserae/discussions/176).
 Dashboard editing, plugin administration, schedules, firmware controls,
 History deletion/administration, and general server administration remain
 outside this contract.
@@ -30,8 +32,10 @@ outside this contract.
 - The unauthenticated capability probe exposes no display names, dashboard
   names, secrets, or other household content.
 - Authenticated calls use only `Authorization: Bearer <companion_token>`.
-- Every write requires `Idempotency-Key`.
-- Write responses are persisted asynchronous jobs and return `202 Accepted`.
+- Render and publish writes require `Idempotency-Key`, persist asynchronous
+  Jobs, and return `202 Accepted`.
+- Personal-data PUT is a synchronous, naturally idempotent latest-snapshot
+  replacement. It neither creates a Job nor triggers rendering or publishing.
 - Tesserae remains authoritative for target validation, rendering, quiet
   hours, publishing, and resource limits.
 
@@ -50,6 +54,9 @@ outside this contract.
 | `POST` | `/api/app/v1/images` | Upload one still image to explicit targets |
 | `POST` | `/api/app/v1/image-urls` | Fetch and send one public image URL |
 | `POST` | `/api/app/v1/webpages` | Render and send one public webpage |
+| `GET` | `/api/app/v1/personal-data/status` | Read source freshness metadata without personal values |
+| `PUT` | `/api/app/v1/personal-data/{source_id}` | Replace the latest strict snapshot for one source |
+| `DELETE` | `/api/app/v1/personal-data/{source_id}` | Immediately remove a disabled source snapshot |
 | `GET` | `/api/app/v1/jobs/{job_id}` | Poll job lifecycle and terminal outcome |
 | `GET` | `/api/app/v1/history` | List canonical push History with cursor pagination |
 | `GET` | `/api/app/v1/history/{history_id}/preview` | Read the retained composition thumbnail |
@@ -89,6 +96,7 @@ devices:read
 dashboards:read
 push:write
 media:write
+personal_data:write
 ```
 
 ## Capabilities and resource limits
@@ -143,11 +151,72 @@ Contract 0.6.0 proposes independently capability-gated photo framing:
 - the server resolves the same intent independently for every target panel,
   rather than applying one fixed crop rectangle to mixed aspect ratios.
 
+Contract 0.7.0 adds the first privacy-preserving personal-data source:
+
+- `personal_data_reminders` advertises the strict `reminders.fridge` snapshot;
+- `limits.personal_data_stale_after_seconds` tells clients when the server will
+  mark a snapshot stale;
+- `limits.personal_data_max_ttl_seconds` bounds the required expiry without
+  making the app hard-code a retention policy;
+- paired clients need the separate `personal_data:write` scope;
+- capability support does not grant EventKit permission or enable upload. The
+  user must separately authorize Reminders, select a list, and enable sync.
+
+The first fixtures use a 24-hour stale threshold and 48-hour maximum TTL as a
+reviewable proposal. Both values remain server-advertised so the accepted
+policy can change without an app release.
+
 Upstream PR [#175](https://github.com/dmellok/tesserae/pull/175) merged the
 underlying normalized `SourceCrop` renderer primitive. It does not by itself
 add this Companion capability, request field, validation, History persistence,
 or resend behavior. The 0.6 surface therefore remains a proposal until its
 server adapter is reviewed and implemented.
+
+## Personal-data snapshot bridge
+
+The iPhone remains authoritative for data behind Apple frameworks. Contract
+0.7.0 covers only the first Reminders slice:
+
+```text
+selected Reminders list
+  -> local filtering and normalization
+  -> minimal expiring snapshot
+  -> paired Tesserae Server store
+  -> pull-based widget at its next dashboard render
+```
+
+`PUT /personal-data/reminders.fridge` atomically replaces one complete latest
+snapshot. Its strict payload contains only opaque item ID, title, optional due
+date, normalized priority, and an incomplete marker. It never contains notes,
+URLs, alarms, locations, or unrelated lists. An older generated timestamp is
+rejected so a delayed background retry cannot overwrite newer data; an exact
+retry is idempotent without an `Idempotency-Key`.
+
+The store retains only the latest value. Raw values are deleted at the required
+`expires_at` deadline or immediately after
+`DELETE /personal-data/reminders.fridge`. `GET /personal-data/status` returns
+only source ID, fresh/stale/expired state, and generated/stale/expiry times. It
+is deliberately not a read API for snapshot contents.
+
+Ingestion and rendering remain separate in v1. Existing schedules, rotations,
+decks, and explicit dashboard pushes decide when a pull-based widget rerenders.
+No snapshot request discovers dependent dashboards, publishes to a display, or
+writes History. Change-triggered rerendering waits for the unified scheduling
+work tracked upstream in
+[Discussion #167](https://github.com/dmellok/tesserae/discussions/167).
+
+Raw snapshot values must not appear in logs, API errors, diagnostics, or normal
+backups. Render outputs are already excluded from Tesserae backups. While a
+render remains in the live cache, its ordinary History thumbnail necessarily
+contains whatever was displayed, including reminder titles; contract 0.7.0
+states that limitation rather than promising a separate thumbnail privacy
+class. Deleting a source does not retroactively alter an already rendered
+composition.
+
+Calendar remains a later source under this family. HealthKit is not implied by
+`personal_data_reminders`: it requires a separate consent design, capability,
+and maintainer decision, and would carry daily aggregates rather than raw
+samples.
 
 ## Photo framing
 
@@ -346,10 +415,11 @@ internal web routes.
 
 The client includes a live `URLSession` transport and the base write path has
 been verified against an edge Tesserae server and physical display. Contract
-0.4.1, 0.5.0, and proposed 0.6.0 extensions remain capability-gated until their
-matching server implementations and compatibility evidence are recorded. For
-0.6.0, the app sends normalized intent; Tesserae validates it, resolves a
-target-specific `SourceCrop`, renders, persists History, and resends.
+0.4.1, 0.5.0, proposed 0.6.0, and proposed 0.7.0 extensions remain
+capability-gated until their matching server implementations and compatibility
+evidence are recorded. For 0.7.0, the contract, fixtures, models, and transport
+precede EventKit UI and background sync; the maintainer owns the server adapter,
+snapshot store, and bundled fresh/stale/expired widget.
 
 ## Contract checks
 
@@ -365,8 +435,9 @@ The Python checks validate every fixture against its OpenAPI component,
 operation ID uniqueness, required endpoint coverage, Job/result separation,
 idempotency headers, image-fit fallback and expansion, History composition
 semantics, resend correlation, strict URL policy, single-render webpage
-semantics, and the stateful local fixture server. Swift tests decode the same
-JSON files into `TesseraeKit` models. With
+semantics, strict personal-data schemas and metadata-only status, and the
+stateful local fixture server. Swift tests decode the same JSON files into
+`TesseraeKit` models and verify Personal Data PUT/status/delete transport. With
 `TESSERAE_FIXTURE_BASE_URL` set, they also exercise the live transport from
 pairing through publish polling.
 
@@ -380,5 +451,9 @@ pairing through publish polling.
   preview metadata;
 - maintainer acceptance and first edge/stable Tesserae revisions implementing
   the proposed 0.6.0 `image_framing` adapter and History/resend semantics;
+- maintainer review of the proposed 0.7.0 endpoint names, 24-hour stale
+  threshold, 48-hour maximum TTL, and out-of-order replacement semantics;
+- first edge and stable Tesserae revisions implementing the 0.7.0 snapshot
+  store and bundled Reminders widget;
 - the exact reusable PNG stage each packed renderer exposes as its
   device-specific preview.
