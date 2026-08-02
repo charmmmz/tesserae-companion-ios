@@ -77,11 +77,12 @@ Companion release.
 
 Manual photo composition is split into independently reviewable layers:
 
-1. **Contract foundation (0.6 proposal):** carry normalized focus and zoom,
+1. **Contract foundation (accepted 0.6 draft):** carry normalized focus and zoom,
    gate it with `image_framing`, and define mixed-target resolution precisely.
 2. **Tesserae adapter:** validate the request, resolve one `SourceCrop` per
    target using the renderer primitive merged in upstream PR #175, and retain
-   enough state for History and resend.
+   the original intent for History and re-targeting while keeping resolved
+   rectangles internal.
 3. **Native editor:** when the capability is present, add drag and pinch
    gestures to the in-app photo preview and send the normalized intent. Keep
    the current layout-only flow on older servers; Share Sheet and Shortcuts may
@@ -690,7 +691,7 @@ display model/transport, and observed outcome.
 | D-022 | 2026-07-30 | Reuse one bounded webpage-render primitive for Web UI manual preview and Companion push while keeping Companion on a strict no-LAN URL policy. | Accepted by upstream maintainer |
 | D-023 | 2026-07-31 | Carry bare Phosphor Dashboard identifiers through Companion API 0.5.1, normalize legacy aliases in the client, and fall back to `cube` for missing or unknown names. | Accepted by app maintainer |
 | D-024 | 2026-08-01 | Keep display cards and Current Screen tied to the last-served frame, and show an exact, separate Next Screen from optional Companion API 0.5.2 pending-render revision metadata. | Accepted by app maintainer |
-| D-025 | 2026-08-01 | Propose capability-gated normalized photo focus and zoom, resolved by Tesserae into a separate SourceCrop for each target; stage the contract and server adapter before enabling native drag/pinch UI. | Proposed for upstream maintainer review |
+| D-025 | 2026-08-01 | Use capability-gated normalized photo focus and zoom, resolved by Tesserae into a separate SourceCrop for each target; stage the contract and server adapter before enabling native drag/pinch UI. | Accepted by upstream maintainer |
 | D-026 | 2026-07-31 | Designate Tesserae Companion as the official native iOS app while retaining the existing privacy, advertising, data-use, free-web-feature, repository, and publishing boundaries. | Accepted by both maintainers |
 | D-027 | 2026-08-02 | Use Companion as an opt-in Reminders snapshot bridge under one strict `/personal-data` family; retain only the latest expiring value and keep ingestion separate from rendering until the unified scheduling model settles. | Accepted by upstream maintainer in Discussion #176 |
 
@@ -701,9 +702,7 @@ display model/transport, and observed outcome.
    image-fit and History extensions?
 3. Which edge and stable releases should first advertise the optional 0.5.0
    image-URL and webpage extensions?
-4. Should Companion API 0.6 adopt the proposed `image_framing` focus/zoom
-   contract and make the advertised maximum zoom mandatory?
-5. Should the initial Personal Data policy use the proposed 24-hour stale
+4. Should the initial Personal Data policy use the proposed 24-hour stale
    threshold and 48-hour maximum TTL, or different server-advertised values?
 
 ## 18. Definition of release 1.0 done

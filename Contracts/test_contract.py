@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import base64
 import json
 from pathlib import Path
 from typing import Any
 
 import jsonschema
+import pytest
 import yaml
 
 
@@ -234,7 +236,7 @@ def test_image_framing_is_independently_gated_and_fill_only() -> None:
     assert "image_framing" not in base["features"]
     assert "image_framing_max_zoom" not in base["limits"]
     assert "image_framing" in framing_capabilities["features"]
-    assert framing_capabilities["limits"]["image_framing_max_zoom"] == 8
+    assert framing_capabilities["limits"]["image_framing_max_zoom"] == 4
 
     assert "framing" not in basic
     assert framed["fit"] == "fill"
@@ -257,6 +259,77 @@ def test_image_framing_is_independently_gated_and_fill_only() -> None:
     assert schema["properties"]["focus_y"]["minimum"] == 0
     assert schema["properties"]["focus_y"]["maximum"] == 1
     assert schema["properties"]["zoom"]["minimum"] == 1
+
+    error_codes = SPEC["components"]["schemas"]["ErrorResponse"]["properties"][
+        "error"
+    ]["properties"]["code"]["enum"]
+    assert "invalid_framing" in error_codes
+
+
+def test_image_framing_uses_orientation_normalized_source_space() -> None:
+    fixture = json.loads(
+        (FIXTURES / "image-framing-exif-rotate-90.json").read_text()
+    )
+    image = base64.b64decode(fixture["jpeg_base64"], validate=True)
+    raw = fixture["raw_source"]
+    normalized = fixture["normalized_source"]
+    target = fixture["target"]
+
+    assert image.startswith(b"\xff\xd8")
+    assert image.endswith(b"\xff\xd9")
+    assert raw == {"width": 40, "height": 30, "exif_orientation": 6}
+    assert normalized == {"width": 30, "height": 40, "exif_orientation": 1}
+
+    def resolve(
+        source: dict[str, int],
+        framing: dict[str, float],
+    ) -> dict[str, float]:
+        source_aspect = source["width"] / source["height"]
+        target_aspect = target["width"] / target["height"]
+        if source_aspect >= target_aspect:
+            base_width = target_aspect / source_aspect
+            base_height = 1.0
+        else:
+            base_width = 1.0
+            base_height = source_aspect / target_aspect
+        width = base_width / framing["zoom"]
+        height = base_height / framing["zoom"]
+        return {
+            "x": min(
+                max(framing["focus_x"] - width / 2, 0),
+                1 - width,
+            ),
+            "y": min(
+                max(framing["focus_y"] - height / 2, 0),
+                1 - height,
+            ),
+            "width": width,
+            "height": height,
+        }
+
+    framing = fixture["framing"]
+    resolved = resolve(normalized, framing)
+    for key, expected in fixture["expected_crop"].items():
+        assert resolved[key] == pytest.approx(expected)
+    assert resolve(raw, framing)["x"] != pytest.approx(resolved["x"])
+
+    clamp_case = fixture["clamp_case"]
+    clamp_framing = clamp_case["framing"]
+    clamped = resolve(normalized, clamp_framing)
+    for key, expected in clamp_case["expected_crop"].items():
+        assert clamped[key] == pytest.approx(expected)
+    assert clamp_framing["focus_x"] - clamped["width"] / 2 > 1 - clamped[
+        "width"
+    ]
+    assert clamp_framing["focus_y"] - clamped["height"] / 2 < 0
+    assert clamped["x"] == pytest.approx(1 - clamped["width"])
+    assert clamped["y"] == pytest.approx(0)
+
+    schema = SPEC["components"]["schemas"]["ImageFraming"]
+    assert "applies EXIF orientation" in schema["description"]
+    assert "orientation-normalized" in schema["properties"]["focus_x"][
+        "description"
+    ]
 
 
 def test_link_push_contract_keeps_routes_and_failures_distinct() -> None:

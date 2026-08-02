@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Implemented base contract plus proposed capability-gated extensions |
+| Status | Implemented base contract plus maintainer-approved gated extensions |
 | Contract version | 0.7.0 |
 | Namespace | `/api/app/v1` |
 | Authentication | Revocable per-client Companion bearer token |
@@ -141,15 +141,19 @@ preview endpoint returns that exact frame; omitting the query continues to
 return the last-served frame. This is additive metadata under `previews`, so
 older compatible servers can omit it without a separate capability.
 
-Contract 0.6.0 proposes independently capability-gated photo framing:
+Contract 0.6.0 defines independently capability-gated photo framing:
 
 - `image_framing` enables normalized focus and zoom on image uploads;
 - `limits.image_framing_max_zoom` is required whenever that capability is
-  advertised, so an editor never hard-codes the server range;
+  advertised, so an editor never hard-codes the server range; the first
+  accepted server value is `4`, as an editor bound rather than an image-quality
+  promise;
 - framing is accepted only with `fit: fill`; omitting it preserves the
   existing centered Fill result;
+- invalid fields, out-of-range focus or zoom, and framing on another fit mode
+  return `400 invalid_framing`;
 - the server resolves the same intent independently for every target panel,
-  rather than applying one fixed crop rectangle to mixed aspect ratios.
+   rather than applying one fixed crop rectangle to mixed aspect ratios.
 
 Contract 0.7.0 adds the first privacy-preserving personal-data source:
 
@@ -169,8 +173,9 @@ policy can change without an app release.
 Upstream PR [#175](https://github.com/dmellok/tesserae/pull/175) merged the
 underlying normalized `SourceCrop` renderer primitive. It does not by itself
 add this Companion capability, request field, validation, History persistence,
-or resend behavior. The 0.6 surface therefore remains a proposal until its
-server adapter is reviewed and implemented.
+or resend behavior. The maintainer accepted the 0.6 contract shape in
+[Discussion #147](https://github.com/dmellok/tesserae/discussions/147#discussioncomment-17861578);
+its server adapter remains pending.
 
 ## Personal-data snapshot bridge
 
@@ -236,20 +241,24 @@ samples.
 }
 ```
 
-`focus_x` and `focus_y` are normalized coordinates in the orientation-correct
-source image. `zoom: 1` means ordinary Fill; larger values crop more tightly,
-up to the advertised maximum. For each target, the server first derives its
-ordinary Fill crop from source and target aspect ratios, divides both crop
-dimensions by `zoom`, centers the result on the requested focus, and clamps it
-inside the source bounds. The OpenAPI `ImageFraming` schema defines the exact
-formula.
+`focus_x` and `focus_y` are normalized coordinates in the
+EXIF-orientation-normalized source image as displayed. Tesserae 0.225.0 applies
+orientation normalization before `SourceCrop`; the Companion also bakes
+non-upright orientation into upload pixels. `zoom: 1` means ordinary Fill;
+larger values crop more tightly, up to the advertised maximum. For each target,
+the server first derives its ordinary Fill crop from normalized source and
+target aspect ratios, divides both crop dimensions by `zoom`, centers the
+result on the requested focus, and clamps it inside the source bounds. The
+OpenAPI `ImageFraming` schema defines the exact formula.
 
 This target-independent intent is important when one send contains both
 portrait and landscape displays: each panel receives a different source crop
 while preserving the user's chosen subject and zoom. Rotation is intentionally
 deferred from this first slice. History may return the original framing, and a
-resend must retain enough original or resolved state to reproduce the target
-snapshot faithfully.
+client may reuse that intent to reproduce or re-target the composition.
+Resolved per-target rectangles stay server-internal because they are derived
+from a particular target set. Original-target resend continues through the
+canonical retained-composition path.
 
 ## Remote image URLs and webpages
 
@@ -349,10 +358,12 @@ or device treatment. The device preview answers **what full frame was most
 recently served to that particular display**, while `has_pending_render`
 indicates that a newer server render is waiting for its next wake.
 
-V1 resend targets only the original device snapshot. It reuses the stored fit
-mode and framing intent when they exist, records a new History row rather than
-mutating the original, and returns `not_resendable` or `not_found` when the
-retained composition is unavailable. A successful Job may include
+V1 resend targets only the original device snapshot and republishes the
+retained composition through the canonical server path. The original fit and
+framing intent remain History metadata for reproduction or re-targeting;
+resolved crop rectangles are not public state. Resend records a new History
+row rather than mutating the original and returns `not_resendable` or
+`not_found` when the retained composition is unavailable. A successful Job may include
 `result.history_event_ids` so Activity can replace local Job progress with
 canonical rows without timestamp heuristics.
 
@@ -415,7 +426,7 @@ internal web routes.
 
 The client includes a live `URLSession` transport and the base write path has
 been verified against an edge Tesserae server and physical display. Contract
-0.4.1, 0.5.0, proposed 0.6.0, and proposed 0.7.0 extensions remain
+0.4.1, 0.5.0, accepted 0.6.0, and proposed 0.7.0 extensions remain
 capability-gated until their matching server implementations and compatibility
 evidence are recorded. For 0.7.0, the contract, fixtures, models, and transport
 precede EventKit UI and background sync; the maintainer owns the server adapter,
@@ -435,9 +446,11 @@ The Python checks validate every fixture against its OpenAPI component,
 operation ID uniqueness, required endpoint coverage, Job/result separation,
 idempotency headers, image-fit fallback and expansion, History composition
 semantics, resend correlation, strict URL policy, single-render webpage
-semantics, strict personal-data schemas and metadata-only status, and the
-stateful local fixture server. Swift tests decode the same JSON files into
-`TesseraeKit` models and verify Personal Data PUT/status/delete transport. With
+semantics, EXIF-orientation-normalized crop resolution, strict personal-data
+schemas and metadata-only status, and the stateful local fixture server. Swift
+tests decode the same JSON files into `TesseraeKit` models, exercise the
+rotated-EXIF JPEG fixture, and verify Personal Data PUT/status/delete transport.
+With
 `TESSERAE_FIXTURE_BASE_URL` set, they also exercise the live transport from
 pairing through publish polling.
 
@@ -449,8 +462,8 @@ pairing through publish polling.
 - first stable Tesserae revision including the additive 0.5.1 Dashboard icon;
 - first stable Tesserae revision including the additive 0.5.2 exact pending
   preview metadata;
-- maintainer acceptance and first edge/stable Tesserae revisions implementing
-  the proposed 0.6.0 `image_framing` adapter and History/resend semantics;
+- first edge and stable Tesserae revisions implementing the accepted 0.6.0
+  `image_framing` adapter and History/re-targeting semantics;
 - maintainer review of the proposed 0.7.0 endpoint names, 24-hour stale
   threshold, 48-hour maximum TTL, and out-of-order replacement semantics;
 - first edge and stable Tesserae revisions implementing the 0.7.0 snapshot

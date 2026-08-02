@@ -6,9 +6,8 @@ info:
     Companion API contract for community-built clients. Previews, History,
     resend, remote-image push, webpage push, and server-advertised image fit
     modes are optional additive extensions over the five-feature compatibility
-    floor. Image framing is a proposed additive extension for server-resolved
-    drag and pinch composition across mixed target geometries. The
-    privacy-preserving Reminders snapshot bridge is independently gated.
+    floor. Image framing and the privacy-preserving Reminders snapshot bridge
+    are independently capability-gated additive extensions.
 servers:
   - url: /
 tags:
@@ -1053,8 +1052,11 @@ components:
           default: false
     ImageFraming:
       description: >-
-        Normalized subject framing resolved independently for each target. Let
-        source_aspect be source_width/source_height and target_aspect be
+        Normalized subject framing resolved independently for each target. The
+        server applies EXIF orientation before interpreting these coordinates,
+        so source_width/source_height and focus_x/focus_y all refer to the
+        orientation-normalized image as displayed. Let source_aspect be
+        source_width/source_height and target_aspect be
         target_width/target_height. Ordinary Fill exposes a normalized source
         crop of target_aspect/source_aspect by 1 when the source is wider than
         the target, otherwise 1 by source_aspect/target_aspect. Divide both crop
@@ -1068,12 +1070,16 @@ components:
       required: [focus_x, focus_y, zoom]
       properties:
         focus_x:
-          description: Horizontal subject focus in normalized source-image space
+          description: >-
+            Horizontal subject focus in normalized, EXIF-orientation-normalized
+            source-image space
           type: number
           minimum: 0
           maximum: 1
         focus_y:
-          description: Vertical subject focus in normalized source-image space
+          description: >-
+            Vertical subject focus in normalized, EXIF-orientation-normalized
+            source-image space
           type: number
           minimum: 0
           maximum: 1
@@ -1207,8 +1213,9 @@ components:
         framing:
           description: >-
             Original normalized framing intent when the image was sent with
-            image_framing. The server retains enough original or resolved
-            framing state for a faithful resend to the target snapshot.
+            image_framing. It is returned for reproduction or re-targeting.
+            Resolved per-target crop rectangles are derived server-internal
+            state rather than part of the public History contract.
           allOf:
             - $ref: "#/components/schemas/ImageFraming"
           nullable: true
@@ -1330,6 +1337,7 @@ components:
                 - pairing_expired
                 - pairing_code_used
                 - invalid_target
+                - invalid_framing
                 - invalid_snapshot
                 - unsupported_personal_data_source
                 - snapshot_out_of_order
