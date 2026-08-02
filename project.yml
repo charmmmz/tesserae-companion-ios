@@ -3,7 +3,7 @@ name: TesseraeCompanion
 options:
   minimumXcodeGenVersion: 2.44.1
   deploymentTarget:
-    iOS: "17.0"
+    iOS: "18.0"
   createIntermediateGroups: true
 
 packages:
@@ -33,6 +33,7 @@ targets:
         NSBonjourServices:
           - _tesserae._tcp
         NSLocalNetworkUsageDescription: Discover and connect to your Tesserae server on the local network.
+        NSRemindersFullAccessUsageDescription: Choose a grocery list to send a minimal, expiring snapshot to your Tesserae server.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         TesseraeAppGroupIdentifier: group.com.charmmmz.tesseraecompanion
@@ -120,6 +121,23 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         TEST_TARGET_NAME: TesseraeCompanion
 
+  TesseraeCompanionTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: App/Tests
+    dependencies:
+      - target: TesseraeCompanion
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.charmmmz.tesseraecompanion.tests
+        DEVELOPMENT_TEAM: 3MSS7DJGVR
+        CODE_SIGN_STYLE: Automatic
+        SWIFT_VERSION: 6.0
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Tesserae Companion.app/Tesserae Companion
+        BUNDLE_LOADER: $(TEST_HOST)
+
 schemes:
   TesseraeCompanion:
     build:
@@ -131,6 +149,7 @@ schemes:
     test:
       config: Debug
       targets:
+        - TesseraeCompanionTests
         - TesseraeCompanionUITests
     archive:
       config: Release

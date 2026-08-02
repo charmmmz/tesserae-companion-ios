@@ -42,6 +42,15 @@ capabilities.
   server-advertised `4×` editor bound and defines focus coordinates in
   EXIF-orientation-normalized source space, with schema-aligned framing errors
   and rotate-90 plus edge-clamp fixture coverage.
+- Dashboards now refresh immediately when their tab becomes visible, continue
+  revalidating while the app stays active, and reliably replace cancelled
+  in-flight preview requests instead of showing stale content until relaunch.
+- Tesserae Companion now requires iOS 18. Dashboard Push measures its content
+  to choose a matching sheet height, shows the Dashboard preview above its
+  bound displays at its rendered image size, scrolls only when that content is
+  long, and keeps its action button fully visible outside the scrolling region.
+- Dashboard preview images now expand and collapse inside their cards like
+  Activity photos instead of opening a separate full-screen zoom sheet.
 
 ### Fixed
 

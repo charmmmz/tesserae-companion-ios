@@ -4,11 +4,18 @@ import UIKit
 
 struct DashboardsView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var scenePhase
     @State private var draggedDashboardID: String?
     @State private var dropTargetDashboardID: String?
-    @State private var expandedPreview: DashboardPreviewSelection?
+    @State private var expandedDashboardID: String?
     @State private var dashboardToPush: DashboardSummary?
     private let previewCanvasSize = CGSize(width: 112, height: 118)
+
+    let isActive: Bool
+
+    private var shouldAutoRefresh: Bool {
+        isActive && scenePhase == .active
+    }
 
     var body: some View {
         ScrollView {
@@ -66,17 +73,16 @@ struct DashboardsView: View {
             .padding(16)
         }
         .refreshable {
-            await model.refresh()
-        }
-        .sheet(item: $expandedPreview) { preview in
-            DashboardPreviewViewer(preview: preview)
+            await model.refreshDashboards()
         }
         .sheet(item: $dashboardToPush) { dashboard in
             DashboardPushSheet(dashboard: dashboard)
                 .environment(model)
         }
         .overlay {
-            if model.isRefreshing && model.dashboards.isEmpty {
+            if (model.isRefreshingDashboards || model.isRefreshing)
+                && model.dashboards.isEmpty
+            {
                 ProgressView("Loading dashboards…")
             } else if model.dashboards.isEmpty {
                 ContentUnavailableView {
@@ -85,67 +91,110 @@ struct DashboardsView: View {
                     Text("Create a Dashboard in Tesserae's web interface, then refresh.")
                 } actions: {
                     Button("Refresh") {
-                        Task { await model.refresh() }
+                        Task { await model.refreshDashboards() }
                     }
                     .buttonStyle(.borderedProminent)
                 }
+            }
+        }
+        .task(id: shouldAutoRefresh) {
+            guard shouldAutoRefresh else { return }
+
+            await model.refreshDashboards(
+                showErrors: false,
+                saveSnapshot: false
+            )
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(15))
+                } catch {
+                    return
+                }
+                await model.refreshDashboards(
+                    showErrors: false,
+                    saveSnapshot: false
+                )
             }
         }
         .tesseraeScreenBackground()
     }
 
     private func dashboardCard(_ dashboard: DashboardSummary) -> some View {
-        HStack(alignment: .center, spacing: 14) {
-            VStack(alignment: .leading, spacing: 9) {
-                HStack(alignment: .firstTextBaseline, spacing: 7) {
-                    dashboardIcon(dashboard)
+        let expandedImage = dashboardPreviewImage(for: dashboard)
+        let isExpanded = expandedDashboardID == dashboard.id
 
-                    Text(dashboard.name)
-                        .font(.headline)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.82)
-                }
+        return VStack(
+            alignment: .leading,
+            spacing: isExpanded ? 14 : 0
+        ) {
+            HStack(alignment: .center, spacing: 14) {
+                VStack(alignment: .leading, spacing: 9) {
+                    HStack(alignment: .firstTextBaseline, spacing: 7) {
+                        dashboardIcon(dashboard)
 
-                Text(dashboard.kind.rawValue.capitalized)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
-
-                Label(
-                    model.displayNames(for: dashboard.deviceIDs),
-                    systemImage: "rectangle.connected.to.line.below"
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-
-                Button {
-                    dashboardToPush = dashboard
-                } label: {
-                    HStack(spacing: 5) {
-                        if model.activeOperationIDs.contains(dashboard.id) {
-                            ProgressView()
-                                .controlSize(.mini)
-                        } else {
-                            Image(systemName: "paperplane.fill")
-                        }
-                        Text("Push")
+                        Text(dashboard.name)
+                            .font(.headline)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.82)
                     }
-                    .font(.caption.weight(.semibold))
+
+                    Text(dashboard.kind.rawValue.capitalized)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+
+                    Label(
+                        model.displayNames(for: dashboard.deviceIDs),
+                        systemImage: "rectangle.connected.to.line.below"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+
+                    Button {
+                        dashboardToPush = dashboard
+                    } label: {
+                        HStack(spacing: 5) {
+                            if model.activeOperationIDs.contains(dashboard.id) {
+                                ProgressView()
+                                    .controlSize(.mini)
+                            } else {
+                                Image(systemName: "paperplane.fill")
+                            }
+                            Text("Push")
+                        }
+                        .font(.caption.weight(.semibold))
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .fixedSize()
+                    .accessibilityIdentifier("dashboard-push-\(dashboard.id)")
+                    .disabled(
+                        model.displays.isEmpty
+                            || model.activeOperationIDs.contains(dashboard.id)
+                    )
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                .fixedSize()
-                .accessibilityIdentifier("dashboard-push-\(dashboard.id)")
-                .disabled(
-                    model.displays.isEmpty
-                        || model.activeOperationIDs.contains(dashboard.id)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                dashboardPreview(
+                    dashboard,
+                    canExpand: expandedImage != nil,
+                    isExpanded: isExpanded
                 )
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
 
-            dashboardPreview(dashboard)
+            if let expandedImage, isExpanded {
+                expandedDashboardPreview(
+                    expandedImage,
+                    dashboard: dashboard
+                )
+                .transition(.opacity)
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .tesseraeCard()
+        .clipShape(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+        )
     }
 
     private func dashboardIcon(_ dashboard: DashboardSummary) -> some View {
@@ -153,7 +202,9 @@ struct DashboardsView: View {
     }
 
     private func dashboardPreview(
-        _ dashboard: DashboardSummary
+        _ dashboard: DashboardSummary,
+        canExpand: Bool,
+        isExpanded: Bool
     ) -> some View {
         let previewSize = dashboardPreviewSize(for: dashboard)
         let preview = ZStack {
@@ -178,37 +229,69 @@ struct DashboardsView: View {
             height: previewCanvasSize.height
         )
 
-        return ZStack {
-            preview
-
-            Button {
-                openPreview(for: dashboard)
-            } label: {
-                Color.clear
-                    .frame(
-                        width: previewCanvasSize.width,
-                        height: previewCanvasSize.height
-                    )
-                    .contentShape(Rectangle())
+        return Button {
+            guard canExpand else { return }
+            withAnimation(.smooth(duration: 0.28)) {
+                expandedDashboardID = isExpanded ? nil : dashboard.id
             }
-            .buttonStyle(.plain)
-            .contentShape(Rectangle())
-            .accessibilityIdentifier(
-                "dashboard-preview-button-\(dashboard.id)"
-            )
-            .accessibilityLabel("Preview \(dashboard.name)")
-            .accessibilityHint("Opens a full-size preview.")
+        } label: {
+            preview
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .accessibilityIdentifier(
+            "dashboard-preview-button-\(dashboard.id)"
+        )
+        .accessibilityLabel("Preview \(dashboard.name)")
+        .accessibilityValue(
+            isExpanded ? Text("Expanded") : Text("Collapsed")
+        )
+        .accessibilityHint(
+            canExpand
+                ? Text(
+                    isExpanded
+                        ? "Collapse dashboard preview"
+                        : "Expand dashboard preview"
+                )
+                : Text("Dashboard preview unavailable")
+        )
+        .disabled(!canExpand)
     }
 
-    private func openPreview(for dashboard: DashboardSummary) {
-        expandedPreview = DashboardPreviewSelection(
-            id: dashboard.id,
-            name: dashboard.name,
-            image: model.dashboardPreviews[dashboard.id]?
-                .data
-                .flatMap(UIImage.init(data:))
+    private func dashboardPreviewImage(
+        for dashboard: DashboardSummary
+    ) -> UIImage? {
+        model.dashboardPreviews[dashboard.id]?
+            .data
+            .flatMap(UIImage.init(data:))
+    }
+
+    private func expandedDashboardPreview(
+        _ image: UIImage,
+        dashboard: DashboardSummary
+    ) -> some View {
+        FittedPreviewLayout(
+            aspectRatio: image.size.width / image.size.height,
+            maximumHeight: 420
+        ) {
+            Image(uiImage: image)
+                .resizable()
+                .interpolation(.none)
+                .scaledToFit()
+        }
+        .frame(maxWidth: .infinity)
+        .background(
+            Color.primary.opacity(0.055),
+            in: RoundedRectangle(cornerRadius: 15, style: .continuous)
         )
+        .clipShape(
+            RoundedRectangle(cornerRadius: 15, style: .continuous)
+        )
+        .accessibilityIdentifier(
+            "dashboard-preview-expanded-\(dashboard.id)"
+        )
+        .accessibilityLabel("Expanded preview for \(dashboard.name)")
     }
 
     private func dashboardPreviewSize(
@@ -310,143 +393,208 @@ private struct DashboardPushSheet: View {
 
     @State private var selectedDeviceIDs: Set<String> = []
     @State private var didLoadInitialSelection = false
-    @State private var selectedDetent: PresentationDetent = .large
+    @State private var contentHeight: CGFloat = 1
+    @State private var sheetHeight: CGFloat = 400
+
+    private let maximumContentHeight: CGFloat = 460
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(dashboard.name)
-                            .font(.title3.weight(.semibold))
-                        Text(
-                            "Choose one or more displays already bound to this dashboard."
-                        )
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .tesseraeCard()
+        VStack(spacing: 0) {
+            ZStack {
+                Text("Push Dashboard")
+                    .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityIdentifier("dashboard-push-sheet-title")
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Bound Displays")
-                                .font(.headline)
-                            Spacer()
-                            if !boundDeviceIDs.isEmpty {
-                                Button("Select All") {
-                                    selectedDeviceIDs = boundDeviceIDs
-                                }
-                                .font(.caption.weight(.semibold))
-                            }
-                        }
-
-                        if boundDisplays.isEmpty {
-                            ContentUnavailableView {
-                                Label(
-                                    "No Bound Displays",
-                                    systemImage: "rectangle.badge.xmark"
-                                )
-                            } description: {
-                                Text(
-                                    "Bind this dashboard to at least one display in Tesserae before pushing it from the app."
-                                )
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                        } else {
-                            ForEach(boundDisplays) { display in
-                                Button {
-                                    if selectedDeviceIDs.contains(display.id) {
-                                        selectedDeviceIDs.remove(display.id)
-                                    } else {
-                                        selectedDeviceIDs.insert(display.id)
-                                    }
-                                } label: {
-                                    HStack(spacing: 10) {
-                                        Image(
-                                            systemName: selectedDeviceIDs.contains(
-                                                display.id
-                                            )
-                                                ? "checkmark.circle.fill"
-                                                : "circle"
-                                        )
-                                        .foregroundStyle(
-                                            selectedDeviceIDs.contains(display.id)
-                                                ? TesseraeTheme.accent
-                                                : .secondary
-                                        )
-
-                                        Text(display.name)
-                                            .foregroundStyle(.primary)
-
-                                        Spacer()
-
-                                        Text(
-                                            "\(display.panel.width)×\(display.panel.height)"
-                                        )
-                                        .font(.caption.monospaced())
-                                        .foregroundStyle(.secondary)
-                                    }
-                                    .contentShape(Rectangle())
-                                    .padding(.vertical, 7)
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier(
-                                    "dashboard-push-device-\(display.id)"
-                                )
-                            }
-                        }
-                    }
-                    .tesseraeCard()
-
-                    Button {
-                        Task {
-                            let sent = await model.push(
-                                dashboard,
-                                deviceIDs: Array(selectedDeviceIDs).sorted()
-                            )
-                            if sent {
-                                dismiss()
-                            }
-                        }
-                    } label: {
-                        Label(
-                            model.activeOperationIDs.contains(dashboard.id)
-                                ? "Sending…"
-                                : "Push to Selected Displays",
-                            systemImage: "paperplane.fill"
-                        )
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .disabled(
-                        selectedDeviceIDs.isEmpty
-                            || model.activeOperationIDs.contains(dashboard.id)
-                    )
-                }
-                .padding(16)
-            }
-            .navigationTitle("Push Dashboard")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
+                HStack {
                     Button("Cancel") {
                         dismiss()
                     }
+                    Spacer()
                 }
             }
-            .task {
-                await loadInitialSelection()
+            .padding(.horizontal, 16)
+            .padding(.top, 24)
+            .padding(.bottom, 12)
+
+            ScrollView {
+                dashboardPushContent
+                    .onGeometryChange(for: CGFloat.self) { geometry in
+                        geometry.size.height
+                    } action: { measuredHeight in
+                        contentHeight = measuredHeight
+                    }
             }
-            .tesseraeScreenBackground()
+            .frame(height: min(contentHeight, maximumContentHeight))
+            .scrollDisabled(contentHeight <= maximumContentHeight)
+
+            Button {
+                Task {
+                    let sent = await model.push(
+                        dashboard,
+                        deviceIDs: Array(selectedDeviceIDs).sorted()
+                    )
+                    if sent {
+                        dismiss()
+                    }
+                }
+            } label: {
+                Label(
+                    model.activeOperationIDs.contains(dashboard.id)
+                        ? "Sending…"
+                        : "Push to Selected Displays",
+                    systemImage: "paperplane.fill"
+                )
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .disabled(
+                selectedDeviceIDs.isEmpty
+                    || model.activeOperationIDs.contains(dashboard.id)
+            )
+            .padding(.horizontal, 16)
+            .padding(.bottom, 16)
         }
-        .presentationDetents(
-            [.medium, .large],
-            selection: $selectedDetent
-        )
+        .task {
+            loadInitialSelection()
+        }
+        .tesseraeScreenBackground()
+        .fixedSize(horizontal: false, vertical: true)
+        .onGeometryChange(for: CGFloat.self) { geometry in
+            geometry.size.height
+        } action: { measuredHeight in
+            guard abs(sheetHeight - measuredHeight) > 0.5 else { return }
+            sheetHeight = measuredHeight
+        }
+        .presentationDetents([.height(sheetHeight)])
         .presentationDragIndicator(.visible)
+    }
+
+    private var dashboardPushContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(dashboard.name)
+                    .font(.title3.weight(.semibold))
+
+                if let previewImage {
+                    FittedPreviewLayout(
+                        aspectRatio: previewImage.size.width
+                            / previewImage.size.height,
+                        maximumHeight: 220,
+                        shrinksWidthAtMaximumHeight: true
+                    ) {
+                        Image(uiImage: previewImage)
+                            .resizable()
+                            .interpolation(.none)
+                            .scaledToFit()
+                    }
+                    .background(
+                        Color.primary.opacity(0.055),
+                        in: RoundedRectangle(
+                            cornerRadius: 15,
+                            style: .continuous
+                        )
+                    )
+                    .clipShape(
+                        RoundedRectangle(
+                            cornerRadius: 15,
+                            style: .continuous
+                        )
+                    )
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .accessibilityIdentifier(
+                        "dashboard-push-preview-\(dashboard.id)"
+                    )
+                    .accessibilityLabel(
+                        "Preview for \(dashboard.name)"
+                    )
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .tesseraeCard()
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Bound Displays")
+                        .font(.headline)
+                    Spacer()
+                    if !boundDeviceIDs.isEmpty {
+                        Button("Select All") {
+                            selectedDeviceIDs = boundDeviceIDs
+                        }
+                        .font(.caption.weight(.semibold))
+                    }
+                }
+
+                if boundDisplays.isEmpty {
+                    ContentUnavailableView {
+                        Label(
+                            "No Bound Displays",
+                            systemImage: "rectangle.badge.xmark"
+                        )
+                    } description: {
+                        Text(
+                            "Bind this dashboard to at least one display in Tesserae before pushing it from the app."
+                        )
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                } else {
+                    ForEach(boundDisplays) { display in
+                        Button {
+                            if selectedDeviceIDs.contains(display.id) {
+                                selectedDeviceIDs.remove(display.id)
+                            } else {
+                                selectedDeviceIDs.insert(display.id)
+                            }
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(
+                                    systemName: selectedDeviceIDs.contains(
+                                        display.id
+                                    )
+                                        ? "checkmark.circle.fill"
+                                        : "circle"
+                                )
+                                .foregroundStyle(
+                                    selectedDeviceIDs.contains(display.id)
+                                        ? TesseraeTheme.accent
+                                        : .secondary
+                                )
+
+                                Text(display.name)
+                                    .foregroundStyle(.primary)
+
+                                Spacer()
+
+                                Text(
+                                    "\(display.panel.width)×\(display.panel.height)"
+                                )
+                                .font(.caption.monospaced())
+                                .foregroundStyle(.secondary)
+                            }
+                            .contentShape(Rectangle())
+                            .padding(.vertical, 7)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier(
+                            "dashboard-push-device-\(display.id)"
+                        )
+                    }
+                }
+            }
+            .tesseraeCard()
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
+        .padding(.bottom, 12)
+    }
+
+    private var previewImage: UIImage? {
+        model.dashboardPreviews[dashboard.id]?
+            .data
+            .flatMap(UIImage.init(data:))
     }
 
     private var boundDisplays: [DisplaySummary] {
@@ -458,210 +606,10 @@ private struct DashboardPushSheet: View {
         Set(boundDisplays.map(\.id))
     }
 
-    private func loadInitialSelection() async {
+    private func loadInitialSelection() {
         guard !didLoadInitialSelection else { return }
         didLoadInitialSelection = true
 
         selectedDeviceIDs = boundDeviceIDs
-    }
-}
-
-private struct DashboardPreviewSelection: Identifiable {
-    let id: String
-    let name: String
-    let image: UIImage?
-}
-
-private struct DashboardPreviewViewer: View {
-    @Environment(\.dismiss) private var dismiss
-    let preview: DashboardPreviewSelection
-
-    var body: some View {
-        NavigationStack {
-            Group {
-                if let image = preview.image {
-                    ZoomableDashboardImage(image: image)
-                        .background(Color.black)
-                } else {
-                    ContentUnavailableView {
-                        Label(
-                            "Preview Unavailable",
-                            systemImage: "photo.badge.exclamationmark"
-                        )
-                    } description: {
-                        Text(
-                            "Tesserae has not provided an image for this Dashboard."
-                        )
-                    }
-                    .tesseraeScreenBackground()
-                }
-            }
-            .accessibilityIdentifier(
-                "dashboard-preview-viewer-\(preview.id)"
-            )
-            .accessibilityLabel(
-                "Full-size preview for \(preview.name)"
-            )
-            .accessibilityHint(
-                "Pinch to zoom, or double-tap to zoom in and out."
-            )
-            .navigationTitle(preview.name)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-            }
-        }
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
-    }
-}
-
-private struct ZoomableDashboardImage: UIViewRepresentable {
-    let image: UIImage
-
-    func makeUIView(context: Context) -> DashboardImageScrollView {
-        DashboardImageScrollView(image: image)
-    }
-
-    func updateUIView(
-        _ scrollView: DashboardImageScrollView,
-        context: Context
-    ) {
-        scrollView.setImage(image)
-    }
-}
-
-private final class DashboardImageScrollView:
-    UIScrollView,
-    UIScrollViewDelegate
-{
-    private let imageView = UIImageView()
-    private var lastLayoutSize: CGSize = .zero
-
-    init(image: UIImage) {
-        super.init(frame: .zero)
-
-        delegate = self
-        minimumZoomScale = 1
-        maximumZoomScale = 5
-        bouncesZoom = true
-        decelerationRate = .fast
-        showsHorizontalScrollIndicator = false
-        showsVerticalScrollIndicator = false
-        backgroundColor = .black
-
-        imageView.contentMode = .scaleAspectFit
-        imageView.layer.magnificationFilter = .nearest
-        imageView.layer.minificationFilter = .trilinear
-        addSubview(imageView)
-        setImage(image)
-
-        let doubleTap = UITapGestureRecognizer(
-            target: self,
-            action: #selector(handleDoubleTap(_:))
-        )
-        doubleTap.numberOfTapsRequired = 2
-        addGestureRecognizer(doubleTap)
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    func setImage(_ image: UIImage) {
-        guard imageView.image !== image else { return }
-        imageView.image = image
-        lastLayoutSize = .zero
-        setNeedsLayout()
-    }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-
-        guard bounds.width > 0, bounds.height > 0 else { return }
-        if bounds.size != lastLayoutSize {
-            lastLayoutSize = bounds.size
-            setZoomScale(minimumZoomScale, animated: false)
-            imageView.frame = CGRect(
-                origin: .zero,
-                size: fittedImageSize()
-            )
-            contentSize = imageView.bounds.size
-        }
-        centerImage()
-    }
-
-    func viewForZooming(in scrollView: UIScrollView) -> UIView? {
-        imageView
-    }
-
-    func scrollViewDidZoom(_ scrollView: UIScrollView) {
-        centerImage()
-    }
-
-    private func fittedImageSize() -> CGSize {
-        guard
-            let image = imageView.image,
-            image.size.width > 0,
-            image.size.height > 0
-        else {
-            return bounds.size
-        }
-
-        let scale = min(
-            bounds.width / image.size.width,
-            bounds.height / image.size.height
-        )
-        return CGSize(
-            width: image.size.width * scale,
-            height: image.size.height * scale
-        )
-    }
-
-    private func centerImage() {
-        let horizontalInset = max(
-            0,
-            (bounds.width - contentSize.width) / 2
-        )
-        let verticalInset = max(
-            0,
-            (bounds.height - contentSize.height) / 2
-        )
-        contentInset = UIEdgeInsets(
-            top: verticalInset,
-            left: horizontalInset,
-            bottom: verticalInset,
-            right: horizontalInset
-        )
-    }
-
-    @objc private func handleDoubleTap(
-        _ recognizer: UITapGestureRecognizer
-    ) {
-        if zoomScale > minimumZoomScale {
-            setZoomScale(minimumZoomScale, animated: true)
-            return
-        }
-
-        let targetScale = min(2.5, maximumZoomScale)
-        let point = recognizer.location(in: imageView)
-        let zoomSize = CGSize(
-            width: bounds.width / targetScale,
-            height: bounds.height / targetScale
-        )
-        zoom(
-            to: CGRect(
-                x: point.x - zoomSize.width / 2,
-                y: point.y - zoomSize.height / 2,
-                width: zoomSize.width,
-                height: zoomSize.height
-            ),
-            animated: true
-        )
     }
 }

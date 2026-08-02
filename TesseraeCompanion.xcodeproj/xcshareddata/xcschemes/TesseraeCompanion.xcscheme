@@ -16,7 +16,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "9432DA2869BF47821B1E91E8"
-               BuildableName = "Tesserae Companion.app"
+               BuildableName = "TesseraeCompanion.app"
                BlueprintName = "TesseraeCompanion"
                ReferencedContainer = "container:TesseraeCompanion.xcodeproj">
             </BuildableReference>
@@ -47,12 +47,23 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "9432DA2869BF47821B1E91E8"
-            BuildableName = "Tesserae Companion.app"
+            BuildableName = "TesseraeCompanion.app"
             BlueprintName = "TesseraeCompanion"
             ReferencedContainer = "container:TesseraeCompanion.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
       <Testables>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "A98D2993617B8AE8AD8A7FDA"
+               BuildableName = "TesseraeCompanionTests.xctest"
+               BlueprintName = "TesseraeCompanionTests"
+               ReferencedContainer = "container:TesseraeCompanion.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
          <TestableReference
             skipped = "NO"
             parallelizable = "NO">
@@ -83,7 +94,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "9432DA2869BF47821B1E91E8"
-            BuildableName = "Tesserae Companion.app"
+            BuildableName = "TesseraeCompanion.app"
             BlueprintName = "TesseraeCompanion"
             ReferencedContainer = "container:TesseraeCompanion.xcodeproj">
          </BuildableReference>
@@ -102,7 +113,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "9432DA2869BF47821B1E91E8"
-            BuildableName = "Tesserae Companion.app"
+            BuildableName = "TesseraeCompanion.app"
             BlueprintName = "TesseraeCompanion"
             ReferencedContainer = "container:TesseraeCompanion.xcodeproj">
          </BuildableReference>

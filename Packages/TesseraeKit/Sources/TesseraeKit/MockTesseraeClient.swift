@@ -1,6 +1,9 @@
 import Foundation
 
 public actor MockTesseraeClient: TesseraeServing {
+    private static let dashboardPreviewData = Data(
+        base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAADIAAAAeCAYAAABuUU38AAAAU0lEQVR42u3PMQ3AIBAAQJxUSxc84KgKagcZWGBiadKViiAkn+aGE3Dpffr8gyQisily3NdcMWoOQURERERERERERGR/pJUzBBERERERERGRgJEPNPv5WtxkAPMAAAAASUVORK5CYII="
+    )!
     private let latency: Duration
     private var completedJobs: [String: PushJob] = [:]
     private var jobsByIdempotencyKey: [String: PushJob] = [:]
@@ -26,10 +29,10 @@ public actor MockTesseraeClient: TesseraeServing {
                 "previews",
                 "history",
                 "webpage_push",
+                "image_framing",
             ],
             limits: CompanionLimits(
                 imageUploadBytes: 26_214_400,
-                "image_framing",
                 imageMaxEdge: 8_192,
                 imageContentTypes: [
                     "image/jpeg",
@@ -39,10 +42,10 @@ public actor MockTesseraeClient: TesseraeServing {
                     "image/webp",
                 ],
                 imageFitModes: ImageFitMode.allCases,
+                imageFramingMaxZoom: 4,
                 jobRetentionSeconds: 86_400,
                 idempotencyRetentionSeconds: 86_400
             ),
-                imageFramingMaxZoom: 4,
             webURL: "/"
         )
     }
@@ -173,7 +176,11 @@ public actor MockTesseraeClient: TesseraeServing {
         instance: TesseraeInstance
     ) async throws -> PreviewFetchResult {
         try await pause()
-        return .notFound
+        let eTag = "\"dashboard-preview-\(id)\""
+        if ifNoneMatch == eTag {
+            return .notModified
+        }
+        return .image(data: Self.dashboardPreviewData, eTag: eTag)
     }
 
     public func fetchHistory(

@@ -17,6 +17,7 @@
 		38FFA83B75C8B09B8F32AE6E /* TesseraeCompanionApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BC6F53F178D10E050100D5A /* TesseraeCompanionApp.swift */; };
 		3F29C92C8E5B97327E3D0265 /* DisplaysView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6B1174AA85BE4EB711F746F /* DisplaysView.swift */; };
 		4B98C3F8FFCE806E85BF0034 /* TesseraeIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE83E45C36CFD34C381B1684 /* TesseraeIntents.swift */; };
+		4E49B020891D38A919ECF53E /* FittedPreviewLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A04E5CC172EAC80A6C24F75 /* FittedPreviewLayout.swift */; };
 		4F402A0069B78FDE2256EE9F /* TesseraePanelImagePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 135374B71848FF0E87F4A6D3 /* TesseraePanelImagePreview.swift */; };
 		4F63438E4356B972B7A4600D /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EA5F074B206DD2FF54C9767 /* RootView.swift */; };
 		50F233622A7FB17CD2295534 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF3B64DA50FECFA7A4514489 /* ShareViewController.swift */; };
@@ -24,6 +25,8 @@
 		56C7CF9DC0CBA6DC2FE131BD /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B285D6042818DD9ECF798800 /* AppModel.swift */; };
 		5A369EE1C0A1B4C46F414077 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E10BE2603FB01EFAAE4419 /* SettingsView.swift */; };
 		5EC9A7DAA43DC020D3D5DE6D /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68D757E72A99A23D9A75B361 /* OnboardingView.swift */; };
+		64D3E04F40AB9CBE6306FBC0 /* RemindersBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CBD8BCA89698A1281940F5D /* RemindersBridge.swift */; };
+		65250F43371291617815D0A0 /* ReminderSnapshotFactoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49B49CB5FE65FF3DC08A0081 /* ReminderSnapshotFactoryTests.swift */; };
 		65EC60FE0E110924626C640A /* DisplayHardwareBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36574431BF8F9CAB78DF3088 /* DisplayHardwareBadge.swift */; };
 		66ED4DBFBDA5C24CE79DA230 /* AppShortcuts.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = AD24891D7CDB0886913F3675 /* AppShortcuts.xcstrings */; };
 		6934735274B0175C7C2D2AF8 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F548F3379CFFB93726CD704 /* MainTabView.swift */; };
@@ -36,12 +39,14 @@
 		ADE2EF08AEC3F760A31BA858 /* Phosphor.ttf in Resources */ = {isa = PBXBuildFile; fileRef = CB98E98A7C6727AE8FE4694E /* Phosphor.ttf */; };
 		BCC58FB96478BC3992F3946E /* ActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1A411679F997EDCC5BDFF5 /* ActivityView.swift */; };
 		CA3CCC0682447B674710FFE9 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 0580CE81ECB940408B4B84B9 /* InfoPlist.strings */; };
+		CB4BA3CC542CA597567043D8 /* FittedPreviewLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A04E5CC172EAC80A6C24F75 /* FittedPreviewLayout.swift */; };
 		DF2314E330D5BC6AA639C723 /* TesseraeShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 6F532D2BC8A0893B35702D88 /* TesseraeShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E055718F1CCF2934072489D2 /* TesseraeKit in Frameworks */ = {isa = PBXBuildFile; productRef = E392BF45FD381310B341C63D /* TesseraeKit */; };
 		EDA7DAFA44340F1BDCBE5FCB /* TesseraeTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD8060E9227692A0914DB946 /* TesseraeTheme.swift */; };
 		F0209EEDC79E28C76F13B892 /* AppConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DABD7AC708239FDC0621487 /* AppConfiguration.swift */; };
 		F2B69015E438D0D45B00B241 /* DashboardsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA9D7AD75F28CF202A22080E /* DashboardsView.swift */; };
 		F49FCB7C12E28E8AB7DF788B /* PreviewImageState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BD9BF482144BDCB753B7EF6 /* PreviewImageState.swift */; };
+		FE4195F9C97F6AD1B91871CE /* RemindersBridgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90014E225C2AB46EE0CA6530 /* RemindersBridgeView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -58,6 +63,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = BF8FA7A603C51A901CE3496C;
 			remoteInfo = TesseraeShare;
+		};
+		D2872B1AE1E50C32F48CD39A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9BD8DEFB33928469FB54E25A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9432DA2869BF47821B1E91E8;
+			remoteInfo = TesseraeCompanion;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -83,6 +95,7 @@
 		216C90508EC6D953751E6523 /* InfoPlist.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = InfoPlist.strings; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		2F71FB166C88F622C1873E39 /* SendView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendView.swift; sourceTree = "<group>"; };
 		36574431BF8F9CAB78DF3088 /* DisplayHardwareBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayHardwareBadge.swift; sourceTree = "<group>"; };
+		49B49CB5FE65FF3DC08A0081 /* ReminderSnapshotFactoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderSnapshotFactoryTests.swift; sourceTree = "<group>"; };
 		4EA5F074B206DD2FF54C9767 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		4F548F3379CFFB93726CD704 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		5CCA51F737B4F27E6617E7E4 /* PhosphorRegularGlyphs.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = PhosphorRegularGlyphs.json; sourceTree = "<group>"; };
@@ -92,7 +105,11 @@
 		6DABD7AC708239FDC0621487 /* AppConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfiguration.swift; sourceTree = "<group>"; };
 		6F532D2BC8A0893B35702D88 /* TesseraeShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = TesseraeShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		7F7B082A4F4C920F49545310 /* TesseraeCompanionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TesseraeCompanionUITests.swift; sourceTree = "<group>"; };
+		8CBD8BCA89698A1281940F5D /* RemindersBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersBridge.swift; sourceTree = "<group>"; };
 		8FE0A6BC06BC1C26FD5AD93A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		90014E225C2AB46EE0CA6530 /* RemindersBridgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersBridgeView.swift; sourceTree = "<group>"; };
+		98EB9E58C42AF0D99B2F11DF /* TesseraeCompanionTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = TesseraeCompanionTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		9A04E5CC172EAC80A6C24F75 /* FittedPreviewLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FittedPreviewLayout.swift; sourceTree = "<group>"; };
 		9BC6F53F178D10E050100D5A /* TesseraeCompanionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TesseraeCompanionApp.swift; sourceTree = "<group>"; };
 		A6B1174AA85BE4EB711F746F /* DisplaysView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplaysView.swift; sourceTree = "<group>"; };
 		AB1A411679F997EDCC5BDFF5 /* ActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityView.swift; sourceTree = "<group>"; };
@@ -184,6 +201,14 @@
 			path = Intents;
 			sourceTree = "<group>";
 		};
+		39E174B4EB45783A473AB121 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				49B49CB5FE65FF3DC08A0081 /* ReminderSnapshotFactoryTests.swift */,
+			);
+			path = Tests;
+			sourceTree = "<group>";
+		};
 		3B9024065E11E0712FDCB156 = {
 			isa = PBXGroup;
 			children = (
@@ -193,6 +218,14 @@
 				16F4C0688EDCB53F156106EC /* ShareExtension */,
 				EEAC4FB1E2EF711A00FADF57 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		4016E4AE6B2434E91D7C2199 /* PersonalData */ = {
+			isa = PBXGroup;
+			children = (
+				8CBD8BCA89698A1281940F5D /* RemindersBridge.swift */,
+			);
+			path = PersonalData;
 			sourceTree = "<group>";
 		};
 		64D0FBA4BF3F184508F3A83C /* Sources */ = {
@@ -208,6 +241,7 @@
 				2DC9327414E33AA4160EB599 /* DesignSystem */,
 				E6D7C0DDCDD748FFE82C7174 /* Features */,
 				36FE76D48082912992AAD4F2 /* Intents */,
+				4016E4AE6B2434E91D7C2199 /* PersonalData */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -245,6 +279,7 @@
 		DF851628CBA704E4C7FEC2F0 /* SharedUI */ = {
 			isa = PBXGroup;
 			children = (
+				9A04E5CC172EAC80A6C24F75 /* FittedPreviewLayout.swift */,
 				135374B71848FF0E87F4A6D3 /* TesseraePanelImagePreview.swift */,
 				FD8060E9227692A0914DB946 /* TesseraeTheme.swift */,
 			);
@@ -258,6 +293,7 @@
 				DA9D7AD75F28CF202A22080E /* DashboardsView.swift */,
 				A6B1174AA85BE4EB711F746F /* DisplaysView.swift */,
 				68D757E72A99A23D9A75B361 /* OnboardingView.swift */,
+				90014E225C2AB46EE0CA6530 /* RemindersBridgeView.swift */,
 				2F71FB166C88F622C1873E39 /* SendView.swift */,
 				D1E10BE2603FB01EFAAE4419 /* SettingsView.swift */,
 			);
@@ -268,6 +304,7 @@
 			isa = PBXGroup;
 			children = (
 				1595109BA73E8D8DE2555D38 /* TesseraeCompanion.app */,
+				98EB9E58C42AF0D99B2F11DF /* TesseraeCompanionTests.xctest */,
 				F1964C9534AA2D6526D1275E /* TesseraeCompanionUITests.xctest */,
 				6F532D2BC8A0893B35702D88 /* TesseraeShare.appex */,
 			);
@@ -279,6 +316,7 @@
 			children = (
 				A9E9E896C712B1972E167C9D /* Resources */,
 				64D0FBA4BF3F184508F3A83C /* Sources */,
+				39E174B4EB45783A473AB121 /* Tests */,
 				0C19AEC43BFEFFA87E5A5D94 /* UITests */,
 			);
 			path = App;
@@ -327,6 +365,24 @@
 			productReference = 1595109BA73E8D8DE2555D38 /* TesseraeCompanion.app */;
 			productType = "com.apple.product-type.application";
 		};
+		A98D2993617B8AE8AD8A7FDA /* TesseraeCompanionTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 14248478A620B074513AAD24 /* Build configuration list for PBXNativeTarget "TesseraeCompanionTests" */;
+			buildPhases = (
+				FE7B5380B132B99F27DBAF8F /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A79AF6B57AD479990C7FF043 /* PBXTargetDependency */,
+			);
+			name = TesseraeCompanionTests;
+			packageProductDependencies = (
+			);
+			productName = TesseraeCompanionTests;
+			productReference = 98EB9E58C42AF0D99B2F11DF /* TesseraeCompanionTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		BF8FA7A603C51A901CE3496C /* TesseraeShare */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = AC09E1DB2A8C7B2ECA54E042 /* Build configuration list for PBXNativeTarget "TesseraeShare" */;
@@ -365,6 +421,10 @@
 						DevelopmentTeam = 3MSS7DJGVR;
 						ProvisioningStyle = Automatic;
 					};
+					A98D2993617B8AE8AD8A7FDA = {
+						DevelopmentTeam = 3MSS7DJGVR;
+						ProvisioningStyle = Automatic;
+					};
 					BF8FA7A603C51A901CE3496C = {
 						DevelopmentTeam = 3MSS7DJGVR;
 						ProvisioningStyle = Automatic;
@@ -390,6 +450,7 @@
 			projectRoot = "";
 			targets = (
 				9432DA2869BF47821B1E91E8 /* TesseraeCompanion */,
+				A98D2993617B8AE8AD8A7FDA /* TesseraeCompanionTests */,
 				2E0E36907526CC0D16BA5050 /* TesseraeCompanionUITests */,
 				BF8FA7A603C51A901CE3496C /* TesseraeShare */,
 			);
@@ -428,6 +489,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CB4BA3CC542CA597567043D8 /* FittedPreviewLayout.swift in Sources */,
 				50F233622A7FB17CD2295534 /* ShareViewController.swift in Sources */,
 				4F402A0069B78FDE2256EE9F /* TesseraePanelImagePreview.swift in Sources */,
 				04BA9B524B9B033C0098349C /* TesseraeTheme.swift in Sources */,
@@ -452,11 +514,14 @@
 				F2B69015E438D0D45B00B241 /* DashboardsView.swift in Sources */,
 				65EC60FE0E110924626C640A /* DisplayHardwareBadge.swift in Sources */,
 				3F29C92C8E5B97327E3D0265 /* DisplaysView.swift in Sources */,
+				4E49B020891D38A919ECF53E /* FittedPreviewLayout.swift in Sources */,
 				6934735274B0175C7C2D2AF8 /* MainTabView.swift in Sources */,
 				5EC9A7DAA43DC020D3D5DE6D /* OnboardingView.swift in Sources */,
 				6FD2A3368ED54597304902DB /* PhosphorDashboardIcon.swift in Sources */,
 				923B54BBAA318026F2C29769 /* PreviewArtwork.swift in Sources */,
 				F49FCB7C12E28E8AB7DF788B /* PreviewImageState.swift in Sources */,
+				64D3E04F40AB9CBE6306FBC0 /* RemindersBridge.swift in Sources */,
+				FE4195F9C97F6AD1B91871CE /* RemindersBridgeView.swift in Sources */,
 				4F63438E4356B972B7A4600D /* RootView.swift in Sources */,
 				34687E78EE655E20CD4768D8 /* SendView.swift in Sources */,
 				5A369EE1C0A1B4C46F414077 /* SettingsView.swift in Sources */,
@@ -467,6 +532,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		FE7B5380B132B99F27DBAF8F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				65250F43371291617815D0A0 /* ReminderSnapshotFactoryTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -474,6 +547,11 @@
 			isa = PBXTargetDependency;
 			target = 9432DA2869BF47821B1E91E8 /* TesseraeCompanion */;
 			targetProxy = 0A5B88A0F604E18CC92E4063 /* PBXContainerItemProxy */;
+		};
+		A79AF6B57AD479990C7FF043 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9432DA2869BF47821B1E91E8 /* TesseraeCompanion */;
+			targetProxy = D2872B1AE1E50C32F48CD39A /* PBXContainerItemProxy */;
 		};
 		E49C122F7414654C7D76CCC2 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -505,6 +583,26 @@
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		24AE613CDB7FF5AA2EBDDC6A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 3MSS7DJGVR;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.charmmmz.tesseraecompanion.tests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Tesserae Companion.app/Tesserae Companion";
 			};
 			name = Debug;
 		};
@@ -559,7 +657,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -666,7 +764,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -717,6 +815,26 @@
 			};
 			name = Debug;
 		};
+		E6C4CE827A6CAA7373ECE58A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 3MSS7DJGVR;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.charmmmz.tesseraecompanion.tests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Tesserae Companion.app/Tesserae Companion";
+			};
+			name = Release;
+		};
 		FD2B85D6CA16F8A4295B9656 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -745,6 +863,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		14248478A620B074513AAD24 /* Build configuration list for PBXNativeTarget "TesseraeCompanionTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				24AE613CDB7FF5AA2EBDDC6A /* Debug */,
+				E6C4CE827A6CAA7373ECE58A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		517D45B2ED06138C1B4480DA /* Build configuration list for PBXNativeTarget "TesseraeCompanion" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

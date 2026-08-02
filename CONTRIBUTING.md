@@ -9,7 +9,7 @@ public repository, and contributions are welcome under Apache-2.0.
 Requirements:
 
 - macOS with Xcode;
-- iOS 17 or later SDK support;
+- iOS 18 or later SDK support;
 - Swift 6;
 - Python 3.11 or later for contract checks.
 

@@ -925,7 +925,7 @@ struct ActivityView: View {
     }
 
     private func expandedPhoto(_ thumbnail: UIImage) -> some View {
-        ActivityFittedPhotoLayout(
+        FittedPreviewLayout(
             aspectRatio: thumbnail.size.width / thumbnail.size.height,
             maximumHeight: 420
         ) {
@@ -1202,46 +1202,6 @@ private struct HistoryStatusPresentation {
     let label: String
     let symbol: String
     let color: Color
-}
-
-private struct ActivityFittedPhotoLayout: Layout {
-    let aspectRatio: CGFloat
-    let maximumHeight: CGFloat
-
-    func sizeThatFits(
-        proposal: ProposedViewSize,
-        subviews: Subviews,
-        cache: inout ()
-    ) -> CGSize {
-        guard let subview = subviews.first else {
-            return .zero
-        }
-
-        let fallback = subview.sizeThatFits(.unspecified)
-        let width = proposal.width ?? fallback.width
-        let safeRatio = max(aspectRatio, 0.01)
-        return CGSize(
-            width: width,
-            height: min(width / safeRatio, maximumHeight)
-        )
-    }
-
-    func placeSubviews(
-        in bounds: CGRect,
-        proposal: ProposedViewSize,
-        subviews: Subviews,
-        cache: inout ()
-    ) {
-        guard let subview = subviews.first else { return }
-        subview.place(
-            at: CGPoint(x: bounds.midX, y: bounds.midY),
-            anchor: .center,
-            proposal: ProposedViewSize(
-                width: bounds.width,
-                height: bounds.height
-            )
-        )
-    }
 }
 
 @MainActor

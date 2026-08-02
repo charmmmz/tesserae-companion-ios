@@ -22,7 +22,9 @@ struct MainTabView: View {
             .tag(AppTab.displays)
 
             tabNavigation(title: "Dashboards") {
-                DashboardsView()
+                DashboardsView(
+                    isActive: selection == .dashboards && !settingsPresented
+                )
             }
             .tabItem { Label("Dashboards", systemImage: "rectangle.grid.2x2") }
             .tag(AppTab.dashboards)

@@ -46,6 +46,7 @@ final class AppModel {
     private var activityRefreshTask: Task<Void, Never>?
     private var displayPreviewRequestIDs: [String: UUID] = [:]
     private var pendingDisplayPreviewRequestIDs: [String: UUID] = [:]
+    private var dashboardPreviewRequestIDs: [String: UUID] = [:]
 
     var activeInstance: TesseraeInstance?
     var connectionMode: ConnectionMode?
@@ -73,6 +74,7 @@ final class AppModel {
     var dashboardOrderIDs: [String] = []
     var activeOperationIDs: Set<String> = []
     var isRefreshing = false
+    var isRefreshingDashboards = false
     var isDiscovering = false
     var isRestoringConnection = true
     var isRetryingSharedImages = false
@@ -234,6 +236,7 @@ final class AppModel {
             pendingDisplayPreviews = [:]
             pendingDisplayPreviewRequestIDs = [:]
             dashboardPreviews = [:]
+            dashboardPreviewRequestIDs = [:]
             loadDashboardOrder(for: session.instance.id)
             if mode == .live {
                 await persistSnapshot()
@@ -369,10 +372,14 @@ final class AppModel {
                 dashboardPreviews = dashboardPreviews.filter {
                     dashboardIDs.contains($0.key)
                 }
+                dashboardPreviewRequestIDs = dashboardPreviewRequestIDs.filter {
+                    dashboardIDs.contains($0.key)
+                }
             } else {
                 displayPreviews = [:]
                 pendingDisplayPreviews = [:]
                 dashboardPreviews = [:]
+                dashboardPreviewRequestIDs = [:]
             }
             displayPreviewGeneration &+= 1
             previewGeneration &+= 1
@@ -515,6 +522,70 @@ final class AppModel {
         }
     }
 
+    func refreshDashboards(
+        showErrors: Bool = true,
+        saveSnapshot: Bool = true
+    ) async {
+        guard
+            let currentInstance = activeInstance,
+            !isRefreshingDashboards
+        else {
+            return
+        }
+        isRefreshingDashboards = true
+        defer { isRefreshingDashboards = false }
+
+        do {
+            let refreshedDashboards = try await activeClient.fetchDashboards(
+                instance: currentInstance
+            )
+            guard
+                activeInstance?.id == currentInstance.id,
+                !Task.isCancelled
+            else {
+                return
+            }
+
+            dashboards = refreshedDashboards
+            reconcileDashboardOrder()
+            connectionHealth = .connected
+            connectionNotice = nil
+
+            if supportsPreviews {
+                let dashboardIDs = Set(refreshedDashboards.map(\.id))
+                dashboardPreviews = dashboardPreviews.filter {
+                    dashboardIDs.contains($0.key)
+                }
+                dashboardPreviewRequestIDs = dashboardPreviewRequestIDs.filter {
+                    dashboardIDs.contains($0.key)
+                }
+            } else {
+                dashboardPreviews = [:]
+                dashboardPreviewRequestIDs = [:]
+            }
+            previewGeneration &+= 1
+
+            if connectionMode == .live, saveSnapshot {
+                await persistSnapshot(showErrors: showErrors)
+            }
+        } catch is CancellationError {
+            return
+        } catch let error as TesseraeClientError {
+            if showErrors
+                || error == .unauthorized
+                || error == .missingCredential
+            {
+                await handleConnectionError(error)
+            }
+        } catch {
+            if showErrors {
+                connectionHealth = .offline
+                connectionNotice = error.localizedDescription
+                lastError = nil
+            }
+        }
+    }
+
     func startActivityRefresh() {
         guard activityRefreshTask == nil else { return }
 
@@ -634,6 +705,7 @@ final class AppModel {
     func sendImage(
         data: Data,
         fit: ImageFitMode,
+        framing: ImageFraming? = nil,
         deviceIDs: [String],
         contentType: String
     ) async -> Bool {
@@ -647,6 +719,7 @@ final class AppModel {
                 fileName: imageFileName(for: contentType),
                 contentType: contentType,
                 fit: fit,
+                framing: framing,
                 deviceIDs: deviceIDs,
                 overrideQuietHours: false,
                 idempotencyKey: UUID().uuidString,
@@ -705,7 +778,6 @@ final class AppModel {
                     overrideQuietHours: false,
                     idempotencyKey: idempotencyKey,
                     instance: activeInstance
-        framing: ImageFraming? = nil,
                 )
             }
             jobs.insert(job, at: 0)
@@ -719,7 +791,6 @@ final class AppModel {
     }
 
     func loadMoreHistory() async {
-                framing: framing,
         guard
             supportsHistory,
             !isLoadingMoreHistory,
@@ -1417,10 +1488,16 @@ final class AppModel {
         guard supportsPreviews, let instance = activeInstance else {
             return
         }
-        let previous = dashboardPreviews[dashboard.id] ?? .idle
-        guard previous.phase != .loading else {
-            return
-        }
+        let stored = dashboardPreviews[dashboard.id] ?? .idle
+        let previous = stored.phase == .loading
+            ? PreviewImageState(
+                data: stored.data,
+                eTag: stored.eTag,
+                phase: stored.data == nil ? .idle : .ready
+            )
+            : stored
+        let requestID = UUID()
+        dashboardPreviewRequestIDs[dashboard.id] = requestID
         dashboardPreviews[dashboard.id] = PreviewImageState(
             data: previous.data,
             eTag: previous.eTag,
@@ -1436,7 +1513,12 @@ final class AppModel {
                     ifNoneMatch: previous.data == nil ? nil : previous.eTag,
                     instance: instance
                 )
-                guard activeInstance?.id == instance.id else {
+                guard dashboardPreviewRequestIDs[dashboard.id] == requestID else {
+                    return
+                }
+                guard activeInstance?.id == instance.id, !Task.isCancelled else {
+                    dashboardPreviews[dashboard.id] = previous
+                    dashboardPreviewRequestIDs[dashboard.id] = nil
                     return
                 }
                 if case let .preparing(retryAfterSeconds) = result {
@@ -1455,6 +1537,10 @@ final class AppModel {
                     to: &dashboardPreviews,
                     key: dashboard.id
                 )
+                dashboardPreviewRequestIDs[dashboard.id] = nil
+                return
+            }
+            guard dashboardPreviewRequestIDs[dashboard.id] == requestID else {
                 return
             }
             finishFailedPreview(
@@ -1462,18 +1548,27 @@ final class AppModel {
                 in: &dashboardPreviews,
                 key: dashboard.id
             )
+            dashboardPreviewRequestIDs[dashboard.id] = nil
         } catch is CancellationError {
+            guard dashboardPreviewRequestIDs[dashboard.id] == requestID else {
+                return
+            }
             finishCancelledPreview(
                 previous: previous,
                 in: &dashboardPreviews,
                 key: dashboard.id
             )
+            dashboardPreviewRequestIDs[dashboard.id] = nil
         } catch {
+            guard dashboardPreviewRequestIDs[dashboard.id] == requestID else {
+                return
+            }
             finishFailedPreview(
                 previous: previous,
                 in: &dashboardPreviews,
                 key: dashboard.id
             )
+            dashboardPreviewRequestIDs[dashboard.id] = nil
         }
     }
 
@@ -1630,6 +1725,7 @@ final class AppModel {
         pendingDisplayPreviews = [:]
         pendingDisplayPreviewRequestIDs = [:]
         dashboardPreviews = [:]
+        dashboardPreviewRequestIDs = [:]
         dashboardOrderIDs = []
         activeClient = liveClient
         if let disconnectError {
@@ -1674,6 +1770,7 @@ final class AppModel {
             pendingDisplayPreviews = [:]
             pendingDisplayPreviewRequestIDs = [:]
             dashboardPreviews = [:]
+            dashboardPreviewRequestIDs = [:]
             dashboardOrderIDs = []
             activeClient = liveClient
             connectionHealth = .requiresPairing

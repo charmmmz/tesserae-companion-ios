@@ -43,7 +43,7 @@ management in Tesserae's existing web UI.
 
 ## Prototype
 
-The repository now contains an iOS 17+ SwiftUI prototype generated with
+The repository now contains an iOS 18+ SwiftUI application generated with
 [XcodeGen](https://github.com/yonaskolb/XcodeGen):
 
 ```text

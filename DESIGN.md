@@ -8,7 +8,7 @@
 | App name | Tesserae Companion |
 | Planned first release | 1.0.0, focused on the accepted native Companion surface |
 | Client | Native iOS, Swift 6, SwiftUI |
-| Deployment target | iOS 17 or later, subject to prototype validation |
+| Deployment target | iOS 18 or later |
 | Upstream reviewed | `dmellok/tesserae` `main` at `76521718411ff0632920b2daa4ace19bc4e6d098` |
 | Reviewed source version | Tesserae 0.208.0 |
 

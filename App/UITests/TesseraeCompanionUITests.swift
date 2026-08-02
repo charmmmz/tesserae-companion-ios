@@ -216,28 +216,45 @@ final class TesseraeCompanionUITests: XCTestCase {
 
         tabBar.buttons["Dashboards"].tap()
         XCTAssertTrue(app.staticTexts["Pantry"].waitForExistence(timeout: 2))
-        let dashboardPreview = app.descendants(matching: .any)[
-            "dashboard-preview-pantry"
-        ]
-        assertPreview(
-            dashboardPreview,
-            hasAspectRatio: 800.0 / 480.0
-        )
         let dashboardPreviewButton = app.buttons[
             "dashboard-preview-button-pantry"
         ]
-        XCTAssertTrue(dashboardPreviewButton.exists)
+        XCTAssertTrue(dashboardPreviewButton.waitForExistence(timeout: 2))
+        let previewLoaded = NSPredicate(format: "isEnabled == true")
+        expectation(
+            for: previewLoaded,
+            evaluatedWith: dashboardPreviewButton
+        )
+        waitForExpectations(timeout: 2)
+        let followingDashboardPreviewButton = app.buttons[
+            "dashboard-preview-button-morning"
+        ]
+        XCTAssertTrue(followingDashboardPreviewButton.exists)
+        let collapsedFollowingDashboardY = followingDashboardPreviewButton.frame.minY
+        XCTAssertEqual(
+            dashboardPreviewButton.value as? String,
+            "Collapsed"
+        )
         dashboardPreviewButton.tap()
-        let previewDoneButton = app.buttons["Done"]
-        XCTAssertTrue(previewDoneButton.waitForExistence(timeout: 2))
+        XCTAssertEqual(
+            dashboardPreviewButton.value as? String,
+            "Expanded"
+        )
+        XCTAssertGreaterThan(
+            followingDashboardPreviewButton.frame.minY,
+            collapsedFollowingDashboardY
+        )
         let expandedDashboardScreenshot = XCTAttachment(
             screenshot: app.screenshot()
         )
-        expandedDashboardScreenshot.name = "Expanded Dashboard Preview"
+        expandedDashboardScreenshot.name = "Inline Dashboard Preview"
         expandedDashboardScreenshot.lifetime = .keepAlways
         add(expandedDashboardScreenshot)
-        previewDoneButton.tap()
-        XCTAssertTrue(dashboardPreviewButton.waitForExistence(timeout: 2))
+        dashboardPreviewButton.tap()
+        XCTAssertEqual(
+            dashboardPreviewButton.value as? String,
+            "Collapsed"
+        )
         XCTAssertFalse(app.buttons["Add to favourites"].exists)
         XCTAssertFalse(app.buttons["Remove from favourites"].exists)
         XCTAssertTrue(app.buttons["Push"].exists)
@@ -246,12 +263,24 @@ final class TesseraeCompanionUITests: XCTestCase {
         let pantryPushButton = app.buttons["dashboard-push-pantry"]
         XCTAssertTrue(pantryPushButton.exists)
         pantryPushButton.tap()
-        let pushDashboardNavigation = app.navigationBars["Push Dashboard"]
-        XCTAssertTrue(pushDashboardNavigation.waitForExistence(timeout: 2))
-        XCTAssertLessThan(
-            pushDashboardNavigation.frame.minY,
+        let pushDashboardTitle = app.staticTexts[
+            "dashboard-push-sheet-title"
+        ]
+        XCTAssertTrue(pushDashboardTitle.waitForExistence(timeout: 2))
+        XCTAssertGreaterThan(
+            pushDashboardTitle.frame.minY,
             app.frame.height * 0.2,
-            "Dashboard Push should open at the large sheet detent."
+            "A short Dashboard Push should fit its content instead of opening full height."
+        )
+        XCTAssertFalse(
+            app.staticTexts[
+                "Choose one or more displays already bound to this dashboard."
+            ].exists
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)[
+                "dashboard-push-preview-pantry"
+            ].exists
         )
         XCTAssertTrue(app.staticTexts["Bound Displays"].exists)
         XCTAssertTrue(
@@ -264,7 +293,15 @@ final class TesseraeCompanionUITests: XCTestCase {
                 "dashboard-push-device-e1004-desk"
             ].exists
         )
-        XCTAssertTrue(app.buttons["Push to Selected Displays"].isEnabled)
+        let pushToSelectedDisplays = app.buttons[
+            "Push to Selected Displays"
+        ]
+        XCTAssertTrue(pushToSelectedDisplays.isEnabled)
+        XCTAssertLessThan(
+            pushToSelectedDisplays.frame.maxY,
+            app.frame.maxY,
+            "The fitted sheet must keep its primary action fully visible."
+        )
         let dashboardPushScreenshot = XCTAttachment(
             screenshot: app.screenshot()
         )
