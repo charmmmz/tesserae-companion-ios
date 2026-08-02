@@ -29,6 +29,9 @@ capabilities.
 
 ### Changed
 
+- Project status and TestFlight documentation now reflect the first external
+  beta submission instead of describing the app as an internal beta candidate
+  or pre-upload artifact.
 - Send Photo now exposes every server-supported Image Fit mode directly in the
   selector instead of placing Stretch and Center under More, and defaults new
   selections to Fill when available.
@@ -38,13 +41,13 @@ capabilities.
   two seconds after the gesture ends. The always-present display selector is
   presented as a dedicated Previewing on row and remains visible but disabled
   when only one display is selected.
+- Dashboards now refresh immediately when their tab becomes visible, continue
+  revalidating while the app stays active, and reliably replace cancelled
+  in-flight preview requests instead of showing stale content until relaunch.
 - The maintainer-approved OpenAPI 0.6 photo-framing draft now uses the
   server-advertised `4×` editor bound and defines focus coordinates in
   EXIF-orientation-normalized source space, with schema-aligned framing errors
   and rotate-90 plus edge-clamp fixture coverage.
-- Dashboards now refresh immediately when their tab becomes visible, continue
-  revalidating while the app stays active, and reliably replace cancelled
-  in-flight preview requests instead of showing stale content until relaunch.
 - Tesserae Companion now requires iOS 18. Dashboard Push measures its content
   to choose a matching sheet height, shows the Dashboard preview above its
   bound displays at its rendered image size, scrolls only when that content is

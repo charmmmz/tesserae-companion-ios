@@ -4,14 +4,15 @@ Tesserae Companion is the official native iOS app for
 [Tesserae](https://github.com/dmellok/tesserae). It is intended to make
 the small, frequent interactions around a household's displays feel at
 home on iPhone: finding the server, checking displays, sending a saved
-dashboard, sharing a photo, and running the same actions from Shortcuts.
+dashboard, sharing a photo, bridging selected personal data with explicit
+privacy controls, and running the same actions from Shortcuts.
 
 The app is maintained in this public repository and works directly with the
 user's own Tesserae server.
 
 ## Project status
 
-- Product status: official iOS app, live-connected internal beta candidate
+- Product status: official iOS app, external TestFlight beta
 - Document version: 0.6.0
 - Planned first App Store release: 1.0.0
 - Included product scope: native V1 plus Share Sheet and Shortcuts integrations
@@ -35,8 +36,8 @@ management in Tesserae's existing web UI.
 - [PRIVACY.md](PRIVACY.md) records local data flow, retention, permissions,
   and the draft App Store privacy position.
 - [TESTFLIGHT_CHECKLIST.md](TESTFLIGHT_CHECKLIST.md) and
-  [TESTFLIGHT_NOTES.md](TESTFLIGHT_NOTES.md) prepare the first internal beta
-  without implying that a build has been uploaded.
+  [TESTFLIGHT_NOTES.md](TESTFLIGHT_NOTES.md) track release checks, beta
+  metadata, and tester guidance for TestFlight builds.
 - [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and
   [ATTRIBUTION.md](ATTRIBUTION.md) define repository, reporting, and upstream
   boundaries.
@@ -112,8 +113,8 @@ provisioning profiles.
 ### Still pending
 
 - the remaining physical-device permission and failure-mode test matrix;
-- final icon, store metadata, privacy-policy hosting, and archive validation
-  before any TestFlight upload;
+- public TestFlight distribution, external-tester validation, and follow-up
+  builds;
 - live server implementation and physical validation of the optional
   History/resend, image-URL, and webpage contracts.
 
