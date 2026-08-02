@@ -692,6 +692,7 @@ display model/transport, and observed outcome.
 | D-024 | 2026-08-01 | Keep display cards and Current Screen tied to the last-served frame, and show an exact, separate Next Screen from optional Companion API 0.5.2 pending-render revision metadata. | Accepted by app maintainer |
 | D-025 | 2026-08-01 | Propose capability-gated normalized photo focus and zoom, resolved by Tesserae into a separate SourceCrop for each target; stage the contract and server adapter before enabling native drag/pinch UI. | Proposed for upstream maintainer review |
 | D-026 | 2026-07-31 | Designate Tesserae Companion as the official native iOS app while retaining the existing privacy, advertising, data-use, free-web-feature, repository, and publishing boundaries. | Accepted by both maintainers |
+| D-027 | 2026-08-02 | Use Companion as an opt-in Reminders snapshot bridge under one strict `/personal-data` family; retain only the latest expiring value and keep ingestion separate from rendering until the unified scheduling model settles. | Accepted by upstream maintainer in Discussion #176 |
 
 ## 17. Open questions for maintainer review
 
@@ -702,6 +703,8 @@ display model/transport, and observed outcome.
    image-URL and webpage extensions?
 4. Should Companion API 0.6 adopt the proposed `image_framing` focus/zoom
    contract and make the advertised maximum zoom mandatory?
+5. Should the initial Personal Data policy use the proposed 24-hour stale
+   threshold and 48-hour maximum TTL, or different server-advertised values?
 
 ## 18. Definition of release 1.0 done
 

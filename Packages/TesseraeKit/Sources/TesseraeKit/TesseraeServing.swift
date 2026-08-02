@@ -69,6 +69,17 @@ public protocol TesseraeServing: Sendable {
         idempotencyKey: String,
         instance: TesseraeInstance
     ) async throws -> PushJob
+    func fetchPersonalDataStatus(
+        instance: TesseraeInstance
+    ) async throws -> PersonalDataStatusResponse
+    func putRemindersFridgeSnapshot(
+        _ snapshot: RemindersFridgeSnapshot,
+        instance: TesseraeInstance
+    ) async throws -> PersonalDataSourceStatus
+    func deletePersonalData(
+        sourceID: PersonalDataSourceID,
+        instance: TesseraeInstance
+    ) async throws
     func fetchJob(id: String, instance: TesseraeInstance) async throws -> PushJob
 }
 

@@ -28,6 +28,8 @@ public struct CompanionLimits: Codable, Hashable, Sendable {
     public let imageContentTypes: [String]
     public let imageFitModes: [ImageFitMode]
     public let imageFramingMaxZoom: Double?
+    public let personalDataStaleAfterSeconds: Int?
+    public let personalDataMaxTTLSeconds: Int?
     public let jobRetentionSeconds: Int
     public let idempotencyRetentionSeconds: Int
 
@@ -37,6 +39,8 @@ public struct CompanionLimits: Codable, Hashable, Sendable {
         imageContentTypes: [String],
         imageFitModes: [ImageFitMode] = ImageFitMode.legacyModes,
         imageFramingMaxZoom: Double? = nil,
+        personalDataStaleAfterSeconds: Int? = nil,
+        personalDataMaxTTLSeconds: Int? = nil,
         jobRetentionSeconds: Int,
         idempotencyRetentionSeconds: Int
     ) {
@@ -45,6 +49,8 @@ public struct CompanionLimits: Codable, Hashable, Sendable {
         self.imageContentTypes = imageContentTypes
         self.imageFitModes = imageFitModes
         self.imageFramingMaxZoom = imageFramingMaxZoom
+        self.personalDataStaleAfterSeconds = personalDataStaleAfterSeconds
+        self.personalDataMaxTTLSeconds = personalDataMaxTTLSeconds
         self.jobRetentionSeconds = jobRetentionSeconds
         self.idempotencyRetentionSeconds = idempotencyRetentionSeconds
     }
@@ -55,6 +61,8 @@ public struct CompanionLimits: Codable, Hashable, Sendable {
         case imageContentTypes
         case imageFitModes
         case imageFramingMaxZoom
+        case personalDataStaleAfterSeconds
+        case personalDataMaxTTLSeconds = "personalDataMaxTtlSeconds"
         case jobRetentionSeconds
         case idempotencyRetentionSeconds
     }
@@ -74,6 +82,14 @@ public struct CompanionLimits: Codable, Hashable, Sendable {
         imageFramingMaxZoom = try container.decodeIfPresent(
             Double.self,
             forKey: .imageFramingMaxZoom
+        )
+        personalDataStaleAfterSeconds = try container.decodeIfPresent(
+            Int.self,
+            forKey: .personalDataStaleAfterSeconds
+        )
+        personalDataMaxTTLSeconds = try container.decodeIfPresent(
+            Int.self,
+            forKey: .personalDataMaxTTLSeconds
         )
         jobRetentionSeconds = try container.decode(
             Int.self,

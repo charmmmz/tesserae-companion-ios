@@ -11,6 +11,14 @@ capabilities.
 
 ## [Unreleased]
 
+### Added
+
+- A proposed OpenAPI 0.7 `personal_data_reminders` bridge now defines scoped,
+  latest-only Reminders snapshots with strict grocery-item fields, required
+  expiry, metadata-only status, immediate deletion, synthetic fixtures, and
+  TesseraeKit transport models. Snapshot ingestion remains separate from
+  dashboard rendering and does not add EventKit permissions or UI yet.
+
 ## [0.4.0] - 2026-08-01
 
 ### Changed

@@ -1,13 +1,14 @@
 openapi: 3.0.3
 info:
   title: Tesserae Companion API
-  version: 0.6.0
+  version: 0.7.0
   description: >-
     Companion API contract for community-built clients. Previews, History,
     resend, remote-image push, webpage push, and server-advertised image fit
     modes are optional additive extensions over the five-feature compatibility
     floor. Image framing is a proposed additive extension for server-resolved
-    drag and pinch composition across mixed target geometries.
+    drag and pinch composition across mixed target geometries. The
+    privacy-preserving Reminders snapshot bridge is independently gated.
 servers:
   - url: /
 tags:
@@ -19,6 +20,7 @@ tags:
   - name: Webpages
   - name: Jobs
   - name: History
+  - name: Personal Data
 paths:
   /api/app/v1:
     get:
@@ -64,6 +66,69 @@ paths:
       responses:
         "204":
           description: Credential revoked
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/app/v1/personal-data/status:
+    get:
+      tags: [Personal Data]
+      operationId: getCompanionPersonalDataStatus
+      summary: List snapshot freshness metadata without returning personal values
+      description: >-
+        Returns only source identifiers and timestamps. Snapshot payload values
+        are intentionally unavailable through the Companion read surface.
+      responses:
+        "200":
+          description: Metadata for currently stored or expired snapshot sources
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonalDataStatusResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/app/v1/personal-data/{source_id}:
+    parameters:
+      - $ref: "#/components/parameters/PersonalDataSourceID"
+    put:
+      tags: [Personal Data]
+      operationId: putCompanionPersonalDataSnapshot
+      summary: Replace the latest snapshot for one advertised personal-data source
+      description: >-
+        Validates and atomically replaces the source's latest snapshot. This
+        synchronous storage operation does not render a dashboard, publish to a
+        display, create a Job, or write History. A retry with the same generated
+        timestamp and payload is idempotent; an older snapshot or conflicting
+        payload at the same timestamp is refused so delayed background work
+        cannot replace newer data.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PersonalDataSnapshot"
+      responses:
+        "200":
+          description: Snapshot accepted as the source's latest value
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonalDataSourceStatus"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      tags: [Personal Data]
+      operationId: deleteCompanionPersonalDataSnapshot
+      summary: Delete the latest snapshot when its source is disabled
+      description: >-
+        Idempotently removes the raw snapshot immediately. Previously rendered
+        compositions remain governed by the existing render-cache and History
+        policy and are not personal-data snapshot records.
+      responses:
+        "204":
+          description: Snapshot absent after the request
         "401":
           $ref: "#/components/responses/Unauthorized"
   /api/app/v1/devices:
@@ -455,6 +520,13 @@ components:
       required: true
       schema:
         type: string
+    PersonalDataSourceID:
+      in: path
+      name: source_id
+      required: true
+      description: Source advertised by the corresponding capability flag
+      schema:
+        $ref: "#/components/schemas/PersonalDataSourceID"
     IdempotencyKey:
       in: header
       name: Idempotency-Key
@@ -572,6 +644,7 @@ components:
               - image_url_push
               - webpage_push
               - image_framing
+              - personal_data_reminders
         limits:
           $ref: "#/components/schemas/Limits"
         web_url:
@@ -620,6 +693,18 @@ components:
             an editor range.
           type: number
           minimum: 1
+        personal_data_stale_after_seconds:
+          description: >-
+            Age at which an accepted personal-data snapshot becomes stale.
+            Required whenever any personal-data capability is advertised.
+          type: integer
+          minimum: 60
+        personal_data_max_ttl_seconds:
+          description: >-
+            Maximum allowed difference between generated_at and expires_at.
+            Required whenever any personal-data capability is advertised.
+          type: integer
+          minimum: 60
         job_retention_seconds:
           type: integer
           minimum: 60
@@ -668,7 +753,12 @@ components:
           uniqueItems: true
           items:
             type: string
-            enum: [devices:read, dashboards:read, push:write, media:write]
+            enum:
+              - devices:read
+              - dashboards:read
+              - push:write
+              - media:write
+              - personal_data:write
         created_at:
           type: string
           format: date-time
@@ -689,6 +779,118 @@ components:
           type: string
         web_url:
           type: string
+    PersonalDataSourceID:
+      type: string
+      enum:
+        - reminders.fridge
+    PersonalDataSnapshot:
+      description: >-
+        Versioned, expiring snapshot envelope. Each source is a strict schema;
+        this is not an arbitrary JSON storage endpoint.
+      oneOf:
+        - $ref: "#/components/schemas/RemindersFridgeSnapshot"
+      discriminator:
+        propertyName: source_id
+        mapping:
+          reminders.fridge: "#/components/schemas/RemindersFridgeSnapshot"
+    RemindersFridgeSnapshot:
+      type: object
+      additionalProperties: false
+      required: [version, source_id, generated_at, expires_at, data]
+      properties:
+        version:
+          type: string
+          enum: [personal_data_bridge_v1]
+        source_id:
+          type: string
+          enum: [reminders.fridge]
+        generated_at:
+          description: Time at which the iPhone generated this complete snapshot
+          type: string
+          format: date-time
+        expires_at:
+          description: >-
+            Required deletion deadline for raw snapshot values. It must be later
+            than generated_at and conform to the server retention policy.
+          type: string
+          format: date-time
+        data:
+          $ref: "#/components/schemas/RemindersFridgeData"
+    RemindersFridgeData:
+      description: >-
+        Incomplete items selected from one user-approved Reminders list. Notes,
+        URLs, alarms, locations, and unrelated lists are never included.
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/ReminderSnapshotItem"
+    ReminderSnapshotItem:
+      type: object
+      additionalProperties: false
+      required: [id, title, due_date, priority, completed]
+      properties:
+        id:
+          description: Opaque reminder identifier used only inside this snapshot
+          type: string
+          minLength: 1
+          maxLength: 256
+        title:
+          type: string
+          minLength: 1
+          maxLength: 512
+        due_date:
+          description: Local calendar date selected in Reminders, or null
+          type: string
+          format: date
+          nullable: true
+        priority:
+          description: Normalized priority rather than EventKit's numeric value
+          type: string
+          enum: [none, low, medium, high]
+        completed:
+          description: Defense-in-depth marker; the first source contains only incomplete items
+          type: boolean
+          enum: [false]
+    PersonalDataFreshness:
+      type: string
+      enum: [fresh, stale, expired]
+    PersonalDataSourceStatus:
+      description: Metadata only; raw snapshot values are never returned here
+      type: object
+      additionalProperties: false
+      required: [source_id, state, generated_at, stale_at, expires_at]
+      properties:
+        source_id:
+          $ref: "#/components/schemas/PersonalDataSourceID"
+        state:
+          $ref: "#/components/schemas/PersonalDataFreshness"
+        generated_at:
+          type: string
+          format: date-time
+        stale_at:
+          description: >-
+            Server-computed generated_at plus the advertised stale interval.
+            State is stale at or after this time and before expires_at.
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+    PersonalDataStatusResponse:
+      type: object
+      additionalProperties: false
+      required: [sources]
+      properties:
+        sources:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/PersonalDataSourceStatus"
     DevicesResponse:
       type: object
       additionalProperties: false
@@ -1128,6 +1330,10 @@ components:
                 - pairing_expired
                 - pairing_code_used
                 - invalid_target
+                - invalid_snapshot
+                - unsupported_personal_data_source
+                - snapshot_out_of_order
+                - snapshot_conflict
                 - unsupported_image
                 - image_too_large
                 - url_blocked
