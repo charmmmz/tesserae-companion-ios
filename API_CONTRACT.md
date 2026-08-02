@@ -142,6 +142,8 @@ Contract 0.6.0 defines independently capability-gated photo framing:
   promise;
 - framing is accepted only with `fit: fill`; omitting it preserves the
   existing centered Fill result;
+- invalid fields, out-of-range focus or zoom, and framing on another fit mode
+  return `400 invalid_framing`;
 - the server resolves the same intent independently for every target panel,
   rather than applying one fixed crop rectangle to mixed aspect ratios.
 

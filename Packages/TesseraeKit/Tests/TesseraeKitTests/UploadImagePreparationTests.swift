@@ -61,6 +61,43 @@ final class UploadImagePreparationTests: XCTestCase {
             targetHeight: Double(fixture.target.height)
         )
         XCTAssertGreaterThan(abs(rawBufferCrop.x - crop.x), 0.01)
+
+        let clampCrop = fixture.clampCase.framing.resolvedCrop(
+            sourceWidth: Double(prepared.pixelWidth),
+            sourceHeight: Double(prepared.pixelHeight),
+            targetWidth: Double(fixture.target.width),
+            targetHeight: Double(fixture.target.height)
+        )
+        XCTAssertEqual(
+            clampCrop.x,
+            fixture.clampCase.expectedCrop.x,
+            accuracy: 0.000_001
+        )
+        XCTAssertEqual(
+            clampCrop.y,
+            fixture.clampCase.expectedCrop.y,
+            accuracy: 0.000_001
+        )
+        XCTAssertEqual(
+            clampCrop.width,
+            fixture.clampCase.expectedCrop.width,
+            accuracy: 0.000_001
+        )
+        XCTAssertEqual(
+            clampCrop.height,
+            fixture.clampCase.expectedCrop.height,
+            accuracy: 0.000_001
+        )
+        XCTAssertGreaterThan(
+            fixture.clampCase.framing.focusX - clampCrop.width / 2,
+            1 - clampCrop.width
+        )
+        XCTAssertLessThan(
+            fixture.clampCase.framing.focusY - clampCrop.height / 2,
+            0
+        )
+        XCTAssertEqual(clampCrop.x, 1 - clampCrop.width, accuracy: 0.000_001)
+        XCTAssertEqual(clampCrop.y, 0, accuracy: 0.000_001)
     }
 
     func testRotatesEXIFRightImageIntoUprightPixels() throws {
@@ -194,6 +231,12 @@ private struct EXIFFramingFixture: Decodable {
     let rawSource: EXIFSourceDescription
     let normalizedSource: EXIFSourceDescription
     let target: FixturePixelSize
+    let framing: ImageFraming
+    let expectedCrop: FixtureNormalizedCrop
+    let clampCase: EXIFFramingCase
+}
+
+private struct EXIFFramingCase: Decodable {
     let framing: ImageFraming
     let expectedCrop: FixtureNormalizedCrop
 }

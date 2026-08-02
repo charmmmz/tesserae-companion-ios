@@ -100,6 +100,7 @@ def test_fixture_server_exercises_companion_vertical_slice():
             "center",
         ]
         assert capabilities["limits"]["image_framing_max_zoom"] == 4
+        framing_max_zoom = capabilities["limits"]["image_framing_max_zoom"]
         assert "image_framing" in capabilities["features"]
         assert "history" in capabilities["features"]
         assert "image_url_push" in capabilities["features"]
@@ -348,12 +349,12 @@ def test_fixture_server_exercises_companion_vertical_slice():
                 "framing": {
                     "focus_x": 0.5,
                     "focus_y": 0.5,
-                    "zoom": 4.01,
+                    "zoom": framing_max_zoom + 0.01,
                 },
                 "override_quiet_hours": False,
             },
             token=FIXTURE_TOKEN,
-            idempotency_key="fixture-framing-zoom-over-4",
+            idempotency_key="fixture-framing-zoom-over-advertised-limit",
         )
         assert status == 400
         assert excessive_zoom["error"]["code"] == "invalid_framing"

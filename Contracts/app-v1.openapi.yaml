@@ -1136,6 +1136,7 @@ components:
                 - pairing_expired
                 - pairing_code_used
                 - invalid_target
+                - invalid_framing
                 - unsupported_image
                 - image_too_large
                 - url_blocked

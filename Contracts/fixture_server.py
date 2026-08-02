@@ -31,6 +31,11 @@ def load_fixture(name: str) -> dict[str, Any]:
     return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
 
 
+def advertised_image_framing_max_zoom() -> float:
+    capabilities = load_fixture("capabilities-framing.json")
+    return float(capabilities["limits"]["image_framing_max_zoom"])
+
+
 @dataclass
 class FixtureJob:
     accepted: dict[str, Any]
@@ -546,7 +551,12 @@ class FixtureRequestHandler(BaseHTTPRequestHandler):
                 "Framing values must be numbers.",
             )
             return None
-        if not 0 <= focus_x <= 1 or not 0 <= focus_y <= 1 or not 1 <= zoom <= 4:
+        max_zoom = advertised_image_framing_max_zoom()
+        if (
+            not 0 <= focus_x <= 1
+            or not 0 <= focus_y <= 1
+            or not 1 <= zoom <= max_zoom
+        ):
             self.send_error_response(
                 HTTPStatus.BAD_REQUEST,
                 "invalid_framing",

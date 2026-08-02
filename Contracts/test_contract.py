@@ -258,6 +258,11 @@ def test_image_framing_is_independently_gated_and_fill_only() -> None:
     assert schema["properties"]["focus_y"]["maximum"] == 1
     assert schema["properties"]["zoom"]["minimum"] == 1
 
+    error_codes = SPEC["components"]["schemas"]["ErrorResponse"]["properties"][
+        "error"
+    ]["properties"]["code"]["enum"]
+    assert "invalid_framing" in error_codes
+
 
 def test_image_framing_uses_orientation_normalized_source_space() -> None:
     fixture = json.loads(
@@ -267,14 +272,16 @@ def test_image_framing_uses_orientation_normalized_source_space() -> None:
     raw = fixture["raw_source"]
     normalized = fixture["normalized_source"]
     target = fixture["target"]
-    framing = fixture["framing"]
 
     assert image.startswith(b"\xff\xd8")
     assert image.endswith(b"\xff\xd9")
     assert raw == {"width": 40, "height": 30, "exif_orientation": 6}
     assert normalized == {"width": 30, "height": 40, "exif_orientation": 1}
 
-    def resolve(source: dict[str, int]) -> dict[str, float]:
+    def resolve(
+        source: dict[str, int],
+        framing: dict[str, float],
+    ) -> dict[str, float]:
         source_aspect = source["width"] / source["height"]
         target_aspect = target["width"] / target["height"]
         if source_aspect >= target_aspect:
@@ -298,10 +305,23 @@ def test_image_framing_uses_orientation_normalized_source_space() -> None:
             "height": height,
         }
 
-    resolved = resolve(normalized)
+    framing = fixture["framing"]
+    resolved = resolve(normalized, framing)
     for key, expected in fixture["expected_crop"].items():
         assert resolved[key] == pytest.approx(expected)
-    assert resolve(raw)["x"] != pytest.approx(resolved["x"])
+    assert resolve(raw, framing)["x"] != pytest.approx(resolved["x"])
+
+    clamp_case = fixture["clamp_case"]
+    clamp_framing = clamp_case["framing"]
+    clamped = resolve(normalized, clamp_framing)
+    for key, expected in clamp_case["expected_crop"].items():
+        assert clamped[key] == pytest.approx(expected)
+    assert clamp_framing["focus_x"] - clamped["width"] / 2 > 1 - clamped[
+        "width"
+    ]
+    assert clamp_framing["focus_y"] - clamped["height"] / 2 < 0
+    assert clamped["x"] == pytest.approx(1 - clamped["width"])
+    assert clamped["y"] == pytest.approx(0)
 
     schema = SPEC["components"]["schemas"]["ImageFraming"]
     assert "applies EXIF orientation" in schema["description"]

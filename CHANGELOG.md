@@ -15,7 +15,8 @@ capabilities.
 
 - The maintainer-approved OpenAPI 0.6 photo-framing draft now uses the
   server-advertised `4×` editor bound and defines focus coordinates in
-  EXIF-orientation-normalized source space, backed by a rotate-90 JPEG fixture.
+  EXIF-orientation-normalized source space, with schema-aligned framing errors
+  and rotate-90 plus edge-clamp fixture coverage.
 
 ## [0.4.0] - 2026-08-01
 
