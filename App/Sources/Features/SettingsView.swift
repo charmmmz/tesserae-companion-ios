@@ -56,6 +56,25 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    NavigationLink {
+                        RemindersBridgeView()
+                    } label: {
+                        LabeledContent(
+                            "Grocery Reminders",
+                            value: model.supportsRemindersPersonalData
+                                ? String(localized: "Available")
+                                : String(localized: "Server update required")
+                        )
+                    }
+                } header: {
+                    Text("Personal Data")
+                } footer: {
+                    Text(
+                        "Choose one Reminders list and explicitly enable an expiring snapshot for Tesserae."
+                    )
+                }
+
+                Section {
                     Button(role: .destructive) {
                         clearActivityConfirmationPresented = true
                     } label: {

@@ -91,6 +91,15 @@ final class AppModel {
         capabilities?.features.contains("history") == true
     }
 
+    var supportsRemindersPersonalData: Bool {
+        connectionMode == .live
+            && capabilities?.supports(personalDataSource: .remindersFridge) == true
+    }
+
+    var personalDataMaximumTTLSeconds: Int? {
+        capabilities?.limits.personalDataMaxTTLSeconds
+    }
+
     var supportedLinkPushKinds: [LinkPushKind] {
         guard let capabilities else { return [] }
         return LinkPushKind.allCases.filter(capabilities.supports)
@@ -589,6 +598,37 @@ final class AppModel {
         } catch {
             lastError = error.localizedDescription
         }
+    }
+
+    func remindersPersonalDataStatus() async throws -> PersonalDataSourceStatus? {
+        guard let activeInstance else {
+            throw RemindersBridgeError.unavailable
+        }
+        return try await activeClient.fetchPersonalDataStatus(
+            instance: activeInstance
+        ).sources.first { $0.sourceID == .remindersFridge }
+    }
+
+    func putRemindersSnapshot(
+        _ snapshot: RemindersFridgeSnapshot
+    ) async throws -> PersonalDataSourceStatus {
+        guard let activeInstance else {
+            throw RemindersBridgeError.unavailable
+        }
+        return try await activeClient.putRemindersFridgeSnapshot(
+            snapshot,
+            instance: activeInstance
+        )
+    }
+
+    func deleteRemindersPersonalData() async throws {
+        guard let activeInstance else {
+            throw RemindersBridgeError.unavailable
+        }
+        try await activeClient.deletePersonalData(
+            sourceID: .remindersFridge,
+            instance: activeInstance
+        )
     }
 
     func sendImage(

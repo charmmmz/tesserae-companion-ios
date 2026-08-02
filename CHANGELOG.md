@@ -13,11 +13,20 @@ capabilities.
 
 ### Added
 
+- Personal Data settings can now request Reminders access, select one grocery
+  list, and manually enable, refresh, or delete a strict expiring snapshot when
+  the connected server advertises `personal_data_reminders`. This first client
+  slice intentionally does not run background sync.
 - A proposed OpenAPI 0.7 `personal_data_reminders` bridge now defines scoped,
   latest-only Reminders snapshots with strict grocery-item fields, required
   expiry, metadata-only status, immediate deletion, synthetic fixtures, and
   TesseraeKit transport models. Snapshot ingestion remains separate from
   dashboard rendering and does not add EventKit permissions or UI yet.
+
+### Fixed
+
+- Grocery Reminders sync no longer crashes when EventKit delivers reminder
+  fetch results on its background queue.
 
 ## [0.4.0] - 2026-08-01
 
