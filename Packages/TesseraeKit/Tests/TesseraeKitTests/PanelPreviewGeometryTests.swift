@@ -199,4 +199,62 @@ final class PanelPreviewGeometryTests: XCTestCase {
         XCTAssertEqual(crop.x + crop.width, 1, accuracy: 0.000_001)
         XCTAssertEqual(crop.y, 0, accuracy: 0.000_001)
     }
+
+    func testFramedPreviewRectDisplaysTheResolvedSourceCrop() {
+        let rect = ImageFraming.centeredFill.framedPreviewRect(
+            sourceWidth: 1_600,
+            sourceHeight: 1_200,
+            canvasWidth: 300,
+            canvasHeight: 400,
+            targetWidth: 1_200,
+            targetHeight: 1_600
+        )
+
+        XCTAssertEqual(rect.x, -116.666667, accuracy: 0.000_001)
+        XCTAssertEqual(rect.y, 0, accuracy: 0.000_001)
+        XCTAssertEqual(rect.width, 533.333333, accuracy: 0.000_001)
+        XCTAssertEqual(rect.height, 400, accuracy: 0.000_001)
+    }
+
+    func testPreviewDragMovesTheSourceOppositeTheFinger() {
+        let framing = ImageFraming.centeredFill.applyingPreviewGesture(
+            translationX: 53.333333,
+            translationY: 0,
+            magnification: 1,
+            canvasWidth: 300,
+            canvasHeight: 400,
+            sourceWidth: 1_600,
+            sourceHeight: 1_200,
+            targetWidth: 1_200,
+            targetHeight: 1_600,
+            maximumZoom: 4
+        )
+
+        XCTAssertEqual(framing.focusX, 0.4, accuracy: 0.000_001)
+        XCTAssertEqual(framing.focusY, 0.5, accuracy: 0.000_001)
+        XCTAssertEqual(framing.zoom, 1, accuracy: 0.000_001)
+    }
+
+    func testPreviewPinchUsesTheAdvertisedBoundAndPreservesFocus() {
+        let framing = ImageFraming(
+            focusX: 0.62,
+            focusY: 0.38,
+            zoom: 1
+        ).applyingPreviewGesture(
+            translationX: 0,
+            translationY: 0,
+            magnification: 8,
+            canvasWidth: 300,
+            canvasHeight: 400,
+            sourceWidth: 1_600,
+            sourceHeight: 1_200,
+            targetWidth: 1_200,
+            targetHeight: 1_600,
+            maximumZoom: 4
+        )
+
+        XCTAssertEqual(framing.focusX, 0.62, accuracy: 0.000_001)
+        XCTAssertEqual(framing.focusY, 0.38, accuracy: 0.000_001)
+        XCTAssertEqual(framing.zoom, 4, accuracy: 0.000_001)
+    }
 }

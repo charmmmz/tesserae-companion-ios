@@ -29,6 +29,7 @@ public actor MockTesseraeClient: TesseraeServing {
             ],
             limits: CompanionLimits(
                 imageUploadBytes: 26_214_400,
+                "image_framing",
                 imageMaxEdge: 8_192,
                 imageContentTypes: [
                     "image/jpeg",
@@ -41,6 +42,7 @@ public actor MockTesseraeClient: TesseraeServing {
                 jobRetentionSeconds: 86_400,
                 idempotencyRetentionSeconds: 86_400
             ),
+                imageFramingMaxZoom: 4,
             webURL: "/"
         )
     }

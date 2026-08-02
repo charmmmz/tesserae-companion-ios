@@ -705,6 +705,7 @@ final class AppModel {
                     overrideQuietHours: false,
                     idempotencyKey: idempotencyKey,
                     instance: activeInstance
+        framing: ImageFraming? = nil,
                 )
             }
             jobs.insert(job, at: 0)
@@ -718,6 +719,7 @@ final class AppModel {
     }
 
     func loadMoreHistory() async {
+                framing: framing,
         guard
             supportsHistory,
             !isLoadingMoreHistory,

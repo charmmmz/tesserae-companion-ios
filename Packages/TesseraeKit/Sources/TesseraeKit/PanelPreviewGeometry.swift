@@ -114,3 +114,106 @@ public extension ImageFitMode {
         )
     }
 }
+
+public extension ImageFraming {
+    static var centeredFill: ImageFraming {
+        ImageFraming(focusX: 0.5, focusY: 0.5, zoom: 1)
+    }
+
+    /// Returns the full source-image rectangle needed to display this framing
+    /// inside one panel-shaped preview canvas.
+    func framedPreviewRect(
+        sourceWidth: Double,
+        sourceHeight: Double,
+        canvasWidth: Double,
+        canvasHeight: Double,
+        targetWidth: Double,
+        targetHeight: Double
+    ) -> PanelImagePreviewRect {
+        guard canvasWidth > 0, canvasHeight > 0 else {
+            return .zero
+        }
+        let crop = resolvedCrop(
+            sourceWidth: sourceWidth,
+            sourceHeight: sourceHeight,
+            targetWidth: targetWidth,
+            targetHeight: targetHeight
+        )
+        guard crop.width > 0, crop.height > 0 else {
+            return .zero
+        }
+        let width = canvasWidth / crop.width
+        let height = canvasHeight / crop.height
+        return PanelImagePreviewRect(
+            x: -crop.x * width,
+            y: -crop.y * height,
+            width: width,
+            height: height
+        )
+    }
+
+    /// Maps one drag/pinch gesture from panel-preview points back into the
+    /// target-independent focus + zoom intent sent to Tesserae.
+    func applyingPreviewGesture(
+        translationX: Double,
+        translationY: Double,
+        magnification: Double,
+        canvasWidth: Double,
+        canvasHeight: Double,
+        sourceWidth: Double,
+        sourceHeight: Double,
+        targetWidth: Double,
+        targetHeight: Double,
+        maximumZoom: Double
+    ) -> ImageFraming {
+        let boundedMaximumZoom = max(maximumZoom, 1)
+        let nextZoom = min(
+            max(zoom * max(magnification, 0.01), 1),
+            boundedMaximumZoom
+        )
+        let zoomed = ImageFraming(
+            focusX: min(max(focusX, 0), 1),
+            focusY: min(max(focusY, 0), 1),
+            zoom: nextZoom
+        )
+        let crop = zoomed.resolvedCrop(
+            sourceWidth: sourceWidth,
+            sourceHeight: sourceHeight,
+            targetWidth: targetWidth,
+            targetHeight: targetHeight
+        )
+
+        guard
+            canvasWidth > 0,
+            canvasHeight > 0,
+            crop.width > 0,
+            crop.height > 0
+        else {
+            return zoomed
+        }
+
+        let fullPreviewWidth = canvasWidth / crop.width
+        let fullPreviewHeight = canvasHeight / crop.height
+        let hasTranslation = abs(translationX) > 0.001
+            || abs(translationY) > 0.001
+        guard hasTranslation else {
+            return zoomed
+        }
+
+        let translatedFocusX = zoomed.focusX
+            - translationX / fullPreviewWidth
+        let translatedFocusY = zoomed.focusY
+            - translationY / fullPreviewHeight
+        return ImageFraming(
+            focusX: min(
+                max(translatedFocusX, crop.width / 2),
+                1 - crop.width / 2
+            ),
+            focusY: min(
+                max(translatedFocusY, crop.height / 2),
+                1 - crop.height / 2
+            ),
+            zoom: nextZoom
+        )
+    }
+}

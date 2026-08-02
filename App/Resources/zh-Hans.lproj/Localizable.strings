@@ -91,6 +91,10 @@
 "Connect a display to preview its panel shape." = "连接显示屏后即可预览其屏幕比例。";
 "Tap to choose a photo." = "轻点以选择照片。";
 "Use Sample" = "使用示例";
+"Change Photo" = "更换照片";
+"Drag · Pinch to zoom" = "拖动 · 双指缩放";
+"Adjust" = "调整";
+"Previewing on" = "正在预览";
 "Image Fit" = "图片适配";
 "Fit" = "适应";
 "Fill" = "填充";

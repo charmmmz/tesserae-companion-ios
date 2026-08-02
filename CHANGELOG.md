@@ -17,11 +17,31 @@ capabilities.
   list, and manually enable, refresh, or delete a strict expiring snapshot when
   the connected server advertises `personal_data_reminders`. This first client
   slice intentionally does not run background sync.
+- Send Photo now supports drag-to-position, pinch-to-zoom, reset, and selected-
+  display preview switching with a trailing-aligned, name-sized selector for
+  Fill when the connected Tesserae server advertises image framing. Older
+  servers and other fit modes keep their existing behavior.
 - A proposed OpenAPI 0.7 `personal_data_reminders` bridge now defines scoped,
   latest-only Reminders snapshots with strict grocery-item fields, required
   expiry, metadata-only status, immediate deletion, synthetic fixtures, and
   TesseraeKit transport models. Snapshot ingestion remains separate from
   dashboard rendering and does not add EventKit permissions or UI yet.
+
+### Changed
+
+- Send Photo now exposes every server-supported Image Fit mode directly in the
+  selector instead of placing Stretch and Center under More, and defaults new
+  selections to Fill when available.
+- Send Photo now gives its Preview image more visual priority: Change Photo
+  sits in the header, resolution and file size share one caption, Fill framing
+  controls appear over the image, hide during direct manipulation, and return
+  two seconds after the gesture ends. The always-present display selector is
+  presented as a dedicated Previewing on row and remains visible but disabled
+  when only one display is selected.
+- The maintainer-approved OpenAPI 0.6 photo-framing draft now uses the
+  server-advertised `4×` editor bound and defines focus coordinates in
+  EXIF-orientation-normalized source space, with schema-aligned framing errors
+  and rotate-90 plus edge-clamp fixture coverage.
 
 ### Fixed
 

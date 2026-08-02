@@ -624,16 +624,16 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(tabBar.buttons["Send"].waitForExistence(timeout: 3))
         tabBar.buttons["Send"].tap()
 
-        let deskTarget = app.buttons.containing(
-            .staticText,
-            identifier: "Desk"
-        ).firstMatch
-        let kitchenTarget = app.buttons.containing(
-            .staticText,
-            identifier: "Kitchen"
-        ).firstMatch
+        let deskTarget = app.buttons["send-display-e1004-desk"]
+        let kitchenTarget = app.buttons["send-display-picpak-kitchen"]
         XCTAssertTrue(deskTarget.waitForExistence(timeout: 2))
         XCTAssertTrue(kitchenTarget.exists)
+        XCTAssertTrue(app.buttons["Stretch"].exists)
+        XCTAssertTrue(app.buttons["Center"].exists)
+        XCTAssertFalse(app.buttons["More"].exists)
+        let previewPicker = app.buttons["send-preview-display-picker"]
+        XCTAssertTrue(previewPicker.waitForExistence(timeout: 2))
+        XCTAssertFalse(previewPicker.isEnabled)
         for _ in 0..<4 where !deskTarget.isHittable {
             app.swipeUp()
         }
@@ -647,20 +647,54 @@ final class TesseraeCompanionUITests: XCTestCase {
             initialTargetListY,
             accuracy: 1
         )
+        XCTAssertTrue(previewPicker.isEnabled)
+        let previewPickerFrame = previewPicker.frame
+        previewPicker.tap()
+        let kitchenPreviewOption = app.buttons["Kitchen"]
+        XCTAssertTrue(kitchenPreviewOption.waitForExistence(timeout: 2))
+        kitchenPreviewOption.tap()
+        XCTAssertEqual(
+            previewPicker.frame.maxX,
+            previewPickerFrame.maxX,
+            accuracy: 1
+        )
+        XCTAssertGreaterThan(
+            previewPicker.frame.width,
+            previewPickerFrame.width
+        )
+        let targetListYBeforeKitchenToggle = targetList.frame.minY
         kitchenTarget.tap()
         XCTAssertEqual(
             targetList.frame.minY,
-            initialTargetListY,
+            targetListYBeforeKitchenToggle,
             accuracy: 1
         )
+        XCTAssertFalse(previewPicker.isEnabled)
+        kitchenTarget.tap()
+        XCTAssertTrue(previewPicker.isEnabled)
+        previewPicker.tap()
+        let deskPreviewOption = app.buttons["Desk"]
+        XCTAssertTrue(deskPreviewOption.waitForExistence(timeout: 2))
+        deskPreviewOption.tap()
 
         app.buttons["Use Sample"].tap()
+        let changePhoto = app.buttons["send-change-photo"]
+        XCTAssertTrue(changePhoto.waitForExistence(timeout: 2))
+        let previewMetadata = app.descendants(matching: .any)[
+            "send-preview-metadata"
+        ]
+        XCTAssertTrue(previewMetadata.exists)
+        XCTAssertTrue(previewMetadata.label.contains("×"))
+        XCTAssertTrue(previewMetadata.label.contains("·"))
+        XCTAssertFalse(previewMetadata.label.contains("Desk"))
+        XCTAssertTrue(app.staticTexts["Previewing on"].exists)
+        XCTAssertLessThan(changePhoto.frame.maxY, previewPicker.frame.minY)
         let panelPreview = app.descendants(matching: .any)["send-panel-preview"]
         XCTAssertTrue(panelPreview.waitForExistence(timeout: 2))
         let portraitPreviewValue = (
             panelPreview.value as? String ?? ""
         ).replacingOccurrences(of: ",", with: "")
-        XCTAssertTrue(portraitPreviewValue.contains("fit"))
+        XCTAssertTrue(portraitPreviewValue.contains("fill"))
         XCTAssertTrue(
             portraitPreviewValue.contains("1200 by 1600")
         )
@@ -681,6 +715,51 @@ final class TesseraeCompanionUITests: XCTestCase {
         )
         app.buttons["Fill"].tap()
         XCTAssertTrue((panelPreview.value as? String)?.contains("fill") == true)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["send-framing-hint"]
+                .waitForExistence(timeout: 2)
+        )
+        let framingZoom = app.descendants(matching: .any)[
+            "send-framing-zoom"
+        ]
+        let resetFraming = app.descendants(matching: .any)[
+            "send-framing-reset"
+        ]
+        XCTAssertTrue(framingZoom.exists)
+        XCTAssertTrue(resetFraming.exists)
+        let initialZoom = framingZoom.label
+        XCTAssertFalse(resetFraming.isEnabled)
+        let leadingPreviewGutter = imagePreview.frame.minX
+            - panelPreview.frame.minX
+        XCTAssertGreaterThan(leadingPreviewGutter, 4)
+        let framingBeforeOutsideDrag = panelPreview.value as? String
+        let outsideDragStart = panelPreview.coordinate(
+            withNormalizedOffset: CGVector(dx: 0, dy: 0)
+        ).withOffset(
+            CGVector(
+                dx: leadingPreviewGutter / 2,
+                dy: imagePreview.frame.midY - panelPreview.frame.minY
+            )
+        )
+        let outsideDragEnd = outsideDragStart.withOffset(
+            CGVector(dx: min(20, leadingPreviewGutter / 3), dy: 0)
+        )
+        outsideDragStart.press(
+            forDuration: 0.05,
+            thenDragTo: outsideDragEnd
+        )
+        XCTAssertEqual(
+            panelPreview.value as? String,
+            framingBeforeOutsideDrag
+        )
+        imagePreview.pinch(withScale: 1.6, velocity: 1)
+        expectation(
+            for: NSPredicate(format: "isHittable == true"),
+            evaluatedWith: resetFraming
+        )
+        waitForExpectations(timeout: 3)
+        XCTAssertNotEqual(framingZoom.label, initialZoom)
+        XCTAssertTrue(resetFraming.isEnabled)
         XCTAssertGreaterThanOrEqual(
             imagePreview.frame.minX,
             panelPreview.frame.minX - 1
