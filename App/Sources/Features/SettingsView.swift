@@ -1,115 +1,52 @@
 import SwiftUI
+import TesseraeKit
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
-    @State private var clearActivityConfirmationPresented = false
-    @State private var activityClearConfirmation: String?
+    @Environment(RemindersBridgeModel.self) private var remindersBridgeModel
 
     var body: some View {
         NavigationStack {
             Form {
                 if let instance = model.activeInstance {
-                    Section("Instance") {
-                        LabeledContent("Name", value: instance.name)
-                        LabeledContent("Server", value: instance.baseURL.absoluteString)
-                        LabeledContent(
-                            "Version",
-                            value: model.capabilities?.serverVersion
-                                ?? instance.serverVersion
-                        )
-                        LabeledContent(
-                            "API mode",
-                            value: apiMode
-                        )
-                        if let capabilities = model.capabilities {
-                            LabeledContent(
-                                "Companion API",
-                                value: "v\(capabilities.api.version)"
-                            )
+                    Section("Tesserae Server") {
+                        NavigationLink {
+                            ServerDetailsView()
+                        } label: {
+                            LabeledContent {
+                                Text(serverSummaryValue)
+                            } label: {
+                                Label(
+                                    serverSummaryTitle(instanceName: instance.name),
+                                    systemImage: model.connectionMode == .demo
+                                        ? "shippingbox"
+                                        : "server.rack"
+                                )
+                            }
                         }
 
-                        Link(destination: instance.baseURL) {
-                            Label("Open Web Management", systemImage: "safari")
+                        if model.connectionMode == .live {
+                            Link(destination: webURL(for: instance)) {
+                                Label("Open Tesserae Web", systemImage: "safari")
+                            }
                         }
                     }
                 }
 
-                Section("Connection") {
-                    LabeledContent("Status", value: connectionStatus)
-
-                    Button(role: .destructive) {
-                        Task {
-                            await model.disconnect()
-                            dismiss()
-                        }
-                    } label: {
-                        Label(
-                            "Disconnect",
-                            systemImage: "link.badge.minus"
-                        )
-                    }
-
-                    Text(connectionDescription)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-
-                Section {
+                Section("Personal Data") {
                     NavigationLink {
                         RemindersBridgeView()
                     } label: {
-                        LabeledContent(
-                            "Apple Reminders",
-                            value: model.supportsRemindersPersonalData
-                                ? String(localized: "Available")
-                                : String(localized: "Server update required")
-                        )
-                    }
-                } header: {
-                    Text("Personal Data")
-                } footer: {
-                    Text(
-                        "Choose the Reminders lists you want to share and explicitly enable an expiring snapshot for Tesserae."
-                    )
-                }
-
-                Section {
-                    Button(role: .destructive) {
-                        clearActivityConfirmationPresented = true
-                    } label: {
-                        if model.isClearingLocalActivity {
-                            HStack(spacing: 8) {
-                                ProgressView()
-                                Text("Clearing Local Activity…")
-                            }
-                        } else {
-                            Label(
-                                "Clear Local Activity",
-                                systemImage: "trash"
-                            )
+                        LabeledContent {
+                            Text(remindersStatus)
+                        } label: {
+                            Label("Apple Reminders", systemImage: "checklist")
                         }
                     }
-                    .disabled(model.isClearingLocalActivity)
-                    .accessibilityIdentifier("clear-local-activity")
-
-                    if let activityClearConfirmation {
-                        Label(
-                            activityClearConfirmation,
-                            systemImage: "checkmark.circle.fill"
-                        )
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    }
-                } header: {
-                    Text("Local Storage")
                 }
 
-                Section {
-                    LabeledContent(
-                        "Product",
-                        value: String(localized: "Official Tesserae iOS app")
-                    )
+                Section("About") {
                     LabeledContent("App Version", value: appVersion)
 
                     Link(
@@ -117,13 +54,11 @@ struct SettingsView: View {
                             string: "https://github.com/charmmmz/tesserae-companion-ios"
                         )!
                     ) {
-                        LabeledContent(
-                            "GitHub Repository",
-                            value: "charmmmz/tesserae-companion-ios"
+                        Label(
+                            "Source Code",
+                            systemImage: "chevron.left.forwardslash.chevron.right"
                         )
                     }
-                } header: {
-                    Text("About")
                 }
             }
             .scrollContentBackground(.hidden)
@@ -135,40 +70,47 @@ struct SettingsView: View {
                     Button("Done") { dismiss() }
                 }
             }
-            .alert(
-                "Clear Local Activity?",
-                isPresented: $clearActivityConfirmationPresented
-            ) {
-                Button("Clear Local Activity", role: .destructive) {
-                    Task {
-                        if await model.clearLocalActivity() {
-                            activityClearConfirmation = String(
-                                localized: "Local Activity was cleared."
-                            )
-                        }
-                    }
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text(
-                    "This clears the Activity list for this Tesserae instance and hides existing server History on this iPhone. Server History remains available in Tesserae."
-                )
-            }
         }
     }
 
-    private var connectionStatus: String {
-        switch model.connectionHealth {
-        case .idle:
-            String(localized: "Not connected")
-        case .restoring:
-            String(localized: "Restoring")
-        case .connected:
-            String(localized: "Connected")
-        case .offline:
-            String(localized: "Saved for retry")
-        case .requiresPairing:
-            String(localized: "Pair again")
+    private var serverSummaryValue: String {
+        model.connectionMode == .demo
+            ? String(localized: "Local data")
+            : model.connectionHealth.displayName
+    }
+
+    private func serverSummaryTitle(instanceName: String) -> String {
+        model.connectionMode == .demo
+            ? String(localized: "Demo Mode")
+            : instanceName
+    }
+
+    private var remindersStatus: String {
+        guard model.supportsRemindersPersonalData else {
+            return String(localized: "Server update required")
+        }
+        if remindersBridgeModel.isBusy {
+            return String(localized: "Syncing…")
+        }
+        if remindersBridgeModel.authorizationState == .denied
+            || remindersBridgeModel.isEnabled
+                && remindersBridgeModel.authorizationState != .fullAccess
+        {
+            return String(localized: "Needs Access")
+        }
+        guard remindersBridgeModel.isEnabled else {
+            return String(localized: "Off")
+        }
+        guard let sourceStatus = remindersBridgeModel.sourceStatus else {
+            return String(localized: "On")
+        }
+        switch sourceStatus.state {
+        case .fresh:
+            return String(localized: "Synced")
+        case .stale:
+            return String(localized: "Stale")
+        case .expired:
+            return String(localized: "Expired")
         }
     }
 
@@ -183,15 +125,78 @@ struct SettingsView: View {
         return build.isEmpty ? version : "\(version) (\(build))"
     }
 
-    private var apiMode: String {
-        model.connectionMode == .live
-            ? String(localized: "Live Companion API")
-            : String(localized: "Demo data")
+    private func webURL(for instance: TesseraeInstance) -> URL {
+        URL(string: instance.webURL) ?? instance.baseURL
+    }
+}
+
+private struct ServerDetailsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Form {
+            if let instance = model.activeInstance {
+                Section("Connection") {
+                    LabeledContent("Name", value: instance.name)
+                    LabeledContent("Status", value: statusValue)
+                    LabeledContent("Server", value: instance.baseURL.absoluteString)
+                    LabeledContent(
+                        "Tesserae Version",
+                        value: model.capabilities?.serverVersion
+                            ?? instance.serverVersion
+                    )
+                    if let capabilities = model.capabilities {
+                        LabeledContent(
+                            "Companion API",
+                            value: "v\(capabilities.api.version)"
+                        )
+                    }
+                }
+
+                Section {
+                    Button(role: .destructive) {
+                        Task {
+                            await model.disconnect()
+                            dismiss()
+                        }
+                    } label: {
+                        Label(
+                            model.connectionMode == .demo
+                                ? "Exit Demo"
+                                : "Disconnect",
+                            systemImage: "link.badge.minus"
+                        )
+                    }
+                }
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .tesseraeScreenBackground()
+        .navigationTitle("Server Details")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
-    private var connectionDescription: String {
-        model.connectionMode == .live
-            ? String(localized: "The client token is stored in shared Keychain access. Non-secret connection details are stored in the App Group for the app and Share Extension.")
-            : String(localized: "This session uses local demo data and does not contact a Tesserae server.")
+    private var statusValue: String {
+        model.connectionMode == .demo
+            ? String(localized: "Demo Mode")
+            : model.connectionHealth.displayName
+    }
+}
+
+private extension AppModel.ConnectionHealth {
+    var displayName: String {
+        switch self {
+        case .idle:
+            String(localized: "Not connected")
+        case .restoring:
+            String(localized: "Restoring")
+        case .connected:
+            String(localized: "Connected")
+        case .offline:
+            String(localized: "Saved for retry")
+        case .requiresPairing:
+            String(localized: "Pair again")
+        }
     }
 }

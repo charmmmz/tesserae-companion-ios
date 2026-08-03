@@ -344,17 +344,25 @@ enum RemindersBridgeError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .accessDenied:
-            "Reminders full access is required to read the selected lists."
+            String(
+                localized: "Reminders full access is required to read the selected lists."
+            )
         case .listRequired:
-            "Choose at least one Reminders list before enabling sync."
+            String(
+                localized: "Choose at least one Reminders list before enabling sync."
+            )
         case .listUnavailable:
-            "One or more selected Reminders lists are no longer available."
+            String(
+                localized: "One or more selected Reminders lists are no longer available."
+            )
         case .serverUnsupported:
-            "This Tesserae server does not advertise Reminders personal data support."
+            String(
+                localized: "This Tesserae server does not advertise Reminders personal data support."
+            )
         case .tooManyLists:
-            "You can sync up to 20 Reminders lists."
+            String(localized: "You can sync up to 20 Reminders lists.")
         case .unavailable:
-            "A connected Tesserae instance is required."
+            String(localized: "A connected Tesserae instance is required.")
         }
     }
 }

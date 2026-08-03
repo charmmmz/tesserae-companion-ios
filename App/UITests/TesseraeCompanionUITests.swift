@@ -147,6 +147,60 @@ final class TesseraeCompanionUITests: XCTestCase {
         add(screenshot)
     }
 
+    func testSettingsHierarchyAndActivityClearAction() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launch()
+
+        XCTAssertTrue(
+            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
+        )
+        app.buttons["Explore with Demo Data"].tap()
+        app.tabBars.firstMatch.buttons["Activity"].tap()
+        XCTAssertTrue(
+            app.descendants(matching: .any).matching(
+                NSPredicate(
+                    format: "identifier BEGINSWITH %@",
+                    "history-card-"
+                )
+            ).firstMatch.waitForExistence(timeout: 3)
+        )
+
+        app.buttons["Settings"].tap()
+        XCTAssertTrue(app.staticTexts["Demo Mode"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.staticTexts["Local data"].exists)
+        XCTAssertTrue(app.staticTexts["Apple Reminders"].exists)
+        XCTAssertTrue(app.staticTexts["Server update required"].exists)
+        XCTAssertTrue(app.staticTexts["App Version"].exists)
+        XCTAssertTrue(app.buttons["Source Code"].exists)
+        XCTAssertFalse(app.staticTexts["Product"].exists)
+        XCTAssertFalse(app.staticTexts["API mode"].exists)
+        XCTAssertFalse(app.staticTexts["Local Storage"].exists)
+        XCTAssertFalse(app.buttons["clear-local-activity"].exists)
+
+        app.staticTexts["Demo Mode"].tap()
+        XCTAssertTrue(
+            app.navigationBars["Server Details"].waitForExistence(timeout: 2)
+        )
+        XCTAssertTrue(app.staticTexts["Tesserae Version"].exists)
+        XCTAssertTrue(app.staticTexts["Companion API"].exists)
+        XCTAssertTrue(app.buttons["Exit Demo"].exists)
+        app.navigationBars["Server Details"].buttons["Settings"].tap()
+        app.buttons["Done"].tap()
+
+        app.buttons["Activity Actions"].tap()
+        let clearLocalActivityButton = app.buttons["clear-local-activity"]
+        XCTAssertTrue(clearLocalActivityButton.waitForExistence(timeout: 2))
+        clearLocalActivityButton.tap()
+
+        let confirmation = app.alerts["Clear Local Activity?"]
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 2))
+        confirmation.buttons["Clear Local Activity"].tap()
+        XCTAssertTrue(
+            app.staticTexts["No Activity Yet"].waitForExistence(timeout: 2)
+        )
+    }
+
     func testDemoJourneyAcrossMainTabs() {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
@@ -411,28 +465,15 @@ final class TesseraeCompanionUITests: XCTestCase {
             ).firstMatch.exists
         )
 
-        app.buttons["Settings"].tap()
+        app.buttons["Activity Actions"].tap()
         let clearLocalActivityButton = app.buttons["clear-local-activity"]
         XCTAssertTrue(clearLocalActivityButton.waitForExistence(timeout: 2))
-        for _ in 0..<4 where !clearLocalActivityButton.isHittable {
-            app.swipeUp()
-        }
         XCTAssertTrue(clearLocalActivityButton.isHittable)
-        XCTAssertFalse(
-            app.staticTexts[
-                "Clears Activity on this iPhone, including locally displayed server History. Tesserae server History is not deleted."
-            ].exists
-        )
         clearLocalActivityButton.tap()
 
         let confirmation = app.alerts["Clear Local Activity?"]
         XCTAssertTrue(confirmation.waitForExistence(timeout: 2))
         confirmation.buttons["Clear Local Activity"].tap()
-        XCTAssertTrue(
-            app.staticTexts["Local Activity was cleared."]
-                .waitForExistence(timeout: 2)
-        )
-        app.buttons["Done"].tap()
 
         XCTAssertFalse(
             app.buttons[localActivityCardIdentifier]

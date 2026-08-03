@@ -10,24 +10,16 @@ struct RemindersBridgeView: View {
 
     var body: some View {
         Form {
-            Section {
-                capabilityContent
-            } header: {
-                Text("Tesserae Server")
-            } footer: {
-                Text(
-                    "The phone remains authoritative. Tesserae stores only the latest expiring snapshot and returns freshness metadata, not reminder contents."
-                )
-            }
-
             if appModel.supportsRemindersPersonalData {
+                syncStatusSection
+
                 Section {
                     authorizationContent
                 } header: {
                     Text("Reminders Access")
                 } footer: {
                     Text(
-                        "Only incomplete items from lists you select are read. Notes, URLs, alarms, locations, and unselected lists are never included."
+                        "Only incomplete reminders from selected lists are shared. Notes, URLs, alarms, and locations stay on this iPhone."
                     )
                 }
 
@@ -75,9 +67,7 @@ struct RemindersBridgeView: View {
                     } header: {
                         Text("Lists")
                     } footer: {
-                        Text(
-                            "Choose up to 20 lists. Each upload replaces the complete published set; syncing no selections keeps the enabled source fresh but makes its widgets unavailable."
-                        )
+                        Text("Choose up to 20 lists.")
                     }
 
                     Section {
@@ -86,24 +76,24 @@ struct RemindersBridgeView: View {
                         Text("Sync")
                     } footer: {
                         Text(
-                            "While Tesserae is running, EventKit changes trigger a debounced refresh of the selected lists. iOS does not guarantee background wakeups, so Sync Now remains available."
+                            "Tesserae syncs while this app is active. Use Sync Now if needed."
                         )
                     }
                 }
 
-                if bridgeModel.confirmationMessage != nil
-                    || bridgeModel.errorMessage != nil
-                {
-                    Section("Result") {
-                        if let confirmation = bridgeModel.confirmationMessage {
-                            Label(confirmation, systemImage: "checkmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                        if let error = bridgeModel.errorMessage {
-                            Label(error, systemImage: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.red)
-                        }
+                if let error = bridgeModel.errorMessage {
+                    Section {
+                        Label(error, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
                     }
+                }
+            } else {
+                Section {
+                    Label(
+                        "The connected server does not support Apple Reminders yet.",
+                        systemImage: "server.rack"
+                    )
+                    .foregroundStyle(.secondary)
                 }
             }
         }
@@ -131,34 +121,42 @@ struct RemindersBridgeView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(
-                "The selected lists stay on this iPhone. Tesserae immediately deletes its latest raw snapshot. Existing rendered History thumbnails follow the normal render-cache lifetime."
+                "Selected lists stay on this iPhone. Tesserae deletes the latest snapshot now; rendered History thumbnails expire normally."
             )
         }
     }
 
-    @ViewBuilder
-    private var capabilityContent: some View {
-        if appModel.supportsRemindersPersonalData {
-            LabeledContent("Reminders Bridge", value: "Available")
-            LabeledContent("Server Source", value: "Apple Reminders")
+    private var syncStatusSection: some View {
+        Section("Sync Status") {
+            LabeledContent("Status", value: syncStatus)
             if let status = bridgeModel.sourceStatus {
                 LabeledContent("Snapshot", value: status.state.displayName)
-                LabeledContent("Generated") {
+                LabeledContent("Last Sync") {
                     Text(status.generatedAt, style: .relative)
                 }
                 LabeledContent("Expires") {
                     Text(status.expiresAt, style: .relative)
                 }
-            } else {
-                LabeledContent("Snapshot", value: "Not uploaded")
             }
-        } else {
-            Label(
-                "The connected server does not support the Reminders bridge yet.",
-                systemImage: "server.rack"
-            )
-            .foregroundStyle(.secondary)
+            if let itemCount = bridgeModel.itemCount {
+                LabeledContent(
+                    "Last Upload",
+                    value: String.localizedStringWithFormat(
+                        String(localized: "%lld items"),
+                        itemCount
+                    )
+                )
+            }
         }
+    }
+
+    private var syncStatus: String {
+        if bridgeModel.isBusy {
+            return String(localized: "Syncing…")
+        }
+        return bridgeModel.isEnabled
+            ? String(localized: "On")
+            : String(localized: "Off")
     }
 
     @ViewBuilder
@@ -227,11 +225,6 @@ struct RemindersBridgeView: View {
                 .disabled(bridgeModel.isBusy)
             }
         }
-
-        if let itemCount = bridgeModel.itemCount {
-            LabeledContent("Last Upload", value: "\(itemCount) items")
-        }
-        LabeledContent("Selected", value: "\(bridgeModel.selectedListCount) lists")
     }
 
     private func busyLabel(title: LocalizedStringKey, systemImage: String) -> some View {

@@ -34,6 +34,12 @@ capabilities.
 
 ### Changed
 
+- Settings now uses a compact Server, Personal Data, and About hierarchy.
+  Connection diagnostics and Disconnect live in Server Details, Clear Local
+  Activity lives with Activity, and Apple Reminders shows its actual sync or
+  compatibility state. The Reminders page also removes repeated capability and
+  source rows, consolidates snapshot status, shortens its privacy and sync
+  guidance, and includes Simplified Chinese localization.
 - An enabled Apple Reminders bridge can now publish an empty list set after the
   final list is deselected, keeping the source fresh and making widgets show
   their unavailable state. Stop Sync remains the only action that deletes and
