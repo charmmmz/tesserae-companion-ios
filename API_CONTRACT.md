@@ -450,9 +450,12 @@ been verified against an edge Tesserae server and physical display. Contract
 0.4.1, 0.5.0, accepted 0.6.0, and accepted 0.7.0 extensions remain
 capability-gated until their matching server implementations and compatibility
 evidence are recorded. For 0.7.0, the implemented EventKit UI supports explicit
-list selection, manual refresh, and process-lifetime change notifications with
-foreground delivery and debouncing. Those notifications are not a guaranteed
-background wake mechanism. The generic server adapter and latest-only snapshot
+list selection, manual refresh, process-lifetime change notifications, and a
+catch-up check whenever the App becomes active. Foreground and EventKit
+triggers share one debounced path; the App compares a locally stored digest of
+the last successful payload and only republishes changed content or a missing
+or non-fresh server snapshot. These mechanisms do not provide a guaranteed
+background wakeup. The generic server adapter and latest-only snapshot
 store are proposed in upstream Draft PR
 [#183](https://github.com/dmellok/tesserae/pull/183); the separately published
 Apple Reminders widget remains an opt-in community package.

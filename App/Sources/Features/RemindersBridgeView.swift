@@ -76,7 +76,7 @@ struct RemindersBridgeView: View {
                         Text("Sync")
                     } footer: {
                         Text(
-                            "Tesserae syncs while this app is active. Use Sync Now if needed."
+                            "Tesserae checks selected lists when the app becomes active and after Reminders changes. Unchanged content is not uploaded. Sync Now always uploads."
                         )
                     }
                 }

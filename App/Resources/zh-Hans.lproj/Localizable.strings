@@ -241,6 +241,7 @@
 "Choose up to 20 lists." = "最多选择 20 个列表。";
 "Sync" = "同步";
 "Tesserae syncs while this app is active. Use Sync Now if needed." = "此 App 活跃时，Tesserae 会自动同步；需要时也可以手动同步。";
+"Tesserae checks selected lists when the app becomes active and after Reminders changes. Unchanged content is not uploaded. Sync Now always uploads." = "App 进入前台或提醒事项发生变化后，Tesserae 会检查所选列表。内容未变化时不会上传；“立即同步”始终会上传。";
 "The connected server does not support Apple Reminders yet." = "当前连接的服务器尚不支持 Apple 提醒事项。";
 "Stop Reminders Sync?" = "要停止提醒事项同步吗？";
 "Stop Sync and Delete Snapshot" = "停止同步并删除快照";

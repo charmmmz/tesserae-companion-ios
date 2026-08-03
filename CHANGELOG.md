@@ -11,6 +11,14 @@ capabilities.
 
 ## [Unreleased]
 
+### Changed
+
+- Enabled Apple Reminders sync now performs a catch-up check whenever the App
+  becomes active. Foreground and EventKit triggers share one debounced path,
+  skip uploading unchanged content while the server snapshot remains fresh,
+  and republish when content changes or the snapshot is missing or stale;
+  Sync Now continues to force an upload.
+
 ## [0.5.0] - 2026-08-03
 
 ### Added

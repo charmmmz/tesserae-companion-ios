@@ -1,4 +1,5 @@
 @preconcurrency import EventKit
+import CryptoKit
 import Foundation
 import Observation
 import TesseraeKit
@@ -278,6 +279,7 @@ struct RemindersBridgePreferences: Codable, Equatable {
     var selectedListIDs: [String]
     var selectedListTitles: [String: String]
     var publicationIDs: [String: String]
+    var lastSuccessfulContentDigest: String?
     var isEnabled: Bool
 
     init(
@@ -285,12 +287,14 @@ struct RemindersBridgePreferences: Codable, Equatable {
         selectedListIDs: [String] = [],
         selectedListTitles: [String: String] = [:],
         publicationIDs: [String: String] = [:],
+        lastSuccessfulContentDigest: String? = nil,
         isEnabled: Bool = false
     ) {
         self.instanceID = instanceID
         self.selectedListIDs = selectedListIDs
         self.selectedListTitles = selectedListTitles
         self.publicationIDs = publicationIDs
+        self.lastSuccessfulContentDigest = lastSuccessfulContentDigest
         self.isEnabled = isEnabled
     }
 }
@@ -384,13 +388,14 @@ final class RemindersBridgeModel {
     private var eventStoreObserver: NSObjectProtocol?
     private var changeDebounceTask: Task<Void, Never>?
     private var applicationIsActive = false
-    private var hasPendingEventStoreChange = false
+    private var hasPendingAutomaticRefresh = false
 
     var authorizationState: RemindersAuthorizationState = .notDetermined
     var lists: [RemindersListDescriptor] = []
     var selectedListIDs: Set<String> = []
     private var selectedListTitles: [String: String] = [:]
     private var publicationIDs: [String: String] = [:]
+    private var lastSuccessfulContentDigest: String?
     var isEnabled = false
     var isBusy = false
     var itemCount: Int?
@@ -450,7 +455,7 @@ final class RemindersBridgeModel {
                 }
             }
         }
-        schedulePendingChangeIfPossible()
+        requestAutomaticRefresh()
     }
 
     func updateApplicationActivity(
@@ -460,7 +465,7 @@ final class RemindersBridgeModel {
         monitoringAppModel = appModel
         applicationIsActive = isActive
         if isActive {
-            schedulePendingChangeIfPossible()
+            requestAutomaticRefresh()
         } else {
             changeDebounceTask?.cancel()
             changeDebounceTask = nil
@@ -478,14 +483,18 @@ final class RemindersBridgeModel {
     }
 
     func eventStoreDidChange() {
-        guard isEnabled else { return }
-        hasPendingEventStoreChange = true
-        schedulePendingChangeIfPossible()
+        requestAutomaticRefresh()
     }
 
-    private func schedulePendingChangeIfPossible() {
+    private func requestAutomaticRefresh() {
+        guard isEnabled else { return }
+        hasPendingAutomaticRefresh = true
+        schedulePendingRefreshIfPossible()
+    }
+
+    private func schedulePendingRefreshIfPossible() {
         guard
-            hasPendingEventStoreChange,
+            hasPendingAutomaticRefresh,
             applicationIsActive,
             monitoringAppModel != nil
         else {
@@ -500,13 +509,13 @@ final class RemindersBridgeModel {
                 return
             }
             changeDebounceTask = nil
-            await synchronizePendingEventStoreChange()
+            await synchronizePendingAutomaticRefresh()
         }
     }
 
-    private func synchronizePendingEventStoreChange() async {
+    private func synchronizePendingAutomaticRefresh() async {
         guard
-            hasPendingEventStoreChange,
+            hasPendingAutomaticRefresh,
             applicationIsActive,
             isEnabled,
             authorizationState == .fullAccess,
@@ -516,14 +525,18 @@ final class RemindersBridgeModel {
             return
         }
         if isBusy {
-            schedulePendingChangeIfPossible()
+            schedulePendingRefreshIfPossible()
             return
         }
 
-        hasPendingEventStoreChange = false
+        hasPendingAutomaticRefresh = false
         reloadLists()
-        await synchronize(using: appModel, enabling: false)
-        schedulePendingChangeIfPossible()
+        await synchronize(
+            using: appModel,
+            enabling: false,
+            forceUpload: false
+        )
+        schedulePendingRefreshIfPossible()
     }
 
     func load(using appModel: AppModel) async {
@@ -537,6 +550,7 @@ final class RemindersBridgeModel {
         selectedListIDs = Set(preferences.selectedListIDs)
         selectedListTitles = preferences.selectedListTitles
         publicationIDs = preferences.publicationIDs
+        lastSuccessfulContentDigest = preferences.lastSuccessfulContentDigest
         isEnabled = preferences.isEnabled
         authorizationState = reminders.authorizationState
         if authorizationState == .fullAccess {
@@ -600,11 +614,19 @@ final class RemindersBridgeModel {
     }
 
     func enableAndSync(using appModel: AppModel) async {
-        await synchronize(using: appModel, enabling: true)
+        await synchronize(
+            using: appModel,
+            enabling: true,
+            forceUpload: true
+        )
     }
 
     func syncNow(using appModel: AppModel) async {
-        await synchronize(using: appModel, enabling: false)
+        await synchronize(
+            using: appModel,
+            enabling: false,
+            forceUpload: true
+        )
     }
 
     func disableAndDelete(using appModel: AppModel) async {
@@ -622,6 +644,7 @@ final class RemindersBridgeModel {
             isEnabled = false
             sourceStatus = nil
             itemCount = nil
+            lastSuccessfulContentDigest = nil
             savePreferences()
             confirmationMessage = String(
                 localized: "Reminders sync is off and the server snapshot was deleted."
@@ -633,7 +656,8 @@ final class RemindersBridgeModel {
 
     private func synchronize(
         using appModel: AppModel,
-        enabling: Bool
+        enabling: Bool,
+        forceUpload: Bool
     ) async {
         guard appModel.supportsRemindersPersonalData else {
             errorMessage = RemindersBridgeError.serverUnsupported.localizedDescription
@@ -654,7 +678,9 @@ final class RemindersBridgeModel {
         }
         isBusy = true
         errorMessage = nil
-        confirmationMessage = nil
+        if forceUpload {
+            confirmationMessage = nil
+        }
         defer { isBusy = false }
 
         do {
@@ -673,18 +699,53 @@ final class RemindersBridgeModel {
                 from: sourceLists,
                 serverMaximumTTLSeconds: appModel.personalDataMaximumTTLSeconds
             )
-            sourceStatus = try await appModel.putRemindersSnapshot(snapshot)
+            let contentDigest = try Self.contentDigest(for: snapshot.data)
             itemCount = snapshot.data.lists.reduce(0) { $0 + $1.items.count }
+
+            var uploadIsRequired = forceUpload
+                || contentDigest != lastSuccessfulContentDigest
+            if !uploadIsRequired {
+                sourceStatus = try await appModel.remindersPersonalDataStatus()
+                uploadIsRequired = Self.automaticUploadIsRequired(
+                    contentDigest: contentDigest,
+                    lastSuccessfulContentDigest: lastSuccessfulContentDigest,
+                    sourceStatus: sourceStatus
+                )
+            }
+
+            guard uploadIsRequired else { return }
+            sourceStatus = try await appModel.putRemindersSnapshot(snapshot)
+            lastSuccessfulContentDigest = contentDigest
             if enabling {
                 isEnabled = true
             }
             savePreferences()
-            confirmationMessage = String(
-                localized: "Synced \(itemCount ?? 0) incomplete reminders from \(selectedLists.count) list(s)."
-            )
+            if forceUpload {
+                confirmationMessage = String(
+                    localized: "Synced \(itemCount ?? 0) incomplete reminders from \(selectedLists.count) list(s)."
+                )
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    static func contentDigest(for data: RemindersData) throws -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let encoded = try encoder.encode(data)
+        return SHA256.hash(data: encoded)
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
+
+    static func automaticUploadIsRequired(
+        contentDigest: String,
+        lastSuccessfulContentDigest: String?,
+        sourceStatus: PersonalDataSourceStatus?
+    ) -> Bool {
+        contentDigest != lastSuccessfulContentDigest
+            || sourceStatus?.state != .fresh
     }
 
     private func reloadLists() {
@@ -728,6 +789,7 @@ final class RemindersBridgeModel {
                 selectedListIDs: orderedIDs,
                 selectedListTitles: selectedListTitles,
                 publicationIDs: publicationIDs,
+                lastSuccessfulContentDigest: lastSuccessfulContentDigest,
                 isEnabled: isEnabled
             )
         )

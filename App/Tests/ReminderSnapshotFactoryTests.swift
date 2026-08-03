@@ -175,6 +175,7 @@ final class ReminderSnapshotFactoryTests: XCTestCase {
                 "weekend-list": "Weekend",
             ],
             publicationIDs: ["grocery-list": "public-grocery"],
+            lastSuccessfulContentDigest: "digest-1",
             isEnabled: true
         )
 
@@ -183,6 +184,125 @@ final class ReminderSnapshotFactoryTests: XCTestCase {
         XCTAssertEqual(store.preferences(for: "home"), preferences)
         XCTAssertFalse(store.preferences(for: "other").isEnabled)
         XCTAssertTrue(store.preferences(for: "other").selectedListIDs.isEmpty)
+    }
+
+    @MainActor
+    func testPreferencesWithoutContentDigestStillDecode() throws {
+        let encoded = try XCTUnwrap(
+            """
+            {
+              "instanceID": "home",
+              "selectedListIDs": ["grocery-list"],
+              "selectedListTitles": {"grocery-list": "Grocery List"},
+              "publicationIDs": {"grocery-list": "public-grocery"},
+              "isEnabled": true
+            }
+            """.data(using: .utf8)
+        )
+
+        let preferences = try JSONDecoder().decode(
+            RemindersBridgePreferences.self,
+            from: encoded
+        )
+
+        XCTAssertTrue(preferences.isEnabled)
+        XCTAssertNil(preferences.lastSuccessfulContentDigest)
+    }
+
+    @MainActor
+    func testContentDigestChangesOnlyWhenPublishedReminderDataChanges() throws {
+        let data = RemindersData(
+            lists: [
+                ReminderListSnapshot(
+                    id: "public-grocery",
+                    title: "Grocery List",
+                    items: [
+                        ReminderSnapshotItem(
+                            id: "milk",
+                            title: "Milk",
+                            dueDate: "2026-08-04",
+                            priority: .medium
+                        ),
+                    ]
+                ),
+            ]
+        )
+        let changedData = RemindersData(
+            lists: [
+                ReminderListSnapshot(
+                    id: "public-grocery",
+                    title: "Grocery List",
+                    items: [
+                        ReminderSnapshotItem(
+                            id: "milk",
+                            title: "Oat Milk",
+                            dueDate: "2026-08-04",
+                            priority: .medium
+                        ),
+                    ]
+                ),
+            ]
+        )
+
+        let digest = try RemindersBridgeModel.contentDigest(for: data)
+
+        XCTAssertEqual(
+            digest,
+            try RemindersBridgeModel.contentDigest(for: data)
+        )
+        XCTAssertNotEqual(
+            digest,
+            try RemindersBridgeModel.contentDigest(for: changedData)
+        )
+        XCTAssertEqual(digest.count, 64)
+    }
+
+    @MainActor
+    func testAutomaticUploadDecisionRequiresChangeOrNonFreshServerSnapshot() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let freshStatus = PersonalDataSourceStatus(
+            sourceID: .reminders,
+            state: .fresh,
+            generatedAt: now,
+            staleAt: now.addingTimeInterval(86_400),
+            expiresAt: now.addingTimeInterval(172_800)
+        )
+        let staleStatus = PersonalDataSourceStatus(
+            sourceID: .reminders,
+            state: .stale,
+            generatedAt: now,
+            staleAt: now,
+            expiresAt: now.addingTimeInterval(86_400)
+        )
+
+        XCTAssertFalse(
+            RemindersBridgeModel.automaticUploadIsRequired(
+                contentDigest: "same",
+                lastSuccessfulContentDigest: "same",
+                sourceStatus: freshStatus
+            )
+        )
+        XCTAssertTrue(
+            RemindersBridgeModel.automaticUploadIsRequired(
+                contentDigest: "changed",
+                lastSuccessfulContentDigest: "same",
+                sourceStatus: freshStatus
+            )
+        )
+        XCTAssertTrue(
+            RemindersBridgeModel.automaticUploadIsRequired(
+                contentDigest: "same",
+                lastSuccessfulContentDigest: "same",
+                sourceStatus: staleStatus
+            )
+        )
+        XCTAssertTrue(
+            RemindersBridgeModel.automaticUploadIsRequired(
+                contentDigest: "same",
+                lastSuccessfulContentDigest: "same",
+                sourceStatus: nil
+            )
+        )
     }
 
     @MainActor
@@ -240,7 +360,7 @@ final class ReminderSnapshotFactoryTests: XCTestCase {
     }
 
     @MainActor
-    func testEventKitChangeQueuesWhileInactiveAndSyncsOnceWhenActive() async throws {
+    func testForegroundCatchUpAndQueuedEventKitChangesShareOnePath() async throws {
         let suiteName = "ReminderSnapshotFactoryTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -280,6 +400,18 @@ final class ReminderSnapshotFactoryTests: XCTestCase {
             using: appModel,
             applicationIsActive: false
         )
+        for _ in 0..<10 {
+            await Task.yield()
+        }
+        XCTAssertEqual(reminders.incompleteItemsFetchCount, 0)
+
+        model.updateApplicationActivity(true, using: appModel)
+        for _ in 0..<100 where model.sourceStatus == nil {
+            await Task.yield()
+        }
+        XCTAssertEqual(reminders.incompleteItemsFetchCount, 1)
+
+        model.updateApplicationActivity(false, using: appModel)
         notificationCenter.post(
             name: .EKEventStoreChanged,
             object: reminders.changeNotificationObject
@@ -291,14 +423,14 @@ final class ReminderSnapshotFactoryTests: XCTestCase {
         for _ in 0..<10 {
             await Task.yield()
         }
-        XCTAssertEqual(reminders.incompleteItemsFetchCount, 0)
+        XCTAssertEqual(reminders.incompleteItemsFetchCount, 1)
 
         model.updateApplicationActivity(true, using: appModel)
-        for _ in 0..<100 where model.sourceStatus == nil {
+        for _ in 0..<100 where reminders.incompleteItemsFetchCount < 2 {
             await Task.yield()
         }
 
-        XCTAssertEqual(reminders.incompleteItemsFetchCount, 1)
+        XCTAssertEqual(reminders.incompleteItemsFetchCount, 2)
         XCTAssertEqual(model.sourceStatus?.state, .fresh)
         XCTAssertNil(model.errorMessage)
         model.stopChangeMonitoring()
