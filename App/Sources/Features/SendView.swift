@@ -213,19 +213,17 @@ struct SendView: View {
 
             simulatedPanel
 
-            if !selectedDisplays.isEmpty {
-                Divider()
+            Divider()
 
-                HStack(spacing: 10) {
-                    Text("Previewing on")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    Spacer(minLength: 8)
-                    previewTargetPicker
-                }
-                .frame(minHeight: 34)
-                .accessibilityElement(children: .contain)
+            HStack(spacing: 10) {
+                Text("Previewing on")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                previewTargetPicker
             }
+            .frame(minHeight: 34)
+            .accessibilityElement(children: .contain)
 
             if model.connectionMode == .demo {
                 Button("Use Sample") {
@@ -330,8 +328,12 @@ struct SendView: View {
             }
         } label: {
             HStack(spacing: 5) {
-                Image(systemName: "rectangle.on.rectangle")
-                Text(previewDisplay?.name ?? "Preview Display")
+                Image(
+                    systemName: selectedDisplays.isEmpty
+                        ? "rectangle.slash"
+                        : "rectangle.on.rectangle"
+                )
+                Text(previewTargetName)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(width: previewTargetNameWidth, alignment: .leading)
@@ -353,6 +355,13 @@ struct SendView: View {
         .accessibilityIdentifier("send-preview-display-picker")
     }
 
+    private var previewTargetName: String {
+        if selectedDisplays.isEmpty {
+            return String(localized: "None selected")
+        }
+        return previewDisplay?.name ?? String(localized: "Preview Display")
+    }
+
     private var previewTargetNameWidth: CGFloat {
         min(measuredPreviewTargetNameWidth, 114)
     }
@@ -362,10 +371,9 @@ struct SendView: View {
     }
 
     private var measuredPreviewTargetNameWidth: CGFloat {
-        let name = previewDisplay?.name ?? "Preview Display"
         let pointSize = UIFont.preferredFont(forTextStyle: .footnote).pointSize
         let font = UIFont.systemFont(ofSize: pointSize, weight: .semibold)
-        return ceil((name as NSString).size(
+        return ceil((previewTargetName as NSString).size(
             withAttributes: [.font: font]
         ).width)
     }

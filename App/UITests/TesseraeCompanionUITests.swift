@@ -678,7 +678,24 @@ final class TesseraeCompanionUITests: XCTestCase {
         let targetList = app.staticTexts["Displays"].firstMatch
         XCTAssertTrue(targetList.waitForExistence(timeout: 2))
         let initialTargetListY = targetList.frame.minY
-        deskTarget.tap()
+        let initiallySelectedTarget = previewPicker.label.contains("Kitchen")
+            ? kitchenTarget
+            : deskTarget
+        let secondTarget = previewPicker.label.contains("Kitchen")
+            ? deskTarget
+            : kitchenTarget
+        XCTAssertTrue(initiallySelectedTarget.isHittable)
+        initiallySelectedTarget.tap()
+        XCTAssertTrue(previewPicker.label.contains("None selected"))
+        XCTAssertFalse(previewPicker.isEnabled)
+        XCTAssertEqual(
+            targetList.frame.minY,
+            initialTargetListY,
+            accuracy: 1
+        )
+        initiallySelectedTarget.tap()
+        XCTAssertFalse(previewPicker.label.contains("None selected"))
+        secondTarget.tap()
         XCTAssertEqual(
             targetList.frame.minY,
             initialTargetListY,

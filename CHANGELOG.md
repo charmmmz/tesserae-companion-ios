@@ -39,8 +39,9 @@ capabilities.
   sits in the header, resolution and file size share one caption, Fill framing
   controls appear over the image, hide during direct manipulation, and return
   two seconds after the gesture ends. The always-present display selector is
-  presented as a dedicated Previewing on row and remains visible but disabled
-  when only one display is selected.
+  presented as a dedicated Previewing on row, shows a stable placeholder when
+  no display is selected, and remains visible but disabled when zero or one
+  display is selected.
 - Dashboards now refresh immediately when their tab becomes visible, continue
   revalidating while the app stays active, and reliably replace cancelled
   in-flight preview requests instead of showing stale content until relaunch.

@@ -88,6 +88,7 @@
 "Preview" = "预览";
 "Display image preview" = "显示屏图片预览";
 "No display selected" = "未选择显示屏";
+"None selected" = "未选择";
 "Connect a display to preview its panel shape." = "连接显示屏后即可预览其屏幕比例。";
 "Tap to choose a photo." = "轻点以选择照片。";
 "Use Sample" = "使用示例";
