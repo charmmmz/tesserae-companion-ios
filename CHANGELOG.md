@@ -11,6 +11,8 @@ capabilities.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-03
+
 ### Added
 
 - Personal Data settings can now request Reminders access, select up to 20
@@ -453,7 +455,8 @@ capabilities.
 - Required Keychain storage, scoped credentials, revocation, redacted
   diagnostics, direct-to-instance photo transfer, and idempotent writes.
 
-[Unreleased]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/charmmmz/tesserae-companion-ios/releases/tag/v0.2.0
