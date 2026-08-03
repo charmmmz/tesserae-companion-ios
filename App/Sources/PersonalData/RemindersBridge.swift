@@ -25,6 +25,7 @@ struct ReminderSourceItem: Equatable, Sendable {
 @MainActor
 protocol RemindersAccessing: AnyObject {
     var authorizationState: RemindersAuthorizationState { get }
+    var changeNotificationObject: AnyObject { get }
 
     func requestFullAccess() async throws -> Bool
     func lists() -> [RemindersListDescriptor]
@@ -34,6 +35,10 @@ protocol RemindersAccessing: AnyObject {
 @MainActor
 final class EventKitRemindersStore: RemindersAccessing {
     private let eventStore = EKEventStore()
+
+    var changeNotificationObject: AnyObject {
+        eventStore
+    }
 
     var authorizationState: RemindersAuthorizationState {
         let status = EKEventStore.authorizationStatus(for: .reminder)
@@ -113,30 +118,69 @@ final class EventKitRemindersStore: RemindersAccessing {
 enum ReminderSnapshotFactory {
     static let privacyTTLSeconds = 48 * 60 * 60
     static let maximumItemCount = 200
+    static let maximumListCount = 20
+
+    struct SourceList: Equatable, Sendable {
+        let id: String
+        let title: String
+        let items: [ReminderSourceItem]
+    }
 
     static func makeSnapshot(
-        from sourceItems: [ReminderSourceItem],
+        from sourceLists: [SourceList],
         generatedAt: Date = .now,
         serverMaximumTTLSeconds: Int?
-    ) -> RemindersFridgeSnapshot {
-        let ttlSeconds = max(
+    ) -> RemindersSnapshot {
+        let ttlSeconds = maximumTTL(serverMaximumTTLSeconds)
+        var remainingItems = maximumItemCount
+        var lists: [ReminderListSnapshot] = []
+
+        for sourceList in sourceLists.prefix(maximumListCount) {
+            let id = bounded(
+                sourceList.id.trimmingCharacters(in: .whitespacesAndNewlines),
+                maximumCharacters: 256
+            )
+            let title = bounded(
+                sourceList.title.trimmingCharacters(in: .whitespacesAndNewlines),
+                maximumCharacters: 256
+            )
+            guard !id.isEmpty, !title.isEmpty else { continue }
+
+            let items = normalizedItems(sourceList.items)
+                .prefix(remainingItems)
+            lists.append(
+                ReminderListSnapshot(
+                    id: id,
+                    title: title,
+                    items: Array(items)
+                )
+            )
+            remainingItems -= items.count
+        }
+
+        return RemindersSnapshot(
+            generatedAt: generatedAt,
+            expiresAt: generatedAt.addingTimeInterval(TimeInterval(ttlSeconds)),
+            data: RemindersData(lists: lists)
+        )
+    }
+
+    private static func normalizedItems(
+        _ sourceItems: [ReminderSourceItem]
+    ) -> [ReminderSnapshotItem] {
+        sourceItems
+            .filter { !$0.isCompleted }
+            .compactMap(snapshotItem)
+            .sorted(by: precedes)
+    }
+
+    private static func maximumTTL(_ serverMaximumTTLSeconds: Int?) -> Int {
+        max(
             1,
             min(
                 serverMaximumTTLSeconds ?? privacyTTLSeconds,
                 privacyTTLSeconds
             )
-        )
-
-        let items = sourceItems
-            .filter { !$0.isCompleted }
-            .compactMap(snapshotItem)
-            .sorted(by: precedes)
-            .prefix(maximumItemCount)
-
-        return RemindersFridgeSnapshot(
-            generatedAt: generatedAt,
-            expiresAt: generatedAt.addingTimeInterval(TimeInterval(ttlSeconds)),
-            data: RemindersFridgeData(items: Array(items))
         )
     }
 
@@ -231,9 +275,24 @@ enum ReminderSnapshotFactory {
 
 struct RemindersBridgePreferences: Codable, Equatable {
     let instanceID: String
-    var listID: String?
-    var listTitle: String?
+    var selectedListIDs: [String]
+    var selectedListTitles: [String: String]
+    var publicationIDs: [String: String]
     var isEnabled: Bool
+
+    init(
+        instanceID: String,
+        selectedListIDs: [String] = [],
+        selectedListTitles: [String: String] = [:],
+        publicationIDs: [String: String] = [:],
+        isEnabled: Bool = false
+    ) {
+        self.instanceID = instanceID
+        self.selectedListIDs = selectedListIDs
+        self.selectedListTitles = selectedListTitles
+        self.publicationIDs = publicationIDs
+        self.isEnabled = isEnabled
+    }
 }
 
 @MainActor
@@ -258,10 +317,7 @@ final class RemindersBridgePreferencesStore {
             )
         else {
             return RemindersBridgePreferences(
-                instanceID: instanceID,
-                listID: nil,
-                listTitle: nil,
-                isEnabled: false
+                instanceID: instanceID
             )
         }
         return preferences
@@ -282,18 +338,21 @@ enum RemindersBridgeError: Error, LocalizedError {
     case listRequired
     case listUnavailable
     case serverUnsupported
+    case tooManyLists
     case unavailable
 
     var errorDescription: String? {
         switch self {
         case .accessDenied:
-            "Reminders full access is required to read the selected list."
+            "Reminders full access is required to read the selected lists."
         case .listRequired:
-            "Choose a Reminders list before enabling sync."
+            "Choose at least one Reminders list before enabling sync."
         case .listUnavailable:
-            "The selected Reminders list is no longer available."
+            "One or more selected Reminders lists are no longer available."
         case .serverUnsupported:
             "This Tesserae server does not advertise Reminders personal data support."
+        case .tooManyLists:
+            "You can sync up to 20 Reminders lists."
         case .unavailable:
             "A connected Tesserae instance is required."
         }
@@ -303,13 +362,27 @@ enum RemindersBridgeError: Error, LocalizedError {
 @MainActor
 @Observable
 final class RemindersBridgeModel {
+    struct UnavailableSelectedList: Identifiable, Equatable {
+        let id: String
+        let title: String
+    }
+
     private let reminders: any RemindersAccessing
     private let preferencesStore: RemindersBridgePreferencesStore
+    private let notificationCenter: NotificationCenter
+    private let changeDebounceDuration: Duration
     private var instanceID: String?
+    private weak var monitoringAppModel: AppModel?
+    private var eventStoreObserver: NSObjectProtocol?
+    private var changeDebounceTask: Task<Void, Never>?
+    private var applicationIsActive = false
+    private var hasPendingEventStoreChange = false
 
     var authorizationState: RemindersAuthorizationState = .notDetermined
     var lists: [RemindersListDescriptor] = []
-    var selectedListID: String?
+    var selectedListIDs: Set<String> = []
+    private var selectedListTitles: [String: String] = [:]
+    private var publicationIDs: [String: String] = [:]
     var isEnabled = false
     var isBusy = false
     var itemCount: Int?
@@ -317,12 +390,132 @@ final class RemindersBridgeModel {
     var confirmationMessage: String?
     var errorMessage: String?
 
+    var selectedListCount: Int {
+        selectedListIDs.count
+    }
+
+    var unavailableSelectedLists: [UnavailableSelectedList] {
+        let availableIDs = Set(lists.map(\.id))
+        return selectedListIDs
+            .filter { !availableIDs.contains($0) }
+            .map {
+                UnavailableSelectedList(
+                    id: $0,
+                    title: selectedListTitles[$0] ?? String(localized: "Unknown List")
+                )
+            }
+            .sorted {
+                let titleOrder = $0.title.localizedStandardCompare($1.title)
+                if titleOrder != .orderedSame {
+                    return titleOrder == .orderedAscending
+                }
+                return $0.id < $1.id
+            }
+    }
+
     init(
         reminders: any RemindersAccessing = EventKitRemindersStore(),
-        preferencesStore: RemindersBridgePreferencesStore = .init()
+        preferencesStore: RemindersBridgePreferencesStore = .init(),
+        notificationCenter: NotificationCenter = .default,
+        changeDebounceDuration: Duration = .seconds(2)
     ) {
         self.reminders = reminders
         self.preferencesStore = preferencesStore
+        self.notificationCenter = notificationCenter
+        self.changeDebounceDuration = changeDebounceDuration
+    }
+
+    func startChangeMonitoring(
+        using appModel: AppModel,
+        applicationIsActive: Bool
+    ) {
+        monitoringAppModel = appModel
+        self.applicationIsActive = applicationIsActive
+        if eventStoreObserver == nil {
+            eventStoreObserver = notificationCenter.addObserver(
+                forName: .EKEventStoreChanged,
+                object: reminders.changeNotificationObject,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.eventStoreDidChange()
+                }
+            }
+        }
+        schedulePendingChangeIfPossible()
+    }
+
+    func updateApplicationActivity(
+        _ isActive: Bool,
+        using appModel: AppModel
+    ) {
+        monitoringAppModel = appModel
+        applicationIsActive = isActive
+        if isActive {
+            schedulePendingChangeIfPossible()
+        } else {
+            changeDebounceTask?.cancel()
+            changeDebounceTask = nil
+        }
+    }
+
+    func stopChangeMonitoring() {
+        changeDebounceTask?.cancel()
+        changeDebounceTask = nil
+        if let eventStoreObserver {
+            notificationCenter.removeObserver(eventStoreObserver)
+            self.eventStoreObserver = nil
+        }
+        monitoringAppModel = nil
+    }
+
+    func eventStoreDidChange() {
+        guard isEnabled else { return }
+        hasPendingEventStoreChange = true
+        schedulePendingChangeIfPossible()
+    }
+
+    private func schedulePendingChangeIfPossible() {
+        guard
+            hasPendingEventStoreChange,
+            applicationIsActive,
+            monitoringAppModel != nil
+        else {
+            return
+        }
+        changeDebounceTask?.cancel()
+        changeDebounceTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                try await Task.sleep(for: changeDebounceDuration)
+            } catch {
+                return
+            }
+            changeDebounceTask = nil
+            await synchronizePendingEventStoreChange()
+        }
+    }
+
+    private func synchronizePendingEventStoreChange() async {
+        guard
+            hasPendingEventStoreChange,
+            applicationIsActive,
+            isEnabled,
+            authorizationState == .fullAccess,
+            let appModel = monitoringAppModel,
+            appModel.supportsRemindersPersonalData
+        else {
+            return
+        }
+        if isBusy {
+            schedulePendingChangeIfPossible()
+            return
+        }
+
+        hasPendingEventStoreChange = false
+        reloadLists()
+        await synchronize(using: appModel, enabling: false)
+        schedulePendingChangeIfPossible()
     }
 
     func load(using appModel: AppModel) async {
@@ -333,11 +526,13 @@ final class RemindersBridgeModel {
         }
         instanceID = currentInstanceID
         let preferences = preferencesStore.preferences(for: currentInstanceID)
-        selectedListID = preferences.listID
+        selectedListIDs = Set(preferences.selectedListIDs)
+        selectedListTitles = preferences.selectedListTitles
+        publicationIDs = preferences.publicationIDs
         isEnabled = preferences.isEnabled
         authorizationState = reminders.authorizationState
         if authorizationState == .fullAccess {
-            reloadLists(preferredTitle: preferences.listTitle)
+            reloadLists()
         }
         guard appModel.supportsRemindersPersonalData else { return }
         do {
@@ -358,15 +553,39 @@ final class RemindersBridgeModel {
                 throw RemindersBridgeError.accessDenied
             }
             authorizationState = reminders.authorizationState
-            reloadLists(preferredTitle: "Grocery List")
+            reloadLists()
         } catch {
             authorizationState = reminders.authorizationState
             errorMessage = error.localizedDescription
         }
     }
 
-    func chooseList(_ listID: String) {
-        selectedListID = listID.isEmpty ? nil : listID
+    func toggleList(_ listID: String) {
+        if selectedListIDs.contains(listID) {
+            selectedListIDs.remove(listID)
+        } else {
+            guard selectedListIDs.count < ReminderSnapshotFactory.maximumListCount else {
+                errorMessage = RemindersBridgeError.tooManyLists.localizedDescription
+                return
+            }
+            selectedListIDs.insert(listID)
+            if publicationIDs[listID] == nil {
+                publicationIDs[listID] = UUID().uuidString.lowercased()
+            }
+        }
+        confirmationMessage = nil
+        errorMessage = nil
+        savePreferences()
+    }
+
+    func removeUnavailableList(_ listID: String) {
+        let availableIDs = Set(lists.map(\.id))
+        guard
+            !availableIDs.contains(listID),
+            selectedListIDs.remove(listID) != nil
+        else {
+            return
+        }
         confirmationMessage = nil
         errorMessage = nil
         savePreferences()
@@ -416,63 +635,91 @@ final class RemindersBridgeModel {
             errorMessage = RemindersBridgeError.accessDenied.localizedDescription
             return
         }
-        guard let selectedListID else {
+        guard !enabling || !selectedListIDs.isEmpty else {
             errorMessage = RemindersBridgeError.listRequired.localizedDescription
             return
         }
-
+        let selectedLists = lists.filter { selectedListIDs.contains($0.id) }
+        guard selectedLists.count == selectedListIDs.count else {
+            errorMessage = RemindersBridgeError.listUnavailable.localizedDescription
+            return
+        }
         isBusy = true
         errorMessage = nil
         confirmationMessage = nil
         defer { isBusy = false }
 
         do {
-            let sourceItems = try await reminders.incompleteItems(
-                in: selectedListID
-            )
+            var sourceLists: [ReminderSnapshotFactory.SourceList] = []
+            for list in selectedLists {
+                let sourceItems = try await reminders.incompleteItems(in: list.id)
+                sourceLists.append(
+                    ReminderSnapshotFactory.SourceList(
+                        id: publicationID(for: list.id),
+                        title: list.title,
+                        items: sourceItems
+                    )
+                )
+            }
             let snapshot = ReminderSnapshotFactory.makeSnapshot(
-                from: sourceItems,
+                from: sourceLists,
                 serverMaximumTTLSeconds: appModel.personalDataMaximumTTLSeconds
             )
             sourceStatus = try await appModel.putRemindersSnapshot(snapshot)
-            itemCount = snapshot.data.items.count
+            itemCount = snapshot.data.lists.reduce(0) { $0 + $1.items.count }
             if enabling {
                 isEnabled = true
             }
             savePreferences()
             confirmationMessage = String(
-                localized: "Synced \(snapshot.data.items.count) incomplete reminders."
+                localized: "Synced \(itemCount ?? 0) incomplete reminders from \(selectedLists.count) list(s)."
             )
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
-    private func reloadLists(preferredTitle: String?) {
+    private func reloadLists() {
         lists = reminders.lists()
-        if let selectedListID, lists.contains(where: { $0.id == selectedListID }) {
+        if !selectedListIDs.isEmpty {
+            for list in lists where selectedListIDs.contains(list.id) {
+                selectedListTitles[list.id] = list.title
+                if publicationIDs[list.id] == nil {
+                    publicationIDs[list.id] = UUID().uuidString.lowercased()
+                }
+            }
+            savePreferences()
             return
-        }
-        selectedListID = lists.first {
-            $0.title.compare(
-                preferredTitle ?? "Grocery List",
-                options: [.caseInsensitive, .diacriticInsensitive]
-            ) == .orderedSame
-        }?.id
-        if selectedListID == nil, lists.count == 1 {
-            selectedListID = lists[0].id
         }
         savePreferences()
     }
 
+    private func publicationID(for eventKitListID: String) -> String {
+        if let existing = publicationIDs[eventKitListID] {
+            return existing
+        }
+        let newID = UUID().uuidString.lowercased()
+        publicationIDs[eventKitListID] = newID
+        return newID
+    }
+
     private func savePreferences() {
         guard let instanceID else { return }
-        let selectedList = lists.first { $0.id == selectedListID }
+        for list in lists where selectedListIDs.contains(list.id) {
+            selectedListTitles[list.id] = list.title
+        }
+        let orderedIDs = lists
+            .filter { selectedListIDs.contains($0.id) }
+            .map(\.id)
+            + selectedListIDs
+                .filter { id in !lists.contains(where: { $0.id == id }) }
+                .sorted()
         preferencesStore.save(
             RemindersBridgePreferences(
                 instanceID: instanceID,
-                listID: selectedListID,
-                listTitle: selectedList?.title,
+                selectedListIDs: orderedIDs,
+                selectedListTitles: selectedListTitles,
+                publicationIDs: publicationIDs,
                 isEnabled: isEnabled
             )
         )

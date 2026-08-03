@@ -7,8 +7,8 @@ public extension MockTesseraeClient {
         PersonalDataStatusResponse(sources: [])
     }
 
-    func putRemindersFridgeSnapshot(
-        _ snapshot: RemindersFridgeSnapshot,
+    func putRemindersSnapshot(
+        _ snapshot: RemindersSnapshot,
         instance: TesseraeInstance
     ) async throws -> PersonalDataSourceStatus {
         PersonalDataSourceStatus(

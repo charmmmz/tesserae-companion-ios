@@ -60,7 +60,7 @@ struct SettingsView: View {
                         RemindersBridgeView()
                     } label: {
                         LabeledContent(
-                            "Grocery Reminders",
+                            "Apple Reminders",
                             value: model.supportsRemindersPersonalData
                                 ? String(localized: "Available")
                                 : String(localized: "Server update required")
@@ -70,7 +70,7 @@ struct SettingsView: View {
                     Text("Personal Data")
                 } footer: {
                     Text(
-                        "Choose one Reminders list and explicitly enable an expiring snapshot for Tesserae."
+                        "Choose the Reminders lists you want to share and explicitly enable an expiring snapshot for Tesserae."
                     )
                 }
 

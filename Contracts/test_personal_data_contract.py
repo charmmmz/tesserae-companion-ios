@@ -59,6 +59,8 @@ def test_personal_data_fixtures_match_strict_schemas() -> None:
     validate_fixture("capabilities-personal-data.json", "Capabilities")
     validate_fixture("pair-response-personal-data.json", "PairingResponse")
     validate_fixture("personal-data-reminders-fridge.json", "PersonalDataSnapshot")
+    validate_fixture("personal-data-reminders.json", "PersonalDataSnapshot")
+    validate_fixture("personal-data-reminders-empty.json", "PersonalDataSnapshot")
     validate_fixture("personal-data-put-response.json", "PersonalDataSourceStatus")
     validate_fixture("personal-data-status.json", "PersonalDataStatusResponse")
 
@@ -77,6 +79,14 @@ def test_reminders_snapshot_is_minimal_and_expiring() -> None:
         for item in snapshot["data"]["items"]
     )
     assert all(item["completed"] is False for item in snapshot["data"]["items"])
+
+
+def test_empty_reminders_snapshot_keeps_the_source_enabled() -> None:
+    snapshot = load_fixture("personal-data-reminders-empty.json")
+
+    assert snapshot["source_id"] == "reminders"
+    assert snapshot["data"] == {"lists": []}
+    validate_fixture("personal-data-reminders-empty.json", "PersonalDataSnapshot")
 
 
 def test_personal_data_routes_are_one_family_and_not_render_triggers() -> None:
@@ -102,6 +112,8 @@ def test_personal_data_is_independently_capability_and_scope_gated() -> None:
 
     assert "personal_data_reminders" not in base["features"]
     assert "personal_data_reminders" in extension["features"]
+    assert extension["personal_data"]["sources"] == ["reminders", "reminders.fridge"]
+    assert "personal_data_reminders_multi_list" not in extension["features"]
     assert extension["limits"]["personal_data_stale_after_seconds"] == 86_400
     assert extension["limits"]["personal_data_max_ttl_seconds"] == 172_800
     assert "personal_data:write" in pairing["scopes"]

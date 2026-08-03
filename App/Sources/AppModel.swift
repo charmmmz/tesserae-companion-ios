@@ -95,7 +95,7 @@ final class AppModel {
 
     var supportsRemindersPersonalData: Bool {
         connectionMode == .live
-            && capabilities?.supports(personalDataSource: .remindersFridge) == true
+            && capabilities?.supports(personalDataSource: .reminders) == true
     }
 
     var personalDataMaximumTTLSeconds: Int? {
@@ -677,16 +677,16 @@ final class AppModel {
         }
         return try await activeClient.fetchPersonalDataStatus(
             instance: activeInstance
-        ).sources.first { $0.sourceID == .remindersFridge }
+        ).sources.first { $0.sourceID == .reminders }
     }
 
     func putRemindersSnapshot(
-        _ snapshot: RemindersFridgeSnapshot
+        _ snapshot: RemindersSnapshot
     ) async throws -> PersonalDataSourceStatus {
         guard let activeInstance else {
             throw RemindersBridgeError.unavailable
         }
-        return try await activeClient.putRemindersFridgeSnapshot(
+        return try await activeClient.putRemindersSnapshot(
             snapshot,
             instance: activeInstance
         )
@@ -697,7 +697,7 @@ final class AppModel {
             throw RemindersBridgeError.unavailable
         }
         try await activeClient.deletePersonalData(
-            sourceID: .remindersFridge,
+            sourceID: .reminders,
             instance: activeInstance
         )
     }

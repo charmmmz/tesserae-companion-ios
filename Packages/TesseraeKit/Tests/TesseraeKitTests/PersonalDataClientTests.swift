@@ -3,6 +3,23 @@ import XCTest
 @testable import TesseraeKit
 
 final class PersonalDataClientTests: XCTestCase {
+    func testReminderWithoutDueDateEncodesRequiredNullField() throws {
+        let item = ReminderSnapshotItem(
+            id: "undated-reminder",
+            title: "Buy salt",
+            dueDate: nil,
+            priority: .none
+        )
+
+        let encoded = try TesseraeJSON.encoder().encode(item)
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+
+        XCTAssertTrue(object.keys.contains("due_date"))
+        XCTAssertTrue(object["due_date"] is NSNull)
+    }
+
     func testContractFixturesDecodeIntoPersonalDataModels() throws {
         let capabilities = try decode(
             ServerCapabilities.self,
@@ -13,48 +30,71 @@ final class PersonalDataClientTests: XCTestCase {
             fixture: "pair-response-personal-data.json"
         )
         let snapshot = try decode(
-            RemindersFridgeSnapshot.self,
-            fixture: "personal-data-reminders-fridge.json"
+            RemindersSnapshot.self,
+            fixture: "personal-data-reminders.json"
         )
         let status = try decode(
             PersonalDataStatusResponse.self,
             fixture: "personal-data-status.json"
         )
 
-        XCTAssertTrue(capabilities.supports(personalDataSource: .remindersFridge))
+        XCTAssertTrue(capabilities.supports(personalDataSource: .reminders))
+        XCTAssertEqual(
+            capabilities.personalData?.sources,
+            Set(["reminders", "reminders.fridge"])
+        )
         XCTAssertEqual(capabilities.limits.personalDataStaleAfterSeconds, 86_400)
         XCTAssertEqual(capabilities.limits.personalDataMaxTTLSeconds, 172_800)
         XCTAssertTrue(pairResponse.scopes.contains("personal_data:write"))
-        XCTAssertEqual(snapshot.sourceID, .remindersFridge)
-        XCTAssertEqual(snapshot.data.items.count, 3)
-        XCTAssertEqual(snapshot.data.items.first?.priority, .high)
+        XCTAssertEqual(snapshot.sourceID, .reminders)
+        XCTAssertEqual(snapshot.data.lists.count, 2)
+        XCTAssertEqual(snapshot.data.lists.first?.title, "Grocery List")
+        XCTAssertEqual(snapshot.data.lists.first?.items.first?.priority, .high)
         XCTAssertEqual(status.sources.first?.state, .fresh)
     }
 
-    func testPutSnapshotUsesScopedResourceAndNoIdempotencyHeader() async throws {
+    func testLegacyFeatureDoesNotEnableNewRemindersBridge() {
+        let capabilities = ServerCapabilities(
+            product: "tesserae",
+            serverVersion: "0.235.0",
+            api: CompanionAPI(version: 1),
+            pairing: PairingCapabilities(supported: true, codeLength: 6, ttlSeconds: 600),
+            features: ["personal_data_reminders"],
+            limits: CompanionLimits(
+                imageUploadBytes: 1,
+                imageMaxEdge: 1,
+                imageContentTypes: ["image/png"],
+                jobRetentionSeconds: 60,
+                idempotencyRetentionSeconds: 60
+            ),
+            webURL: "/"
+        )
+
+        XCTAssertFalse(capabilities.supports(personalDataSource: .reminders))
+        XCTAssertFalse(capabilities.supports(personalDataSource: .remindersFridge))
+    }
+
+    func testPutMultiListSnapshotUsesGenericRemindersResource() async throws {
         let response = try fixtureResponse(
-            "personal-data-put-response.json",
+            "personal-data-reminders-put-response.json",
             statusCode: 200
         )
         let transport = RecordingPersonalDataTransport(responses: [response])
         let client = try await makeClient(transport: transport)
         let snapshot = try decode(
-            RemindersFridgeSnapshot.self,
-            fixture: "personal-data-reminders-fridge.json"
+            RemindersSnapshot.self,
+            fixture: "personal-data-reminders.json"
         )
 
-        let accepted = try await client.putRemindersFridgeSnapshot(
+        let accepted = try await client.putRemindersSnapshot(
             snapshot,
             instance: instance
         )
 
-        XCTAssertEqual(accepted.state, .fresh)
+        XCTAssertEqual(accepted.sourceID, .reminders)
         let capturedRequest = await transport.lastRequest()
         let request = try XCTUnwrap(capturedRequest)
-        XCTAssertEqual(
-            request.url?.path,
-            "/api/app/v1/personal-data/reminders.fridge"
-        )
+        XCTAssertEqual(request.url?.path, "/api/app/v1/personal-data/reminders")
         XCTAssertEqual(request.httpMethod, "PUT")
         XCTAssertEqual(
             request.value(forHTTPHeaderField: "Authorization"),
@@ -63,17 +103,26 @@ final class PersonalDataClientTests: XCTestCase {
         XCTAssertNil(request.value(forHTTPHeaderField: "Idempotency-Key"))
         let body = try XCTUnwrap(request.httpBody)
         XCTAssertEqual(
-            try TesseraeJSON.decoder().decode(
-                RemindersFridgeSnapshot.self,
-                from: body
-            ),
+            try TesseraeJSON.decoder().decode(RemindersSnapshot.self, from: body),
             snapshot
         )
     }
 
     func testStatusAndDeleteNeverReadSnapshotValues() async throws {
-        let statusResponse = try fixtureResponse(
-            "personal-data-status.json",
+        let statusResponse = TesseraeHTTPResponse(
+            data: try TesseraeJSON.encoder().encode(
+                PersonalDataStatusResponse(
+                    sources: [
+                        PersonalDataSourceStatus(
+                            sourceID: .reminders,
+                            state: .fresh,
+                            generatedAt: Date(timeIntervalSince1970: 1_700_000_000),
+                            staleAt: Date(timeIntervalSince1970: 1_700_086_400),
+                            expiresAt: Date(timeIntervalSince1970: 1_700_172_800)
+                        ),
+                    ]
+                )
+            ),
             statusCode: 200
         )
         let deleteResponse = TesseraeHTTPResponse(data: Data(), statusCode: 204)
@@ -84,18 +133,18 @@ final class PersonalDataClientTests: XCTestCase {
 
         let status = try await client.fetchPersonalDataStatus(instance: instance)
         try await client.deletePersonalData(
-            sourceID: .remindersFridge,
+            sourceID: .reminders,
             instance: instance
         )
 
-        XCTAssertEqual(status.sources.map(\.sourceID), [.remindersFridge])
+        XCTAssertEqual(status.sources.map(\.sourceID), [.reminders])
         let requests = await transport.recordedRequests()
         XCTAssertEqual(requests.count, 2)
         XCTAssertEqual(requests[0].url?.path, "/api/app/v1/personal-data/status")
         XCTAssertEqual(requests[0].httpMethod, "GET")
         XCTAssertEqual(
             requests[1].url?.path,
-            "/api/app/v1/personal-data/reminders.fridge"
+            "/api/app/v1/personal-data/reminders"
         )
         XCTAssertEqual(requests[1].httpMethod, "DELETE")
         XCTAssertNil(requests[1].httpBody)

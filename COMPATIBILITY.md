@@ -122,17 +122,28 @@ of a visually portrait image.
 
 ## Proposed contract 0.7 Reminders snapshot bridge
 
-OpenAPI 0.7.0 proposes `personal_data_reminders` as an independent optional
-capability. It adds a `personal_data:write` Companion scope and a strict
-`reminders.fridge` snapshot under the single `/api/app/v1/personal-data`
-family. Existing servers remain compatible because the app must hide the
-integration unless the exact capability and retention limits are advertised.
+OpenAPI 0.7.0 adds a `personal_data:write` Companion scope and the
+`/api/app/v1/personal-data` family. The legacy `personal_data_reminders`
+capability and strict `reminders.fridge` source remain server-side support for
+the already published fridge widget; the current Companion does not use them.
 
-The contract, synthetic fixtures, Swift models, and URLSession transport are
-reviewable ahead of implementation. They are not evidence that EventKit access,
-background sync, a server snapshot store, or a bundled widget exists yet. The
-first server adapter and fresh/stale/expired widget remain upstream-owned after
-contract review; the native permission and sync surface remains client-owned.
+The additive `personal_data.sources` capability block exposes the strict
+personal-data source IDs accepted by the server. Companion uses the generic
+`reminders` source when listed and may publish up to 20 explicitly selected
+lists and 200 incomplete items in aggregate. List IDs are opaque publication
+UUIDs generated and persisted per server instance; EventKit calendar IDs are
+never uploaded. Companion hides the integration unless `reminders` is listed,
+and it never falls back to `reminders.fridge` or migrates an old snapshot.
+Duplicate publication IDs and more than 200 aggregate items are rejected rather
+than truncated. An enabled bridge may publish `lists: []` to atomically remove
+its last selected list while keeping the source fresh; only Stop Sync uses
+`DELETE` to disable the source.
+
+The contract was accepted and merged in upstream PR
+[#182](https://github.com/dmellok/tesserae/pull/182). The server adapter is a
+separate follow-up in Draft PR
+[#183](https://github.com/dmellok/tesserae/pull/183); the native permission and
+sync surface and community widget remain independently versioned deliverables.
 
 Snapshot ingestion does not create a Job, rerender a dashboard, publish to a
 display, or write History. Existing schedules, rotations, decks, and manual

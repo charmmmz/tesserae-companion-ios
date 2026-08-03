@@ -13,22 +13,31 @@ capabilities.
 
 ### Added
 
-- Personal Data settings can now request Reminders access, select one grocery
-  list, and manually enable, refresh, or delete a strict expiring snapshot when
-  the connected server advertises `personal_data_reminders`. This first client
-  slice intentionally does not run background sync.
+- Personal Data settings can now request Reminders access, select up to 20
+  lists, and enable, refresh, or delete one strict expiring snapshot. Once
+  enabled, the App observes EventKit database changes for its full process
+  lifetime, coalesces bursts for two seconds, and refreshes the selected lists
+  when the App is active; a notification received while inactive is queued
+  until the App returns to the foreground.
+  The integration requires `reminders` in `personal_data.sources` and never
+  falls back to the deprecated one-list `reminders.fridge` source. EventKit
+  notifications do not provide a guaranteed background wakeup, so this first
+  client slice still does not claim periodic or reliable background sync.
 - Send Photo now supports drag-to-position, pinch-to-zoom, reset, and selected-
   display preview switching with a trailing-aligned, name-sized selector for
   Fill when the connected Tesserae server advertises image framing. Older
   servers and other fit modes keep their existing behavior.
-- A proposed OpenAPI 0.7 `personal_data_reminders` bridge now defines scoped,
-  latest-only Reminders snapshots with strict grocery-item fields, required
-  expiry, metadata-only status, immediate deletion, synthetic fixtures, and
-  TesseraeKit transport models. Snapshot ingestion remains separate from
-  dashboard rendering and does not add EventKit permissions or UI yet.
+- A proposed OpenAPI 0.7 Reminders bridge now defines the additive generic
+  `reminders` multi-list source alongside the original `reminders.fridge`
+  source, using anonymous app-generated list IDs, strict bounded fields,
+  required expiry, metadata-only status, and immediate deletion.
 
 ### Changed
 
+- An enabled Apple Reminders bridge can now publish an empty list set after the
+  final list is deselected, keeping the source fresh and making widgets show
+  their unavailable state. Stop Sync remains the only action that deletes and
+  disables the source.
 - Project status and TestFlight documentation now reflect the first external
   beta submission instead of describing the app as an internal beta candidate
   or pre-upload artifact.
@@ -58,6 +67,11 @@ capabilities.
 
 ### Fixed
 
+- A selected Reminders list that was later deleted can now be removed directly
+  from its unavailable warning, allowing the remaining lists to sync normally.
+- Reminders without a due date are now uploaded with the contract-required
+  `due_date: null` field instead of omitting the field and being rejected by
+  strict servers.
 - Grocery Reminders sync no longer crashes when EventKit delivers reminder
   fetch results on its background queue.
 

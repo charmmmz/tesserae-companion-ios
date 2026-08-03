@@ -23,6 +23,9 @@
     "image_framing",
     "personal_data_reminders"
   ],
+  "personal_data": {
+    "sources": ["reminders", "reminders.fridge"]
+  },
   "limits": {
     "image_upload_bytes": 26214400,
     "image_max_edge": 8192,

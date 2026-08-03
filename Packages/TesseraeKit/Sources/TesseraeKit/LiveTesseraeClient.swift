@@ -412,8 +412,8 @@ public actor LiveTesseraeClient: TesseraeServing {
         )
     }
 
-    public func putRemindersFridgeSnapshot(
-        _ snapshot: RemindersFridgeSnapshot,
+    public func putRemindersSnapshot(
+        _ snapshot: RemindersSnapshot,
         instance: TesseraeInstance
     ) async throws -> PersonalDataSourceStatus {
         let request = try await authenticatedRequest(

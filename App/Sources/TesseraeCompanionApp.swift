@@ -5,6 +5,7 @@ import TesseraeKit
 @MainActor
 struct TesseraeCompanionApp: App {
     @State private var model: AppModel
+    @State private var remindersBridgeModel: RemindersBridgeModel
 
     init() {
         let credentials: any CredentialStoring
@@ -98,12 +99,14 @@ struct TesseraeCompanionApp: App {
                 discovery: discovery
             )
         )
+        _remindersBridgeModel = State(initialValue: RemindersBridgeModel())
     }
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(model)
+                .environment(remindersBridgeModel)
                 .tint(TesseraeTheme.accent)
                 .preferredColorScheme(uiTestColorScheme)
         }

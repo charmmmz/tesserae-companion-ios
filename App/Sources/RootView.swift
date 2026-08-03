@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    @Environment(RemindersBridgeModel.self) private var remindersBridgeModel
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -49,7 +50,18 @@ struct RootView: View {
             await model.restoreConnectionIfNeeded()
             model.openWebIfRequested()
         }
+        .task(id: model.activeInstance?.id) {
+            await remindersBridgeModel.load(using: model)
+            remindersBridgeModel.startChangeMonitoring(
+                using: model,
+                applicationIsActive: scenePhase == .active
+            )
+        }
         .onChange(of: scenePhase) { _, newPhase in
+            remindersBridgeModel.updateApplicationActivity(
+                newPhase == .active,
+                using: model
+            )
             if newPhase == .active {
                 model.openWebIfRequested()
                 Task {

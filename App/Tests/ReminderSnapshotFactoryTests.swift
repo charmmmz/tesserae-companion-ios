@@ -1,5 +1,6 @@
 @preconcurrency import EventKit
 import Foundation
+import TesseraeKit
 import XCTest
 @testable import Tesserae_Companion
 
@@ -70,17 +71,20 @@ final class ReminderSnapshotFactoryTests: XCTestCase {
         ]
 
         let snapshot = ReminderSnapshotFactory.makeSnapshot(
-            from: source,
+            from: [
+                .init(id: "public-list", title: "Grocery List", items: source),
+            ],
             generatedAt: generatedAt,
             serverMaximumTTLSeconds: 86_400
         )
+        let items = snapshot.data.lists[0].items
 
-        XCTAssertEqual(snapshot.data.items.map(\.id), ["milk-id", "bread-id"])
-        XCTAssertEqual(snapshot.data.items.map(\.title), ["Milk", "Bread"])
-        XCTAssertEqual(snapshot.data.items[0].dueDate, "2026-08-03")
-        XCTAssertEqual(snapshot.data.items[0].priority, .high)
-        XCTAssertEqual(snapshot.data.items[1].priority, .low)
-        XCTAssertTrue(snapshot.data.items.allSatisfy { !$0.completed })
+        XCTAssertEqual(items.map(\.id), ["milk-id", "bread-id"])
+        XCTAssertEqual(items.map(\.title), ["Milk", "Bread"])
+        XCTAssertEqual(items[0].dueDate, "2026-08-03")
+        XCTAssertEqual(items[0].priority, .high)
+        XCTAssertEqual(items[1].priority, .low)
+        XCTAssertTrue(items.allSatisfy { !$0.completed })
         XCTAssertEqual(
             snapshot.expiresAt.timeIntervalSince(snapshot.generatedAt),
             86_400,
@@ -99,17 +103,59 @@ final class ReminderSnapshotFactoryTests: XCTestCase {
             )
         }
         let snapshot = ReminderSnapshotFactory.makeSnapshot(
-            from: source,
+            from: [
+                .init(id: "public-list", title: "Grocery List", items: source),
+            ],
             generatedAt: .now,
             serverMaximumTTLSeconds: 7 * 24 * 60 * 60
         )
 
-        XCTAssertEqual(snapshot.data.items.count, 200)
+        XCTAssertEqual(snapshot.data.lists[0].items.count, 200)
         XCTAssertEqual(
             snapshot.expiresAt.timeIntervalSince(snapshot.generatedAt),
             48 * 60 * 60,
             accuracy: 0.001
         )
+    }
+
+    func testMultiListSnapshotGroupsListsAndCapsAggregateItems() {
+        let sourceItems = (0..<150).map { index in
+            ReminderSourceItem(
+                id: "item-\(index)",
+                title: "Item \(index)",
+                dueDateComponents: nil,
+                priority: 0,
+                isCompleted: false
+            )
+        }
+        let snapshot = ReminderSnapshotFactory.makeSnapshot(
+            from: [
+                .init(id: "public-a", title: "Groceries", items: sourceItems),
+                .init(id: "public-b", title: "Weekend", items: sourceItems),
+            ],
+            generatedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            serverMaximumTTLSeconds: nil
+        )
+
+        XCTAssertEqual(snapshot.sourceID, .reminders)
+        XCTAssertEqual(snapshot.data.lists.map(\.title), ["Groceries", "Weekend"])
+        XCTAssertEqual(snapshot.data.lists[0].items.count, 150)
+        XCTAssertEqual(snapshot.data.lists[1].items.count, 50)
+        XCTAssertEqual(
+            snapshot.data.lists.reduce(0) { $0 + $1.items.count },
+            200
+        )
+    }
+
+    func testSnapshotAllowsAnEmptyPublishedListSet() {
+        let snapshot = ReminderSnapshotFactory.makeSnapshot(
+            from: [],
+            generatedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            serverMaximumTTLSeconds: nil
+        )
+
+        XCTAssertEqual(snapshot.sourceID, .reminders)
+        XCTAssertEqual(snapshot.data.lists, [])
     }
 
     @MainActor
@@ -123,8 +169,12 @@ final class ReminderSnapshotFactoryTests: XCTestCase {
         )
         let preferences = RemindersBridgePreferences(
             instanceID: "home",
-            listID: "grocery-list",
-            listTitle: "Grocery List",
+            selectedListIDs: ["grocery-list", "weekend-list"],
+            selectedListTitles: [
+                "grocery-list": "Grocery List",
+                "weekend-list": "Weekend",
+            ],
+            publicationIDs: ["grocery-list": "public-grocery"],
             isEnabled: true
         )
 
@@ -132,5 +182,261 @@ final class ReminderSnapshotFactoryTests: XCTestCase {
 
         XCTAssertEqual(store.preferences(for: "home"), preferences)
         XCTAssertFalse(store.preferences(for: "other").isEnabled)
+        XCTAssertTrue(store.preferences(for: "other").selectedListIDs.isEmpty)
+    }
+
+    @MainActor
+    func testGrantingAccessDoesNotAutoSelectAnyList() async {
+        let reminders = TestRemindersStore(
+            lists: [
+                RemindersListDescriptor(id: "grocery-list", title: "Grocery List"),
+            ]
+        )
+        let model = RemindersBridgeModel(reminders: reminders)
+
+        await model.requestAccess()
+
+        XCTAssertEqual(model.lists, reminders.lists())
+        XCTAssertTrue(model.selectedListIDs.isEmpty)
+    }
+
+    @MainActor
+    func testEnabledBridgeCanSyncAnEmptyPublishedListSet() async throws {
+        let suiteName = "ReminderSnapshotFactoryTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let preferencesStore = RemindersBridgePreferencesStore(
+            defaults: defaults,
+            keyPrefix: "test-reminders"
+        )
+        preferencesStore.save(
+            RemindersBridgePreferences(
+                instanceID: "home",
+                isEnabled: true
+            )
+        )
+        let reminders = TestRemindersStore(
+            lists: [],
+            authorizationState: .fullAccess
+        )
+        let model = RemindersBridgeModel(
+            reminders: reminders,
+            preferencesStore: preferencesStore
+        )
+        let appModel = makeRemindersAppModel()
+
+        await model.load(using: appModel)
+        await model.syncNow(using: appModel)
+
+        XCTAssertTrue(model.isEnabled)
+        XCTAssertTrue(model.selectedListIDs.isEmpty)
+        XCTAssertEqual(model.itemCount, 0)
+        XCTAssertEqual(model.sourceStatus?.state, .fresh)
+        XCTAssertNil(model.errorMessage)
+        XCTAssertEqual(
+            model.confirmationMessage,
+            "Synced 0 incomplete reminders from 0 list(s)."
+        )
+    }
+
+    @MainActor
+    func testEventKitChangeQueuesWhileInactiveAndSyncsOnceWhenActive() async throws {
+        let suiteName = "ReminderSnapshotFactoryTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let preferencesStore = RemindersBridgePreferencesStore(
+            defaults: defaults,
+            keyPrefix: "test-reminders"
+        )
+        preferencesStore.save(
+            RemindersBridgePreferences(
+                instanceID: "home",
+                selectedListIDs: ["grocery-list"],
+                selectedListTitles: ["grocery-list": "Grocery List"],
+                publicationIDs: ["grocery-list": "public-grocery"],
+                isEnabled: true
+            )
+        )
+        let reminders = TestRemindersStore(
+            lists: [
+                RemindersListDescriptor(
+                    id: "grocery-list",
+                    title: "Grocery List"
+                ),
+            ],
+            authorizationState: .fullAccess
+        )
+        let notificationCenter = NotificationCenter()
+        let model = RemindersBridgeModel(
+            reminders: reminders,
+            preferencesStore: preferencesStore,
+            notificationCenter: notificationCenter,
+            changeDebounceDuration: .zero
+        )
+        let appModel = makeRemindersAppModel()
+
+        await model.load(using: appModel)
+        model.startChangeMonitoring(
+            using: appModel,
+            applicationIsActive: false
+        )
+        notificationCenter.post(
+            name: .EKEventStoreChanged,
+            object: reminders.changeNotificationObject
+        )
+        notificationCenter.post(
+            name: .EKEventStoreChanged,
+            object: reminders.changeNotificationObject
+        )
+        for _ in 0..<10 {
+            await Task.yield()
+        }
+        XCTAssertEqual(reminders.incompleteItemsFetchCount, 0)
+
+        model.updateApplicationActivity(true, using: appModel)
+        for _ in 0..<100 where model.sourceStatus == nil {
+            await Task.yield()
+        }
+
+        XCTAssertEqual(reminders.incompleteItemsFetchCount, 1)
+        XCTAssertEqual(model.sourceStatus?.state, .fresh)
+        XCTAssertNil(model.errorMessage)
+        model.stopChangeMonitoring()
+    }
+
+    @MainActor
+    func testDeletedSelectedListCanBeRemovedAndRemainingListsSynced() async throws {
+        let suiteName = "ReminderSnapshotFactoryTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let preferencesStore = RemindersBridgePreferencesStore(
+            defaults: defaults,
+            keyPrefix: "test-reminders"
+        )
+        preferencesStore.save(
+            RemindersBridgePreferences(
+                instanceID: "home",
+                selectedListIDs: ["grocery-list", "deleted-todo-list"],
+                selectedListTitles: [
+                    "grocery-list": "Grocery List",
+                    "deleted-todo-list": "TODO",
+                ],
+                publicationIDs: [
+                    "grocery-list": "public-grocery",
+                    "deleted-todo-list": "public-todo",
+                ],
+                isEnabled: true
+            )
+        )
+        let reminders = TestRemindersStore(
+            lists: [
+                RemindersListDescriptor(
+                    id: "grocery-list",
+                    title: "Grocery List"
+                ),
+            ],
+            authorizationState: .fullAccess
+        )
+        let model = RemindersBridgeModel(
+            reminders: reminders,
+            preferencesStore: preferencesStore
+        )
+        let appModel = makeRemindersAppModel()
+
+        await model.load(using: appModel)
+        XCTAssertEqual(
+            model.unavailableSelectedLists,
+            [.init(id: "deleted-todo-list", title: "TODO")]
+        )
+
+        model.removeUnavailableList("deleted-todo-list")
+        await model.syncNow(using: appModel)
+
+        XCTAssertEqual(model.selectedListIDs, ["grocery-list"])
+        XCTAssertTrue(model.unavailableSelectedLists.isEmpty)
+        XCTAssertEqual(reminders.incompleteItemsFetchCount, 1)
+        XCTAssertEqual(model.sourceStatus?.state, .fresh)
+        XCTAssertNil(model.errorMessage)
+    }
+
+    @MainActor
+    private func makeRemindersAppModel() -> AppModel {
+        let client = MockTesseraeClient(latency: .milliseconds(0))
+        let model = AppModel(
+            liveClient: client,
+            demoClient: client,
+            credentials: InMemoryCredentialStore(),
+            stateStore: InMemoryCompanionStateStore(),
+            sendPreferences: InMemoryCompanionSendPreferencesStore(),
+            shareQueue: InMemoryShareQueueStore(),
+            linkShareQueue: InMemoryLinkShareQueueStore(),
+            activityThumbnails: InMemoryActivityThumbnailStore(),
+            discovery: StaticDiscoveryService(results: [])
+        )
+        model.activeInstance = TesseraeInstance(
+            id: "home",
+            name: "Home",
+            baseURL: URL(string: "http://tesserae.test")!,
+            serverVersion: "0.240.0",
+            timezone: "UTC",
+            webURL: "/"
+        )
+        model.connectionMode = .live
+        model.capabilities = ServerCapabilities(
+            product: "tesserae",
+            serverVersion: "0.240.0",
+            api: CompanionAPI(version: 1),
+            pairing: PairingCapabilities(
+                supported: true,
+                codeLength: 6,
+                ttlSeconds: 600
+            ),
+            features: [],
+            personalData: PersonalDataCapabilities(sources: ["reminders"]),
+            limits: CompanionLimits(
+                imageUploadBytes: 1,
+                imageMaxEdge: 1,
+                imageContentTypes: ["image/png"],
+                personalDataStaleAfterSeconds: 86_400,
+                personalDataMaxTTLSeconds: 172_800,
+                jobRetentionSeconds: 60,
+                idempotencyRetentionSeconds: 60
+            ),
+            webURL: "/"
+        )
+        return model
+    }
+}
+
+@MainActor
+private final class TestRemindersStore: RemindersAccessing {
+    private(set) var authorizationState: RemindersAuthorizationState = .notDetermined
+    private(set) var incompleteItemsFetchCount = 0
+    private let availableLists: [RemindersListDescriptor]
+
+    var changeNotificationObject: AnyObject {
+        self
+    }
+
+    init(
+        lists: [RemindersListDescriptor],
+        authorizationState: RemindersAuthorizationState = .notDetermined
+    ) {
+        availableLists = lists
+        self.authorizationState = authorizationState
+    }
+
+    func requestFullAccess() async throws -> Bool {
+        authorizationState = .fullAccess
+        return true
+    }
+
+    func lists() -> [RemindersListDescriptor] {
+        availableLists
+    }
+
+    func incompleteItems(in listID: String) async throws -> [ReminderSourceItem] {
+        incompleteItemsFetchCount += 1
+        return []
     }
 }

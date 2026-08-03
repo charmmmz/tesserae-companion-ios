@@ -694,6 +694,7 @@ display model/transport, and observed outcome.
 | D-025 | 2026-08-01 | Use capability-gated normalized photo focus and zoom, resolved by Tesserae into a separate SourceCrop for each target; stage the contract and server adapter before enabling native drag/pinch UI. | Accepted by upstream maintainer |
 | D-026 | 2026-07-31 | Designate Tesserae Companion as the official native iOS app while retaining the existing privacy, advertising, data-use, free-web-feature, repository, and publishing boundaries. | Accepted by both maintainers |
 | D-027 | 2026-08-02 | Use Companion as an opt-in Reminders snapshot bridge under one strict `/personal-data` family; retain only the latest expiring value and keep ingestion separate from rendering until the unified scheduling model settles. | Accepted by upstream maintainer in Discussion #176 |
+| D-028 | 2026-08-03 | Generalize Reminders additively: upload explicitly selected lists through `reminders` with anonymous publication IDs, let widgets select one uploaded list, and retain `reminders.fridge` server-side only for the already published fridge widget. The new Companion and Apple Reminders widget do not fall back or migrate legacy snapshots. | Accepted in Discussion #176 and merged in upstream PR #182; server adapter proposed in Draft PR #183 |
 
 ## 17. Open questions for maintainer review
 

@@ -108,6 +108,7 @@ public struct ServerCapabilities: Codable, Hashable, Sendable {
     public let api: CompanionAPI
     public let pairing: PairingCapabilities
     public let features: Set<String>
+    public let personalData: PersonalDataCapabilities?
     public let limits: CompanionLimits
     public let webURL: String
 
@@ -117,6 +118,7 @@ public struct ServerCapabilities: Codable, Hashable, Sendable {
         api: CompanionAPI,
         pairing: PairingCapabilities,
         features: Set<String>,
+        personalData: PersonalDataCapabilities? = nil,
         limits: CompanionLimits,
         webURL: String
     ) {
@@ -125,6 +127,7 @@ public struct ServerCapabilities: Codable, Hashable, Sendable {
         self.api = api
         self.pairing = pairing
         self.features = features
+        self.personalData = personalData
         self.limits = limits
         self.webURL = webURL
     }
@@ -135,6 +138,7 @@ public struct ServerCapabilities: Codable, Hashable, Sendable {
         case api
         case pairing
         case features
+        case personalData
         case limits
         case webURL = "webUrl"
     }

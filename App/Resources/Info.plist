@@ -32,7 +32,7 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Discover and connect to your Tesserae server on the local network.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
-	<string>Choose a grocery list to send a minimal, expiring snapshot to your Tesserae server.</string>
+	<string>Choose Reminders lists to send a minimal, expiring snapshot to your Tesserae server.</string>
 	<key>TesseraeAppGroupIdentifier</key>
 	<string>group.com.charmmmz.tesseraecompanion</string>
 	<key>TesseraeKeychainAccessGroup</key>

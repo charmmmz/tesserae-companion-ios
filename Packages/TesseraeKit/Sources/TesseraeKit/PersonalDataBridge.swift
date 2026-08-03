@@ -1,13 +1,17 @@
 import Foundation
 
 public enum PersonalDataSourceID: String, Codable, CaseIterable, Hashable, Sendable {
+    case reminders
     case remindersFridge = "reminders.fridge"
+}
 
-    public var capability: String {
-        switch self {
-        case .remindersFridge:
-            "personal_data_reminders"
-        }
+public struct PersonalDataCapabilities: Codable, Hashable, Sendable {
+    /// Raw source ids stay forward-compatible when a newer server advertises
+    /// Calendar, Health, or another schema this app version does not know yet.
+    public let sources: Set<String>
+
+    public init(sources: Set<String>) {
+        self.sources = sources
     }
 }
 
@@ -48,29 +52,62 @@ public struct ReminderSnapshotItem: Codable, Identifiable, Hashable, Sendable {
         self.priority = priority
         self.completed = completed
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case dueDate
+        case priority
+        case completed
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(title, forKey: .title)
+        if let dueDate {
+            try container.encode(dueDate, forKey: .dueDate)
+        } else {
+            try container.encodeNil(forKey: .dueDate)
+        }
+        try container.encode(priority, forKey: .priority)
+        try container.encode(completed, forKey: .completed)
+    }
 }
 
-public struct RemindersFridgeData: Codable, Hashable, Sendable {
+public struct ReminderListSnapshot: Codable, Identifiable, Hashable, Sendable {
+    public let id: String
+    public let title: String
     public let items: [ReminderSnapshotItem]
 
-    public init(items: [ReminderSnapshotItem]) {
+    public init(id: String, title: String, items: [ReminderSnapshotItem]) {
+        self.id = id
+        self.title = title
         self.items = items
     }
 }
 
-public struct RemindersFridgeSnapshot: Codable, Hashable, Sendable {
+public struct RemindersData: Codable, Hashable, Sendable {
+    public let lists: [ReminderListSnapshot]
+
+    public init(lists: [ReminderListSnapshot]) {
+        self.lists = lists
+    }
+}
+
+public struct RemindersSnapshot: Codable, Hashable, Sendable {
     public let version: PersonalDataSnapshotVersion
     public let sourceID: PersonalDataSourceID
     public let generatedAt: Date
     public let expiresAt: Date
-    public let data: RemindersFridgeData
+    public let data: RemindersData
 
     public init(
         version: PersonalDataSnapshotVersion = .v1,
-        sourceID: PersonalDataSourceID = .remindersFridge,
+        sourceID: PersonalDataSourceID = .reminders,
         generatedAt: Date,
         expiresAt: Date,
-        data: RemindersFridgeData
+        data: RemindersData
     ) {
         self.version = version
         self.sourceID = sourceID
@@ -128,6 +165,6 @@ public struct PersonalDataStatusResponse: Codable, Hashable, Sendable {
 
 public extension ServerCapabilities {
     func supports(personalDataSource sourceID: PersonalDataSourceID) -> Bool {
-        features.contains(sourceID.capability)
+        personalData?.sources.contains(sourceID.rawValue) == true
     }
 }

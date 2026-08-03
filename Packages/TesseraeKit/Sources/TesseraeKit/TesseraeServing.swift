@@ -72,8 +72,8 @@ public protocol TesseraeServing: Sendable {
     func fetchPersonalDataStatus(
         instance: TesseraeInstance
     ) async throws -> PersonalDataStatusResponse
-    func putRemindersFridgeSnapshot(
-        _ snapshot: RemindersFridgeSnapshot,
+    func putRemindersSnapshot(
+        _ snapshot: RemindersSnapshot,
         instance: TesseraeInstance
     ) async throws -> PersonalDataSourceStatus
     func deletePersonalData(

@@ -12,8 +12,10 @@
 This is the server surface used by the native Tesserae companion. It
 complements the web UI rather than replacing it. The five base features form
 the compatibility floor; `previews`, `history`, `image_url_push`,
-`webpage_push`, `image_framing`, and `personal_data_reminders` are additive
-capabilities.
+`webpage_push`, and `image_framing` are additive capabilities. The legacy
+`personal_data_reminders` feature remains for the published fridge widget;
+new personal-data schemas are advertised directly through
+`personal_data.sources` rather than one feature flag per source.
 
 The proposal reflects the maintainer reviews in
 [Discussion #147](https://github.com/dmellok/tesserae/discussions/147),
@@ -157,14 +159,19 @@ Contract 0.6.0 defines independently capability-gated photo framing:
 
 Contract 0.7.0 adds the first privacy-preserving personal-data source:
 
-- `personal_data_reminders` advertises the strict `reminders.fridge` snapshot;
+- `personal_data_reminders` remains a legacy server capability for the already
+  published `reminders_fridge` widget;
+- `personal_data.sources` lists the strict source IDs accepted by the server;
+  this Companion requires grouped `reminders` and does not implement a legacy
+  fallback;
 - `limits.personal_data_stale_after_seconds` tells clients when the server will
   mark a snapshot stale;
 - `limits.personal_data_max_ttl_seconds` bounds the required expiry without
   making the app hard-code a retention policy;
 - paired clients need the separate `personal_data:write` scope;
 - capability support does not grant EventKit permission or enable upload. The
-  user must separately authorize Reminders, select a list, and enable sync.
+  user must separately authorize Reminders, select one or more lists, and
+  enable sync.
 
 The first fixtures use a 24-hour stale threshold and 48-hour maximum TTL as a
 reviewable proposal. Both values remain server-advertised so the accepted
@@ -183,23 +190,37 @@ The iPhone remains authoritative for data behind Apple frameworks. Contract
 0.7.0 covers only the first Reminders slice:
 
 ```text
-selected Reminders list
+selected Reminders lists
   -> local filtering and normalization
   -> minimal expiring snapshot
   -> paired Tesserae Server store
   -> pull-based widget at its next dashboard render
 ```
 
-`PUT /personal-data/reminders.fridge` atomically replaces one complete latest
-snapshot. Its strict payload contains only opaque item ID, title, optional due
-date, normalized priority, and an incomplete marker. It never contains notes,
-URLs, alarms, locations, or unrelated lists. An older generated timestamp is
-rejected so a delayed background retry cannot overwrite newer data; an exact
-retry is idempotent without an `Idempotency-Key`.
+`PUT /personal-data/reminders` atomically replaces one complete latest snapshot
+containing up to 20 selected list groups and 200 incomplete items in aggregate.
+Each list has a locally generated opaque publication UUID and its display
+title; the EventKit calendar identifier is never uploaded. Each item contains
+only an opaque ID, title, optional due date, normalized priority, and an
+incomplete marker. Notes, URLs, alarms, locations, and unselected lists are
+excluded. An older generated timestamp is rejected so a delayed background
+retry cannot overwrite newer data; an exact retry is idempotent without an
+`Idempotency-Key`.
+
+List publication IDs must be unique within one snapshot. Duplicate IDs or more
+than 200 items across all lists are rejected with `400 invalid_snapshot`; the
+server never silently truncates an upload. Once sync is enabled, `lists: []` is
+a valid atomic replacement meaning no lists are currently published. The
+source remains fresh and widgets show their selected-list-unavailable state.
+`DELETE` is reserved for explicitly disabling the Reminders source.
+
+`PUT /personal-data/reminders.fridge` remains server-side compatibility for the
+already published `reminders_fridge` widget. This Companion neither writes that
+source nor migrates it into grouped `reminders`.
 
 The store retains only the latest value. Raw values are deleted at the required
 `expires_at` deadline or immediately after
-`DELETE /personal-data/reminders.fridge`. `GET /personal-data/status` returns
+the matching `DELETE /personal-data/{source_id}`. `GET /personal-data/status` returns
 only source ID, fresh/stale/expired state, and generated/stale/expiry times. It
 is deliberately not a read API for snapshot contents.
 
@@ -219,9 +240,9 @@ class. Deleting a source does not retroactively alter an already rendered
 composition.
 
 Calendar remains a later source under this family. HealthKit is not implied by
-`personal_data_reminders`: it requires a separate consent design, capability,
-and maintainer decision, and would carry daily aggregates rather than raw
-samples.
+the Reminders source: it requires a separate consent design, advertised source
+schema, and maintainer decision, and would carry daily aggregates rather than
+raw samples.
 
 ## Photo framing
 
@@ -426,11 +447,15 @@ internal web routes.
 
 The client includes a live `URLSession` transport and the base write path has
 been verified against an edge Tesserae server and physical display. Contract
-0.4.1, 0.5.0, accepted 0.6.0, and proposed 0.7.0 extensions remain
+0.4.1, 0.5.0, accepted 0.6.0, and accepted 0.7.0 extensions remain
 capability-gated until their matching server implementations and compatibility
-evidence are recorded. For 0.7.0, the contract, fixtures, models, and transport
-precede EventKit UI and background sync; the maintainer owns the server adapter,
-snapshot store, and bundled fresh/stale/expired widget.
+evidence are recorded. For 0.7.0, the implemented EventKit UI supports explicit
+list selection, manual refresh, and process-lifetime change notifications with
+foreground delivery and debouncing. Those notifications are not a guaranteed
+background wake mechanism. The generic server adapter and latest-only snapshot
+store are proposed in upstream Draft PR
+[#183](https://github.com/dmellok/tesserae/pull/183); the separately published
+Apple Reminders widget remains an opt-in community package.
 
 ## Contract checks
 
