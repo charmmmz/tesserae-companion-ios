@@ -48,7 +48,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.charmmmz.tesseraecompanion
         PRODUCT_NAME: Tesserae Companion
-        MARKETING_VERSION: 0.6.0
+        MARKETING_VERSION: 0.5.2
         CURRENT_PROJECT_VERSION: 7
         DEVELOPMENT_TEAM: 3MSS7DJGVR
         CODE_SIGN_STYLE: Automatic
@@ -94,7 +94,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.charmmmz.tesseraecompanion.share
         PRODUCT_NAME: TesseraeShare
-        MARKETING_VERSION: 0.6.0
+        MARKETING_VERSION: 0.5.2
         CURRENT_PROJECT_VERSION: 7
         DEVELOPMENT_TEAM: 3MSS7DJGVR
         CODE_SIGN_STYLE: Automatic

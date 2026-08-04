@@ -11,13 +11,7 @@ capabilities.
 
 ## [Unreleased]
 
-### Fixed
-
-- Explicitly user-initiated Photo, Link, Dashboard, Share Sheet, and Resend
-  actions now bypass quiet hours automatically, matching Tesserae's manual-send
-  behavior while Scheduler, Rotation, and Shortcuts automations remain quiet.
-
-## [0.6.0] - 2026-08-04
+## [0.5.2] - 2026-08-05
 
 ### Added
 
@@ -28,6 +22,9 @@ capabilities.
 
 ### Fixed
 
+- Explicitly user-initiated Photo, Link, Dashboard, Share Sheet, and Resend
+  actions now bypass quiet hours automatically, matching Tesserae's manual-send
+  behavior while Scheduler, Rotation, and Shortcuts automations remain quiet.
 - Dashboard lifted cards and the shared Dashboard/Display reorder labels now
   use their rounded outline as the drag-preview shape, removing the pale
   rectangular edge around Dashboard drags.
@@ -521,8 +518,8 @@ capabilities.
 - Required Keychain storage, scoped credentials, revocation, redacted
   diagnostics, direct-to-instance photo transfer, and idempotent writes.
 
-[Unreleased]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.6.0...HEAD
-[0.6.0]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.5.1...v0.6.0
+[Unreleased]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.3.0...v0.4.0
