@@ -26,8 +26,6 @@
 "Fit" = "适应";
 "Fill" = "填充";
 "Displays" = "显示屏";
-"Override quiet hours" = "忽略静默时段";
-"Leave this off unless the shared item should be sent immediately." = "除非需要立即发送，否则请保持关闭。";
 "Retry Now" = "立即重试";
 "Send" = "发送";
 "The image is saved for up to 24 hours and the app will retry with the same request key." = "图片最多保留 24 小时，主 App 会使用相同的请求键重试。";

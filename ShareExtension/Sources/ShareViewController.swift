@@ -46,7 +46,6 @@ private final class ShareComposerModel: ObservableObject {
     @Published var snapshot: CompanionSnapshot?
     @Published var selectedDeviceIDs: Set<String> = []
     @Published var fit: ImageFitMode = .fit
-    @Published var overrideQuietHours = false
     @Published var imageByteCount = 0
     @Published var previewImage: UIImage?
     @Published var contentKind: ContentKind?
@@ -297,7 +296,7 @@ private final class ShareComposerModel: ObservableObject {
             contentType: contentType,
             fit: fit,
             deviceIDs: Array(selectedDeviceIDs).sorted(),
-            overrideQuietHours: overrideQuietHours
+            overrideQuietHours: ManualSendPolicy.overridesQuietHours
         )
         do {
             if queuedRequest == nil {
@@ -357,7 +356,7 @@ private final class ShareComposerModel: ObservableObject {
             kind: linkKind,
             fit: fit,
             deviceIDs: Array(selectedDeviceIDs).sorted(),
-            overrideQuietHours: overrideQuietHours
+            overrideQuietHours: ManualSendPolicy.overridesQuietHours
         )
         do {
             if queuedLinkRequest == nil {
@@ -670,7 +669,6 @@ private struct ShareComposerView: View {
                 contentCard
                 layoutCard
                 displaysCard
-                quietHoursCard
 
                 if let errorMessage = model.errorMessage {
                     Label(errorMessage, systemImage: "exclamationmark.triangle")
@@ -898,19 +896,6 @@ private struct ShareComposerView: View {
                 }
                 .buttonStyle(.plain)
             }
-        }
-        .tesseraeCard()
-    }
-
-    private var quietHoursCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Toggle(
-                "Override quiet hours",
-                isOn: $model.overrideQuietHours
-            )
-            Text("Leave this off unless the shared item should be sent immediately.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
         }
         .tesseraeCard()
     }

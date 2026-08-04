@@ -1087,6 +1087,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         previewScreenshot.lifetime = .keepAlways
         add(previewScreenshot)
         let previewSendButton = app.buttons["Send to Displays"]
+        XCTAssertFalse(app.switches["send-override-quiet-hours"].exists)
         XCTAssertTrue(previewSendButton.isEnabled)
         let previewSendButtonHeight = previewSendButton.frame.height
         previewSendButton.tap()

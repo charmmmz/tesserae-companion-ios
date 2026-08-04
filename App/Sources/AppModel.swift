@@ -701,7 +701,7 @@ final class AppModel {
             let job = try await activeClient.pushDashboard(
                 id: dashboard.id,
                 deviceIDs: deviceIDs,
-                overrideQuietHours: false,
+                overrideQuietHours: ManualSendPolicy.overridesQuietHours,
                 idempotencyKey: UUID().uuidString,
                 instance: activeInstance
             )
@@ -795,7 +795,7 @@ final class AppModel {
                 fit: fit,
                 framing: framing,
                 deviceIDs: deviceIDs,
-                overrideQuietHours: false,
+                overrideQuietHours: ManualSendPolicy.overridesQuietHours,
                 idempotencyKey: UUID().uuidString,
                 instance: activeInstance
             )
@@ -839,7 +839,7 @@ final class AppModel {
                     url: url,
                     fit: fit,
                     deviceIDs: deviceIDs,
-                    overrideQuietHours: false,
+                    overrideQuietHours: ManualSendPolicy.overridesQuietHours,
                     idempotencyKey: idempotencyKey,
                     instance: activeInstance
                 )
@@ -849,7 +849,7 @@ final class AppModel {
                     fit: fit,
                     viewportW: nil,
                     deviceIDs: deviceIDs,
-                    overrideQuietHours: false,
+                    overrideQuietHours: ManualSendPolicy.overridesQuietHours,
                     idempotencyKey: idempotencyKey,
                     instance: activeInstance
                 )
@@ -906,7 +906,7 @@ final class AppModel {
         do {
             let job = try await activeClient.resendHistory(
                 id: item.id,
-                overrideQuietHours: false,
+                overrideQuietHours: ManualSendPolicy.overridesQuietHours,
                 idempotencyKey: UUID().uuidString,
                 instance: activeInstance
             )

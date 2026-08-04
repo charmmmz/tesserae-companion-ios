@@ -434,8 +434,10 @@ Job lifecycle and business outcome are intentionally separate:
 - `history_event_ids`, when present, precisely correlate a terminal Job with
   the canonical History rows it created.
 
-The app and Shortcuts respect quiet hours by default. Only an explicit
-user-initiated Send/Share action may request an override.
+Companion's explicit user-initiated Send, Share, Dashboard Push, and Resend
+actions request an override. Shortcuts continue to respect quiet hours by
+default because they may run as automations, and expose an explicit override
+parameter when immediate delivery is intended.
 
 ## Client and server implementation boundary
 

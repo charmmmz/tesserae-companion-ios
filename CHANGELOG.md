@@ -11,6 +11,12 @@ capabilities.
 
 ## [Unreleased]
 
+### Fixed
+
+- Explicitly user-initiated Photo, Link, Dashboard, Share Sheet, and Resend
+  actions now bypass quiet hours automatically, matching Tesserae's manual-send
+  behavior while Scheduler, Rotation, and Shortcuts automations remain quiet.
+
 ## [0.6.0] - 2026-08-04
 
 ### Added
