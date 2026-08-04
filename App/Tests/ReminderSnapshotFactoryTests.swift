@@ -541,6 +541,147 @@ final class ReminderSnapshotFactoryTests: XCTestCase {
 }
 
 @MainActor
+final class AppModelOrderingTests: XCTestCase {
+    private let displayOrderKey = "display-order.demo-home"
+    private let collapsedDashboardSectionsKey =
+        "dashboard-collapsed-sections.demo-home"
+
+    override func setUp() {
+        super.setUp()
+        UserDefaults.standard.removeObject(forKey: displayOrderKey)
+        UserDefaults.standard.removeObject(
+            forKey: collapsedDashboardSectionsKey
+        )
+    }
+
+    override func tearDown() {
+        UserDefaults.standard.removeObject(forKey: displayOrderKey)
+        UserDefaults.standard.removeObject(
+            forKey: collapsedDashboardSectionsKey
+        )
+        super.tearDown()
+    }
+
+    func testDisplayOrderSurvivesRefreshAndReconnect() async {
+        let model = makeAppModel()
+
+        await model.connectDemo()
+        XCTAssertEqual(
+            model.sortedDisplays.map(\.id),
+            ["e1004-desk", "picpak-kitchen"]
+        )
+
+        model.moveDisplay("picpak-kitchen", to: 0)
+        XCTAssertEqual(
+            model.sortedDisplays.map(\.id),
+            ["picpak-kitchen", "e1004-desk"]
+        )
+
+        await model.refreshDisplays()
+        XCTAssertEqual(
+            model.sortedDisplays.map(\.id),
+            ["picpak-kitchen", "e1004-desk"]
+        )
+
+        let restoredModel = makeAppModel()
+        await restoredModel.connectDemo()
+        XCTAssertEqual(
+            restoredModel.sortedDisplays.map(\.id),
+            ["picpak-kitchen", "e1004-desk"]
+        )
+    }
+
+    func testCollapsedDashboardSectionsSurviveReconnect() async {
+        let model = makeAppModel()
+
+        await model.connectDemo()
+        model.setDashboardSectionCollapsed(
+            "display-picpak-kitchen",
+            isCollapsed: true
+        )
+        model.setDashboardSectionCollapsed("shared", isCollapsed: true)
+
+        let restoredModel = makeAppModel()
+        await restoredModel.connectDemo()
+        XCTAssertEqual(
+            restoredModel.collapsedDashboardSectionIDs,
+            ["display-picpak-kitchen", "shared"]
+        )
+
+        restoredModel.setDashboardSectionCollapsed(
+            "display-picpak-kitchen",
+            isCollapsed: false
+        )
+        XCTAssertEqual(
+            restoredModel.collapsedDashboardSectionIDs,
+            ["shared"]
+        )
+    }
+
+    private func makeAppModel() -> AppModel {
+        let client = MockTesseraeClient(latency: .milliseconds(0))
+        return AppModel(
+            liveClient: client,
+            demoClient: client,
+            credentials: InMemoryCredentialStore(),
+            stateStore: InMemoryCompanionStateStore(),
+            sendPreferences: InMemoryCompanionSendPreferencesStore(),
+            shareQueue: InMemoryShareQueueStore(),
+            linkShareQueue: InMemoryLinkShareQueueStore(),
+            activityThumbnails: InMemoryActivityThumbnailStore(),
+            discovery: StaticDiscoveryService(results: [])
+        )
+    }
+}
+
+@MainActor
+final class AppModelDashboardPreviewTests: XCTestCase {
+    func testDashboardPreviewsRemainScopedToTheirTargetDisplay() async throws {
+        let client = MockTesseraeClient(latency: .milliseconds(0))
+        let model = AppModel(
+            liveClient: client,
+            demoClient: client,
+            credentials: InMemoryCredentialStore(),
+            stateStore: InMemoryCompanionStateStore(),
+            sendPreferences: InMemoryCompanionSendPreferencesStore(),
+            shareQueue: InMemoryShareQueueStore(),
+            linkShareQueue: InMemoryLinkShareQueueStore(),
+            activityThumbnails: InMemoryActivityThumbnailStore(),
+            discovery: StaticDiscoveryService(results: [])
+        )
+
+        await model.connectDemo()
+        let dashboard = try XCTUnwrap(
+            model.dashboards.first { $0.id == "photo-frame" }
+        )
+
+        await model.loadDashboardPreview(
+            dashboard,
+            deviceID: "picpak-kitchen"
+        )
+        await model.loadDashboardPreview(
+            dashboard,
+            deviceID: "e1004-desk"
+        )
+
+        XCTAssertEqual(
+            model.dashboardPreview(
+                for: dashboard,
+                deviceID: "picpak-kitchen"
+            )?.eTag,
+            "\"dashboard-preview-photo-frame-picpak-kitchen\""
+        )
+        XCTAssertEqual(
+            model.dashboardPreview(
+                for: dashboard,
+                deviceID: "e1004-desk"
+            )?.eTag,
+            "\"dashboard-preview-photo-frame-e1004-desk\""
+        )
+    }
+}
+
+@MainActor
 private final class TestRemindersStore: RemindersAccessing {
     private(set) var authorizationState: RemindersAuthorizationState = .notDetermined
     private(set) var incompleteItemsFetchCount = 0
