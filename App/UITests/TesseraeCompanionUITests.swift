@@ -236,11 +236,10 @@ final class TesseraeCompanionUITests: XCTestCase {
         waitForExpectations(timeout: 2)
 
         group.tap()
-        expectation(
-            for: NSPredicate(format: "isHittable == true"),
-            evaluatedWith: pantryPushButton
-        )
-        waitForExpectations(timeout: 2)
+        for _ in 0..<4 where !pantryPushButton.isHittable {
+            app.swipeUp()
+        }
+        XCTAssertTrue(pantryPushButton.isHittable)
     }
 
     func testDemoJourneyAcrossMainTabs() {
@@ -335,11 +334,10 @@ final class TesseraeCompanionUITests: XCTestCase {
         waitForExpectations(timeout: 2)
         kitchenDashboardGroup.tap()
         XCTAssertEqual(kitchenDashboardGroup.value as? String, "Expanded")
-        expectation(
-            for: NSPredicate(format: "isHittable == true"),
-            evaluatedWith: collapsedPantryPushButton
-        )
-        waitForExpectations(timeout: 2)
+        for _ in 0..<4 where !collapsedPantryPushButton.isHittable {
+            app.swipeUp()
+        }
+        XCTAssertTrue(collapsedPantryPushButton.isHittable)
         let dashboardPreviewButton = app.buttons[
             "dashboard-preview-button-pantry-display-picpak-kitchen"
         ]
@@ -350,11 +348,6 @@ final class TesseraeCompanionUITests: XCTestCase {
             evaluatedWith: dashboardPreviewButton
         )
         waitForExpectations(timeout: 2)
-        let followingDashboardPreviewButton = app.buttons[
-            "dashboard-preview-button-photo-frame-display-picpak-kitchen"
-        ]
-        XCTAssertTrue(followingDashboardPreviewButton.exists)
-        let collapsedFollowingDashboardY = followingDashboardPreviewButton.frame.minY
         XCTAssertEqual(
             dashboardPreviewButton.value as? String,
             "Collapsed"
@@ -364,10 +357,13 @@ final class TesseraeCompanionUITests: XCTestCase {
             dashboardPreviewButton.value as? String,
             "Expanded"
         )
-        XCTAssertGreaterThan(
-            followingDashboardPreviewButton.frame.minY,
-            collapsedFollowingDashboardY
+        let expandedDashboardPreview = app.descendants(matching: .any)[
+            "dashboard-preview-expanded-pantry-display-picpak-kitchen"
+        ]
+        XCTAssertTrue(
+            expandedDashboardPreview.waitForExistence(timeout: 2)
         )
+        XCTAssertGreaterThan(expandedDashboardPreview.frame.height, 0)
         let expandedDashboardScreenshot = XCTAttachment(
             screenshot: app.screenshot()
         )
@@ -845,7 +841,8 @@ final class TesseraeCompanionUITests: XCTestCase {
 
         XCTAssertTrue(app.staticTexts["Tesserae 伴侣"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["使用演示数据体验"].exists)
-        XCTAssertTrue(app.buttons["扫描配对二维码"].exists)
+        XCTAssertTrue(app.buttons["输入服务器地址"].exists)
+        XCTAssertFalse(app.buttons["扫描配对二维码"].exists)
 
         app.buttons["使用演示数据体验"].tap()
         let tabBar = app.tabBars.firstMatch
@@ -913,19 +910,31 @@ final class TesseraeCompanionUITests: XCTestCase {
         )
         XCTAssertTrue(previewPicker.isEnabled)
         let previewPickerFrame = previewPicker.frame
+        let previewWasKitchen = previewPicker.label.contains("Kitchen")
         previewPicker.tap()
-        let kitchenPreviewOption = app.buttons["Kitchen"]
-        XCTAssertTrue(kitchenPreviewOption.waitForExistence(timeout: 2))
-        kitchenPreviewOption.tap()
+        let otherPreviewOption = app.buttons[
+            previewWasKitchen
+                ? "send-preview-display-e1004-desk"
+                : "send-preview-display-picpak-kitchen"
+        ]
+        XCTAssertTrue(otherPreviewOption.waitForExistence(timeout: 2))
+        otherPreviewOption.tap()
         XCTAssertEqual(
             previewPicker.frame.maxX,
             previewPickerFrame.maxX,
             accuracy: 1
         )
-        XCTAssertGreaterThan(
-            previewPicker.frame.width,
-            previewPickerFrame.width
-        )
+        if previewWasKitchen {
+            XCTAssertLessThan(
+                previewPicker.frame.width,
+                previewPickerFrame.width
+            )
+        } else {
+            XCTAssertGreaterThan(
+                previewPicker.frame.width,
+                previewPickerFrame.width
+            )
+        }
         let targetListYBeforeKitchenToggle = targetList.frame.minY
         kitchenTarget.tap()
         XCTAssertEqual(
@@ -937,7 +946,9 @@ final class TesseraeCompanionUITests: XCTestCase {
         kitchenTarget.tap()
         XCTAssertTrue(previewPicker.isEnabled)
         previewPicker.tap()
-        let deskPreviewOption = app.buttons["Desk"]
+        let deskPreviewOption = app.buttons[
+            "send-preview-display-e1004-desk"
+        ]
         XCTAssertTrue(deskPreviewOption.waitForExistence(timeout: 2))
         deskPreviewOption.tap()
 

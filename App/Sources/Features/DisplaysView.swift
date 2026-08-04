@@ -24,16 +24,17 @@ struct DisplaysView: View {
         ScrollView {
             LazyVStack(spacing: 14) {
                 ForEach(model.sortedDisplays) { display in
-                    Button {
+                    DisplayCard(
+                        display: display,
+                        preview: model.displayPreviews[display.id]
+                    )
+                    .contentShape(Rectangle())
+                    .onTapGesture {
                         selectedDisplay = display
-                    } label: {
-                        DisplayCard(
-                            display: display,
-                            preview: model.displayPreviews[display.id]
-                        )
                     }
-                    .buttonStyle(.plain)
+                    .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("display-card-\(display.id)")
+                    .accessibilityAddTraits(.isButton)
                     .onDrag {
                         draggedDisplayID = display.id
                         return NSItemProvider(object: display.id as NSString)
@@ -70,7 +71,7 @@ struct DisplaysView: View {
                         value: model.sortedDisplays.map(\.id)
                     )
                     .accessibilityHint(
-                        "Long press and drag to reorder."
+                        "Tap for details. Long press and drag to reorder."
                     )
                     .task(
                         id: display.previewRefreshID(

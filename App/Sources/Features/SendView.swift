@@ -325,6 +325,9 @@ struct SendView: View {
                             : "circle"
                     )
                 }
+                .accessibilityIdentifier(
+                    "send-preview-display-\(display.id)"
+                )
             }
         } label: {
             HStack(spacing: 5) {
