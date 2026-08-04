@@ -11,6 +11,8 @@ capabilities.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-04
+
 ### Changed
 
 - Display cards, Dashboard display-group headers, and Display drag previews now
@@ -38,6 +40,12 @@ capabilities.
   skip uploading unchanged content while the server snapshot remains fresh,
   and republish when content changes or the snapshot is missing or stale;
   Sync Now continues to force an upload.
+
+### Fixed
+
+- Display cards now distinguish a tap for details from a long-press drag, so
+  display ordering can be changed reliably without the detail button consuming
+  the drag gesture.
 
 ## [0.5.0] - 2026-08-03
 
@@ -483,7 +491,8 @@ capabilities.
 - Required Keychain storage, scoped credentials, revocation, redacted
   diagnostics, direct-to-instance photo transfer, and idempotent writes.
 
-[Unreleased]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.2.0...v0.3.0

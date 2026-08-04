@@ -33,7 +33,7 @@ targets:
         NSBonjourServices:
           - _tesserae._tcp
         NSLocalNetworkUsageDescription: Discover and connect to your Tesserae server on the local network.
-        NSRemindersFullAccessUsageDescription: Choose a grocery list to send a minimal, expiring snapshot to your Tesserae server.
+        NSRemindersFullAccessUsageDescription: Choose Reminders lists to send a minimal, expiring snapshot to your Tesserae server.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         TesseraeAppGroupIdentifier: group.com.charmmmz.tesseraecompanion
@@ -48,8 +48,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.charmmmz.tesseraecompanion
         PRODUCT_NAME: Tesserae Companion
-        MARKETING_VERSION: 0.4.0
-        CURRENT_PROJECT_VERSION: 4
+        MARKETING_VERSION: 0.5.1
+        CURRENT_PROJECT_VERSION: 6
         DEVELOPMENT_TEAM: 3MSS7DJGVR
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: App/Resources/TesseraeCompanion.entitlements
@@ -94,8 +94,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.charmmmz.tesseraecompanion.share
         PRODUCT_NAME: TesseraeShare
-        MARKETING_VERSION: 0.4.0
-        CURRENT_PROJECT_VERSION: 4
+        MARKETING_VERSION: 0.5.1
+        CURRENT_PROJECT_VERSION: 6
         DEVELOPMENT_TEAM: 3MSS7DJGVR
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: ShareExtension/Resources/TesseraeShare.entitlements
