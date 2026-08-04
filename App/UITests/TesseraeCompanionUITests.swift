@@ -201,7 +201,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         )
     }
 
-    func testDashboardGroupCollapseDisablesHiddenCards() {
+    func testDashboardGroupCollapseAndExpand() {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launch()
@@ -211,6 +211,12 @@ final class TesseraeCompanionUITests: XCTestCase {
         )
         app.buttons["Explore with Demo Data"].tap()
         app.tabBars.firstMatch.buttons["Dashboards"].tap()
+
+        let layoutToggle = app.buttons["dashboard-layout-toggle"]
+        XCTAssertTrue(layoutToggle.waitForExistence(timeout: 2))
+        if layoutToggle.label == "Use Card View" {
+            layoutToggle.tap()
+        }
 
         let group = app.buttons[
             "dashboard-section-toggle-display-picpak-kitchen"
@@ -228,14 +234,44 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(pantryTitle.isHittable)
         XCTAssertTrue(pantryPushButton.isHittable)
 
-        group.tap()
-        expectation(
-            for: NSPredicate(format: "isHittable == false"),
-            evaluatedWith: pantryPushButton
+        let pantryPreviewButton = app.buttons[
+            "dashboard-preview-button-pantry-display-picpak-kitchen"
+        ]
+        XCTAssertTrue(pantryPreviewButton.waitForExistence(timeout: 2))
+
+        layoutToggle.tap()
+        XCTAssertEqual(layoutToggle.label, "Use Card View")
+        XCTAssertFalse(pantryPreviewButton.exists)
+        XCTAssertTrue(pantryPushButton.isHittable)
+        let listLayoutScreenshot = XCTAttachment(screenshot: app.screenshot())
+        listLayoutScreenshot.name = "Dashboard List Layout"
+        listLayoutScreenshot.lifetime = .keepAlways
+        add(listLayoutScreenshot)
+
+        pantryPushButton.tap()
+        XCTAssertTrue(
+            app.staticTexts["dashboard-push-sheet-title"]
+                .waitForExistence(timeout: 2)
         )
-        waitForExpectations(timeout: 2)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["dashboard-push-preview-pantry"]
+                .waitForExistence(timeout: 2)
+        )
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(layoutToggle.waitForExistence(timeout: 2))
+
+        layoutToggle.tap()
+        XCTAssertEqual(layoutToggle.label, "Use List View")
+        XCTAssertTrue(pantryPreviewButton.waitForExistence(timeout: 2))
 
         group.tap()
+        XCTAssertEqual(group.value as? String, "Collapsed")
+        XCTAssertFalse(
+            app.staticTexts["dashboard-push-sheet-title"].exists
+        )
+
+        group.tap()
+        XCTAssertEqual(group.value as? String, "Expanded")
         for _ in 0..<4 where !pantryPushButton.isHittable {
             app.swipeUp()
         }
@@ -310,6 +346,11 @@ final class TesseraeCompanionUITests: XCTestCase {
         assertPreview(deskPreview, hasAspectRatio: 1_200.0 / 1_600.0)
 
         tabBar.buttons["Dashboards"].tap()
+        let dashboardLayoutToggle = app.buttons["dashboard-layout-toggle"]
+        XCTAssertTrue(dashboardLayoutToggle.waitForExistence(timeout: 2))
+        if dashboardLayoutToggle.label == "Use Card View" {
+            dashboardLayoutToggle.tap()
+        }
         let kitchenDashboardGroup = app.buttons[
             "dashboard-section-toggle-display-picpak-kitchen"
         ]
@@ -327,11 +368,9 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(pantryTitle.waitForExistence(timeout: 2))
         kitchenDashboardGroup.tap()
         XCTAssertEqual(kitchenDashboardGroup.value as? String, "Collapsed")
-        expectation(
-            for: NSPredicate(format: "isHittable == false"),
-            evaluatedWith: collapsedPantryPushButton
+        XCTAssertFalse(
+            app.staticTexts["dashboard-push-sheet-title"].exists
         )
-        waitForExpectations(timeout: 2)
         kitchenDashboardGroup.tap()
         XCTAssertEqual(kitchenDashboardGroup.value as? String, "Expanded")
         for _ in 0..<4 where !collapsedPantryPushButton.isHittable {

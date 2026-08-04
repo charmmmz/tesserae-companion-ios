@@ -11,6 +11,28 @@ capabilities.
 
 ## [Unreleased]
 
+### Added
+
+- Dashboards can now switch between the existing preview-card layout and a
+  compact, remembered list layout that hides artwork and keeps Push on the
+  trailing edge of each row. Push confirmation still loads and shows the
+  target-specific preview from either layout.
+
+### Fixed
+
+- Dashboard lifted cards and the shared Dashboard/Display reorder labels now
+  use their rounded outline as the drag-preview shape, removing the pale
+  rectangular edge around Dashboard drags.
+- Expanding Dashboard groups with many cards now keeps their view hierarchy
+  warm, avoids repeated row-order work and full-group alpha masking, and
+  defers preview refresh work until after the transition, reducing animation
+  hitches while hidden card controls remain unable to receive taps.
+- Dashboard groups now switch their content and disclosure state immediately,
+  avoiding animated frame sequences when expanding or collapsing sections with
+  many cards.
+- Dashboard logos now use a consistent icon slot and vertical alignment with
+  their names in both card and list layouts.
+
 ## [0.5.1] - 2026-08-04
 
 ### Changed

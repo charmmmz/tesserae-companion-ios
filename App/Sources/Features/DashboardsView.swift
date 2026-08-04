@@ -23,6 +23,11 @@ private struct DashboardSection: Identifiable {
     let dashboards: [DashboardSummary]
 }
 
+private enum DashboardLayoutMode: String {
+    case cards
+    case list
+}
+
 private struct DashboardPushContext: Identifiable {
     enum Scope {
         case display(DisplaySummary)
@@ -67,11 +72,6 @@ private struct DashboardPushContext: Identifiable {
     }
 }
 
-@MainActor
-private final class DashboardSectionCleanupCoordinator {
-    var tasks: [String: Task<Void, Never>] = [:]
-}
-
 struct DashboardsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
@@ -80,9 +80,8 @@ struct DashboardsView: View {
     @State private var expandedOccurrenceID: DashboardOccurrenceID?
     @State private var dashboardToPush: DashboardPushContext?
     @State private var sectionContentHeights: [String: CGFloat] = [:]
-    @State private var retainedSectionContentIDs: Set<String> = []
-    @State private var sectionCleanupCoordinator =
-        DashboardSectionCleanupCoordinator()
+    @AppStorage("dashboardLayoutMode")
+    private var layoutMode = DashboardLayoutMode.cards
     private let previewCanvasSize = CGSize(width: 112, height: 118)
 
     let isActive: Bool
@@ -134,110 +133,116 @@ struct DashboardsView: View {
     }
 
     var body: some View {
+        let sections = dashboardSections
+        let dashboardOrder = sections.flatMap(\.dashboards).map(\.id)
+
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
-                ForEach(dashboardSections) { section in
+                ForEach(sections) { section in
                     let isCollapsed = model.collapsedDashboardSectionIDs.contains(
                         section.id
                     )
-                    let rendersContent = !isCollapsed
-                        || retainedSectionContentIDs.contains(section.id)
 
                     VStack(alignment: .leading, spacing: 0) {
                         dashboardSectionHeader(section)
 
-                        if rendersContent {
-                            VStack(alignment: .leading, spacing: 10) {
-                                ForEach(section.dashboards) { dashboard in
-                                    let occurrenceID = DashboardOccurrenceID(
-                                        sectionID: section.id,
-                                        dashboardID: dashboard.id
-                                    )
-                                    let pushContext = pushContext(
-                                        for: dashboard,
-                                        in: section
-                                    )
+                        VStack(alignment: .leading, spacing: 10) {
+                            ForEach(section.dashboards) { dashboard in
+                                let occurrenceID = DashboardOccurrenceID(
+                                    sectionID: section.id,
+                                    dashboardID: dashboard.id
+                                )
+                                let pushContext = pushContext(
+                                    for: dashboard,
+                                    in: section
+                                )
 
-                                    dashboardCard(
-                                        dashboard,
-                                        occurrenceID: occurrenceID,
-                                        pushContext: pushContext
+                                dashboardCard(
+                                    dashboard,
+                                    occurrenceID: occurrenceID,
+                                    pushContext: pushContext
+                                )
+                                .onDrag {
+                                    draggedOccurrenceID = occurrenceID
+                                    return NSItemProvider(
+                                        object: dashboard.id as NSString
                                     )
-                                    .onDrag {
-                                        draggedOccurrenceID = occurrenceID
-                                        return NSItemProvider(
-                                            object: dashboard.id as NSString
-                                        )
-                                    } preview: {
-                                        dashboardDragPreview(dashboard)
-                                    }
-                                    .dropDestination(
-                                        for: String.self
-                                    ) { items, _ in
-                                        defer { endDashboardDrag() }
-                                        return items.first != nil
-                                    } isTargeted: { targeted in
-                                        updateDropTarget(
-                                            occurrenceID,
-                                            targeted: targeted
-                                        )
-                                    }
-                                    .overlay {
-                                        if dropTargetOccurrenceID == occurrenceID {
-                                            RoundedRectangle(
-                                                cornerRadius: 16,
-                                                style: .continuous
-                                            )
-                                            .strokeBorder(
-                                                TesseraeTheme.accent.opacity(0.8),
-                                                lineWidth: 2
-                                            )
-                                            .allowsHitTesting(false)
-                                            .transition(.opacity)
-                                        }
-                                    }
-                                    .animation(
-                                        .spring(
-                                            response: 0.28,
-                                            dampingFraction: 0.82
-                                        ),
-                                        value: model.sortedDashboards.map(\.id)
-                                    )
-                                    .accessibilityHint(
-                                        "Long press and drag to reorder within this section."
-                                    )
-                                    .task(
-                                        id: isCollapsed
-                                            ? nil
-                                            : model.previewGeneration
-                                    ) {
-                                        guard !isCollapsed else { return }
-                                        await model.loadDashboardPreview(
-                                            dashboard,
-                                            deviceID: pushContext.previewDeviceID
-                                        )
-                                    }
-                                    .allowsHitTesting(!isCollapsed)
-                                    .accessibilityHidden(isCollapsed)
+                                } preview: {
+                                    dashboardDragPreview(dashboard)
                                 }
+                                .dropDestination(
+                                    for: String.self
+                                ) { items, _ in
+                                    defer { endDashboardDrag() }
+                                    return items.first != nil
+                                } isTargeted: { targeted in
+                                    updateDropTarget(
+                                        occurrenceID,
+                                        targeted: targeted
+                                    )
+                                }
+                                .overlay {
+                                    if dropTargetOccurrenceID == occurrenceID {
+                                        RoundedRectangle(
+                                            cornerRadius: 16,
+                                            style: .continuous
+                                        )
+                                        .strokeBorder(
+                                            TesseraeTheme.accent.opacity(0.8),
+                                            lineWidth: 2
+                                        )
+                                        .allowsHitTesting(false)
+                                        .transition(.opacity)
+                                    }
+                                }
+                                .animation(
+                                    .spring(
+                                        response: 0.28,
+                                        dampingFraction: 0.82
+                                    ),
+                                    value: dashboardOrder
+                                )
+                                .accessibilityHint(
+                                    "Long press and drag to reorder within this section."
+                                )
+                                .task(
+                                    id: isCollapsed || layoutMode == .list
+                                        ? nil
+                                        : model.previewGeneration
+                                ) {
+                                    guard !isCollapsed, layoutMode == .cards else {
+                                        return
+                                    }
+                                    do {
+                                        try await Task.sleep(
+                                            for: .milliseconds(260)
+                                        )
+                                    } catch {
+                                        return
+                                    }
+                                    await model.loadDashboardPreview(
+                                        dashboard,
+                                        deviceID: pushContext.previewDeviceID
+                                    )
+                                }
+                                .allowsHitTesting(!isCollapsed)
                             }
-                            .padding(.top, 10)
-                            .onGeometryChange(for: CGFloat.self) { proxy in
-                                proxy.size.height
-                            } action: { height in
-                                guard height > 0 else { return }
-                                sectionContentHeights[section.id] = height
-                            }
-                            .frame(
-                                height: isCollapsed
-                                    ? 0
-                                    : sectionContentHeights[section.id],
-                                alignment: .top
-                            )
-                            .clipped()
-                            .allowsHitTesting(!isCollapsed)
-                            .accessibilityHidden(isCollapsed)
                         }
+                        .padding(.top, 10)
+                        .onGeometryChange(for: CGFloat.self) { proxy in
+                            proxy.size.height
+                        } action: { height in
+                            guard height > 0 else { return }
+                            sectionContentHeights[section.id] = height
+                        }
+                        .frame(
+                            height: isCollapsed
+                                ? 0
+                                : sectionContentHeights[section.id],
+                            alignment: .top
+                        )
+                        .clipped()
+                        .allowsHitTesting(!isCollapsed)
                     }
                 }
             }
@@ -249,6 +254,23 @@ struct DashboardsView: View {
         .sheet(item: $dashboardToPush) { context in
             DashboardPushSheet(context: context)
                 .environment(model)
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    toggleLayoutMode()
+                } label: {
+                    Label(
+                        layoutMode == .cards
+                            ? "Use List View"
+                            : "Use Card View",
+                        systemImage: layoutMode == .cards
+                            ? "rectangle.stack"
+                            : "list.bullet"
+                    )
+                }
+                .accessibilityIdentifier("dashboard-layout-toggle")
+            }
         }
         .overlay {
             if (model.isRefreshingDashboards || model.isRefreshing)
@@ -337,7 +359,9 @@ struct DashboardsView: View {
                 Image(systemName: "chevron.down")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(.tertiary)
-                    .rotationEffect(.degrees(isCollapsed ? -90 : 0))
+                    .rotationEffect(
+                        .degrees(isCollapsed ? -90 : 0)
+                    )
                     .frame(width: 16)
             }
             .contentShape(Rectangle())
@@ -376,45 +400,31 @@ struct DashboardsView: View {
         let isCollapsing = !model.collapsedDashboardSectionIDs.contains(
             section.id
         )
-        sectionCleanupCoordinator.tasks[section.id]?.cancel()
-        sectionCleanupCoordinator.tasks[section.id] = nil
-
-        if isCollapsing, expandedOccurrenceID?.sectionID == section.id {
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            if isCollapsing,
+               expandedOccurrenceID?.sectionID == section.id
+            {
                 expandedOccurrenceID = nil
             }
-        }
-
-        var retentionTransaction = Transaction()
-        retentionTransaction.disablesAnimations = true
-        withTransaction(retentionTransaction) {
-            _ = retainedSectionContentIDs.insert(section.id)
-        }
-        withAnimation(.easeInOut(duration: 0.22)) {
             model.setDashboardSectionCollapsed(
                 section.id,
                 isCollapsed: isCollapsing
             )
         }
-        guard isCollapsing else { return }
+    }
 
-        sectionCleanupCoordinator.tasks[section.id] = Task { @MainActor in
-            do {
-                try await Task.sleep(for: .milliseconds(240))
-            } catch {
-                return
+    private func toggleLayoutMode() {
+        if layoutMode == .cards {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                expandedOccurrenceID = nil
+                layoutMode = .list
             }
-            guard model.collapsedDashboardSectionIDs.contains(section.id) else {
-                return
-            }
-            var cleanupTransaction = Transaction()
-            cleanupTransaction.disablesAnimations = true
-            withTransaction(cleanupTransaction) {
-                _ = retainedSectionContentIDs.remove(section.id)
-            }
-            sectionCleanupCoordinator.tasks[section.id] = nil
+        } else {
+            layoutMode = .cards
         }
     }
 
@@ -479,91 +489,60 @@ struct DashboardsView: View {
         }
     }
 
+    @ViewBuilder
     private func dashboardCard(
         _ dashboard: DashboardSummary,
         occurrenceID: DashboardOccurrenceID,
         pushContext: DashboardPushContext
     ) -> some View {
-        let expandedImage = dashboardPreviewImage(for: pushContext)
+        let expandedImage = layoutMode == .cards
+            ? dashboardPreviewImage(for: pushContext)
+            : nil
         let isExpanded = expandedOccurrenceID == occurrenceID
 
-        return VStack(
+        VStack(
             alignment: .leading,
-            spacing: isExpanded ? 14 : 0
+            spacing: layoutMode == .cards && isExpanded ? 14 : 0
         ) {
-            HStack(alignment: .center, spacing: 14) {
-                VStack(alignment: .leading, spacing: 9) {
-                    HStack(alignment: .firstTextBaseline, spacing: 7) {
-                        dashboardIcon(dashboard)
-
-                        Text(dashboard.name)
-                            .font(.headline)
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.82)
-                            .accessibilityIdentifier(
-                                "dashboard-title-\(occurrenceID.accessibilitySuffix)"
-                            )
-                    }
-
-                    Text(dashboard.kind.rawValue.capitalized)
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.secondary)
-
-                    if let targetDescription = cardTargetDescription(
-                        pushContext
-                    ) {
-                        Label(
-                            targetDescription,
-                            systemImage: "rectangle.connected.to.line.below"
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                    }
-
-                    Button {
-                        dashboardToPush = pushContext
-                    } label: {
-                        HStack(spacing: 5) {
-                            if model.activeOperationIDs.contains(dashboard.id) {
-                                ProgressView()
-                                    .controlSize(.mini)
-                            } else {
-                                Image(systemName: "paperplane.fill")
-                            }
-                            Text("Push")
-                        }
-                        .font(.caption.weight(.semibold))
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    .fixedSize()
-                    .accessibilityIdentifier(
-                        "dashboard-push-\(occurrenceID.accessibilitySuffix)"
+            if layoutMode == .cards {
+                HStack(alignment: .center, spacing: 14) {
+                    dashboardCardDetails(
+                        dashboard,
+                        occurrenceID: occurrenceID,
+                        pushContext: pushContext
                     )
-                    .disabled(
-                        pushContext.initialDeviceIDs.isEmpty
-                            || model.activeOperationIDs.contains(dashboard.id)
+
+                    dashboardPreview(
+                        dashboard,
+                        occurrenceID: occurrenceID,
+                        context: pushContext,
+                        canExpand: expandedImage != nil,
+                        isExpanded: isExpanded
                     )
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
 
-                dashboardPreview(
-                    dashboard,
-                    occurrenceID: occurrenceID,
-                    context: pushContext,
-                    canExpand: expandedImage != nil,
-                    isExpanded: isExpanded
-                )
-            }
+                if let expandedImage, isExpanded {
+                    expandedDashboardPreview(
+                        expandedImage,
+                        dashboard: dashboard,
+                        occurrenceID: occurrenceID
+                    )
+                    .transition(.opacity)
+                }
+            } else {
+                HStack(alignment: .center, spacing: 12) {
+                    dashboardListDetails(
+                        dashboard,
+                        occurrenceID: occurrenceID,
+                        pushContext: pushContext
+                    )
 
-            if let expandedImage, isExpanded {
-                expandedDashboardPreview(
-                    expandedImage,
-                    dashboard: dashboard,
-                    occurrenceID: occurrenceID
-                )
-                .transition(.opacity)
+                    dashboardPushButton(
+                        dashboard,
+                        occurrenceID: occurrenceID,
+                        pushContext: pushContext
+                    )
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -571,6 +550,118 @@ struct DashboardsView: View {
         .clipShape(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
         )
+        .contentShape(
+            .dragPreview,
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+        )
+    }
+
+    private func dashboardCardDetails(
+        _ dashboard: DashboardSummary,
+        occurrenceID: DashboardOccurrenceID,
+        pushContext: DashboardPushContext
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            dashboardTitle(dashboard, occurrenceID: occurrenceID)
+
+            Text(dashboard.kind.rawValue.capitalized)
+                .font(.caption.monospaced())
+                .foregroundStyle(.secondary)
+
+            if let targetDescription = cardTargetDescription(pushContext) {
+                Label(
+                    targetDescription,
+                    systemImage: "rectangle.connected.to.line.below"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+            }
+
+            dashboardPushButton(
+                dashboard,
+                occurrenceID: occurrenceID,
+                pushContext: pushContext
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func dashboardListDetails(
+        _ dashboard: DashboardSummary,
+        occurrenceID: DashboardOccurrenceID,
+        pushContext: DashboardPushContext
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            dashboardTitle(dashboard, occurrenceID: occurrenceID)
+
+            Text(dashboardListSubtitle(dashboard, context: pushContext))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func dashboardTitle(
+        _ dashboard: DashboardSummary,
+        occurrenceID: DashboardOccurrenceID
+    ) -> some View {
+        HStack(alignment: .center, spacing: 8) {
+            dashboardIcon(dashboard)
+                .frame(width: 24, height: 24)
+
+            Text(dashboard.name)
+                .font(.headline)
+                .lineLimit(2)
+                .minimumScaleFactor(0.82)
+                .layoutPriority(1)
+                .accessibilityIdentifier(
+                    "dashboard-title-\(occurrenceID.accessibilitySuffix)"
+                )
+        }
+    }
+
+    private func dashboardPushButton(
+        _ dashboard: DashboardSummary,
+        occurrenceID: DashboardOccurrenceID,
+        pushContext: DashboardPushContext
+    ) -> some View {
+        Button {
+            dashboardToPush = pushContext
+        } label: {
+            HStack(spacing: 5) {
+                if model.activeOperationIDs.contains(dashboard.id) {
+                    ProgressView()
+                        .controlSize(.mini)
+                } else {
+                    Image(systemName: "paperplane.fill")
+                }
+                Text("Push")
+            }
+            .font(.caption.weight(.semibold))
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.small)
+        .fixedSize()
+        .accessibilityIdentifier(
+            "dashboard-push-\(occurrenceID.accessibilitySuffix)"
+        )
+        .disabled(
+            pushContext.initialDeviceIDs.isEmpty
+                || model.activeOperationIDs.contains(dashboard.id)
+        )
+    }
+
+    private func dashboardListSubtitle(
+        _ dashboard: DashboardSummary,
+        context: DashboardPushContext
+    ) -> String {
+        var parts = [dashboard.kind.rawValue.capitalized]
+        if let targetDescription = cardTargetDescription(context) {
+            parts.append(targetDescription)
+        }
+        return parts.joined(separator: " · ")
     }
 
     private func cardTargetDescription(
@@ -856,8 +947,12 @@ private struct DashboardPushSheet: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 16)
         }
-        .task {
+        .task(id: context.id) {
             loadInitialSelection()
+            await model.loadDashboardPreview(
+                dashboard,
+                deviceID: context.previewDeviceID
+            )
         }
         .tesseraeScreenBackground()
         .fixedSize(horizontal: false, vertical: true)

@@ -19,7 +19,9 @@ struct ReorderDragPreview<Icon: View>: View {
     @ViewBuilder let icon: () -> Icon
 
     var body: some View {
-        Label {
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+
+        return Label {
             Text(title)
         } icon: {
             icon()
@@ -31,8 +33,10 @@ struct ReorderDragPreview<Icon: View>: View {
         .padding(.vertical, 10)
         .background(
             TesseraeTheme.accent.opacity(0.9),
-            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+            in: shape
         )
+        .clipShape(shape)
+        .contentShape(.dragPreview, shape)
     }
 }
 
