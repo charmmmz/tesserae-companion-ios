@@ -2,13 +2,87 @@ import SwiftUI
 import TesseraeKit
 import UIKit
 
+private struct DashboardOccurrenceID: Hashable {
+    let sectionID: String
+    let dashboardID: String
+
+    var accessibilitySuffix: String {
+        "\(dashboardID)-\(sectionID)"
+    }
+}
+
+private struct DashboardSection: Identifiable {
+    enum Kind {
+        case display(DisplaySummary)
+        case shared
+        case unassigned
+    }
+
+    let id: String
+    let kind: Kind
+    let dashboards: [DashboardSummary]
+}
+
+private struct DashboardPushContext: Identifiable {
+    enum Scope {
+        case display(DisplaySummary)
+        case shared([DisplaySummary])
+        case unassigned
+    }
+
+    let dashboard: DashboardSummary
+    let scope: Scope
+
+    var id: String {
+        switch scope {
+        case let .display(display):
+            "\(dashboard.id)|display|\(display.id)"
+        case .shared:
+            "\(dashboard.id)|shared"
+        case .unassigned:
+            "\(dashboard.id)|unassigned"
+        }
+    }
+
+    var previewDeviceID: String? {
+        switch scope {
+        case let .display(display):
+            display.id
+        case let .shared(displays):
+            displays.first?.id
+        case .unassigned:
+            nil
+        }
+    }
+
+    var initialDeviceIDs: Set<String> {
+        switch scope {
+        case let .display(display):
+            [display.id]
+        case let .shared(displays):
+            Set(displays.map(\.id))
+        case .unassigned:
+            []
+        }
+    }
+}
+
+@MainActor
+private final class DashboardSectionCleanupCoordinator {
+    var tasks: [String: Task<Void, Never>] = [:]
+}
+
 struct DashboardsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
-    @State private var draggedDashboardID: String?
-    @State private var dropTargetDashboardID: String?
-    @State private var expandedDashboardID: String?
-    @State private var dashboardToPush: DashboardSummary?
+    @State private var draggedOccurrenceID: DashboardOccurrenceID?
+    @State private var dropTargetOccurrenceID: DashboardOccurrenceID?
+    @State private var expandedOccurrenceID: DashboardOccurrenceID?
+    @State private var dashboardToPush: DashboardPushContext?
+    @State private var sectionContentHeights: [String: CGFloat] = [:]
+    @State private var retainedSectionContentIDs: Set<String> = []
+    @State private var sectionCleanupCoordinator =
+        DashboardSectionCleanupCoordinator()
     private let previewCanvasSize = CGSize(width: 112, height: 118)
 
     let isActive: Bool
@@ -17,57 +91,154 @@ struct DashboardsView: View {
         isActive && scenePhase == .active
     }
 
+    private var dashboardSections: [DashboardSection] {
+        let dashboards = model.sortedDashboards
+        let displays = model.sortedDisplays
+        let displayIDs = Set(displays.map(\.id))
+        var sections = displays.compactMap { display -> DashboardSection? in
+            let matching = dashboards.filter {
+                $0.deviceIDs.contains(display.id)
+            }
+            guard !matching.isEmpty else { return nil }
+            return DashboardSection(
+                id: "display-\(display.id)",
+                kind: .display(display),
+                dashboards: matching
+            )
+        }
+        let shared = dashboards.filter { dashboard in
+            dashboard.deviceIDs.filter(displayIDs.contains).count > 1
+        }
+        if !shared.isEmpty {
+            sections.append(
+                DashboardSection(
+                    id: "shared",
+                    kind: .shared,
+                    dashboards: shared
+                )
+            )
+        }
+        let unassigned = dashboards.filter { dashboard in
+            dashboard.deviceIDs.allSatisfy { !displayIDs.contains($0) }
+        }
+        if !unassigned.isEmpty {
+            sections.append(
+                DashboardSection(
+                    id: "unassigned",
+                    kind: .unassigned,
+                    dashboards: unassigned
+                )
+            )
+        }
+        return sections
+    }
+
     var body: some View {
         ScrollView {
-            LazyVStack(spacing: 14) {
-                ForEach(model.sortedDashboards) { dashboard in
-                    dashboardCard(dashboard)
-                        .onDrag {
-                            draggedDashboardID = dashboard.id
-                            return NSItemProvider(
-                                object: dashboard.id as NSString
-                            )
-                        } preview: {
-                            dashboardDragPreview(dashboard)
-                        }
-                        .dropDestination(
-                            for: String.self
-                        ) { items, _ in
-                            defer { endDashboardDrag() }
-                            return items.first != nil
-                        } isTargeted: { targeted in
-                            updateDropTarget(
-                                dashboard.id,
-                                targeted: targeted
-                            )
-                        }
-                        .overlay {
-                            if dropTargetDashboardID == dashboard.id {
-                                RoundedRectangle(
-                                    cornerRadius: 16,
-                                    style: .continuous
-                                )
-                                .strokeBorder(
-                                    TesseraeTheme.accent.opacity(0.8),
-                                    lineWidth: 2
-                                )
-                                .allowsHitTesting(false)
-                                .transition(.opacity)
+            LazyVStack(alignment: .leading, spacing: 20) {
+                ForEach(dashboardSections) { section in
+                    let isCollapsed = model.collapsedDashboardSectionIDs.contains(
+                        section.id
+                    )
+                    let rendersContent = !isCollapsed
+                        || retainedSectionContentIDs.contains(section.id)
+
+                    VStack(alignment: .leading, spacing: 0) {
+                        dashboardSectionHeader(section)
+
+                        if rendersContent {
+                            VStack(alignment: .leading, spacing: 10) {
+                                ForEach(section.dashboards) { dashboard in
+                                    let occurrenceID = DashboardOccurrenceID(
+                                        sectionID: section.id,
+                                        dashboardID: dashboard.id
+                                    )
+                                    let pushContext = pushContext(
+                                        for: dashboard,
+                                        in: section
+                                    )
+
+                                    dashboardCard(
+                                        dashboard,
+                                        occurrenceID: occurrenceID,
+                                        pushContext: pushContext
+                                    )
+                                    .onDrag {
+                                        draggedOccurrenceID = occurrenceID
+                                        return NSItemProvider(
+                                            object: dashboard.id as NSString
+                                        )
+                                    } preview: {
+                                        dashboardDragPreview(dashboard)
+                                    }
+                                    .dropDestination(
+                                        for: String.self
+                                    ) { items, _ in
+                                        defer { endDashboardDrag() }
+                                        return items.first != nil
+                                    } isTargeted: { targeted in
+                                        updateDropTarget(
+                                            occurrenceID,
+                                            targeted: targeted
+                                        )
+                                    }
+                                    .overlay {
+                                        if dropTargetOccurrenceID == occurrenceID {
+                                            RoundedRectangle(
+                                                cornerRadius: 16,
+                                                style: .continuous
+                                            )
+                                            .strokeBorder(
+                                                TesseraeTheme.accent.opacity(0.8),
+                                                lineWidth: 2
+                                            )
+                                            .allowsHitTesting(false)
+                                            .transition(.opacity)
+                                        }
+                                    }
+                                    .animation(
+                                        .spring(
+                                            response: 0.28,
+                                            dampingFraction: 0.82
+                                        ),
+                                        value: model.sortedDashboards.map(\.id)
+                                    )
+                                    .accessibilityHint(
+                                        "Long press and drag to reorder within this section."
+                                    )
+                                    .task(
+                                        id: isCollapsed
+                                            ? nil
+                                            : model.previewGeneration
+                                    ) {
+                                        guard !isCollapsed else { return }
+                                        await model.loadDashboardPreview(
+                                            dashboard,
+                                            deviceID: pushContext.previewDeviceID
+                                        )
+                                    }
+                                    .allowsHitTesting(!isCollapsed)
+                                    .accessibilityHidden(isCollapsed)
+                                }
                             }
+                            .padding(.top, 10)
+                            .onGeometryChange(for: CGFloat.self) { proxy in
+                                proxy.size.height
+                            } action: { height in
+                                guard height > 0 else { return }
+                                sectionContentHeights[section.id] = height
+                            }
+                            .frame(
+                                height: isCollapsed
+                                    ? 0
+                                    : sectionContentHeights[section.id],
+                                alignment: .top
+                            )
+                            .clipped()
+                            .allowsHitTesting(!isCollapsed)
+                            .accessibilityHidden(isCollapsed)
                         }
-                        .animation(
-                            .spring(
-                                response: 0.28,
-                                dampingFraction: 0.82
-                            ),
-                            value: model.sortedDashboards.map(\.id)
-                        )
-                        .accessibilityHint(
-                            "Long press and drag to reorder."
-                        )
-                        .task(id: model.previewGeneration) {
-                            await model.loadDashboardPreview(dashboard)
-                        }
+                    }
                 }
             }
             .padding(16)
@@ -75,8 +246,8 @@ struct DashboardsView: View {
         .refreshable {
             await model.refreshDashboards()
         }
-        .sheet(item: $dashboardToPush) { dashboard in
-            DashboardPushSheet(dashboard: dashboard)
+        .sheet(item: $dashboardToPush) { context in
+            DashboardPushSheet(context: context)
                 .environment(model)
         }
         .overlay {
@@ -119,9 +290,202 @@ struct DashboardsView: View {
         .tesseraeScreenBackground()
     }
 
-    private func dashboardCard(_ dashboard: DashboardSummary) -> some View {
-        let expandedImage = dashboardPreviewImage(for: dashboard)
-        let isExpanded = expandedDashboardID == dashboard.id
+    private func dashboardSectionHeader(
+        _ section: DashboardSection
+    ) -> some View {
+        let isCollapsed = model.collapsedDashboardSectionIDs.contains(
+            section.id
+        )
+
+        return Button {
+            toggleSection(section)
+        } label: {
+            HStack(spacing: 10) {
+                sectionIcon(section)
+                    .foregroundStyle(TesseraeTheme.accent)
+                    .frame(width: 34, height: 34)
+                    .background(
+                        TesseraeTheme.accent.opacity(0.11),
+                        in: RoundedRectangle(
+                            cornerRadius: 10,
+                            style: .continuous
+                        )
+                    )
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(sectionTitle(section))
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+
+                    Text(sectionSubtitle(section))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Text(section.dashboards.count, format: .number)
+                    .font(.caption.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Color.primary.opacity(0.055),
+                        in: Capsule()
+                    )
+
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(isCollapsed ? -90 : 0))
+                    .frame(width: 16)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel(sectionTitle(section))
+        .accessibilityValue(isCollapsed ? "Collapsed" : "Expanded")
+        .accessibilityHint(
+            isCollapsed ? "Expands this group." : "Collapses this group."
+        )
+        .accessibilityIdentifier("dashboard-section-toggle-\(section.id)")
+    }
+
+    @ViewBuilder
+    private func sectionIcon(_ section: DashboardSection) -> some View {
+        switch section.kind {
+        case let .display(display):
+            PhosphorIcon(
+                name: display.canonicalIconName,
+                size: 18,
+                color: TesseraeTheme.accent,
+                fallbackSystemName: display.panel.height > display.panel.width
+                    ? "rectangle.portrait.inset.filled"
+                    : "rectangle.inset.filled"
+            )
+        case .shared, .unassigned:
+            Image(systemName: sectionSymbol(section))
+                .font(.subheadline.weight(.semibold))
+        }
+    }
+
+    private func toggleSection(_ section: DashboardSection) {
+        let isCollapsing = !model.collapsedDashboardSectionIDs.contains(
+            section.id
+        )
+        sectionCleanupCoordinator.tasks[section.id]?.cancel()
+        sectionCleanupCoordinator.tasks[section.id] = nil
+
+        if isCollapsing, expandedOccurrenceID?.sectionID == section.id {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                expandedOccurrenceID = nil
+            }
+        }
+
+        var retentionTransaction = Transaction()
+        retentionTransaction.disablesAnimations = true
+        withTransaction(retentionTransaction) {
+            _ = retainedSectionContentIDs.insert(section.id)
+        }
+        withAnimation(.easeInOut(duration: 0.22)) {
+            model.setDashboardSectionCollapsed(
+                section.id,
+                isCollapsed: isCollapsing
+            )
+        }
+        guard isCollapsing else { return }
+
+        sectionCleanupCoordinator.tasks[section.id] = Task { @MainActor in
+            do {
+                try await Task.sleep(for: .milliseconds(240))
+            } catch {
+                return
+            }
+            guard model.collapsedDashboardSectionIDs.contains(section.id) else {
+                return
+            }
+            var cleanupTransaction = Transaction()
+            cleanupTransaction.disablesAnimations = true
+            withTransaction(cleanupTransaction) {
+                _ = retainedSectionContentIDs.remove(section.id)
+            }
+            sectionCleanupCoordinator.tasks[section.id] = nil
+        }
+    }
+
+    private func sectionSymbol(_ section: DashboardSection) -> String {
+        switch section.kind {
+        case let .display(display):
+            display.panel.height > display.panel.width
+                ? "rectangle.portrait.inset.filled"
+                : "rectangle.inset.filled"
+        case .shared:
+            "rectangle.3.group.fill"
+        case .unassigned:
+            "rectangle.badge.xmark"
+        }
+    }
+
+    private func sectionTitle(_ section: DashboardSection) -> String {
+        switch section.kind {
+        case let .display(display):
+            display.name
+        case .shared:
+            String(localized: "Shared Displays")
+        case .unassigned:
+            String(localized: "Unassigned")
+        }
+    }
+
+    private func sectionSubtitle(_ section: DashboardSection) -> String {
+        switch section.kind {
+        case let .display(display):
+            "\(display.panel.width) × \(display.panel.height)"
+        case .shared:
+            String(localized: "Dashboards bound to multiple displays")
+        case .unassigned:
+            String(localized: "Not bound to an available display")
+        }
+    }
+
+    private func pushContext(
+        for dashboard: DashboardSummary,
+        in section: DashboardSection
+    ) -> DashboardPushContext {
+        switch section.kind {
+        case let .display(display):
+            return DashboardPushContext(
+                dashboard: dashboard,
+                scope: .display(display)
+            )
+        case .shared:
+            let boundIDs = Set(dashboard.deviceIDs)
+            return DashboardPushContext(
+                dashboard: dashboard,
+                scope: .shared(
+                    model.sortedDisplays.filter { boundIDs.contains($0.id) }
+                )
+            )
+        case .unassigned:
+            return DashboardPushContext(
+                dashboard: dashboard,
+                scope: .unassigned
+            )
+        }
+    }
+
+    private func dashboardCard(
+        _ dashboard: DashboardSummary,
+        occurrenceID: DashboardOccurrenceID,
+        pushContext: DashboardPushContext
+    ) -> some View {
+        let expandedImage = dashboardPreviewImage(for: pushContext)
+        let isExpanded = expandedOccurrenceID == occurrenceID
 
         return VStack(
             alignment: .leading,
@@ -136,22 +500,29 @@ struct DashboardsView: View {
                             .font(.headline)
                             .lineLimit(2)
                             .minimumScaleFactor(0.82)
+                            .accessibilityIdentifier(
+                                "dashboard-title-\(occurrenceID.accessibilitySuffix)"
+                            )
                     }
 
                     Text(dashboard.kind.rawValue.capitalized)
                         .font(.caption.monospaced())
                         .foregroundStyle(.secondary)
 
-                    Label(
-                        model.displayNames(for: dashboard.deviceIDs),
-                        systemImage: "rectangle.connected.to.line.below"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    if let targetDescription = cardTargetDescription(
+                        pushContext
+                    ) {
+                        Label(
+                            targetDescription,
+                            systemImage: "rectangle.connected.to.line.below"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                    }
 
                     Button {
-                        dashboardToPush = dashboard
+                        dashboardToPush = pushContext
                     } label: {
                         HStack(spacing: 5) {
                             if model.activeOperationIDs.contains(dashboard.id) {
@@ -167,9 +538,11 @@ struct DashboardsView: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
                     .fixedSize()
-                    .accessibilityIdentifier("dashboard-push-\(dashboard.id)")
+                    .accessibilityIdentifier(
+                        "dashboard-push-\(occurrenceID.accessibilitySuffix)"
+                    )
                     .disabled(
-                        model.displays.isEmpty
+                        pushContext.initialDeviceIDs.isEmpty
                             || model.activeOperationIDs.contains(dashboard.id)
                     )
                 }
@@ -177,6 +550,8 @@ struct DashboardsView: View {
 
                 dashboardPreview(
                     dashboard,
+                    occurrenceID: occurrenceID,
+                    context: pushContext,
                     canExpand: expandedImage != nil,
                     isExpanded: isExpanded
                 )
@@ -185,7 +560,8 @@ struct DashboardsView: View {
             if let expandedImage, isExpanded {
                 expandedDashboardPreview(
                     expandedImage,
-                    dashboard: dashboard
+                    dashboard: dashboard,
+                    occurrenceID: occurrenceID
                 )
                 .transition(.opacity)
             }
@@ -197,27 +573,45 @@ struct DashboardsView: View {
         )
     }
 
+    private func cardTargetDescription(
+        _ context: DashboardPushContext
+    ) -> String? {
+        switch context.scope {
+        case .display:
+            nil
+        case let .shared(displays):
+            displays.map(\.name).joined(separator: ", ")
+        case .unassigned:
+            String(localized: "No displays")
+        }
+    }
+
     private func dashboardIcon(_ dashboard: DashboardSummary) -> some View {
-        PhosphorDashboardIcon(name: dashboard.canonicalIconName, size: 19)
+        PhosphorIcon(name: dashboard.canonicalIconName, size: 19)
     }
 
     private func dashboardPreview(
         _ dashboard: DashboardSummary,
+        occurrenceID: DashboardOccurrenceID,
+        context: DashboardPushContext,
         canExpand: Bool,
         isExpanded: Bool
     ) -> some View {
-        let previewSize = dashboardPreviewSize(for: dashboard)
+        let previewSize = dashboardPreviewSize(for: context)
         let preview = ZStack {
             Color.clear
 
             PreviewArtwork(
-                state: model.dashboardPreviews[dashboard.id],
+                state: model.dashboardPreview(
+                    for: dashboard,
+                    deviceID: context.previewDeviceID
+                ),
                 placeholderSystemName: dashboard.kind == .canvas
                     ? "scribble.variable"
                     : "square.grid.2x2",
                 placeholderLabel: "Dashboard preview placeholder",
                 imageLabel: "Cached visual preview for \(dashboard.name)",
-                accessibilityIdentifier: "dashboard-preview-\(dashboard.id)"
+                accessibilityIdentifier: "dashboard-preview-\(occurrenceID.accessibilitySuffix)"
             )
             .frame(
                 width: CGFloat(previewSize.width),
@@ -232,7 +626,7 @@ struct DashboardsView: View {
         return Button {
             guard canExpand else { return }
             withAnimation(.smooth(duration: 0.28)) {
-                expandedDashboardID = isExpanded ? nil : dashboard.id
+                expandedOccurrenceID = isExpanded ? nil : occurrenceID
             }
         } label: {
             preview
@@ -241,7 +635,7 @@ struct DashboardsView: View {
         .buttonStyle(.plain)
         .contentShape(Rectangle())
         .accessibilityIdentifier(
-            "dashboard-preview-button-\(dashboard.id)"
+            "dashboard-preview-button-\(occurrenceID.accessibilitySuffix)"
         )
         .accessibilityLabel("Preview \(dashboard.name)")
         .accessibilityValue(
@@ -260,16 +654,20 @@ struct DashboardsView: View {
     }
 
     private func dashboardPreviewImage(
-        for dashboard: DashboardSummary
+        for context: DashboardPushContext
     ) -> UIImage? {
-        model.dashboardPreviews[dashboard.id]?
+        model.dashboardPreview(
+            for: context.dashboard,
+            deviceID: context.previewDeviceID
+        )?
             .data
             .flatMap(UIImage.init(data:))
     }
 
     private func expandedDashboardPreview(
         _ image: UIImage,
-        dashboard: DashboardSummary
+        dashboard: DashboardSummary,
+        occurrenceID: DashboardOccurrenceID
     ) -> some View {
         FittedPreviewLayout(
             aspectRatio: image.size.width / image.size.height,
@@ -289,16 +687,16 @@ struct DashboardsView: View {
             RoundedRectangle(cornerRadius: 15, style: .continuous)
         )
         .accessibilityIdentifier(
-            "dashboard-preview-expanded-\(dashboard.id)"
+            "dashboard-preview-expanded-\(occurrenceID.accessibilitySuffix)"
         )
         .accessibilityLabel("Expanded preview for \(dashboard.name)")
     }
 
     private func dashboardPreviewSize(
-        for dashboard: DashboardSummary
+        for context: DashboardPushContext
     ) -> CGSize {
         guard
-            let targetID = dashboard.deviceIDs.first,
+            let targetID = context.previewDeviceID,
             let target = model.displays.first(where: { $0.id == targetID })
         else {
             return previewCanvasSize
@@ -317,48 +715,46 @@ struct DashboardsView: View {
     private func dashboardDragPreview(
         _ dashboard: DashboardSummary
     ) -> some View {
-        Label(
-            dashboard.name,
-            systemImage: dashboard.kind == .canvas
-                ? "scribble.variable"
-                : "square.grid.2x2"
-        )
-        .font(.subheadline.weight(.semibold))
-        .lineLimit(1)
-        .foregroundStyle(.white)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(
-            TesseraeTheme.accent.opacity(0.9),
-            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-        )
+        ReorderDragPreview(title: dashboard.name) {
+            PhosphorIcon(
+                name: dashboard.canonicalIconName,
+                size: 17,
+                color: .white
+            )
+        }
         .onDisappear {
             endDashboardDrag()
         }
     }
 
     private func updateDropTarget(
-        _ targetID: String,
+        _ targetOccurrenceID: DashboardOccurrenceID,
         targeted: Bool
     ) {
         guard targeted else {
-            if dropTargetDashboardID == targetID {
+            if dropTargetOccurrenceID == targetOccurrenceID {
                 withAnimation(.easeOut(duration: 0.12)) {
-                    dropTargetDashboardID = nil
+                    dropTargetOccurrenceID = nil
                 }
             }
             return
         }
 
+        guard
+            let sourceOccurrenceID = draggedOccurrenceID,
+            sourceOccurrenceID.sectionID == targetOccurrenceID.sectionID
+        else {
+            return
+        }
+
         withAnimation(.easeInOut(duration: 0.15)) {
-            dropTargetDashboardID = targetID
+            dropTargetOccurrenceID = targetOccurrenceID
         }
 
         guard
-            let sourceID = draggedDashboardID,
-            sourceID != targetID,
+            sourceOccurrenceID.dashboardID != targetOccurrenceID.dashboardID,
             let targetIndex = model.sortedDashboards.firstIndex(
-                where: { $0.id == targetID }
+                where: { $0.id == targetOccurrenceID.dashboardID }
             )
         else {
             return
@@ -371,7 +767,7 @@ struct DashboardsView: View {
             )
         ) {
             model.moveDashboard(
-                sourceID,
+                sourceOccurrenceID.dashboardID,
                 to: targetIndex
             )
         }
@@ -379,8 +775,8 @@ struct DashboardsView: View {
 
     private func endDashboardDrag() {
         withAnimation(.easeOut(duration: 0.12)) {
-            draggedDashboardID = nil
-            dropTargetDashboardID = nil
+            draggedOccurrenceID = nil
+            dropTargetOccurrenceID = nil
         }
     }
 }
@@ -389,7 +785,7 @@ private struct DashboardPushSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
 
-    let dashboard: DashboardSummary
+    let context: DashboardPushContext
 
     @State private var selectedDeviceIDs: Set<String> = []
     @State private var didLoadInitialSelection = false
@@ -397,6 +793,10 @@ private struct DashboardPushSheet: View {
     @State private var sheetHeight: CGFloat = 400
 
     private let maximumContentHeight: CGFloat = 460
+
+    private var dashboard: DashboardSummary {
+        context.dashboard
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -442,7 +842,7 @@ private struct DashboardPushSheet: View {
                 Label(
                     model.activeOperationIDs.contains(dashboard.id)
                         ? "Sending…"
-                        : "Push to Selected Displays",
+                        : pushButtonTitle,
                     systemImage: "paperplane.fill"
                 )
                 .frame(maxWidth: .infinity)
@@ -468,6 +868,7 @@ private struct DashboardPushSheet: View {
             sheetHeight = measuredHeight
         }
         .presentationDetents([.height(sheetHeight)])
+        .presentationContentInteraction(.scrolls)
         .presentationDragIndicator(.visible)
     }
 
@@ -514,77 +915,9 @@ private struct DashboardPushSheet: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .tesseraeCard()
 
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Bound Displays")
-                        .font(.headline)
-                    Spacer()
-                    if !boundDeviceIDs.isEmpty {
-                        Button("Select All") {
-                            selectedDeviceIDs = boundDeviceIDs
-                        }
-                        .font(.caption.weight(.semibold))
-                    }
-                }
-
-                if boundDisplays.isEmpty {
-                    ContentUnavailableView {
-                        Label(
-                            "No Bound Displays",
-                            systemImage: "rectangle.badge.xmark"
-                        )
-                    } description: {
-                        Text(
-                            "Bind this dashboard to at least one display in Tesserae before pushing it from the app."
-                        )
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                } else {
-                    ForEach(boundDisplays) { display in
-                        Button {
-                            if selectedDeviceIDs.contains(display.id) {
-                                selectedDeviceIDs.remove(display.id)
-                            } else {
-                                selectedDeviceIDs.insert(display.id)
-                            }
-                        } label: {
-                            HStack(spacing: 10) {
-                                Image(
-                                    systemName: selectedDeviceIDs.contains(
-                                        display.id
-                                    )
-                                        ? "checkmark.circle.fill"
-                                        : "circle"
-                                )
-                                .foregroundStyle(
-                                    selectedDeviceIDs.contains(display.id)
-                                        ? TesseraeTheme.accent
-                                        : .secondary
-                                )
-
-                                Text(display.name)
-                                    .foregroundStyle(.primary)
-
-                                Spacer()
-
-                                Text(
-                                    "\(display.panel.width)×\(display.panel.height)"
-                                )
-                                .font(.caption.monospaced())
-                                .foregroundStyle(.secondary)
-                            }
-                            .contentShape(Rectangle())
-                            .padding(.vertical, 7)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier(
-                            "dashboard-push-device-\(display.id)"
-                        )
-                    }
-                }
+            if showsDisplayPicker {
+                boundDisplaysPicker
             }
-            .tesseraeCard()
         }
         .padding(.horizontal, 16)
         .padding(.top, 16)
@@ -592,14 +925,23 @@ private struct DashboardPushSheet: View {
     }
 
     private var previewImage: UIImage? {
-        model.dashboardPreviews[dashboard.id]?
+        model.dashboardPreview(
+            for: dashboard,
+            deviceID: context.previewDeviceID
+        )?
             .data
             .flatMap(UIImage.init(data:))
     }
 
     private var boundDisplays: [DisplaySummary] {
-        let boundIDs = Set(dashboard.deviceIDs)
-        return model.displays.filter { boundIDs.contains($0.id) }
+        switch context.scope {
+        case let .display(display):
+            [display]
+        case let .shared(displays):
+            displays
+        case .unassigned:
+            []
+        }
     }
 
     private var boundDeviceIDs: Set<String> {
@@ -610,6 +952,106 @@ private struct DashboardPushSheet: View {
         guard !didLoadInitialSelection else { return }
         didLoadInitialSelection = true
 
-        selectedDeviceIDs = boundDeviceIDs
+        selectedDeviceIDs = context.initialDeviceIDs
+    }
+
+    private var showsDisplayPicker: Bool {
+        if case .display = context.scope {
+            false
+        } else {
+            true
+        }
+    }
+
+    private var pushButtonTitle: String {
+        if case let .display(display) = context.scope {
+            return String(localized: "Push to \(display.name)")
+        }
+        if selectedDeviceIDs.count == 1,
+           let selectedID = selectedDeviceIDs.first,
+           let display = boundDisplays.first(where: { $0.id == selectedID })
+        {
+            return String(localized: "Push to \(display.name)")
+        }
+        if selectedDeviceIDs.count > 1 {
+            return String(
+                localized: "Push to \(selectedDeviceIDs.count) Displays"
+            )
+        }
+        return String(localized: "Push to Selected Displays")
+    }
+
+    private var boundDisplaysPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Bound Displays")
+                    .font(.headline)
+                Spacer()
+                if !boundDeviceIDs.isEmpty {
+                    Button("Select All") {
+                        selectedDeviceIDs = boundDeviceIDs
+                    }
+                    .font(.caption.weight(.semibold))
+                }
+            }
+
+            if boundDisplays.isEmpty {
+                ContentUnavailableView {
+                    Label(
+                        "No Bound Displays",
+                        systemImage: "rectangle.badge.xmark"
+                    )
+                } description: {
+                    Text(
+                        "Bind this dashboard to at least one display in Tesserae before pushing it from the app."
+                    )
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+            } else {
+                ForEach(boundDisplays) { display in
+                    Button {
+                        if selectedDeviceIDs.contains(display.id) {
+                            selectedDeviceIDs.remove(display.id)
+                        } else {
+                            selectedDeviceIDs.insert(display.id)
+                        }
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(
+                                systemName: selectedDeviceIDs.contains(
+                                    display.id
+                                )
+                                    ? "checkmark.circle.fill"
+                                    : "circle"
+                            )
+                            .foregroundStyle(
+                                selectedDeviceIDs.contains(display.id)
+                                    ? TesseraeTheme.accent
+                                    : .secondary
+                            )
+
+                            Text(display.name)
+                                .foregroundStyle(.primary)
+
+                            Spacer()
+
+                            Text(
+                                "\(display.panel.width)×\(display.panel.height)"
+                            )
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                        }
+                        .contentShape(Rectangle())
+                        .padding(.vertical, 7)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier(
+                        "dashboard-push-device-\(display.id)"
+                    )
+                }
+            }
+        }
+        .tesseraeCard()
     }
 }

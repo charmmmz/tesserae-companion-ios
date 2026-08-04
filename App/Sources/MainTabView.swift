@@ -18,7 +18,7 @@ struct MainTabView: View {
                     isActive: selection == .displays && !settingsPresented
                 )
             }
-            .tabItem { Label("Displays", systemImage: "rectangle.connected.to.line.below") }
+            .tabItem { Label("Displays", systemImage: "display") }
             .tag(AppTab.displays)
 
             tabNavigation(title: "Dashboards") {

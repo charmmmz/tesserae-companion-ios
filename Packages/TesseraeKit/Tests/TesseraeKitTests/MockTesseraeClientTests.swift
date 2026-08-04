@@ -302,6 +302,7 @@ final class MockTesseraeClientTests: XCTestCase {
         XCTAssertEqual(pairRequest.client.installationID, "A1B2C3D4-E5F6-47A8-9012-3456789ABCDE")
         XCTAssertEqual(pairResponse.tokenID, "ct_01JABCDEF")
         XCTAssertEqual(devices.devices.first?.rssiDBM, -54)
+        XCTAssertEqual(devices.devices.first?.iconName, "device-tablet")
         XCTAssertEqual(devices.devices.first?.hasPendingRender, true)
         XCTAssertEqual(
             devices.devices.first?.pendingRender?.revision,
@@ -442,6 +443,7 @@ final class MockTesseraeClientTests: XCTestCase {
                 "id": "legacy",
                 "name": "Legacy",
                 "kind": "pico_bin_client",
+                "icon": "device-tablet",
                 "panel": {
                   "width": 800,
                   "height": 480,

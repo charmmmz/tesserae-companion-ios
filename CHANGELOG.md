@@ -13,6 +13,26 @@ capabilities.
 
 ### Changed
 
+- Display cards, Dashboard display-group headers, and Display drag previews now
+  use the display's server-configured Phosphor icon, with the existing panel-
+  orientation symbol retained when an unknown icon slug is received. Display
+  cards place freshness as a compact status dot on the icon so the brand and
+  model row remains visually distinct.
+- Dashboards are grouped under every display they are bound to, with independently
+  collapsible group headers whose state is remembered per Tesserae instance, and
+  an additional Shared Displays group for multi-display dashboards. Group
+  transitions keep preview cards stationary while the section closes, reuse
+  decoded preview artwork for smoother reopening, and prevent hidden controls
+  from receiving taps. Opening a dashboard from
+  one display keeps the preview
+  confirmation sheet, removes repeated target metadata, and targets that display
+  directly. Shared Displays retains the preselected bound-display picker for
+  selective multi-display pushes, with scrolling prioritized over sheet resizing
+  so changing a selection no longer jolts the sheet.
+- Dashboard drag previews now use the same server-selected Phosphor icon as
+  their cards. Display cards gain the same long-press drag ordering, retain
+  their order per Tesserae instance across refreshes, apply that order to Send
+  target and preview menus, and use a clearer display-shaped tab icon.
 - Enabled Apple Reminders sync now performs a catch-up check whenever the App
   becomes active. Foreground and EventKit triggers share one debounced path,
   skip uploading unchanged content while the server snapshot remains fresh,

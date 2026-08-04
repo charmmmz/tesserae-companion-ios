@@ -264,6 +264,7 @@ struct ActivityReconciliationTests {
             id: id,
             name: name,
             kind: "seeed_reterminal_e1004",
+            iconName: "device-tablet",
             panel: PanelProfile(
                 width: 1200,
                 height: 1600,

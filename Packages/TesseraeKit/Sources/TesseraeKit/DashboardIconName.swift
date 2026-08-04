@@ -1,6 +1,6 @@
 import Foundation
 
-public enum DashboardIconName {
+public enum PhosphorIconName {
     private static let legacyAliases = [
         "activity": "pulse",
         "archive-box": "box-arrow-down",
@@ -33,8 +33,20 @@ public enum DashboardIconName {
     }
 }
 
+public enum DashboardIconName {
+    public static func canonical(_ rawValue: String?) -> String? {
+        PhosphorIconName.canonical(rawValue)
+    }
+}
+
 public extension DashboardSummary {
     var canonicalIconName: String? {
-        DashboardIconName.canonical(iconName)
+        PhosphorIconName.canonical(iconName)
+    }
+}
+
+public extension DisplaySummary {
+    var canonicalIconName: String? {
+        PhosphorIconName.canonical(iconName)
     }
 }

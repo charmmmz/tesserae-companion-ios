@@ -14,4 +14,11 @@ final class DashboardIconNameTests: XCTestCase {
         XCTAssertNil(DashboardIconName.canonical(" ph- "))
         XCTAssertNil(DashboardIconName.canonical(nil))
     }
+
+    func testDisplayAndDashboardIconsShareCanonicalization() {
+        XCTAssertEqual(
+            PhosphorIconName.canonical(" ph-device-tablet "),
+            "device-tablet"
+        )
+    }
 }

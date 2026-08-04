@@ -10,6 +10,8 @@ private struct DisplayPreviewRefreshID: Hashable {
 struct DisplaysView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
+    @State private var draggedDisplayID: String?
+    @State private var dropTargetDisplayID: String?
     @State private var selectedDisplay: DisplaySummary?
 
     let isActive: Bool
@@ -21,7 +23,7 @@ struct DisplaysView: View {
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 14) {
-                ForEach(model.displays) { display in
+                ForEach(model.sortedDisplays) { display in
                     Button {
                         selectedDisplay = display
                     } label: {
@@ -32,6 +34,44 @@ struct DisplaysView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("display-card-\(display.id)")
+                    .onDrag {
+                        draggedDisplayID = display.id
+                        return NSItemProvider(object: display.id as NSString)
+                    } preview: {
+                        displayDragPreview(display)
+                    }
+                    .dropDestination(
+                        for: String.self
+                    ) { items, _ in
+                        defer { endDisplayDrag() }
+                        return items.first != nil
+                    } isTargeted: { targeted in
+                        updateDropTarget(display.id, targeted: targeted)
+                    }
+                    .overlay {
+                        if dropTargetDisplayID == display.id {
+                            RoundedRectangle(
+                                cornerRadius: 16,
+                                style: .continuous
+                            )
+                            .strokeBorder(
+                                TesseraeTheme.accent.opacity(0.8),
+                                lineWidth: 2
+                            )
+                            .allowsHitTesting(false)
+                            .transition(.opacity)
+                        }
+                    }
+                    .animation(
+                        .spring(
+                            response: 0.28,
+                            dampingFraction: 0.82
+                        ),
+                        value: model.sortedDisplays.map(\.id)
+                    )
+                    .accessibilityHint(
+                        "Long press and drag to reorder."
+                    )
                     .task(
                         id: display.previewRefreshID(
                             generation: model.displayPreviewGeneration
@@ -90,9 +130,70 @@ struct DisplaysView: View {
         }
         .tesseraeScreenBackground()
     }
+
+    private func displayDragPreview(
+        _ display: DisplaySummary
+    ) -> some View {
+        ReorderDragPreview(title: display.name) {
+            PhosphorIcon(
+                name: display.canonicalIconName,
+                size: 28,
+                fallbackSystemName: display.previewSymbol
+            )
+        }
+        .onDisappear {
+            endDisplayDrag()
+        }
+    }
+
+    private func updateDropTarget(
+        _ targetID: String,
+        targeted: Bool
+    ) {
+        guard targeted else {
+            if dropTargetDisplayID == targetID {
+                withAnimation(.easeOut(duration: 0.12)) {
+                    dropTargetDisplayID = nil
+                }
+            }
+            return
+        }
+
+        withAnimation(.easeInOut(duration: 0.15)) {
+            dropTargetDisplayID = targetID
+        }
+
+        guard
+            let sourceID = draggedDisplayID,
+            sourceID != targetID,
+            let targetIndex = model.sortedDisplays.firstIndex(
+                where: { $0.id == targetID }
+            )
+        else {
+            return
+        }
+
+        withAnimation(
+            .spring(
+                response: 0.28,
+                dampingFraction: 0.82
+            )
+        ) {
+            model.moveDisplay(sourceID, to: targetIndex)
+        }
+    }
+
+    private func endDisplayDrag() {
+        withAnimation(.easeOut(duration: 0.12)) {
+            draggedDisplayID = nil
+            dropTargetDisplayID = nil
+        }
+    }
 }
 
 private struct DisplayCard: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     let display: DisplaySummary
     let preview: PreviewImageState?
     private let previewCanvasSize = CGSize(width: 112, height: 118)
@@ -101,10 +202,7 @@ private struct DisplayCard: View {
         HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 9) {
                 HStack(alignment: .center, spacing: 8) {
-                    Image(systemName: display.freshnessSymbol)
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(display.freshnessColor)
-                        .accessibilityLabel(display.freshnessLabel)
+                    displayIdentityIcon
 
                     Text(display.name)
                         .font(.headline)
@@ -135,6 +233,34 @@ private struct DisplayCard: View {
             panelPreview
         }
         .tesseraeCard()
+    }
+
+    private var displayIdentityIcon: some View {
+        ZStack(alignment: .bottomTrailing) {
+            PhosphorIcon(
+                name: display.canonicalIconName,
+                size: 19,
+                fallbackSystemName: display.previewSymbol
+            )
+
+            Circle()
+                .fill(display.freshnessColor)
+                .frame(width: 8, height: 8)
+                .overlay {
+                    Circle()
+                        .stroke(cardSurfaceColor, lineWidth: 1.5)
+                }
+                .offset(x: 2, y: 2)
+        }
+        .frame(width: 24, height: 24)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(display.freshnessLabel)
+    }
+
+    private var cardSurfaceColor: Color {
+        colorScheme == .dark
+            ? Color(red: 24 / 255, green: 27 / 255, blue: 34 / 255)
+            : .white
     }
 
     private var panelPreview: some View {

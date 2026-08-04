@@ -992,13 +992,18 @@ components:
     Device:
       type: object
       additionalProperties: false
-      required: [id, name, kind, panel, freshness]
+      required: [id, name, kind, icon, panel, freshness]
       properties:
         id:
           type: string
         name:
           type: string
         kind:
+          type: string
+        icon:
+          description: >-
+            Bare Phosphor icon name resolved from the device kind or its
+            per-instance override.
           type: string
         panel:
           $ref: "#/components/schemas/Panel"

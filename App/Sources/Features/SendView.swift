@@ -411,7 +411,7 @@ struct SendView: View {
                 .font(.headline)
                 .padding(.bottom, 2)
 
-            if model.displays.isEmpty {
+            if model.sortedDisplays.isEmpty {
                 ContentUnavailableView {
                     Label("No Displays", systemImage: "rectangle.slash")
                 } description: {
@@ -424,12 +424,12 @@ struct SendView: View {
                 }
                 .frame(maxWidth: .infinity)
             } else {
-                ForEach(model.displays) { display in
+                ForEach(model.sortedDisplays) { display in
                     Button {
                         if selectedDeviceIDs.contains(display.id) {
                             selectedDeviceIDs.remove(display.id)
                             if previewDeviceID == display.id,
-                               let remainingPreview = model.displays.first(
+                               let remainingPreview = model.sortedDisplays.first(
                                    where: {
                                        selectedDeviceIDs.contains($0.id)
                                    }
@@ -539,13 +539,13 @@ struct SendView: View {
            ) {
             return preview
         }
-        return model.displays.first {
+        return model.sortedDisplays.first {
             selectedDeviceIDs.contains($0.id)
-        } ?? model.displays.first
+        } ?? model.sortedDisplays.first
     }
 
     private var selectedDisplays: [DisplaySummary] {
-        model.displays.filter { selectedDeviceIDs.contains($0.id) }
+        model.sortedDisplays.filter { selectedDeviceIDs.contains($0.id) }
     }
 
     private var supportsImageFraming: Bool {
@@ -615,7 +615,7 @@ struct SendView: View {
         if !preferredIDs.isEmpty {
             selectedDeviceIDs = preferredIDs
         } else {
-            selectedDeviceIDs = Set(model.displays.prefix(1).map(\.id))
+            selectedDeviceIDs = Set(model.sortedDisplays.prefix(1).map(\.id))
         }
 
         if let preferredFit = preferences?.imageFitMode,
@@ -628,9 +628,9 @@ struct SendView: View {
                 : availableFitModes.first ?? .fill
         }
 
-        previewDeviceID = model.displays.first {
+        previewDeviceID = model.sortedDisplays.first {
             selectedDeviceIDs.contains($0.id)
-        }?.id ?? model.displays.first?.id
+        }?.id ?? model.sortedDisplays.first?.id
         didLoadSendPreferences = true
     }
 

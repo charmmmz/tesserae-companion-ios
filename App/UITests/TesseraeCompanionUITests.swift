@@ -201,6 +201,48 @@ final class TesseraeCompanionUITests: XCTestCase {
         )
     }
 
+    func testDashboardGroupCollapseDisablesHiddenCards() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launch()
+
+        XCTAssertTrue(
+            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
+        )
+        app.buttons["Explore with Demo Data"].tap()
+        app.tabBars.firstMatch.buttons["Dashboards"].tap()
+
+        let group = app.buttons[
+            "dashboard-section-toggle-display-picpak-kitchen"
+        ]
+        let pantryTitle = app.staticTexts[
+            "dashboard-title-pantry-display-picpak-kitchen"
+        ]
+        let pantryPushButton = app.buttons[
+            "dashboard-push-pantry-display-picpak-kitchen"
+        ]
+        for _ in 0..<4 where !pantryTitle.isHittable {
+            app.swipeUp()
+        }
+        XCTAssertTrue(group.waitForExistence(timeout: 2))
+        XCTAssertTrue(pantryTitle.isHittable)
+        XCTAssertTrue(pantryPushButton.isHittable)
+
+        group.tap()
+        expectation(
+            for: NSPredicate(format: "isHittable == false"),
+            evaluatedWith: pantryPushButton
+        )
+        waitForExpectations(timeout: 2)
+
+        group.tap()
+        expectation(
+            for: NSPredicate(format: "isHittable == true"),
+            evaluatedWith: pantryPushButton
+        )
+        waitForExpectations(timeout: 2)
+    }
+
     func testDemoJourneyAcrossMainTabs() {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
@@ -269,9 +311,37 @@ final class TesseraeCompanionUITests: XCTestCase {
         assertPreview(deskPreview, hasAspectRatio: 1_200.0 / 1_600.0)
 
         tabBar.buttons["Dashboards"].tap()
-        XCTAssertTrue(app.staticTexts["Pantry"].waitForExistence(timeout: 2))
+        let kitchenDashboardGroup = app.buttons[
+            "dashboard-section-toggle-display-picpak-kitchen"
+        ]
+        XCTAssertTrue(kitchenDashboardGroup.waitForExistence(timeout: 2))
+        XCTAssertEqual(kitchenDashboardGroup.value as? String, "Expanded")
+        let pantryTitle = app.staticTexts[
+            "dashboard-title-pantry-display-picpak-kitchen"
+        ]
+        let collapsedPantryPushButton = app.buttons[
+            "dashboard-push-pantry-display-picpak-kitchen"
+        ]
+        for _ in 0..<4 where !pantryTitle.exists {
+            app.swipeUp()
+        }
+        XCTAssertTrue(pantryTitle.waitForExistence(timeout: 2))
+        kitchenDashboardGroup.tap()
+        XCTAssertEqual(kitchenDashboardGroup.value as? String, "Collapsed")
+        expectation(
+            for: NSPredicate(format: "isHittable == false"),
+            evaluatedWith: collapsedPantryPushButton
+        )
+        waitForExpectations(timeout: 2)
+        kitchenDashboardGroup.tap()
+        XCTAssertEqual(kitchenDashboardGroup.value as? String, "Expanded")
+        expectation(
+            for: NSPredicate(format: "isHittable == true"),
+            evaluatedWith: collapsedPantryPushButton
+        )
+        waitForExpectations(timeout: 2)
         let dashboardPreviewButton = app.buttons[
-            "dashboard-preview-button-pantry"
+            "dashboard-preview-button-pantry-display-picpak-kitchen"
         ]
         XCTAssertTrue(dashboardPreviewButton.waitForExistence(timeout: 2))
         let previewLoaded = NSPredicate(format: "isEnabled == true")
@@ -281,7 +351,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         )
         waitForExpectations(timeout: 2)
         let followingDashboardPreviewButton = app.buttons[
-            "dashboard-preview-button-morning"
+            "dashboard-preview-button-photo-frame-display-picpak-kitchen"
         ]
         XCTAssertTrue(followingDashboardPreviewButton.exists)
         let collapsedFollowingDashboardY = followingDashboardPreviewButton.frame.minY
@@ -314,7 +384,9 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Push"].exists)
         XCTAssertFalse(app.buttons["Send Now"].exists)
 
-        let pantryPushButton = app.buttons["dashboard-push-pantry"]
+        let pantryPushButton = app.buttons[
+            "dashboard-push-pantry-display-picpak-kitchen"
+        ]
         XCTAssertTrue(pantryPushButton.exists)
         pantryPushButton.tap()
         let pushDashboardTitle = app.staticTexts[
@@ -336,19 +408,19 @@ final class TesseraeCompanionUITests: XCTestCase {
                 "dashboard-push-preview-pantry"
             ].exists
         )
-        XCTAssertTrue(app.staticTexts["Bound Displays"].exists)
-        XCTAssertTrue(
-            app.descendants(matching: .any)[
-                "dashboard-push-device-picpak-kitchen"
-            ].exists
-        )
+        XCTAssertFalse(app.staticTexts["Bound Displays"].exists)
         XCTAssertFalse(
             app.descendants(matching: .any)[
                 "dashboard-push-device-e1004-desk"
             ].exists
         )
+        XCTAssertFalse(
+            app.descendants(matching: .any)[
+                "dashboard-push-single-target-picpak-kitchen"
+            ].exists
+        )
         let pushToSelectedDisplays = app.buttons[
-            "Push to Selected Displays"
+            "Push to Kitchen"
         ]
         XCTAssertTrue(pushToSelectedDisplays.isEnabled)
         XCTAssertLessThan(
@@ -359,11 +431,50 @@ final class TesseraeCompanionUITests: XCTestCase {
         let dashboardPushScreenshot = XCTAttachment(
             screenshot: app.screenshot()
         )
-        dashboardPushScreenshot.name = "Bound Dashboard Push Sheet"
+        dashboardPushScreenshot.name = "Single Display Dashboard Push Sheet"
         dashboardPushScreenshot.lifetime = .keepAlways
         add(dashboardPushScreenshot)
         app.buttons["Cancel"].tap()
         XCTAssertTrue(pantryPushButton.waitForExistence(timeout: 2))
+
+        let sharedPushButton = app.buttons[
+            "dashboard-push-photo-frame-shared"
+        ]
+        for _ in 0..<5 where !sharedPushButton.exists {
+            app.swipeUp()
+        }
+        XCTAssertTrue(sharedPushButton.waitForExistence(timeout: 2))
+        sharedPushButton.tap()
+        XCTAssertTrue(app.staticTexts["Bound Displays"].waitForExistence(timeout: 2))
+        XCTAssertTrue(
+            app.descendants(matching: .any)[
+                "dashboard-push-device-picpak-kitchen"
+            ].exists
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)[
+                "dashboard-push-device-e1004-desk"
+            ].exists
+        )
+        XCTAssertTrue(app.buttons["Push to 2 Displays"].isEnabled)
+        let sharedSheetTitleY = pushDashboardTitle.frame.minY
+        let deskSelection = app.buttons[
+            "dashboard-push-device-e1004-desk"
+        ]
+        XCTAssertTrue(deskSelection.isHittable)
+        deskSelection.tap()
+        XCTAssertTrue(app.buttons["Push to Kitchen"].waitForExistence(timeout: 2))
+        XCTAssertEqual(
+            pushDashboardTitle.frame.minY,
+            sharedSheetTitleY,
+            accuracy: 1,
+            "Changing a display selection must not resize or jolt the sheet."
+        )
+        deskSelection.tap()
+        XCTAssertTrue(
+            app.buttons["Push to 2 Displays"].waitForExistence(timeout: 2)
+        )
+        app.buttons["Cancel"].tap()
 
         let dashboardScreenshot = XCTAttachment(screenshot: app.screenshot())
         dashboardScreenshot.name = "Dashboard Compact Previews"
@@ -625,16 +736,25 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.buttons["Explore with Demo Data"].tap()
         app.tabBars.firstMatch.buttons["Dashboards"].tap()
 
-        let morning = app.staticTexts["Morning"]
-        let pantry = app.staticTexts["Pantry"]
-        XCTAssertTrue(morning.waitForExistence(timeout: 2))
+        let photoFrame = app.staticTexts[
+            "dashboard-title-photo-frame-display-picpak-kitchen"
+        ]
+        let pantry = app.staticTexts[
+            "dashboard-title-pantry-display-picpak-kitchen"
+        ]
+        XCTAssertTrue(photoFrame.waitForExistence(timeout: 2))
         XCTAssertTrue(pantry.waitForExistence(timeout: 2))
-        let upper = morning.frame.minY < pantry.frame.minY
-            ? morning
+        for _ in 0..<5 where !photoFrame.isHittable || !pantry.isHittable {
+            app.swipeUp()
+        }
+        XCTAssertTrue(photoFrame.isHittable)
+        XCTAssertTrue(pantry.isHittable)
+        let upper = photoFrame.frame.minY < pantry.frame.minY
+            ? photoFrame
             : pantry
-        let lower = morning.frame.minY < pantry.frame.minY
+        let lower = photoFrame.frame.minY < pantry.frame.minY
             ? pantry
-            : morning
+            : photoFrame
 
         lower.coordinate(
             withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)
@@ -646,6 +766,55 @@ final class TesseraeCompanionUITests: XCTestCase {
         )
 
         XCTAssertLessThan(lower.frame.minY, upper.frame.minY)
+    }
+
+    func testDisplayCardsReorderWithLongPressDragAndUpdateSendTargets() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launch()
+
+        XCTAssertTrue(
+            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
+        )
+        app.buttons["Explore with Demo Data"].tap()
+
+        let desk = app.staticTexts["Desk"]
+        let kitchen = app.staticTexts["Kitchen"]
+        XCTAssertTrue(desk.waitForExistence(timeout: 2))
+        XCTAssertTrue(kitchen.waitForExistence(timeout: 2))
+        let movingKitchen = kitchen.frame.minY > desk.frame.minY
+        let upper = desk.frame.minY < kitchen.frame.minY
+            ? desk
+            : kitchen
+        let lower = desk.frame.minY < kitchen.frame.minY
+            ? kitchen
+            : desk
+
+        lower.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)
+        ).press(
+            forDuration: 0.45,
+            thenDragTo: upper.coordinate(
+                withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)
+            )
+        )
+
+        XCTAssertLessThan(lower.frame.minY, upper.frame.minY)
+
+        app.tabBars.firstMatch.buttons["Send"].tap()
+        let movedTarget = app.buttons[
+            movingKitchen
+                ? "send-display-picpak-kitchen"
+                : "send-display-e1004-desk"
+        ]
+        let otherTarget = app.buttons[
+            movingKitchen
+                ? "send-display-e1004-desk"
+                : "send-display-picpak-kitchen"
+        ]
+        XCTAssertTrue(movedTarget.waitForExistence(timeout: 2))
+        XCTAssertTrue(otherTarget.exists)
+        XCTAssertLessThan(movedTarget.frame.minY, otherTarget.frame.minY)
     }
 
     private func assertPreview(

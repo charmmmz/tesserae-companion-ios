@@ -372,6 +372,7 @@ public struct DisplaySummary: Codable, Identifiable, Hashable, Sendable {
     public let id: String
     public let name: String
     public let kind: String
+    public let iconName: String
     public let panel: PanelProfile
     public let freshness: DisplayFreshness
     public let lastSeenAt: Date?
@@ -385,6 +386,7 @@ public struct DisplaySummary: Codable, Identifiable, Hashable, Sendable {
         id: String,
         name: String,
         kind: String,
+        iconName: String,
         panel: PanelProfile,
         freshness: DisplayFreshness,
         lastSeenAt: Date? = nil,
@@ -397,6 +399,7 @@ public struct DisplaySummary: Codable, Identifiable, Hashable, Sendable {
         self.id = id
         self.name = name
         self.kind = kind
+        self.iconName = iconName
         self.panel = panel
         self.freshness = freshness
         self.lastSeenAt = lastSeenAt
@@ -411,6 +414,7 @@ public struct DisplaySummary: Codable, Identifiable, Hashable, Sendable {
         case id
         case name
         case kind
+        case iconName = "icon"
         case panel
         case freshness
         case lastSeenAt

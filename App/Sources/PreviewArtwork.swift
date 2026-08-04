@@ -1,6 +1,28 @@
 import SwiftUI
 import UIKit
 
+@MainActor
+private final class PreviewImageCache {
+    static let shared = PreviewImageCache()
+
+    private let images = NSCache<NSData, UIImage>()
+
+    private init() {
+        images.countLimit = 48
+    }
+
+    func image(for data: Data?) -> UIImage? {
+        guard let data else { return nil }
+        let key = data as NSData
+        if let cached = images.object(forKey: key) {
+            return cached
+        }
+        guard let image = UIImage(data: data) else { return nil }
+        images.setObject(image, forKey: key)
+        return image
+    }
+}
+
 struct PreviewArtwork: View {
     let state: PreviewImageState?
     let placeholderSystemName: String
@@ -52,6 +74,6 @@ struct PreviewArtwork: View {
     }
 
     private var image: UIImage? {
-        state?.data.flatMap(UIImage.init(data:))
+        PreviewImageCache.shared.image(for: state?.data)
     }
 }

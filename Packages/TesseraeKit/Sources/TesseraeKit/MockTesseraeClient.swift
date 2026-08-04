@@ -88,6 +88,7 @@ public actor MockTesseraeClient: TesseraeServing {
                 id: "picpak-kitchen",
                 name: "Kitchen",
                 kind: "picpak",
+                iconName: "device-tablet",
                 panel: PanelProfile(
                     width: 800,
                     height: 480,
@@ -110,6 +111,7 @@ public actor MockTesseraeClient: TesseraeServing {
                 id: "e1004-desk",
                 name: "Desk",
                 kind: "reterminal_e1004",
+                iconName: "monitor",
                 panel: PanelProfile(
                     width: 1200,
                     height: 1600,
@@ -176,7 +178,8 @@ public actor MockTesseraeClient: TesseraeServing {
         instance: TesseraeInstance
     ) async throws -> PreviewFetchResult {
         try await pause()
-        let eTag = "\"dashboard-preview-\(id)\""
+        let previewTarget = deviceID ?? "default"
+        let eTag = "\"dashboard-preview-\(id)-\(previewTarget)\""
         if ifNoneMatch == eTag {
             return .notModified
         }

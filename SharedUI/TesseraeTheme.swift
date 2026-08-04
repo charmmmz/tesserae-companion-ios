@@ -14,6 +14,28 @@ enum TesseraeTheme {
     }
 }
 
+struct ReorderDragPreview<Icon: View>: View {
+    let title: String
+    @ViewBuilder let icon: () -> Icon
+
+    var body: some View {
+        Label {
+            Text(title)
+        } icon: {
+            icon()
+        }
+        .font(.subheadline.weight(.semibold))
+        .lineLimit(1)
+        .foregroundStyle(.white)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            TesseraeTheme.accent.opacity(0.9),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
+    }
+}
+
 private struct TesseraeScreenBackdrop: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.displayScale) private var displayScale

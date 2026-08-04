@@ -13,10 +13,18 @@ private enum QueuedLinkSubmissionError: Error, LocalizedError {
     }
 }
 
+private struct DashboardPreviewKey: Hashable {
+    let dashboardID: String
+    let deviceID: String?
+}
+
 @MainActor
 @Observable
 final class AppModel {
+    private static let displayOrderKeyPrefix = "display-order."
     private static let dashboardOrderKeyPrefix = "dashboard-order."
+    private static let collapsedDashboardSectionsKeyPrefix =
+        "dashboard-collapsed-sections."
 
     enum ConnectionMode {
         case live
@@ -46,7 +54,7 @@ final class AppModel {
     private var activityRefreshTask: Task<Void, Never>?
     private var displayPreviewRequestIDs: [String: UUID] = [:]
     private var pendingDisplayPreviewRequestIDs: [String: UUID] = [:]
-    private var dashboardPreviewRequestIDs: [String: UUID] = [:]
+    private var dashboardPreviewRequestIDs: [DashboardPreviewKey: UUID] = [:]
 
     var activeInstance: TesseraeInstance?
     var connectionMode: ConnectionMode?
@@ -68,10 +76,12 @@ final class AppModel {
     var historyPreviews: [String: PreviewImageState] = [:]
     var displayPreviews: [String: PreviewImageState] = [:]
     var pendingDisplayPreviews: [String: PreviewImageState] = [:]
-    var dashboardPreviews: [String: PreviewImageState] = [:]
+    private var dashboardPreviews: [DashboardPreviewKey: PreviewImageState] = [:]
     var previewGeneration = 0
     var displayPreviewGeneration = 0
+    var displayOrderIDs: [String] = []
     var dashboardOrderIDs: [String] = []
+    var collapsedDashboardSectionIDs: Set<String> = []
     var activeOperationIDs: Set<String> = []
     var isRefreshing = false
     var isRefreshingDashboards = false
@@ -137,6 +147,30 @@ final class AppModel {
         }
 
         return dashboards.sorted { lhs, rhs in
+            switch (ranking[lhs.id], ranking[rhs.id]) {
+            case let (lhsRank?, rhsRank?):
+                return lhsRank < rhsRank
+            case (_?, nil):
+                return true
+            case (nil, _?):
+                return false
+            case (nil, nil):
+                let nameOrder = lhs.name.localizedStandardCompare(rhs.name)
+                if nameOrder != .orderedSame {
+                    return nameOrder == .orderedAscending
+                }
+                return lhs.id < rhs.id
+            }
+        }
+    }
+
+    var sortedDisplays: [DisplaySummary] {
+        var ranking: [String: Int] = [:]
+        for displayID in displayOrderIDs where ranking[displayID] == nil {
+            ranking[displayID] = ranking.count
+        }
+
+        return displays.sorted { lhs, rhs in
             switch (ranking[lhs.id], ranking[rhs.id]) {
             case let (lhsRank?, rhsRank?):
                 return lhsRank < rhsRank
@@ -237,7 +271,9 @@ final class AppModel {
             pendingDisplayPreviewRequestIDs = [:]
             dashboardPreviews = [:]
             dashboardPreviewRequestIDs = [:]
+            loadDisplayOrder(for: session.instance.id)
             loadDashboardOrder(for: session.instance.id)
+            loadCollapsedDashboardSections(for: session.instance.id)
             if mode == .live {
                 await persistSnapshot()
             }
@@ -275,7 +311,9 @@ final class AppModel {
             activeClient = liveClient
             connectionMode = .live
             activeInstance = snapshot.activeInstance
+            loadDisplayOrder(for: snapshot.activeInstance.id)
             loadDashboardOrder(for: snapshot.activeInstance.id)
+            loadCollapsedDashboardSections(for: snapshot.activeInstance.id)
             capabilities = snapshot.capabilities
             displays = snapshot.displays
             dashboards = snapshot.dashboards
@@ -354,6 +392,7 @@ final class AppModel {
                 historyPreviews = [:]
             }
             await refreshTrackedJobs(instance: currentInstance)
+            reconcileDisplayOrder()
             reconcileDashboardOrder()
             connectionHealth = .connected
             connectionNotice = nil
@@ -370,10 +409,10 @@ final class AppModel {
                     pendingPreviewKeys.contains($0.key)
                 }
                 dashboardPreviews = dashboardPreviews.filter {
-                    dashboardIDs.contains($0.key)
+                    dashboardIDs.contains($0.key.dashboardID)
                 }
                 dashboardPreviewRequestIDs = dashboardPreviewRequestIDs.filter {
-                    dashboardIDs.contains($0.key)
+                    dashboardIDs.contains($0.key.dashboardID)
                 }
             } else {
                 displayPreviews = [:]
@@ -419,6 +458,7 @@ final class AppModel {
             }
 
             displays = refreshedDisplays
+            reconcileDisplayOrder()
             connectionHealth = .connected
             connectionNotice = nil
 
@@ -554,10 +594,10 @@ final class AppModel {
             if supportsPreviews {
                 let dashboardIDs = Set(refreshedDashboards.map(\.id))
                 dashboardPreviews = dashboardPreviews.filter {
-                    dashboardIDs.contains($0.key)
+                    dashboardIDs.contains($0.key.dashboardID)
                 }
                 dashboardPreviewRequestIDs = dashboardPreviewRequestIDs.filter {
-                    dashboardIDs.contains($0.key)
+                    dashboardIDs.contains($0.key.dashboardID)
                 }
             } else {
                 dashboardPreviews = [:]
@@ -612,6 +652,40 @@ final class AppModel {
 
         dashboardOrderIDs = orderedIDs
         saveDashboardOrder()
+    }
+
+    func moveDisplay(
+        _ displayID: String,
+        to destinationIndex: Int
+    ) {
+        var orderedIDs = sortedDisplays.map(\.id)
+        guard let sourceIndex = orderedIDs.firstIndex(of: displayID) else {
+            return
+        }
+
+        orderedIDs.remove(at: sourceIndex)
+        let boundedIndex = min(max(0, destinationIndex), orderedIDs.count)
+        orderedIDs.insert(displayID, at: boundedIndex)
+        guard orderedIDs != displayOrderIDs else { return }
+
+        displayOrderIDs = orderedIDs
+        saveDisplayOrder()
+    }
+
+    func setDashboardSectionCollapsed(
+        _ sectionID: String,
+        isCollapsed: Bool
+    ) {
+        var updatedIDs = collapsedDashboardSectionIDs
+        if isCollapsed {
+            updatedIDs.insert(sectionID)
+        } else {
+            updatedIDs.remove(sectionID)
+        }
+        guard updatedIDs != collapsedDashboardSectionIDs else { return }
+
+        collapsedDashboardSectionIDs = updatedIDs
+        saveCollapsedDashboardSections()
     }
 
     @discardableResult
@@ -1484,11 +1558,24 @@ final class AppModel {
         return "\(display.id)|\(revision)"
     }
 
-    func loadDashboardPreview(_ dashboard: DashboardSummary) async {
+    func dashboardPreview(
+        for dashboard: DashboardSummary,
+        deviceID: String?
+    ) -> PreviewImageState? {
+        dashboardPreviews[
+            dashboardPreviewKey(dashboard, deviceID: deviceID)
+        ]
+    }
+
+    func loadDashboardPreview(
+        _ dashboard: DashboardSummary,
+        deviceID: String? = nil
+    ) async {
         guard supportsPreviews, let instance = activeInstance else {
             return
         }
-        let stored = dashboardPreviews[dashboard.id] ?? .idle
+        let key = dashboardPreviewKey(dashboard, deviceID: deviceID)
+        let stored = dashboardPreviews[key] ?? .idle
         let previous = stored.phase == .loading
             ? PreviewImageState(
                 data: stored.data,
@@ -1497,8 +1584,8 @@ final class AppModel {
             )
             : stored
         let requestID = UUID()
-        dashboardPreviewRequestIDs[dashboard.id] = requestID
-        dashboardPreviews[dashboard.id] = PreviewImageState(
+        dashboardPreviewRequestIDs[key] = requestID
+        dashboardPreviews[key] = PreviewImageState(
             data: previous.data,
             eTag: previous.eTag,
             phase: .loading
@@ -1509,16 +1596,16 @@ final class AppModel {
                 try Task.checkCancellation()
                 let result = try await activeClient.fetchDashboardPreview(
                     id: dashboard.id,
-                    deviceID: dashboard.deviceIDs.first,
+                    deviceID: key.deviceID,
                     ifNoneMatch: previous.data == nil ? nil : previous.eTag,
                     instance: instance
                 )
-                guard dashboardPreviewRequestIDs[dashboard.id] == requestID else {
+                guard dashboardPreviewRequestIDs[key] == requestID else {
                     return
                 }
                 guard activeInstance?.id == instance.id, !Task.isCancelled else {
-                    dashboardPreviews[dashboard.id] = previous
-                    dashboardPreviewRequestIDs[dashboard.id] = nil
+                    dashboardPreviews[key] = previous
+                    dashboardPreviewRequestIDs[key] = nil
                     return
                 }
                 if case let .preparing(retryAfterSeconds) = result {
@@ -1535,41 +1622,51 @@ final class AppModel {
                     result,
                     previous: previous,
                     to: &dashboardPreviews,
-                    key: dashboard.id
+                    key: key
                 )
-                dashboardPreviewRequestIDs[dashboard.id] = nil
+                dashboardPreviewRequestIDs[key] = nil
                 return
             }
-            guard dashboardPreviewRequestIDs[dashboard.id] == requestID else {
+            guard dashboardPreviewRequestIDs[key] == requestID else {
                 return
             }
             finishFailedPreview(
                 previous: previous,
                 in: &dashboardPreviews,
-                key: dashboard.id
+                key: key
             )
-            dashboardPreviewRequestIDs[dashboard.id] = nil
+            dashboardPreviewRequestIDs[key] = nil
         } catch is CancellationError {
-            guard dashboardPreviewRequestIDs[dashboard.id] == requestID else {
+            guard dashboardPreviewRequestIDs[key] == requestID else {
                 return
             }
             finishCancelledPreview(
                 previous: previous,
                 in: &dashboardPreviews,
-                key: dashboard.id
+                key: key
             )
-            dashboardPreviewRequestIDs[dashboard.id] = nil
+            dashboardPreviewRequestIDs[key] = nil
         } catch {
-            guard dashboardPreviewRequestIDs[dashboard.id] == requestID else {
+            guard dashboardPreviewRequestIDs[key] == requestID else {
                 return
             }
             finishFailedPreview(
                 previous: previous,
                 in: &dashboardPreviews,
-                key: dashboard.id
+                key: key
             )
-            dashboardPreviewRequestIDs[dashboard.id] = nil
+            dashboardPreviewRequestIDs[key] = nil
         }
+    }
+
+    private func dashboardPreviewKey(
+        _ dashboard: DashboardSummary,
+        deviceID: String?
+    ) -> DashboardPreviewKey {
+        DashboardPreviewKey(
+            dashboardID: dashboard.id,
+            deviceID: deviceID ?? dashboard.deviceIDs.first
+        )
     }
 
     func loadHistoryPreview(_ item: HistoryItem) async {
@@ -1726,7 +1823,9 @@ final class AppModel {
         pendingDisplayPreviewRequestIDs = [:]
         dashboardPreviews = [:]
         dashboardPreviewRequestIDs = [:]
+        displayOrderIDs = []
         dashboardOrderIDs = []
+        collapsedDashboardSectionIDs = []
         activeClient = liveClient
         if let disconnectError {
             lastError = disconnectError.localizedDescription
@@ -1771,7 +1870,9 @@ final class AppModel {
             pendingDisplayPreviewRequestIDs = [:]
             dashboardPreviews = [:]
             dashboardPreviewRequestIDs = [:]
+            displayOrderIDs = []
             dashboardOrderIDs = []
+            collapsedDashboardSectionIDs = []
             activeClient = liveClient
             connectionHealth = .requiresPairing
             connectionNotice = String(
@@ -1802,10 +1903,48 @@ final class AppModel {
         }
     }
 
+    private func loadDisplayOrder(for instanceID: String) {
+        displayOrderIDs = UserDefaults.standard.stringArray(
+            forKey: Self.displayOrderKeyPrefix + instanceID
+        ) ?? []
+    }
+
     private func loadDashboardOrder(for instanceID: String) {
         dashboardOrderIDs = UserDefaults.standard.stringArray(
             forKey: Self.dashboardOrderKeyPrefix + instanceID
         ) ?? []
+    }
+
+    private func loadCollapsedDashboardSections(for instanceID: String) {
+        collapsedDashboardSectionIDs = Set(
+            UserDefaults.standard.stringArray(
+                forKey: Self.collapsedDashboardSectionsKeyPrefix + instanceID
+            ) ?? []
+        )
+    }
+
+    private func reconcileDisplayOrder() {
+        let availableIDs = Set(displays.map(\.id))
+        var seenIDs: Set<String> = []
+        let retainedIDs = displayOrderIDs.filter { displayID in
+            availableIDs.contains(displayID)
+                && seenIDs.insert(displayID).inserted
+        }
+        let newIDs = displays
+            .filter { !seenIDs.contains($0.id) }
+            .sorted { lhs, rhs in
+                let nameOrder = lhs.name.localizedStandardCompare(rhs.name)
+                if nameOrder != .orderedSame {
+                    return nameOrder == .orderedAscending
+                }
+                return lhs.id < rhs.id
+            }
+            .map(\.id)
+        let normalizedOrder = retainedIDs + newIDs
+
+        guard normalizedOrder != displayOrderIDs else { return }
+        displayOrderIDs = normalizedOrder
+        saveDisplayOrder()
     }
 
     private func reconcileDashboardOrder() {
@@ -1837,6 +1976,22 @@ final class AppModel {
         UserDefaults.standard.set(
             dashboardOrderIDs,
             forKey: Self.dashboardOrderKeyPrefix + instanceID
+        )
+    }
+
+    private func saveDisplayOrder() {
+        guard let instanceID = activeInstance?.id else { return }
+        UserDefaults.standard.set(
+            displayOrderIDs,
+            forKey: Self.displayOrderKeyPrefix + instanceID
+        )
+    }
+
+    private func saveCollapsedDashboardSections() {
+        guard let instanceID = activeInstance?.id else { return }
+        UserDefaults.standard.set(
+            collapsedDashboardSectionIDs.sorted(),
+            forKey: Self.collapsedDashboardSectionsKeyPrefix + instanceID
         )
     }
 
@@ -1958,11 +2113,11 @@ final class AppModel {
         }
     }
 
-    private func apply(
+    private func apply<Key: Hashable>(
         _ result: PreviewFetchResult,
         previous: PreviewImageState,
-        to previews: inout [String: PreviewImageState],
-        key: String
+        to previews: inout [Key: PreviewImageState],
+        key: Key
     ) {
         switch result {
         case let .image(data, eTag):
@@ -1992,10 +2147,10 @@ final class AppModel {
         }
     }
 
-    private func finishCancelledPreview(
+    private func finishCancelledPreview<Key: Hashable>(
         previous: PreviewImageState,
-        in previews: inout [String: PreviewImageState],
-        key: String
+        in previews: inout [Key: PreviewImageState],
+        key: Key
     ) {
         previews[key] = PreviewImageState(
             data: previous.data,
@@ -2004,10 +2159,10 @@ final class AppModel {
         )
     }
 
-    private func finishFailedPreview(
+    private func finishFailedPreview<Key: Hashable>(
         previous: PreviewImageState,
-        in previews: inout [String: PreviewImageState],
-        key: String
+        in previews: inout [Key: PreviewImageState],
+        key: Key
     ) {
         previews[key] = PreviewImageState(
             data: previous.data,
