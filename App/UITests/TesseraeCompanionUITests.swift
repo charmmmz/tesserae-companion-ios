@@ -914,9 +914,12 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Stretch"].exists)
         XCTAssertTrue(app.buttons["Center"].exists)
         XCTAssertFalse(app.buttons["More"].exists)
-        let previewPicker = app.buttons["send-preview-display-picker"]
+        let previewPicker = app.descendants(matching: .any)[
+            "send-preview-display-picker"
+        ]
+        let previewPickerButton = app.buttons["send-preview-display-picker"]
         XCTAssertTrue(previewPicker.waitForExistence(timeout: 2))
-        XCTAssertFalse(previewPicker.isEnabled)
+        XCTAssertFalse(previewPickerButton.exists)
         for _ in 0..<4 where !deskTarget.isHittable {
             app.swipeUp()
         }
@@ -933,7 +936,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(initiallySelectedTarget.isHittable)
         initiallySelectedTarget.tap()
         XCTAssertTrue(previewPicker.label.contains("None selected"))
-        XCTAssertFalse(previewPicker.isEnabled)
+        XCTAssertFalse(previewPickerButton.exists)
         XCTAssertEqual(
             targetList.frame.minY,
             initialTargetListY,
@@ -947,10 +950,10 @@ final class TesseraeCompanionUITests: XCTestCase {
             initialTargetListY,
             accuracy: 1
         )
-        XCTAssertTrue(previewPicker.isEnabled)
+        XCTAssertTrue(previewPickerButton.waitForExistence(timeout: 2))
         let previewPickerFrame = previewPicker.frame
         let previewWasKitchen = previewPicker.label.contains("Kitchen")
-        previewPicker.tap()
+        previewPickerButton.tap()
         let otherPreviewOption = app.buttons[
             previewWasKitchen
                 ? "send-preview-display-e1004-desk"
@@ -959,21 +962,21 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(otherPreviewOption.waitForExistence(timeout: 2))
         otherPreviewOption.tap()
         XCTAssertEqual(
-            previewPicker.frame.maxX,
-            previewPickerFrame.maxX,
+            previewPicker.frame.midX,
+            previewPickerFrame.midX,
             accuracy: 1
         )
-        if previewWasKitchen {
-            XCTAssertLessThan(
-                previewPicker.frame.width,
-                previewPickerFrame.width
+        XCTAssertTrue(
+            previewPicker.label.contains(
+                previewWasKitchen ? "Desk" : "Kitchen"
             )
-        } else {
-            XCTAssertGreaterThan(
-                previewPicker.frame.width,
-                previewPickerFrame.width
-            )
+        )
+        XCTAssertTrue(previewPicker.label.contains("·"))
+        XCTAssertTrue(previewPicker.label.contains("×"))
+        for _ in 0..<4 where kitchenTarget.frame.minY < 110 {
+            app.swipeDown()
         }
+        XCTAssertGreaterThanOrEqual(kitchenTarget.frame.minY, 110)
         let targetListYBeforeKitchenToggle = targetList.frame.minY
         kitchenTarget.tap()
         XCTAssertEqual(
@@ -981,10 +984,10 @@ final class TesseraeCompanionUITests: XCTestCase {
             targetListYBeforeKitchenToggle,
             accuracy: 1
         )
-        XCTAssertFalse(previewPicker.isEnabled)
+        XCTAssertTrue(previewPickerButton.waitForNonExistence(timeout: 2))
         kitchenTarget.tap()
-        XCTAssertTrue(previewPicker.isEnabled)
-        previewPicker.tap()
+        XCTAssertTrue(previewPickerButton.waitForExistence(timeout: 2))
+        previewPickerButton.tap()
         let deskPreviewOption = app.buttons[
             "send-preview-display-e1004-desk"
         ]
@@ -994,14 +997,13 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.buttons["Use Sample"].tap()
         let changePhoto = app.buttons["send-change-photo"]
         XCTAssertTrue(changePhoto.waitForExistence(timeout: 2))
-        let previewMetadata = app.descendants(matching: .any)[
-            "send-preview-metadata"
-        ]
-        XCTAssertTrue(previewMetadata.exists)
-        XCTAssertTrue(previewMetadata.label.contains("×"))
-        XCTAssertTrue(previewMetadata.label.contains("·"))
-        XCTAssertFalse(previewMetadata.label.contains("Desk"))
-        XCTAssertTrue(app.staticTexts["Previewing on"].exists)
+        XCTAssertFalse(
+            app.descendants(matching: .any)["send-preview-metadata"].exists
+        )
+        XCTAssertTrue(previewPicker.label.contains("Desk"))
+        XCTAssertTrue(previewPicker.label.contains("·"))
+        XCTAssertTrue(previewPicker.label.contains("×"))
+        XCTAssertFalse(app.staticTexts["Previewing on"].exists)
         XCTAssertLessThan(changePhoto.frame.maxY, previewPicker.frame.minY)
         let panelPreview = app.descendants(matching: .any)["send-panel-preview"]
         XCTAssertTrue(panelPreview.waitForExistence(timeout: 2))

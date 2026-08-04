@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 
 struct SendView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var source: SendSource = .photo
     @State private var pickerItem: PhotosPickerItem?
     @State private var isPhotoPickerPresented = false
@@ -21,7 +22,10 @@ struct SendView: View {
     @State private var didLoadSendPreferences = false
     @State private var sentConfirmationPresented = false
     @State private var sentConfirmationMessage = ""
-    private let previewSlotHeight: CGFloat = 310
+
+    private var previewSlotHeight: CGFloat {
+        276 + 9 + previewTargetPickerHeight
+    }
 
     var body: some View {
         ScrollView {
@@ -29,13 +33,13 @@ struct SendView: View {
                 if supportsLinks {
                     sourceCard
                 }
+                targetCard
                 if source == .photo {
                     imagePickerCard
                 } else {
                     linkCard
                 }
                 fitCard
-                targetCard
 
                 Button {
                     Task {
@@ -141,7 +145,7 @@ struct SendView: View {
     }
 
     private var linkCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("Link")
                 .font(.headline)
 
@@ -188,42 +192,10 @@ struct SendView: View {
     }
 
     private var imagePickerCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 10) {
-                Text("Preview")
-                    .font(.headline)
-                    .accessibilityIdentifier("send-preview-title")
-                Spacer(minLength: 8)
-                if imageData != nil {
-                    Button {
-                        isPhotoPickerPresented = true
-                    } label: {
-                        Text("Change Photo")
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(TesseraeTheme.accent)
-                            .padding(.horizontal, 2)
-                            .frame(height: 34)
-                    }
-                    .buttonStyle(.plain)
-                    .fixedSize()
-                    .accessibilityIdentifier("send-change-photo")
-                }
-            }
-            .frame(height: 34)
+        VStack(alignment: .leading, spacing: 10) {
+            previewHeader
 
             simulatedPanel
-
-            Divider()
-
-            HStack(spacing: 10) {
-                Text("Previewing on")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                Spacer(minLength: 8)
-                previewTargetPicker
-            }
-            .frame(minHeight: 34)
-            .accessibilityElement(children: .contain)
 
             if model.connectionMode == .demo {
                 Button("Use Sample") {
@@ -248,40 +220,84 @@ struct SendView: View {
     }
 
     @ViewBuilder
+    private var previewHeader: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 8) {
+                previewTitle
+                changePhotoButton
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                previewTitle
+                Spacer(minLength: 8)
+                changePhotoButton
+            }
+        }
+    }
+
+    private var previewTitle: some View {
+        Text("Preview")
+            .font(.headline)
+            .accessibilityIdentifier("send-preview-title")
+    }
+
+    @ViewBuilder
+    private var changePhotoButton: some View {
+        if imageData != nil {
+            Button {
+                isPhotoPickerPresented = true
+            } label: {
+                Text("Change Photo")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(TesseraeTheme.accent)
+                    .padding(.horizontal, 2)
+                    .padding(.vertical, 7)
+            }
+            .buttonStyle(.plain)
+            .fixedSize(horizontal: true, vertical: false)
+            .accessibilityIdentifier("send-change-photo")
+        }
+    }
+
+    @ViewBuilder
     private var simulatedPanel: some View {
-        Group {
+        VStack(spacing: 9) {
             if let previewDisplay {
                 let panel = previewDisplay.panel
 
-                VStack(spacing: 9) {
-                    TesseraePanelImagePreview(
-                        image: previewImage,
-                        panel: panel,
-                        fit: fitMode,
-                        maximumCanvasHeight: 250,
-                        emptyTitle: imageSelectionLabel,
-                        accessibilityIdentifier: "send-panel-preview",
-                        imageAccessibilityIdentifier: "selected-image-preview",
-                        framing: framingEditorIsActive
-                            ? $imageFraming
-                            : nil,
-                        maximumFramingZoom: maximumFramingZoom
+                TesseraePanelImagePreview(
+                    image: previewImage,
+                    panel: panel,
+                    fit: fitMode,
+                    maximumCanvasHeight: 250,
+                    emptyTitle: imageSelectionLabel,
+                    accessibilityIdentifier: "send-panel-preview",
+                    imageAccessibilityIdentifier: "selected-image-preview",
+                    framing: framingEditorIsActive
+                        ? $imageFraming
+                        : nil,
+                    maximumFramingZoom: maximumFramingZoom,
+                    onCanvasTap: choosePhotoFromPreview
+                )
+                .accessibilityValue(
+                    previewAccessibilityValue(
+                        panel: panel
                     )
-                    .accessibilityValue(
-                        previewAccessibilityValue(
-                            panel: panel
-                        )
-                    )
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 276)
-
-                    Text(previewMetadata(panel: panel))
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-                    .accessibilityIdentifier("send-preview-metadata")
+                )
+                .accessibilityAddTraits(
+                    framingEditorIsActive ? AccessibilityTraits() : .isButton
+                )
+                .accessibilityHint(
+                    framingEditorIsActive
+                        ? "Drag to reposition the photo and pinch to zoom."
+                        : "Tap to choose a photo."
+                )
+                .accessibilityAction {
+                    choosePhotoFromPreview()
                 }
+                .frame(maxWidth: .infinity)
+                .frame(height: 276, alignment: .top)
             } else {
                 ContentUnavailableView {
                     Label("No display selected", systemImage: "rectangle.slash")
@@ -289,73 +305,82 @@ struct SendView: View {
                     Text("Connect a display to preview its panel shape.")
                 }
                 .frame(maxWidth: .infinity)
+                .frame(height: 276, alignment: .top)
             }
+
+            previewFooter
         }
         .frame(height: previewSlotHeight)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            guard !framingEditorIsActive else { return }
-            isPhotoPickerPresented = true
-        }
-        .accessibilityAddTraits(
-            framingEditorIsActive ? AccessibilityTraits() : .isButton
-        )
-        .accessibilityHint(
-            framingEditorIsActive
-                ? "Drag to reposition the photo and pinch to zoom."
-                : "Tap to choose a photo."
-        )
-        .accessibilityAction {
-            if !framingEditorIsActive {
-                isPhotoPickerPresented = true
+    }
+
+    private var previewFooter: some View {
+        previewTargetPicker
+            .frame(maxWidth: .infinity, alignment: .center)
+            .accessibilityElement(children: .contain)
+    }
+
+    private func choosePhotoFromPreview() {
+        guard !framingEditorIsActive else { return }
+        isPhotoPickerPresented = true
+    }
+
+    @ViewBuilder
+    private var previewTargetPicker: some View {
+        if selectedDisplays.count > 1 {
+            Menu {
+                ForEach(selectedDisplays) { display in
+                    Button {
+                        previewDeviceID = display.id
+                    } label: {
+                        Label(
+                            display.name,
+                            systemImage: previewDisplay?.id == display.id
+                                ? "checkmark.circle.fill"
+                                : "circle"
+                        )
+                    }
+                    .accessibilityIdentifier(
+                        "send-preview-display-\(display.id)"
+                    )
+                }
+            } label: {
+                previewTargetLabel(showsChevron: true)
             }
+            .menuIndicator(.hidden)
+            .accessibilityIdentifier("send-preview-display-picker")
+        } else {
+            previewTargetLabel(showsChevron: false)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(previewTargetSummary)
+                .accessibilityIdentifier("send-preview-display-picker")
         }
     }
 
-    private var previewTargetPicker: some View {
-        Menu {
-            ForEach(selectedDisplays) { display in
-                Button {
-                    previewDeviceID = display.id
-                } label: {
-                    Label(
-                        display.name,
-                        systemImage: previewDisplay?.id == display.id
-                            ? "checkmark.circle.fill"
-                            : "circle"
-                    )
-                }
-                .accessibilityIdentifier(
-                    "send-preview-display-\(display.id)"
-                )
-            }
-        } label: {
-            HStack(spacing: 5) {
-                Image(
-                    systemName: selectedDisplays.isEmpty
-                        ? "rectangle.slash"
-                        : "rectangle.on.rectangle"
-                )
-                Text(previewTargetName)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(width: previewTargetNameWidth, alignment: .leading)
+    private func previewTargetLabel(showsChevron: Bool) -> some View {
+        HStack(spacing: 5) {
+            Image(
+                systemName: selectedDisplays.isEmpty
+                    ? "rectangle.slash"
+                    : "rectangle.on.rectangle"
+            )
+            Text(previewTargetSummary)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                .truncationMode(.middle)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
+            if showsChevron {
                 Image(systemName: "chevron.down")
                     .font(.caption2.weight(.bold))
             }
-            .font(.footnote.weight(.semibold))
-            .foregroundStyle(TesseraeTheme.accent)
-            .padding(.horizontal, 10)
-            .frame(width: previewTargetPickerWidth, height: 32)
-            .background(
-                TesseraeTheme.accent.opacity(0.12),
-                in: Capsule()
-            )
         }
-        .menuIndicator(.hidden)
-        .disabled(selectedDisplays.count <= 1)
+        .font(.footnote.weight(.semibold))
+        .foregroundStyle(TesseraeTheme.accent)
+        .padding(.horizontal, 2)
+        .padding(.vertical, 7)
+        .frame(height: previewTargetPickerHeight)
+        .contentShape(Rectangle())
         .layoutPriority(1)
-        .accessibilityIdentifier("send-preview-display-picker")
     }
 
     private var previewTargetName: String {
@@ -365,30 +390,19 @@ struct SendView: View {
         return previewDisplay?.name ?? String(localized: "Preview Display")
     }
 
-    private var previewTargetNameWidth: CGFloat {
-        min(measuredPreviewTargetNameWidth, 114)
+    private var previewTargetSummary: String {
+        guard !selectedDisplays.isEmpty, let panel = previewDisplay?.panel else {
+            return previewTargetName
+        }
+        return "\(previewTargetName) · \(panel.width) × \(panel.height)"
     }
 
-    private var previewTargetPickerWidth: CGFloat {
-        min(max(previewTargetNameWidth + 76, 112), 190)
-    }
-
-    private var measuredPreviewTargetNameWidth: CGFloat {
-        let pointSize = UIFont.preferredFont(forTextStyle: .footnote).pointSize
-        let font = UIFont.systemFont(ofSize: pointSize, weight: .semibold)
-        return ceil((previewTargetName as NSString).size(
-            withAttributes: [.font: font]
-        ).width)
-    }
-
-    private func previewMetadata(panel: PanelProfile) -> String {
-        let resolution = "\(panel.width) × \(panel.height)"
-        guard let imageData else { return resolution }
-        let fileSize = ByteCountFormatter.string(
-            fromByteCount: Int64(imageData.count),
-            countStyle: .file
-        )
-        return "\(resolution) · \(fileSize)"
+    private var previewTargetPickerHeight: CGFloat {
+        let lineHeight = UIFont.preferredFont(
+            forTextStyle: .footnote
+        ).lineHeight
+        let lineCount: CGFloat = dynamicTypeSize.isAccessibilitySize ? 2 : 1
+        return max(32, ceil(lineHeight * lineCount + 14))
     }
 
     private var fitCard: some View {
@@ -409,10 +423,9 @@ struct SendView: View {
     }
 
     private var targetCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("Displays")
                 .font(.headline)
-                .padding(.bottom, 2)
 
             if model.sortedDisplays.isEmpty {
                 ContentUnavailableView {

@@ -15,6 +15,7 @@ struct TesseraePanelImagePreview: View {
     let imageAccessibilityIdentifier: String
     let framing: Binding<ImageFraming>?
     let maximumFramingZoom: Double
+    let onCanvasTap: (() -> Void)?
     @State private var gestureStartFraming: ImageFraming?
     @State private var isFramingGestureActive = false
     @State private var framingControlsRevealTask: Task<Void, Never>?
@@ -28,7 +29,8 @@ struct TesseraePanelImagePreview: View {
         accessibilityIdentifier: String,
         imageAccessibilityIdentifier: String,
         framing: Binding<ImageFraming>? = nil,
-        maximumFramingZoom: Double = 1
+        maximumFramingZoom: Double = 1,
+        onCanvasTap: (() -> Void)? = nil
     ) {
         self.image = image
         self.panel = panel
@@ -39,6 +41,7 @@ struct TesseraePanelImagePreview: View {
         self.imageAccessibilityIdentifier = imageAccessibilityIdentifier
         self.framing = framing
         self.maximumFramingZoom = maximumFramingZoom
+        self.onCanvasTap = onCanvasTap
     }
 
     var body: some View {
@@ -155,6 +158,9 @@ struct TesseraePanelImagePreview: View {
         .clipped()
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .onTapGesture {
+            onCanvasTap?()
+        }
         .gesture(
             framingGesture(size: size, image: image),
             including: framing == nil || image == nil ? .none : .all

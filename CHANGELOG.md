@@ -11,6 +11,22 @@ capabilities.
 
 ## [Unreleased]
 
+### Changed
+
+- Send now places display selection directly below Source and consolidates the
+  photo preview footer into one centered `display name · resolution` selector,
+  removes the repeated Previewing on label and file-size metadata, and uses
+  consistent title-to-content spacing across sections.
+
+### Fixed
+
+- Preview controls now grow and reflow for larger Dynamic Type sizes instead
+  of clipping text in fixed-height rows. The preview-display selector also
+  becomes non-interactive and hides its menu chevron when fewer than two
+  displays are selected, making its state clearer.
+- Choosing a photo from the preview is now limited to the visible rounded image
+  canvas instead of also responding to taps in the surrounding preview slot.
+
 ## [0.5.2] - 2026-08-05
 
 ### Added
