@@ -91,7 +91,7 @@
 		025F289A1CFEF8C9B59D15E0 /* PhosphorDashboardIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhosphorDashboardIcon.swift; sourceTree = "<group>"; };
 		0580CE81ECB940408B4B84B9 /* InfoPlist.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = InfoPlist.strings; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		135374B71848FF0E87F4A6D3 /* TesseraePanelImagePreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TesseraePanelImagePreview.swift; sourceTree = "<group>"; };
-		1595109BA73E8D8DE2555D38 /* TesseraeCompanion.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TesseraeCompanion.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1595109BA73E8D8DE2555D38 /* Tesserae Companion.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Tesserae Companion.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		216C90508EC6D953751E6523 /* InfoPlist.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = InfoPlist.strings; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		2F71FB166C88F622C1873E39 /* SendView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendView.swift; sourceTree = "<group>"; };
 		36574431BF8F9CAB78DF3088 /* DisplayHardwareBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayHardwareBadge.swift; sourceTree = "<group>"; };
@@ -103,7 +103,7 @@
 		68D757E72A99A23D9A75B361 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		6BD9BF482144BDCB753B7EF6 /* PreviewImageState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewImageState.swift; sourceTree = "<group>"; };
 		6DABD7AC708239FDC0621487 /* AppConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfiguration.swift; sourceTree = "<group>"; };
-		6F532D2BC8A0893B35702D88 /* TesseraeShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = TesseraeShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		6F532D2BC8A0893B35702D88 /* TesseraeShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TesseraeShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		7F7B082A4F4C920F49545310 /* TesseraeCompanionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TesseraeCompanionUITests.swift; sourceTree = "<group>"; };
 		8CBD8BCA89698A1281940F5D /* RemindersBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersBridge.swift; sourceTree = "<group>"; };
 		8FE0A6BC06BC1C26FD5AD93A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -114,9 +114,9 @@
 		A6B1174AA85BE4EB711F746F /* DisplaysView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplaysView.swift; sourceTree = "<group>"; };
 		AB1A411679F997EDCC5BDFF5 /* ActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityView.swift; sourceTree = "<group>"; };
 		AD24891D7CDB0886913F3675 /* AppShortcuts.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = AppShortcuts.xcstrings; sourceTree = "<group>"; };
-		AEF28EF26B0AF20FD40F858C /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		AEF28EF26B0AF20FD40F858C /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		B285D6042818DD9ECF798800 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
-		B2A5670FEC5BD4923C95159E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		B2A5670FEC5BD4923C95159E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		CB98E98A7C6727AE8FE4694E /* Phosphor.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Phosphor.ttf; sourceTree = "<group>"; };
 		CF3B64DA50FECFA7A4514489 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		D1E10BE2603FB01EFAAE4419 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -303,7 +303,7 @@
 		EEAC4FB1E2EF711A00FADF57 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				1595109BA73E8D8DE2555D38 /* TesseraeCompanion.app */,
+				1595109BA73E8D8DE2555D38 /* Tesserae Companion.app */,
 				98EB9E58C42AF0D99B2F11DF /* TesseraeCompanionTests.xctest */,
 				F1964C9534AA2D6526D1275E /* TesseraeCompanionUITests.xctest */,
 				6F532D2BC8A0893B35702D88 /* TesseraeShare.appex */,
@@ -362,7 +362,7 @@
 				E392BF45FD381310B341C63D /* TesseraeKit */,
 			);
 			productName = TesseraeCompanion;
-			productReference = 1595109BA73E8D8DE2555D38 /* TesseraeCompanion.app */;
+			productReference = 1595109BA73E8D8DE2555D38 /* Tesserae Companion.app */;
 			productType = "com.apple.product-type.application";
 		};
 		A98D2993617B8AE8AD8A7FDA /* TesseraeCompanionTests */ = {
@@ -567,7 +567,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/Resources/TesseraeShare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_TEAM = 3MSS7DJGVR;
 				INFOPLIST_FILE = ShareExtension/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -675,7 +675,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/Resources/TesseraeShare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_TEAM = 3MSS7DJGVR;
 				INFOPLIST_FILE = ShareExtension/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -702,9 +702,10 @@
 				CODE_SIGN_ENTITLEMENTS = App/Resources/TesseraeCompanion.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_TEAM = 3MSS7DJGVR;
 				INFOPLIST_FILE = App/Resources/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -843,9 +844,10 @@
 				CODE_SIGN_ENTITLEMENTS = App/Resources/TesseraeCompanion.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_TEAM = 3MSS7DJGVR;
 				INFOPLIST_FILE = App/Resources/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
