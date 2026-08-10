@@ -96,6 +96,20 @@ struct ActivityReconciliationTests {
         )
     }
 
+    @Test("Lineup Jobs reconcile with Companion-authored History")
+    func lineupSource() {
+        let job = pushJob(id: "job-lineup", kind: .lineupAction)
+        let history = historyItem(id: "lineup-history", source: "companion")
+
+        #expect(
+            ActivityReconciliation.visibleJobs(
+                [job],
+                historyItems: [history],
+                now: now.addingTimeInterval(10)
+            ).isEmpty
+        )
+    }
+
     @Test("A failed Job replaces its targetless server History row")
     func failedJobKeepsTargetIdentity() {
         let message = "dashboard targets none of the requested device(s)"

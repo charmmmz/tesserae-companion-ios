@@ -177,6 +177,8 @@ public enum ActivityReconciliation {
             "webpage"
         case .historyResend:
             "resend"
+        case .lineupAction:
+            "companion"
         }
     }
 

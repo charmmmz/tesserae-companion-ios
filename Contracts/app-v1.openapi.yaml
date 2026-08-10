@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Tesserae Companion API
-  version: 0.7.0
+  version: 0.8.0
   description: >-
     Companion API contract for community-built clients. Previews, History,
     resend, remote-image push, webpage push, and server-advertised image fit
@@ -21,6 +21,7 @@ tags:
   - name: Images
   - name: Webpages
   - name: Jobs
+  - name: Lineups
   - name: History
   - name: Personal Data
 paths:
@@ -378,6 +379,79 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "409":
           $ref: "#/components/responses/Conflict"
+  /api/app/v1/lineups:
+    get:
+      tags: [Lineups]
+      operationId: listCompanionLineups
+      summary: Read all Lineups without hiding advanced server-owned fields
+      description: >-
+        Requires lineups:read. The resource noun is Lineup even though the
+        server's unified internal model is Deck. native_editable is advisory
+        and server-computed; false never permits the client to discard fields.
+      responses:
+        "200":
+          description: Complete Lineup definitions and lightweight runtime state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LineupsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/app/v1/lineups/{lineup_id}:
+    parameters:
+      - $ref: "#/components/parameters/LineupID"
+    get:
+      tags: [Lineups]
+      operationId: getCompanionLineup
+      summary: Read one complete Lineup
+      responses:
+        "200":
+          description: Complete Lineup definition and runtime state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LineupResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/app/v1/lineups/{lineup_id}/actions:
+    parameters:
+      - $ref: "#/components/parameters/LineupID"
+    post:
+      tags: [Lineups]
+      operationId: controlCompanionLineup
+      summary: Change Lineup state or repaint one or more bound displays
+      description: >-
+        Requires lineups:control. enable and disable are idempotent stored-state
+        flips and return the updated Lineup synchronously. next, previous, and
+        play repaint displays through Jobs, quiet-hours policy, idempotency, and
+        canonical History. None of these actions edits the Lineup definition.
+      parameters:
+        - $ref: "#/components/parameters/ConditionalIdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LineupActionRequest"
+      responses:
+        "200":
+          description: Updated Lineup after enable or disable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LineupResponse"
+        "202":
+          $ref: "#/components/responses/JobAccepted"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
   /api/app/v1/jobs/{job_id}:
     parameters:
       - $ref: "#/components/parameters/JobID"
@@ -522,6 +596,12 @@ components:
       required: true
       schema:
         type: string
+    LineupID:
+      in: path
+      name: lineup_id
+      required: true
+      schema:
+        type: string
     PersonalDataSourceID:
       in: path
       name: source_id
@@ -537,6 +617,18 @@ components:
         Opaque client-generated key. Reusing a key with the same credential,
         method, path, and payload returns the original job; changing the payload
         returns idempotency_conflict.
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 128
+    ConditionalIdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: false
+      description: >-
+        Required for next, previous, and play, which create asynchronous Jobs.
+        Omit for enable and disable, whose state flips are idempotent by
+        construction and return synchronously.
       schema:
         type: string
         minLength: 16
@@ -647,6 +739,8 @@ components:
               - webpage_push
               - image_framing
               - personal_data_reminders
+              - lineups
+              - lineup_control
         personal_data:
           $ref: "#/components/schemas/PersonalDataCapabilities"
         limits:
@@ -778,6 +872,8 @@ components:
               - push:write
               - media:write
               - personal_data:write
+              - lineups:read
+              - lineups:control
         created_at:
           type: string
           format: date-time
@@ -1244,6 +1340,309 @@ components:
     ImageFitMode:
       type: string
       enum: [fit, fill, blur, stretch, center]
+    LineupsResponse:
+      type: object
+      additionalProperties: false
+      required: [lineups]
+      properties:
+        lineups:
+          type: array
+          items:
+            $ref: "#/components/schemas/Lineup"
+    LineupResponse:
+      type: object
+      additionalProperties: false
+      required: [lineup]
+      properties:
+        lineup:
+          $ref: "#/components/schemas/Lineup"
+    Lineup:
+      description: >-
+        Public read projection of the server's unified Deck model. Fields through
+        anchor match the v0.289.2 implementation. The remaining scheduling and
+        navigation fields are additive 0.8 contract requirements so an advanced
+        Lineup remains fully describable when native_editable is false. The
+        internal legacy_kind migration marker is intentionally not public.
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - enabled
+        - intent
+        - device_ids
+        - dashboards
+        - current
+        - next_advance_epoch
+        - advance
+        - trigger
+        - interval_minutes
+        - fires_at
+        - anchor
+        - entry_page_id
+        - home_page_id
+        - home_timeout_minutes
+        - refresh_interval_minutes
+        - end_at
+        - days_of_week
+        - priority
+        - smart_sync
+        - smart_sync_lead_seconds
+        - mode
+        - min_hold_minutes
+        - window_start
+        - window_end
+        - fallback_page_id
+        - native_editable
+        - requires_web_reason
+        - web_url
+      properties:
+        id:
+          type: string
+          pattern: "^[a-z0-9_][a-z0-9_-]*$"
+        name:
+          type: string
+          minLength: 1
+        enabled:
+          type: boolean
+        intent:
+          description: >-
+            Server-computed mapping to the four user-facing wizard intents, or
+            null when the stored trigger cannot be represented by one of them.
+          type: string
+          enum: [daily, interval, cycle, manual]
+          nullable: true
+        device_ids:
+          description: Displays bound to this Lineup
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+        dashboards:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/LineupDashboard"
+        current:
+          description: Per-display navigation state; bound displays may differ
+          type: array
+          items:
+            $ref: "#/components/schemas/LineupCurrent"
+        next_advance_epoch:
+          description: Next scheduled advance as Unix epoch seconds, when known
+          type: integer
+          format: int64
+          nullable: true
+        advance:
+          type: string
+          enum: [manual, timer, both]
+        trigger:
+          type: string
+          enum: [cycle, interval, daily]
+          nullable: true
+        interval_minutes:
+          type: integer
+          minimum: 1
+          maximum: 10080
+          nullable: true
+        fires_at:
+          allOf:
+            - $ref: "#/components/schemas/LocalTime"
+          nullable: true
+        anchor:
+          allOf:
+            - $ref: "#/components/schemas/LocalTime"
+          nullable: true
+        entry_page_id:
+          type: string
+          nullable: true
+        home_page_id:
+          type: string
+          nullable: true
+        home_timeout_minutes:
+          type: integer
+          minimum: 0
+          maximum: 120
+        refresh_interval_minutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+        end_at:
+          allOf:
+            - $ref: "#/components/schemas/LocalTime"
+          nullable: true
+        days_of_week:
+          type: array
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 0
+            maximum: 6
+        priority:
+          type: integer
+        smart_sync:
+          type: boolean
+        smart_sync_lead_seconds:
+          type: integer
+          minimum: 0
+          maximum: 600
+        mode:
+          type: string
+          enum: [scheduled, priority]
+        min_hold_minutes:
+          type: integer
+          minimum: 0
+          maximum: 120
+        window_start:
+          allOf:
+            - $ref: "#/components/schemas/LocalTime"
+          nullable: true
+        window_end:
+          allOf:
+            - $ref: "#/components/schemas/LocalTime"
+          nullable: true
+        fallback_page_id:
+          type: string
+          nullable: true
+        native_editable:
+          description: Server-computed; false makes the definition read/control-only
+          type: boolean
+        requires_web_reason:
+          description: Human-readable reason native editing is unavailable
+          type: string
+          nullable: true
+        web_url:
+          type: string
+    LocalTime:
+      type: string
+      pattern: "^([01]\\d|2[0-3]):[0-5]\\d$"
+    LineupDashboard:
+      type: object
+      additionalProperties: false
+      required:
+        - page_id
+        - name
+        - dwell_minutes
+        - missing
+        - refresh_interval_minutes
+        - links
+        - conditions
+      properties:
+        page_id:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+        dwell_minutes:
+          description: Effective dwell after applying the Lineup default
+          type: integer
+          minimum: 1
+          maximum: 10080
+        missing:
+          description: True when the referenced Dashboard has been deleted
+          type: boolean
+        refresh_interval_minutes:
+          description: Raw per-Dashboard override; null inherits the Lineup default
+          type: integer
+          minimum: 0
+          maximum: 1440
+          nullable: true
+        links:
+          type: array
+          items:
+            $ref: "#/components/schemas/LineupLink"
+        conditions:
+          type: array
+          items:
+            $ref: "#/components/schemas/LineupCondition"
+    LineupCurrent:
+      type: object
+      additionalProperties: false
+      required: [device_id, page_id]
+      properties:
+        device_id:
+          type: string
+        page_id:
+          type: string
+    LineupLink:
+      description: Exactly one of button or zone is non-null
+      type: object
+      additionalProperties: false
+      required: [target_page_id, button, zone]
+      properties:
+        target_page_id:
+          type: string
+          minLength: 1
+        button:
+          type: string
+          nullable: true
+        zone:
+          allOf:
+            - $ref: "#/components/schemas/LineupZone"
+          nullable: true
+    LineupZone:
+      type: object
+      additionalProperties: false
+      required: [x, y, w, h]
+      properties:
+        x: {type: number, minimum: 0, maximum: 1}
+        y: {type: number, minimum: 0, maximum: 1}
+        w: {type: number, minimum: 0.000001, maximum: 1}
+        h: {type: number, minimum: 0.000001, maximum: 1}
+    LineupCondition:
+      description: >-
+        One upstream condition tuple. value remains structurally open because
+        its shape is selected by source_kind and operator; clients must preserve
+        unknown additive condition forms when rendering a read-only summary.
+      type: object
+      additionalProperties: false
+      required: [source_kind, source_id, operator, value]
+      properties:
+        source_kind:
+          type: string
+          enum: [ha_entity, time_window, sun]
+        source_id:
+          type: string
+        operator:
+          type: string
+        value:
+          nullable: true
+    LineupActionRequest:
+      description: >-
+        State actions return 200 with the updated Lineup. Paint actions return
+        202 with a Job; play requires page_id from this Lineup, while next and
+        previous omit page_id. device_ids, when present, must be bound to it.
+      oneOf:
+        - $ref: "#/components/schemas/LineupStateActionRequest"
+        - $ref: "#/components/schemas/LineupPaintActionRequest"
+    LineupStateActionRequest:
+      type: object
+      additionalProperties: false
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [enable, disable]
+    LineupPaintActionRequest:
+      type: object
+      additionalProperties: false
+      required: [action, override_quiet_hours]
+      properties:
+        action:
+          type: string
+          enum: [next, previous, play]
+        page_id:
+          type: string
+        device_ids:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+        override_quiet_hours:
+          type: boolean
+          default: false
     HistoryResponse:
       type: object
       additionalProperties: false
@@ -1350,6 +1749,7 @@ components:
             - image_url_push
             - webpage_push
             - history_resend
+            - lineup_action
         status:
           description: Execution lifecycle only; quiet is a successful result
           type: string

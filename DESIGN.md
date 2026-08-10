@@ -92,6 +92,22 @@ This keeps rendering server-authoritative while allowing a single user framing
 choice to work across portrait and landscape displays. Rotation remains a
 later extension rather than part of the first framing slice.
 
+### Post-1.0 Lineups roadmap
+
+Lineups move into the app in two server-gated phases. The first phase is read
+and control: show the complete definition and live state, open advanced records
+on the web, allow `next`, `previous`, and `play` controls, and expose an
+enable/disable toggle. Paint actions use Jobs and History; enable/disable uses
+the same action endpoint but returns the updated Lineup synchronously and does
+not refresh a panel.
+
+Tesserae now has one internal write path over its unified Deck model, but native
+authoring still needs its own reviewed Companion contract and optional
+`lineups:write` grant. The four user-facing intents remain daily, interval,
+cycle, and manual. Until that API is agreed, the app must not infer authoring
+permission from read/control access or reduce an advanced read-only record to
+the fields the native editor happens to understand.
+
 ### Native integrations included in release 1.0
 
 | ID | Capability | Acceptance summary |

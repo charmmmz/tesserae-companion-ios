@@ -2,8 +2,8 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Implemented base contract plus maintainer-approved gated extensions |
-| Contract version | 0.7.0 |
+| Status | Implemented base contract plus reviewed and proposed gated extensions |
+| Contract version | 0.8.0 |
 | Namespace | `/api/app/v1` |
 | Authentication | Revocable per-client Companion bearer token |
 | Machine-readable source | [`Contracts/app-v1.openapi.yaml`](Contracts/app-v1.openapi.yaml) |
@@ -15,14 +15,17 @@ the compatibility floor; `previews`, `history`, `image_url_push`,
 `webpage_push`, and `image_framing` are additive capabilities. The legacy
 `personal_data_reminders` feature remains for the published fridge widget;
 new personal-data schemas are advertised directly through
-`personal_data.sources` rather than one feature flag per source.
+`personal_data.sources` rather than one feature flag per source. `lineups` and
+`lineup_control` are independently gated extensions for the first native
+Lineups slice, aligned with Tesserae v0.289.2.
 
 The proposal reflects the maintainer reviews in
 [Discussion #147](https://github.com/dmellok/tesserae/discussions/147),
 [Discussion #159](https://github.com/dmellok/tesserae/discussions/159),
-[Discussion #160](https://github.com/dmellok/tesserae/discussions/160), and
-[Discussion #176](https://github.com/dmellok/tesserae/discussions/176).
-Dashboard editing, plugin administration, schedules, firmware controls,
+[Discussion #160](https://github.com/dmellok/tesserae/discussions/160),
+[Discussion #176](https://github.com/dmellok/tesserae/discussions/176), and
+[Discussion #203](https://github.com/dmellok/tesserae/discussions/203).
+Dashboard editing, plugin administration, Lineup authoring, firmware controls,
 History deletion/administration, and general server administration remain
 outside this contract.
 
@@ -38,6 +41,9 @@ outside this contract.
   Jobs, and return `202 Accepted`.
 - Personal-data PUT is a synchronous, naturally idempotent latest-snapshot
   replacement. It neither creates a Job nor triggers rendering or publishing.
+- Lineup `next`, `previous`, and `play` actions are asynchronous Jobs and never
+  save definitions. `enable` and `disable` use the same action endpoint but
+  synchronously return the updated Lineup without touching a display.
 - Tesserae remains authoritative for target validation, rendering, quiet
   hours, publishing, and resource limits.
 
@@ -56,6 +62,9 @@ outside this contract.
 | `POST` | `/api/app/v1/images` | Upload one still image to explicit targets |
 | `POST` | `/api/app/v1/image-urls` | Fetch and send one public image URL |
 | `POST` | `/api/app/v1/webpages` | Render and send one public webpage |
+| `GET` | `/api/app/v1/lineups` | Read complete Lineup definitions and runtime summaries |
+| `GET` | `/api/app/v1/lineups/{lineup_id}` | Read one complete Lineup |
+| `POST` | `/api/app/v1/lineups/{lineup_id}/actions` | Enable/disable synchronously or run a display action as a Job |
 | `GET` | `/api/app/v1/personal-data/status` | Read source freshness metadata without personal values |
 | `PUT` | `/api/app/v1/personal-data/{source_id}` | Replace the latest strict snapshot for one source |
 | `DELETE` | `/api/app/v1/personal-data/{source_id}` | Immediately remove a disabled source snapshot |
@@ -99,7 +108,15 @@ dashboards:read
 push:write
 media:write
 personal_data:write
+lineups:read
+lineups:control
 ```
+
+New pairings receive `lineups:read` and `lineups:control` when the server
+supports the resource. Tokens created before those scopes existed are not
+migrated by this client; the user re-pairs to receive a current token.
+`lineups:write` remains a separate, optional server-side authoring permission
+and is not granted by pairing or used by this read/control slice.
 
 ## Capabilities and resource limits
 
@@ -176,6 +193,34 @@ Contract 0.7.0 adds the first privacy-preserving personal-data source:
 The first fixtures use a 24-hour stale threshold and 48-hour maximum TTL as a
 reviewable proposal. Both values remain server-advertised so the accepted
 policy can change without an app release.
+
+Contract 0.8.0 prepares Lineups read and control without defining authoring:
+
+- `lineups` exposes the public resource while Tesserae may continue using
+  `Deck` internally;
+- the implemented read names and runtime shape remain intact: `dashboards`,
+  per-display `current`, `next_advance_epoch`, `advance`, `trigger`,
+  `interval_minutes`, `fires_at`, and `anchor`;
+- additive fields complete the advanced Deck projection: graph links and touch
+  zones, per-dashboard refresh and conditions, navigation/home settings, and
+  the full timer, priority, smart-sync, window, day, and fallback state;
+- the Swift reader tolerates those additive fields being absent on the deployed
+  v0.289.2 projection, but treats absence as unknown rather than an editable
+  default while the server-side contract additions roll out;
+- `native_editable` and `requires_web_reason` are computed by the server. A
+  false value makes the record read/control-only and never permits the app to
+  simplify or discard advanced fields;
+- `POST /lineups/{id}/actions` accepts `enable`, `disable`, `next`, `previous`,
+  and `play`. The state actions return `200 LineupResponse`; paint actions
+  require `Idempotency-Key` plus `override_quiet_hours` and return `202 Job`;
+- a paint action may target all bound displays or a bound `device_ids` subset.
+  `play` also requires a `page_id` in the Lineup;
+- paint jobs use `lineup_action` so Activity can distinguish explicit Lineup
+  control from an ordinary dashboard push, while History source remains
+  `companion`;
+- create, replace, reorder, scheduling, binding, condition, and delete writes
+  remain a separate authoring contract. Tesserae now has one internal write
+  path, but it does not yet expose Companion authoring endpoints.
 
 Upstream PR [#175](https://github.com/dmellok/tesserae/pull/175) merged the
 underlying normalized `SourceCrop` renderer primitive. It does not by itself

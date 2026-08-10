@@ -105,6 +105,8 @@ def test_fixture_server_exercises_companion_vertical_slice():
         assert "history" in capabilities["features"]
         assert "image_url_push" in capabilities["features"]
         assert "webpage_push" in capabilities["features"]
+        assert "lineups" in capabilities["features"]
+        assert "lineup_control" in capabilities["features"]
 
         status, pair = request(
             base_url,
@@ -122,6 +124,8 @@ def test_fixture_server_exercises_companion_vertical_slice():
         )
         assert status == 201
         assert pair["token"] == FIXTURE_TOKEN
+        assert "lineups:read" in pair["scopes"]
+        assert "lineups:control" in pair["scopes"]
 
         status, devices = request(
             base_url,
@@ -358,6 +362,71 @@ def test_fixture_server_exercises_companion_vertical_slice():
         )
         assert status == 400
         assert excessive_zoom["error"]["code"] == "invalid_framing"
+
+        status, lineups = request(
+            base_url,
+            "/api/app/v1/lineups",
+            token=FIXTURE_TOKEN,
+        )
+        assert status == 200
+        assert lineups["lineups"][1]["native_editable"] is False
+        assert lineups["lineups"][1]["dashboards"][0]["conditions"]
+
+        status, lineup = request(
+            base_url,
+            "/api/app/v1/lineups/kitchen-deck",
+            token=FIXTURE_TOKEN,
+        )
+        assert status == 200
+        assert lineup["lineup"]["current"] == [
+            {"device_id": "picpak-kitchen", "page_id": "pantry"}
+        ]
+
+        status, controlled = request(
+            base_url,
+            "/api/app/v1/lineups/kitchen-deck/actions",
+            method="POST",
+            payload={
+                "action": "play",
+                "page_id": "morning",
+                "device_ids": ["picpak-kitchen"],
+                "override_quiet_hours": False,
+            },
+            token=FIXTURE_TOKEN,
+            idempotency_key="fixture-lineup-action-0001",
+        )
+        assert status == 202
+        assert controlled["job"]["kind"] == "lineup_action"
+
+        status, moved = request(
+            base_url,
+            "/api/app/v1/lineups/kitchen-deck",
+            token=FIXTURE_TOKEN,
+        )
+        assert status == 200
+        assert moved["lineup"]["current"] == [
+            {"device_id": "picpak-kitchen", "page_id": "morning"}
+        ]
+
+        status, disabled = request(
+            base_url,
+            "/api/app/v1/lineups/kitchen-deck/actions",
+            method="POST",
+            payload={"action": "disable"},
+            token=FIXTURE_TOKEN,
+        )
+        assert status == 200
+        assert disabled["lineup"]["enabled"] is False
+
+        status, missing_key = request(
+            base_url,
+            "/api/app/v1/lineups/kitchen-deck/actions",
+            method="POST",
+            payload={"action": "next", "override_quiet_hours": False},
+            token=FIXTURE_TOKEN,
+        )
+        assert status == 400
+        assert missing_key["error"]["code"] == "invalid_request"
     finally:
         server.shutdown()
         server.server_close()

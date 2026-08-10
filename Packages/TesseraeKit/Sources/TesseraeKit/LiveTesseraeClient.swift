@@ -142,6 +142,85 @@ public actor LiveTesseraeClient: TesseraeServing {
         }
     }
 
+    public func fetchLineups(instance: TesseraeInstance) async throws -> [Lineup] {
+        let request = try await authenticatedRequest(
+            instance: instance,
+            path: ["lineups"],
+            method: "GET"
+        )
+        let response: LineupsResponse = try await perform(
+            request,
+            expectedStatusCodes: [200]
+        )
+        return response.lineups
+    }
+
+    public func fetchLineup(
+        id: String,
+        instance: TesseraeInstance
+    ) async throws -> Lineup {
+        let request = try await authenticatedRequest(
+            instance: instance,
+            path: ["lineups", id],
+            method: "GET"
+        )
+        let response: LineupResponse = try await perform(
+            request,
+            expectedStatusCodes: [200]
+        )
+        return response.lineup
+    }
+
+    public func setLineupEnabled(
+        id: String,
+        enabled: Bool,
+        instance: TesseraeInstance
+    ) async throws -> Lineup {
+        let action: LineupStateAction = enabled ? .enable : .disable
+        let request = try await authenticatedRequest(
+            instance: instance,
+            path: ["lineups", id, "actions"],
+            method: "POST",
+            body: TesseraeJSON.encoder().encode(
+                LineupStateActionRequest(action: action)
+            )
+        )
+        let response: LineupResponse = try await perform(
+            request,
+            expectedStatusCodes: [200]
+        )
+        return response.lineup
+    }
+
+    public func controlLineup(
+        id: String,
+        action: LineupPaintAction,
+        pageID: String?,
+        deviceIDs: [String]?,
+        overrideQuietHours: Bool,
+        idempotencyKey: String,
+        instance: TesseraeInstance
+    ) async throws -> PushJob {
+        let body = LineupPaintActionRequest(
+            action: action,
+            pageID: pageID,
+            deviceIDs: deviceIDs,
+            overrideQuietHours: overrideQuietHours
+        )
+        var request = try await authenticatedRequest(
+            instance: instance,
+            path: ["lineups", id, "actions"],
+            method: "POST",
+            body: TesseraeJSON.encoder().encode(body)
+        )
+        request.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
+        let response: JobResponse = try await perform(
+            request,
+            expectedStatusCodes: [202]
+        )
+        return response.job
+    }
+
     public func fetchDevicePreview(
         id: String,
         revision: String?,

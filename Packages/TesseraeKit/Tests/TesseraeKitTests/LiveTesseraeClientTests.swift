@@ -27,6 +27,8 @@ final class LiveTesseraeClientTests: XCTestCase {
         XCTAssertTrue(capabilities.features.contains("image_url_push"))
         XCTAssertTrue(capabilities.features.contains("webpage_push"))
         XCTAssertTrue(capabilities.features.contains("image_framing"))
+        XCTAssertTrue(capabilities.features.contains("lineups"))
+        XCTAssertTrue(capabilities.features.contains("lineup_control"))
         XCTAssertEqual(capabilities.limits.imageFramingMaxZoom, 4)
         XCTAssertEqual(
             capabilities.limits.imageFitModes,
@@ -47,6 +49,35 @@ final class LiveTesseraeClientTests: XCTestCase {
         let dashboards = try await client.fetchDashboards(instance: session.instance)
         XCTAssertEqual(displays.first?.id, "picpak-kitchen")
         XCTAssertEqual(dashboards.first?.id, "pantry")
+
+        let lineups = try await client.fetchLineups(instance: session.instance)
+        XCTAssertEqual(lineups.first?.id, "kitchen-deck")
+        XCTAssertEqual(lineups.last?.nativeEditable, false)
+        XCTAssertFalse(lineups.last?.dashboards.first?.conditions?.isEmpty ?? true)
+
+        let lineup = try await client.fetchLineup(
+            id: "kitchen-deck",
+            instance: session.instance
+        )
+        XCTAssertEqual(lineup.current.first?.pageID, "pantry")
+
+        let lineupJob = try await client.controlLineup(
+            id: "kitchen-deck",
+            action: .play,
+            pageID: "morning",
+            deviceIDs: ["picpak-kitchen"],
+            overrideQuietHours: false,
+            idempotencyKey: "swift-lineup-action-0001",
+            instance: session.instance
+        )
+        XCTAssertEqual(lineupJob.kind, .lineupAction)
+
+        let disabledLineup = try await client.setLineupEnabled(
+            id: "kitchen-deck",
+            enabled: false,
+            instance: session.instance
+        )
+        XCTAssertFalse(disabledLineup.enabled)
 
         let accepted = try await client.pushDashboard(
             id: "pantry",

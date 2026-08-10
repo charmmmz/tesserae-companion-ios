@@ -26,6 +26,8 @@ final class MockTesseraeClientTests: XCTestCase {
         XCTAssertTrue(capabilities.supportsImageFraming)
         XCTAssertEqual(capabilities.limits.imageFramingMaxZoom, 4)
         XCTAssertTrue(capabilities.features.contains("history"))
+        XCTAssertTrue(capabilities.features.contains("lineups"))
+        XCTAssertTrue(capabilities.features.contains("lineup_control"))
         XCTAssertTrue(capabilities.supports(.imageURL))
         XCTAssertTrue(capabilities.supports(.webpage))
     }
@@ -111,6 +113,32 @@ final class MockTesseraeClientTests: XCTestCase {
         )
 
         XCTAssertEqual(first.id, retry.id)
+    }
+
+    func testMockLineupEnableActionPersists() async throws {
+        let client = MockTesseraeClient(latency: .zero)
+        let session = try await client.pair(
+            baseURL: baseURL,
+            code: "123456",
+            clientName: "Test iPhone"
+        )
+        let current = try await client.fetchLineup(
+            id: "kitchen-deck",
+            instance: session.instance
+        )
+        let updated = try await client.setLineupEnabled(
+            id: "kitchen-deck",
+            enabled: false,
+            instance: session.instance
+        )
+        let fetched = try await client.fetchLineup(
+            id: "kitchen-deck",
+            instance: session.instance
+        )
+
+        XCTAssertTrue(current.enabled)
+        XCTAssertFalse(updated.enabled)
+        XCTAssertEqual(fetched, updated)
     }
 
     func testMockLinkPushesProduceCorrelatableJobs() async throws {

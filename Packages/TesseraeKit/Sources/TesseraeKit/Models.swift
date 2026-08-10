@@ -795,6 +795,7 @@ public enum PushJobKind: String, Codable, Hashable, Sendable {
     case imageURLPush = "image_url_push"
     case webpagePush = "webpage_push"
     case historyResend = "history_resend"
+    case lineupAction = "lineup_action"
 }
 
 public enum PushJobStatus: String, Codable, Hashable, Sendable {

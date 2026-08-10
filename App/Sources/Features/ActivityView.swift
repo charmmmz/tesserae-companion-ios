@@ -1168,6 +1168,8 @@ struct ActivityView: View {
             String(localized: "Dashboard")
         case .historyResend:
             String(localized: "Resent item")
+        case .lineupAction:
+            String(localized: "Lineup")
         }
     }
 
@@ -1175,7 +1177,7 @@ struct ActivityView: View {
         switch kind {
         case .imageURLPush, .webpagePush:
             fallbackTitle(kind)
-        case .dashboardPush, .imagePush, .historyResend:
+        case .dashboardPush, .imagePush, .historyResend, .lineupAction:
             nil
         }
     }
@@ -1192,6 +1194,8 @@ struct ActivityView: View {
             "rectangle.grid.2x2"
         case .historyResend:
             "arrow.clockwise"
+        case .lineupAction:
+            "rectangle.3.group"
         }
     }
 

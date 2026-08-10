@@ -19,8 +19,10 @@ CASES = {
     "capabilities-previews.json": "Capabilities",
     "capabilities-extended.json": "Capabilities",
     "capabilities-framing.json": "Capabilities",
+    "capabilities-lineups.json": "Capabilities",
     "pair-request.json": "PairingRequest",
     "pair-response.json": "PairingResponse",
+    "pair-response-lineups.json": "PairingResponse",
     "devices-response.json": "DevicesResponse",
     "dashboards-response.json": "DashboardsResponse",
     "dashboard-push-request.json": "DashboardPushRequest",
@@ -31,6 +33,10 @@ CASES = {
     "history-response.json": "HistoryResponse",
     "history-link-response.json": "HistoryResponse",
     "history-resend-request.json": "HistoryResendRequest",
+    "lineups-response.json": "LineupsResponse",
+    "lineup-response.json": "LineupResponse",
+    "lineup-action-request.json": "LineupActionRequest",
+    "lineup-state-action-request.json": "LineupActionRequest",
     "job-accepted.json": "JobResponse",
     "job-published.json": "JobResponse",
     "job-quiet.json": "JobResponse",
@@ -39,6 +45,7 @@ CASES = {
     "job-image-url-published.json": "JobResponse",
     "job-webpage-published.json": "JobResponse",
     "job-webpage-blocked.json": "JobResponse",
+    "job-lineup-action.json": "JobResponse",
     "error-response.json": "ErrorResponse",
 }
 
@@ -75,7 +82,7 @@ def _json_schema(value: Any) -> Any:
 
 def test_openapi_shape_and_operation_ids_are_stable() -> None:
     assert SPEC["openapi"] == "3.0.3"
-    assert SPEC["info"]["version"] == "0.7.0"
+    assert SPEC["info"]["version"] == "0.8.0"
     assert set(SPEC["paths"]) == {
         "/api/app/v1",
         "/api/app/v1/pair",
@@ -90,6 +97,9 @@ def test_openapi_shape_and_operation_ids_are_stable() -> None:
         "/api/app/v1/images",
         "/api/app/v1/image-urls",
         "/api/app/v1/webpages",
+        "/api/app/v1/lineups",
+        "/api/app/v1/lineups/{lineup_id}",
+        "/api/app/v1/lineups/{lineup_id}/actions",
         "/api/app/v1/jobs/{job_id}",
         "/api/app/v1/history",
         "/api/app/v1/history/{history_id}/preview",
@@ -132,7 +142,7 @@ def test_job_lifecycle_and_business_outcome_are_separate() -> None:
     assert failed["error"]["code"]
 
 
-def test_all_write_operations_require_idempotency_key() -> None:
+def test_all_unconditional_job_writes_require_idempotency_key() -> None:
     paths = SPEC["paths"]
     write_operations = [
         paths["/api/app/v1/dashboards/{dashboard_id}/push"]["post"],
@@ -144,6 +154,62 @@ def test_all_write_operations_require_idempotency_key() -> None:
     for operation in write_operations:
         refs = [parameter.get("$ref") for parameter in operation["parameters"]]
         assert "#/components/parameters/IdempotencyKey" in refs
+
+
+def test_lineup_read_is_lossless_and_action_response_matches_effect() -> None:
+    fixture = json.loads((FIXTURES / "lineups-response.json").read_text())
+    advanced = fixture["lineups"][1]
+
+    assert advanced["native_editable"] is False
+    assert advanced["requires_web_reason"]
+    assert advanced["dashboards"][0]["conditions"]
+    assert advanced["mode"] == "priority"
+    assert advanced["smart_sync"] is True
+    assert advanced["current"] == [
+        {"device_id": "picpak-kitchen", "page_id": "photo-frame"},
+        {"device_id": "e1004-desk", "page_id": "morning"},
+    ]
+    assert "legacy_kind" not in advanced
+
+    schemas = SPEC["components"]["schemas"]
+    required = set(schemas["Lineup"]["required"])
+    assert {
+        "dashboards",
+        "current",
+        "trigger",
+        "smart_sync",
+        "fallback_page_id",
+        "native_editable",
+        "requires_web_reason",
+    } <= required
+    assert set(schemas["Lineup"]["properties"]) == required
+    assert set(schemas["Lineup"]["properties"]["intent"]["enum"]) == {
+        "daily",
+        "interval",
+        "cycle",
+        "manual",
+    }
+
+    paths = SPEC["paths"]
+    operation = paths["/api/app/v1/lineups/{lineup_id}/actions"]["post"]
+    parameter_refs = [item.get("$ref") for item in operation["parameters"]]
+    assert "#/components/parameters/ConditionalIdempotencyKey" in parameter_refs
+    assert operation["responses"]["200"]["content"]["application/json"][
+        "schema"
+    ] == {"$ref": "#/components/schemas/LineupResponse"}
+    assert operation["responses"]["202"] == {
+        "$ref": "#/components/responses/JobAccepted"
+    }
+
+    state_actions = schemas["LineupStateActionRequest"]["properties"]["action"]["enum"]
+    paint_actions = schemas["LineupPaintActionRequest"]["properties"]["action"]["enum"]
+    assert set(state_actions) == {"enable", "disable"}
+    assert set(paint_actions) == {"next", "previous", "play"}
+
+    scopes = schemas["PairingResponse"]["properties"]["scopes"]["items"]["enum"]
+    assert "lineups:read" in scopes
+    assert "lineups:control" in scopes
+    assert "lineups:write" not in scopes
 
 
 def test_preview_endpoints_are_read_only_and_conditional() -> None:

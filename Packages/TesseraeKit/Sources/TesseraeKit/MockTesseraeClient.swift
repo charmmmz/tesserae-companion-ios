@@ -7,6 +7,7 @@ public actor MockTesseraeClient: TesseraeServing {
     private let latency: Duration
     private var completedJobs: [String: PushJob] = [:]
     private var jobsByIdempotencyKey: [String: PushJob] = [:]
+    private var lineupEnabled = true
 
     public init(latency: Duration = .milliseconds(180)) {
         self.latency = latency
@@ -30,6 +31,8 @@ public actor MockTesseraeClient: TesseraeServing {
                 "history",
                 "webpage_push",
                 "image_framing",
+                "lineups",
+                "lineup_control",
             ],
             limits: CompanionLimits(
                 imageUploadBytes: 26_214_400,
@@ -72,6 +75,8 @@ public actor MockTesseraeClient: TesseraeServing {
                 "dashboards:read",
                 "push:write",
                 "media:write",
+                "lineups:read",
+                "lineups:control",
             ],
             createdAt: .now
         )
@@ -159,6 +164,67 @@ public actor MockTesseraeClient: TesseraeServing {
                 webURL: "/pages/photo-frame"
             ),
         ]
+    }
+
+    public func fetchLineups(instance: TesseraeInstance) async throws -> [Lineup] {
+        try await pause()
+        return [demoLineup(enabled: lineupEnabled)]
+    }
+
+    public func fetchLineup(
+        id: String,
+        instance: TesseraeInstance
+    ) async throws -> Lineup {
+        try await pause()
+        guard id == "kitchen-deck" else {
+            throw TesseraeClientError.unavailable
+        }
+        return demoLineup(enabled: lineupEnabled)
+    }
+
+    public func setLineupEnabled(
+        id: String,
+        enabled: Bool,
+        instance: TesseraeInstance
+    ) async throws -> Lineup {
+        _ = try await fetchLineup(id: id, instance: instance)
+        lineupEnabled = enabled
+        return demoLineup(enabled: enabled)
+    }
+
+    public func controlLineup(
+        id: String,
+        action: LineupPaintAction,
+        pageID: String?,
+        deviceIDs: [String]?,
+        overrideQuietHours: Bool,
+        idempotencyKey: String,
+        instance: TesseraeInstance
+    ) async throws -> PushJob {
+        let lineup = try await fetchLineup(id: id, instance: instance)
+        if action == .play,
+           !lineup.dashboards.contains(where: { $0.pageID == pageID }) {
+            throw TesseraeClientError.unavailable
+        }
+        if action != .play, pageID != nil {
+            throw TesseraeClientError.unavailable
+        }
+        let targets = deviceIDs ?? lineup.deviceIDs
+        guard !targets.isEmpty else {
+            throw TesseraeClientError.noTargets
+        }
+        guard Set(targets).isSubset(of: Set(lineup.deviceIDs)) else {
+            throw TesseraeClientError.unavailable
+        }
+        return try await acceptJob(
+            kind: .lineupAction,
+            label: lineup.name,
+            deviceIDs: targets,
+            overrideQuietHours: overrideQuietHours,
+            idempotencyKey: idempotencyKey,
+            resultReason: action.rawValue,
+            historyEventIDs: ["history-demo-lineup"]
+        )
     }
 
     public func fetchDevicePreview(
@@ -422,6 +488,60 @@ public actor MockTesseraeClient: TesseraeServing {
         let host = url.host() ?? url.absoluteString
         let path = url.path.isEmpty ? "/" : url.path
         return "\(host)\(path)"
+    }
+
+    private func demoLineup(enabled: Bool = true) -> Lineup {
+        Lineup(
+            id: "kitchen-deck",
+            name: "Kitchen deck",
+            enabled: enabled,
+            intent: .manual,
+            deviceIDs: ["picpak-kitchen"],
+            dashboards: [
+                LineupDashboard(
+                    pageID: "pantry",
+                    name: "Pantry",
+                    dwellMinutes: 30,
+                    missing: false,
+                    refreshIntervalMinutes: nil,
+                    links: [LineupLink(targetPageID: "morning", button: "right")],
+                    conditions: []
+                ),
+                LineupDashboard(
+                    pageID: "morning",
+                    name: "Morning",
+                    dwellMinutes: 30,
+                    missing: false,
+                    refreshIntervalMinutes: nil,
+                    links: [LineupLink(targetPageID: "pantry", button: "left")],
+                    conditions: []
+                ),
+            ],
+            current: [LineupCurrent(deviceID: "picpak-kitchen", pageID: "pantry")],
+            nextAdvanceEpoch: nil,
+            advance: .manual,
+            trigger: nil,
+            intervalMinutes: nil,
+            firesAt: nil,
+            anchor: nil,
+            entryPageID: "pantry",
+            homePageID: nil,
+            homeTimeoutMinutes: 0,
+            refreshIntervalMinutes: 15,
+            endAt: nil,
+            daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+            priority: 0,
+            smartSync: false,
+            smartSyncLeadSeconds: 10,
+            mode: .scheduled,
+            minHoldMinutes: 5,
+            windowStart: nil,
+            windowEnd: nil,
+            fallbackPageID: nil,
+            nativeEditable: true,
+            requiresWebReason: nil,
+            webURL: "/decks/kitchen-deck"
+        )
     }
 
     private func pause() async throws {
