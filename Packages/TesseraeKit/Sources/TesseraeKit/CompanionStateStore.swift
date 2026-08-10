@@ -8,6 +8,7 @@ public struct CompanionSnapshot: Codable, Hashable, Sendable {
     public let capabilities: ServerCapabilities?
     public let displays: [DisplaySummary]
     public let dashboards: [DashboardSummary]
+    public let lineups: [Lineup]?
     public let jobs: [PushJob]
     public let activityClearedBefore: Date?
     public let updatedAt: Date
@@ -18,6 +19,7 @@ public struct CompanionSnapshot: Codable, Hashable, Sendable {
         capabilities: ServerCapabilities?,
         displays: [DisplaySummary],
         dashboards: [DashboardSummary],
+        lineups: [Lineup]? = nil,
         jobs: [PushJob],
         activityClearedBefore: Date? = nil,
         updatedAt: Date = Date()
@@ -27,6 +29,7 @@ public struct CompanionSnapshot: Codable, Hashable, Sendable {
         self.capabilities = capabilities
         self.displays = displays
         self.dashboards = dashboards
+        self.lineups = lineups
         self.jobs = jobs
         self.activityClearedBefore = activityClearedBefore
         self.updatedAt = updatedAt

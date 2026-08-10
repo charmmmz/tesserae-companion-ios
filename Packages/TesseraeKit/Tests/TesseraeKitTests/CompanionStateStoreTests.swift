@@ -18,6 +18,7 @@ final class CompanionStateStoreTests: XCTestCase {
             capabilities: nil,
             displays: [],
             dashboards: [],
+            lineups: [fixtureLineup],
             jobs: [],
             activityClearedBefore: activityClearedBefore,
             updatedAt: Date(timeIntervalSince1970: 1_722_160_800)
@@ -28,10 +29,34 @@ final class CompanionStateStoreTests: XCTestCase {
 
         XCTAssertEqual(restored, snapshot)
         XCTAssertEqual(restored?.activityClearedBefore, activityClearedBefore)
+        XCTAssertEqual(restored?.lineups, [fixtureLineup])
 
         try await store.clear()
         let cleared = try await store.load()
         XCTAssertNil(cleared)
+    }
+
+    func testDecodesLegacySnapshotWithoutLineupsField() throws {
+        let snapshot = CompanionSnapshot(
+            activeInstance: fixtureInstance,
+            capabilities: nil,
+            displays: [],
+            dashboards: [],
+            jobs: []
+        )
+        let encoded = try TesseraeJSON.encoder().encode(snapshot)
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        object.removeValue(forKey: "lineups")
+
+        let legacyData = try JSONSerialization.data(withJSONObject: object)
+        let restored = try TesseraeJSON.decoder().decode(
+            CompanionSnapshot.self,
+            from: legacyData
+        )
+
+        XCTAssertNil(restored.lineups)
     }
 
     func testRejectsUnsupportedSnapshotSchema() async throws {
@@ -73,6 +98,51 @@ final class CompanionStateStoreTests: XCTestCase {
             serverVersion: "0.203.3",
             timezone: "Asia/Shanghai",
             webURL: "http://tesserae.local:8765"
+        )
+    }
+
+    private var fixtureLineup: Lineup {
+        Lineup(
+            id: "morning-cycle",
+            name: "Morning cycle",
+            enabled: true,
+            intent: .cycle,
+            deviceIDs: ["display"],
+            dashboards: [
+                LineupDashboard(
+                    pageID: "morning",
+                    name: "Morning",
+                    dwellMinutes: 10,
+                    missing: false,
+                    refreshIntervalMinutes: nil,
+                    links: [],
+                    conditions: []
+                ),
+            ],
+            current: [LineupCurrent(deviceID: "display", pageID: "morning")],
+            nextAdvanceEpoch: nil,
+            advance: .timer,
+            trigger: .cycle,
+            intervalMinutes: 10,
+            firesAt: nil,
+            anchor: nil,
+            entryPageID: "morning",
+            homePageID: nil,
+            homeTimeoutMinutes: 0,
+            refreshIntervalMinutes: 10,
+            endAt: nil,
+            daysOfWeek: Array(0...6),
+            priority: 0,
+            smartSync: false,
+            smartSyncLeadSeconds: 10,
+            mode: .scheduled,
+            minHoldMinutes: 0,
+            windowStart: nil,
+            windowEnd: nil,
+            fallbackPageID: nil,
+            nativeEditable: true,
+            requiresWebReason: nil,
+            webURL: "/decks/morning-cycle"
         )
     }
 

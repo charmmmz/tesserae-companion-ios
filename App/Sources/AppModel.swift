@@ -65,6 +65,7 @@ final class AppModel {
     var capabilities: ServerCapabilities?
     var displays: [DisplaySummary] = []
     var dashboards: [DashboardSummary] = []
+    var lineups: [Lineup] = []
     var jobs: [PushJob] = []
     var historyItems: [HistoryItem] = []
     var historyNextBeforeID: String?
@@ -85,6 +86,7 @@ final class AppModel {
     var activeOperationIDs: Set<String> = []
     var isRefreshing = false
     var isRefreshingDashboards = false
+    var isRefreshingLineups = false
     var isDiscovering = false
     var isRestoringConnection = true
     var isRetryingSharedImages = false
@@ -101,6 +103,14 @@ final class AppModel {
 
     var supportsHistory: Bool {
         capabilities?.features.contains("history") == true
+    }
+
+    var supportsLineups: Bool {
+        capabilities?.features.contains("lineups") == true
+    }
+
+    var supportsLineupControl: Bool {
+        capabilities?.features.contains("lineup_control") == true
     }
 
     var supportsRemindersPersonalData: Bool {
@@ -264,6 +274,7 @@ final class AppModel {
             historyItems = []
             historyNextBeforeID = nil
             activityClearedBefore = nil
+            lineups = []
             historyPreviews = [:]
             displayPreviews = [:]
             displayPreviewRequestIDs = [:]
@@ -317,6 +328,7 @@ final class AppModel {
             capabilities = snapshot.capabilities
             displays = snapshot.displays
             dashboards = snapshot.dashboards
+            lineups = snapshot.lineups ?? []
             activityClearedBefore = snapshot.activityClearedBefore
             jobs = retainedActivityJobs(snapshot.jobs)
             await reloadActivityThumbnails(instanceID: snapshot.activeInstance.id)
@@ -373,6 +385,13 @@ final class AppModel {
 
             displays = try await activeClient.fetchDisplays(instance: currentInstance)
             dashboards = try await activeClient.fetchDashboards(instance: currentInstance)
+            if supportsLineups {
+                lineups = try await activeClient.fetchLineups(
+                    instance: currentInstance
+                )
+            } else {
+                lineups = []
+            }
             if supportsHistory {
                 let history = try await activeClient.fetchHistory(
                     beforeID: nil,
@@ -626,6 +645,56 @@ final class AppModel {
         }
     }
 
+    func refreshLineups(
+        showErrors: Bool = true,
+        saveSnapshot: Bool = true
+    ) async {
+        guard
+            supportsLineups,
+            let currentInstance = activeInstance,
+            !isRefreshingLineups
+        else {
+            return
+        }
+        isRefreshingLineups = true
+        defer { isRefreshingLineups = false }
+
+        do {
+            let refreshedLineups = try await activeClient.fetchLineups(
+                instance: currentInstance
+            )
+            guard
+                activeInstance?.id == currentInstance.id,
+                !Task.isCancelled
+            else {
+                return
+            }
+
+            lineups = refreshedLineups
+            connectionHealth = .connected
+            connectionNotice = nil
+
+            if connectionMode == .live, saveSnapshot {
+                await persistSnapshot(showErrors: showErrors)
+            }
+        } catch is CancellationError {
+            return
+        } catch let error as TesseraeClientError {
+            if showErrors
+                || error == .unauthorized
+                || error == .missingCredential
+            {
+                await handleConnectionError(error)
+            }
+        } catch {
+            if showErrors {
+                connectionHealth = .offline
+                connectionNotice = error.localizedDescription
+                lastError = nil
+            }
+        }
+    }
+
     func startActivityRefresh() {
         guard activityRefreshTask == nil else { return }
 
@@ -708,6 +777,75 @@ final class AppModel {
             jobs.insert(job, at: 0)
             await persistSnapshot()
             await updateUntilTerminal(job, instance: activeInstance)
+            return true
+        } catch {
+            await presentOperationError(error)
+            return false
+        }
+    }
+
+    func isOperatingOnLineup(_ lineupID: String) -> Bool {
+        activeOperationIDs.contains(lineupStateOperationID(lineupID))
+            || activeOperationIDs.contains(lineupControlOperationID(lineupID))
+    }
+
+    @discardableResult
+    func setLineupEnabled(
+        _ lineup: Lineup,
+        enabled: Bool
+    ) async -> Bool {
+        guard supportsLineupControl, let activeInstance else { return false }
+        let operationID = lineupStateOperationID(lineup.id)
+        activeOperationIDs.insert(operationID)
+        defer { activeOperationIDs.remove(operationID) }
+
+        do {
+            let updated = try await activeClient.setLineupEnabled(
+                id: lineup.id,
+                enabled: enabled,
+                instance: activeInstance
+            )
+            replaceLineup(updated)
+            await persistSnapshot()
+            return true
+        } catch {
+            await presentOperationError(error)
+            return false
+        }
+    }
+
+    @discardableResult
+    func controlLineup(
+        _ lineup: Lineup,
+        action: LineupPaintAction,
+        pageID: String? = nil,
+        deviceIDs: [String]
+    ) async -> Bool {
+        guard
+            supportsLineupControl,
+            let activeInstance,
+            !deviceIDs.isEmpty
+        else {
+            return false
+        }
+        let operationID = lineupControlOperationID(lineup.id)
+        activeOperationIDs.insert(operationID)
+        defer { activeOperationIDs.remove(operationID) }
+
+        do {
+            let job = try await activeClient.controlLineup(
+                id: lineup.id,
+                action: action,
+                pageID: pageID,
+                deviceIDs: deviceIDs,
+                overrideQuietHours: ManualSendPolicy.overridesQuietHours,
+                idempotencyKey: UUID().uuidString,
+                instance: activeInstance
+            )
+            jobs.insert(job, at: 0)
+            await persistSnapshot()
+            await updateUntilTerminal(job, instance: activeInstance)
+            await refreshLineups(showErrors: false)
             return true
         } catch {
             await presentOperationError(error)
@@ -1808,6 +1946,7 @@ final class AppModel {
         capabilities = nil
         displays = []
         dashboards = []
+        lineups = []
         jobs = []
         historyItems = []
         historyNextBeforeID = nil
@@ -1855,6 +1994,7 @@ final class AppModel {
             capabilities = nil
             displays = []
             dashboards = []
+            lineups = []
             jobs = []
             historyItems = []
             historyNextBeforeID = nil
@@ -1971,6 +2111,22 @@ final class AppModel {
         saveDashboardOrder()
     }
 
+    private func replaceLineup(_ updated: Lineup) {
+        guard let index = lineups.firstIndex(where: { $0.id == updated.id }) else {
+            lineups.append(updated)
+            return
+        }
+        lineups[index] = updated
+    }
+
+    private func lineupStateOperationID(_ lineupID: String) -> String {
+        "lineup-state:\(lineupID)"
+    }
+
+    private func lineupControlOperationID(_ lineupID: String) -> String {
+        "lineup-control:\(lineupID)"
+    }
+
     private func saveDashboardOrder() {
         guard let instanceID = activeInstance?.id else { return }
         UserDefaults.standard.set(
@@ -2010,6 +2166,7 @@ final class AppModel {
                     capabilities: capabilities,
                     displays: displays,
                     dashboards: dashboards,
+                    lineups: lineups,
                     jobs: jobs,
                     activityClearedBefore: activityClearedBefore
                 )

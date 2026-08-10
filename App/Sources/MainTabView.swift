@@ -3,11 +3,13 @@ import SwiftUI
 private enum AppTab: Hashable {
     case displays
     case dashboards
+    case lineups
     case send
     case activity
 }
 
 struct MainTabView: View {
+    @Environment(AppModel.self) private var model
     @State private var selection: AppTab = .displays
     @State private var settingsPresented = false
 
@@ -29,6 +31,16 @@ struct MainTabView: View {
             .tabItem { Label("Dashboards", systemImage: "rectangle.grid.2x2") }
             .tag(AppTab.dashboards)
 
+            if model.supportsLineups {
+                tabNavigation(title: "Lineups") {
+                    LineupsView(
+                        isActive: selection == .lineups && !settingsPresented
+                    )
+                }
+                .tabItem { Label("Lineups", systemImage: "rectangle.3.group") }
+                .tag(AppTab.lineups)
+            }
+
             tabNavigation(title: "Send") {
                 SendView()
             }
@@ -45,6 +57,11 @@ struct MainTabView: View {
         }
         .sheet(isPresented: $settingsPresented) {
             SettingsView()
+        }
+        .onChange(of: model.supportsLineups) { _, supportsLineups in
+            if !supportsLineups, selection == .lineups {
+                selection = .dashboards
+            }
         }
     }
 

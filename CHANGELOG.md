@@ -13,11 +13,11 @@ capabilities.
 
 ### Added
 
-- Prepared the capability-gated Companion 0.8 Lineups read/control contract,
-  complete advanced Deck-compatible Swift models, fixture server behavior,
-  synchronous enable/disable controls, and Job-backed next/previous/play
-  actions. Existing tokens re-pair to receive the new Lineup scopes; native
-  authoring remains a separate contract.
+- Added capability-gated native Lineups read and control, including runtime and
+  advanced behavior details, bound-display targeting, synchronous
+  enable/disable, and Job-backed next/previous/play actions. The Companion 0.8
+  contract preserves complete Deck-compatible definitions; existing tokens
+  re-pair for the new scopes, while native authoring remains a separate phase.
 
 ### Changed
 
