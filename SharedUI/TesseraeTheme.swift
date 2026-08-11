@@ -157,11 +157,15 @@ extension View {
 
     @ViewBuilder
     func tesseraeModalChromeButtonStyle() -> some View {
+#if compiler(>=6.2)
         if #available(iOS 26.0, *) {
             buttonStyle(.glass)
         } else {
             buttonStyle(.plain)
         }
+#else
+        buttonStyle(.plain)
+#endif
     }
 }
 
