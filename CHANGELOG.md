@@ -11,12 +11,6 @@ capabilities.
 
 ## [Unreleased]
 
-### Fixed
-
-- Missing Companion scopes now surface as permission errors without marking
-  Tesserae offline or discarding a valid pairing. Older pairings that lack
-  Lineups read/control are directed to pair again.
-
 ## [0.6.0] - 2026-08-11
 
 ### Added
@@ -63,6 +57,9 @@ capabilities.
 
 ### Fixed
 
+- Missing Companion scopes now surface as permission errors without marking
+  Tesserae offline or discarding a valid pairing. Older pairings that lack
+  Lineups read/control are directed to pair again.
 - Apple Reminders sync actions now align their titles consistently despite
   using different symbols.
 - Lineups now distinguish definitions with no resolvable display from bindings
