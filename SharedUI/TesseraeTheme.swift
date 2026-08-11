@@ -14,6 +14,14 @@ enum TesseraeTheme {
     }
 }
 
+enum TesseraeComposerLayout {
+    static let pagePadding: CGFloat = 16
+    static let sectionSpacing: CGFloat = 14
+    static let contentCardSpacing: CGFloat = 12
+    static let controlCardSpacing: CGFloat = 10
+    static let selectionCardSpacing: CGFloat = 8
+}
+
 struct ReorderDragPreview<Icon: View>: View {
     let title: String
     @ViewBuilder let icon: () -> Icon
@@ -145,6 +153,56 @@ extension View {
 
     func tesseraeScreenBackground() -> some View {
         modifier(TesseraeScreenBackgroundModifier())
+    }
+
+    @ViewBuilder
+    func tesseraeModalChromeButtonStyle() -> some View {
+        if #available(iOS 26.0, *) {
+            buttonStyle(.glass)
+        } else {
+            buttonStyle(.plain)
+        }
+    }
+}
+
+struct TesseraeDisplaySelectionRow: View {
+    let name: String
+    let resolution: String
+    let isSelected: Bool
+
+    var body: some View {
+        HStack {
+            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(isSelected ? TesseraeTheme.accent : .secondary)
+            Text(name)
+                .foregroundStyle(.primary)
+            Spacer()
+            Text(resolution)
+                .font(.caption.monospaced())
+                .foregroundStyle(.secondary)
+        }
+        .contentShape(Rectangle())
+        .padding(.vertical, 6)
+    }
+}
+
+struct TesseraeSuccessBanner: View {
+    let message: String
+
+    var body: some View {
+        Label(message, systemImage: "checkmark.circle.fill")
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                .regularMaterial,
+                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+            )
+            .shadow(color: .black.opacity(0.12), radius: 12, y: 5)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("send-success-banner")
     }
 }
 

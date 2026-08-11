@@ -158,8 +158,14 @@ def test_all_unconditional_job_writes_require_idempotency_key() -> None:
 
 def test_lineup_read_is_lossless_and_action_response_matches_effect() -> None:
     fixture = json.loads((FIXTURES / "lineups-response.json").read_text())
+    detail = json.loads((FIXTURES / "lineup-response.json").read_text())["lineup"]
     advanced = fixture["lineups"][1]
 
+    assert all(
+        lineup["web_url"] == f"/decks/{lineup['id']}/edit"
+        for lineup in fixture["lineups"]
+    )
+    assert detail["web_url"] == f"/decks/{detail['id']}/edit"
     assert advanced["native_editable"] is False
     assert advanced["requires_web_reason"]
     assert advanced["dashboards"][0]["conditions"]

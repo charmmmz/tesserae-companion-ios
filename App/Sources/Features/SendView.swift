@@ -20,8 +20,9 @@ struct SendView: View {
     @State private var selectedDeviceIDs: Set<String> = []
     @State private var previewDeviceID: String?
     @State private var didLoadSendPreferences = false
-    @State private var sentConfirmationPresented = false
-    @State private var sentConfirmationMessage = ""
+    @State private var sentConfirmationMessage: String?
+    @State private var sentConfirmationTask: Task<Void, Never>?
+    @FocusState private var linkFieldIsFocused: Bool
 
     private var previewSlotHeight: CGFloat {
         276 + 9 + previewTargetPickerHeight
@@ -29,7 +30,7 @@ struct SendView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: TesseraeComposerLayout.sectionSpacing) {
                 if supportsLinks {
                     sourceCard
                 }
@@ -64,8 +65,8 @@ struct SendView: View {
                             )
                         }
                         if sent {
-                            sentConfirmationMessage = confirmationMessage
-                            sentConfirmationPresented = true
+                            linkFieldIsFocused = false
+                            showSentConfirmation(confirmationMessage)
                             clearSubmittedSource()
                         }
                     }
@@ -93,7 +94,7 @@ struct SendView: View {
                         || isSending
                 )
             }
-            .padding(16)
+            .padding(TesseraeComposerLayout.pagePadding)
         }
         .task(id: sendPreferenceContextID) {
             await loadSendPreferences()
@@ -120,16 +121,29 @@ struct SendView: View {
             selection: $pickerItem,
             matching: .images
         )
-        .alert("Sent", isPresented: $sentConfirmationPresented) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(sentConfirmationMessage)
+        .overlay(alignment: .top) {
+            if let sentConfirmationMessage {
+                TesseraeSuccessBanner(message: sentConfirmationMessage)
+                    .padding(.horizontal, TesseraeComposerLayout.pagePadding)
+                    .padding(.top, 8)
+                    .transition(
+                        .move(edge: .top)
+                            .combined(with: .opacity)
+                    )
+                    .allowsHitTesting(false)
+            }
+        }
+        .onDisappear {
+            sentConfirmationTask?.cancel()
         }
         .tesseraeScreenBackground()
     }
 
     private var sourceCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(
+            alignment: .leading,
+            spacing: TesseraeComposerLayout.controlCardSpacing
+        ) {
             Text("Source")
                 .font(.headline)
             Picker("Source", selection: $source) {
@@ -145,11 +159,15 @@ struct SendView: View {
     }
 
     private var linkCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(
+            alignment: .leading,
+            spacing: TesseraeComposerLayout.contentCardSpacing
+        ) {
             Text("Link")
                 .font(.headline)
 
             TextField("https://example.com", text: $linkText)
+                .focused($linkFieldIsFocused)
                 .textInputAutocapitalization(.never)
                 .keyboardType(.URL)
                 .autocorrectionDisabled()
@@ -192,7 +210,10 @@ struct SendView: View {
     }
 
     private var imagePickerCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(
+            alignment: .leading,
+            spacing: TesseraeComposerLayout.contentCardSpacing
+        ) {
             previewHeader
 
             simulatedPanel
@@ -406,7 +427,10 @@ struct SendView: View {
     }
 
     private var fitCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(
+            alignment: .leading,
+            spacing: TesseraeComposerLayout.controlCardSpacing
+        ) {
             Text("Image Fit")
                 .font(.headline)
             Picker("Image Fit", selection: $fitMode) {
@@ -423,7 +447,10 @@ struct SendView: View {
     }
 
     private var targetCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(
+            alignment: .leading,
+            spacing: TesseraeComposerLayout.selectionCardSpacing
+        ) {
             Text("Displays")
                 .font(.headline)
 
@@ -457,26 +484,11 @@ struct SendView: View {
                             previewDeviceID = display.id
                         }
                     } label: {
-                        HStack {
-                            Image(
-                                systemName: selectedDeviceIDs.contains(display.id)
-                                    ? "checkmark.circle.fill"
-                                    : "circle"
-                            )
-                            .foregroundStyle(
-                                selectedDeviceIDs.contains(display.id)
-                                    ? TesseraeTheme.accent
-                                    : .secondary
-                            )
-                            Text(display.name)
-                                .foregroundStyle(.primary)
-                            Spacer()
-                            Text("\(display.panel.width)×\(display.panel.height)")
-                                .font(.caption.monospaced())
-                                .foregroundStyle(.secondary)
-                        }
-                        .contentShape(Rectangle())
-                        .padding(.vertical, 6)
+                        TesseraeDisplaySelectionRow(
+                            name: display.name,
+                            resolution: "\(display.panel.width)×\(display.panel.height)",
+                            isSelected: selectedDeviceIDs.contains(display.id)
+                        )
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("send-display-\(display.id)")
@@ -544,6 +556,25 @@ struct SendView: View {
             String(
                 localized: "Tesserae accepted the link. Follow its progress in Activity."
             )
+        }
+    }
+
+    private func showSentConfirmation(_ message: String) {
+        sentConfirmationTask?.cancel()
+        withAnimation(.snappy) {
+            sentConfirmationMessage = message
+        }
+        sentConfirmationTask = Task { @MainActor in
+            do {
+                try await Task.sleep(for: .seconds(3))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.2)) {
+                sentConfirmationMessage = nil
+            }
+            sentConfirmationTask = nil
         }
     }
 

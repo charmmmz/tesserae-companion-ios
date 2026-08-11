@@ -13,16 +13,63 @@ struct DisplaysView: View {
     @State private var draggedDisplayID: String?
     @State private var dropTargetDisplayID: String?
     @State private var selectedDisplay: DisplaySummary?
+    @State private var lineupsPresented = false
 
     let isActive: Bool
 
     private var shouldAutoRefresh: Bool {
-        isActive && scenePhase == .active
+        isActive && !lineupsPresented && scenePhase == .active
     }
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 14) {
+                if model.supportsLineups {
+                    Button {
+                        lineupsPresented = true
+                    } label: {
+                        HStack(spacing: 14) {
+                            Image(systemName: "rectangle.3.group")
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(TesseraeTheme.accent)
+                                .frame(width: 40, height: 40)
+                                .background(
+                                    TesseraeTheme.accent.opacity(0.11),
+                                    in: RoundedRectangle(
+                                        cornerRadius: 12,
+                                        style: .continuous
+                                    )
+                                )
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Manage Lineups")
+                                    .font(.headline)
+                                Text("Schedules, decks, and rotations")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer(minLength: 4)
+
+                            if !model.lineups.isEmpty {
+                                Text("\(model.lineups.count)")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .tesseraeCard()
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("manage-lineups")
+                    .accessibilityHint("Opens Lineups and controls.")
+                }
+
                 ForEach(model.sortedDisplays) { display in
                     DisplayCard(
                         display: display,
@@ -109,6 +156,9 @@ struct DisplaysView: View {
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
+        }
+        .navigationDestination(isPresented: $lineupsPresented) {
+            LineupsView(isActive: isActive && lineupsPresented)
         }
         .task(id: shouldAutoRefresh) {
             guard shouldAutoRefresh else { return }

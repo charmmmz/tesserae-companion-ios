@@ -205,7 +205,11 @@ struct RemindersBridgeView: View {
             Button(role: .destructive) {
                 deleteConfirmationPresented = true
             } label: {
-                Label("Stop Sync and Delete Snapshot", systemImage: "trash")
+                busyLabel(
+                    title: "Stop Sync and Delete Snapshot",
+                    systemImage: "trash",
+                    showsProgress: false
+                )
             }
             .disabled(bridgeModel.isBusy)
         } else {
@@ -220,20 +224,31 @@ struct RemindersBridgeView: View {
                 Button(role: .destructive) {
                     deleteConfirmationPresented = true
                 } label: {
-                    Label("Delete Existing Snapshot", systemImage: "trash")
+                    busyLabel(
+                        title: "Delete Existing Snapshot",
+                        systemImage: "trash",
+                        showsProgress: false
+                    )
                 }
                 .disabled(bridgeModel.isBusy)
             }
         }
     }
 
-    private func busyLabel(title: LocalizedStringKey, systemImage: String) -> some View {
+    private func busyLabel(
+        title: LocalizedStringKey,
+        systemImage: String,
+        showsProgress: Bool = true
+    ) -> some View {
         HStack(spacing: 8) {
-            if bridgeModel.isBusy {
-                ProgressView()
-            } else {
-                Image(systemName: systemImage)
+            Group {
+                if showsProgress && bridgeModel.isBusy {
+                    ProgressView()
+                } else {
+                    Image(systemName: systemImage)
+                }
             }
+            .frame(width: 28)
             Text(title)
         }
     }

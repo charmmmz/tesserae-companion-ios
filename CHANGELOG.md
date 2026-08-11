@@ -18,9 +18,36 @@ capabilities.
   enable/disable, and Job-backed next/previous/play actions. The Companion 0.8
   contract preserves complete Deck-compatible definitions; existing tokens
   re-pair for the new scopes, while native authoring remains a separate phase.
+  Lineups are reached from Displays so the app retains its four primary tabs;
+  their display-grouped list and streamlined detail view foreground the current
+  dashboard over a preview backdrop, reduce duplicate position and state labels,
+  keep manual Dashboard selection in one place, and leave targets and advanced
+  behavior secondary. The detail view uses bound displays from its first frame
+  and loads the backdrop directly from the Lineup page, avoiding transient
+  selection prompts and missing previews while entering a Deck. Manual
+  Dashboard changes update the Now Showing card without a waiting animation or
+  blocking the Enabled switch; the switch now reflects taps immediately while
+  its server update completes.
 
 ### Changed
 
+- Lineup list rows now separate type, Dashboard count, and current playback into
+  compact, baseline-aligned visual metadata with short dividers and a tighter
+  title-to-metadata rhythm, with each row centered between the card edge and its
+  dividers. Enabled status moves from repeated text into the Lineup icon's
+  lower-right status badge. Detail disclosures now adapt to Manual, Daily,
+  Interval, and Cycle behavior, prioritizing useful schedule and timing
+  information instead of repeating low-level trigger and sync fields.
+- Send and Share Sheet now use the same compact composer spacing, display-
+  selection rows, and large-text preview labeling. Dashboard Push also adopts
+  the Share Sheet's rounded modal Cancel treatment, while every app-owned
+  screen and form uses the Tesserae paper background. Share Sheet keeps its
+  primary Send or Retry action visible beside Cancel in the top toolbar instead
+  of repeating a full-width button below the composer.
+- Successful sends no longer require dismissing an alert: Send shows a brief,
+  non-blocking confirmation, while Dashboard Push and Share Sheet close after
+  acceptance. Blocking alerts remain reserved for errors and decisions that
+  need attention.
 - Send now places display selection directly below Source and consolidates the
   photo preview footer into one centered `display name · resolution` selector,
   removes the repeated Previewing on label and file-size metadata, and uses
@@ -28,6 +55,25 @@ capabilities.
 
 ### Fixed
 
+- Apple Reminders sync actions now align their titles consistently despite
+  using different symbols.
+- Lineups now distinguish definitions with no resolvable display from bindings
+  to unavailable displays, follow member Dashboard bindings when a timed
+  Lineup has no explicit display, and explain Home Dashboard startup and
+  idle-return behavior when the server provides those details. Manual Lineups
+  also hide timer-only dwell, mode, priority, hold, and Smart Sync values, and
+  identify pre-render cadence as Background refresh. Inferred Daily targets now
+  show only the resolved display name without exposing binding implementation
+  details.
+- Open in Tesserae now reaches the Lineup editor and remains compatible with
+  older servers that advertised the legacy `/decks/{id}` path.
+- Share Sheet image sends now match Send Photo's Fill editor with drag-to-
+  position, pinch-to-zoom, reset, and selected-display preview switching. The
+  chosen framing is also preserved for queued retries instead of falling back
+  to an unframed centered Fill. High-frequency framing changes remain local to
+  the preview and commit only when the gesture ends. The canvas now takes
+  priority over the surrounding Share Sheet scroller, so short drags respond
+  immediately instead of jumping after the scroller's recognition delay.
 - Preview controls now grow and reflow for larger Dynamic Type sizes instead
   of clipping text in fixed-height rows. The preview-display selector also
   becomes non-interactive and hides its menu chevron when fewer than two

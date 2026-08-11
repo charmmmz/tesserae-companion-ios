@@ -12,6 +12,7 @@ public struct SharedImageRequest: Codable, Identifiable, Hashable, Sendable {
     public let fileName: String
     public let contentType: String
     public let fit: ImageFitMode
+    public let framing: ImageFraming?
     public let deviceIDs: [String]
     public let overrideQuietHours: Bool
     public let idempotencyKey: String
@@ -26,6 +27,7 @@ public struct SharedImageRequest: Codable, Identifiable, Hashable, Sendable {
         fileName: String,
         contentType: String,
         fit: ImageFitMode,
+        framing: ImageFraming? = nil,
         deviceIDs: [String],
         overrideQuietHours: Bool = false,
         idempotencyKey: String = UUID().uuidString,
@@ -39,6 +41,7 @@ public struct SharedImageRequest: Codable, Identifiable, Hashable, Sendable {
         self.fileName = fileName
         self.contentType = contentType
         self.fit = fit
+        self.framing = framing
         self.deviceIDs = deviceIDs
         self.overrideQuietHours = overrideQuietHours
         self.idempotencyKey = idempotencyKey
@@ -59,6 +62,7 @@ public struct SharedImageRequest: Codable, Identifiable, Hashable, Sendable {
             fileName: fileName,
             contentType: contentType,
             fit: fit,
+            framing: framing,
             deviceIDs: deviceIDs,
             overrideQuietHours: overrideQuietHours,
             idempotencyKey: idempotencyKey,
@@ -75,6 +79,7 @@ public struct SharedImageRequest: Codable, Identifiable, Hashable, Sendable {
         case fileName
         case contentType
         case fit
+        case framing
         case deviceIDs = "deviceIds"
         case overrideQuietHours
         case idempotencyKey

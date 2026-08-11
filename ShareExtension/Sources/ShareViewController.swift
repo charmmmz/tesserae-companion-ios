@@ -33,7 +33,6 @@ private final class ShareComposerModel: ObservableObject {
         case loading
         case ready
         case submitting
-        case accepted
         case failed
     }
 
@@ -45,8 +44,8 @@ private final class ShareComposerModel: ObservableObject {
     @Published var phase: Phase = .loading
     @Published var snapshot: CompanionSnapshot?
     @Published var selectedDeviceIDs: Set<String> = []
+    @Published var previewDeviceID: String?
     @Published var fit: ImageFitMode = .fit
-    @Published var imageByteCount = 0
     @Published var previewImage: UIImage?
     @Published var contentKind: ContentKind?
     @Published var sharedURL: URL?
@@ -136,7 +135,32 @@ private final class ShareComposerModel: ObservableObject {
     }
 
     var previewDisplay: DisplaySummary? {
-        displays.first { selectedDeviceIDs.contains($0.id) }
+        if let previewDeviceID,
+           selectedDeviceIDs.contains(previewDeviceID),
+           let preview = displays.first(where: { $0.id == previewDeviceID })
+        {
+            return preview
+        }
+        return displays.first { selectedDeviceIDs.contains($0.id) }
+    }
+
+    var selectedDisplays: [DisplaySummary] {
+        displays.filter { selectedDeviceIDs.contains($0.id) }
+    }
+
+    var supportsImageFraming: Bool {
+        snapshot?.capabilities?.supportsImageFraming == true
+    }
+
+    var maximumFramingZoom: Double {
+        max(snapshot?.capabilities?.limits.imageFramingMaxZoom ?? 1, 1)
+    }
+
+    var framingEditorIsActive: Bool {
+        contentKind == .image
+            && fit == .fill
+            && previewImage != nil
+            && supportsImageFraming
     }
 
     var fitModes: [ImageFitMode] {
@@ -200,7 +224,6 @@ private final class ShareComposerModel: ObservableObject {
                     capabilities: snapshot.capabilities
                 )
                 imageData = loaded.data
-                imageByteCount = loaded.data.count
                 previewImage = UIImage(data: loaded.data)
                 contentType = loaded.contentType
                 fileName = loaded.fileName
@@ -219,6 +242,9 @@ private final class ShareComposerModel: ObservableObject {
             } else {
                 selectedDeviceIDs = Set(snapshot.displays.prefix(1).map(\.id))
             }
+            previewDeviceID = snapshot.displays.first {
+                selectedDeviceIDs.contains($0.id)
+            }?.id
             if let preferredFit = savedPreferences?.imageFitMode,
                fitModes.contains(preferredFit)
             {
@@ -233,7 +259,7 @@ private final class ShareComposerModel: ObservableObject {
         }
     }
 
-    func send() async {
+    func send(framing: ImageFraming? = nil) async {
         guard
             let snapshot,
             !selectedDeviceIDs.isEmpty
@@ -252,6 +278,7 @@ private final class ShareComposerModel: ObservableObject {
                 guard let imageData else { return }
                 job = try await submitImage(
                     imageData,
+                    framing: framing,
                     snapshot: snapshot
                 )
             case .link:
@@ -274,7 +301,7 @@ private final class ShareComposerModel: ObservableObject {
                     activityClearedBefore: snapshot.activityClearedBefore
                 )
             )
-            phase = .accepted
+            complete()
         } catch {
             errorMessage = failedRequestRetained
                 ? [
@@ -288,6 +315,7 @@ private final class ShareComposerModel: ObservableObject {
 
     private func submitImage(
         _ imageData: Data,
+        framing: ImageFraming?,
         snapshot: CompanionSnapshot
     ) async throws -> PushJob {
         let request = queuedRequest ?? SharedImageRequest(
@@ -295,6 +323,7 @@ private final class ShareComposerModel: ObservableObject {
             fileName: fileName,
             contentType: contentType,
             fit: fit,
+            framing: framing,
             deviceIDs: Array(selectedDeviceIDs).sorted(),
             overrideQuietHours: ManualSendPolicy.overridesQuietHours
         )
@@ -317,6 +346,7 @@ private final class ShareComposerModel: ObservableObject {
                 fileName: submitting.fileName,
                 contentType: submitting.contentType,
                 fit: submitting.fit,
+                framing: submitting.framing,
                 deviceIDs: submitting.deviceIDs,
                 overrideQuietHours: submitting.overrideQuietHours,
                 idempotencyKey: submitting.idempotencyKey,
@@ -606,6 +636,8 @@ private final class ShareComposerModel: ObservableObject {
 private struct ShareComposerView: View {
     @ObservedObject var model: ShareComposerModel
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var imageFraming = ImageFraming.centeredFill
 
     var body: some View {
         NavigationStack {
@@ -613,12 +645,6 @@ private struct ShareComposerView: View {
                 switch model.phase {
                 case .loading:
                     ProgressView("Loading shared item…")
-                case .accepted:
-                    ContentUnavailableView(
-                        "Accepted by Tesserae",
-                        systemImage: "checkmark.circle.fill",
-                        description: Text(acceptedDescription)
-                    )
                 case .failed where model.snapshot == nil:
                     ContentUnavailableView(
                         "Open Tesserae Companion",
@@ -642,12 +668,16 @@ private struct ShareComposerView: View {
             )
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { model.cancel() }
-                }
-                if model.phase == .accepted || model.phase == .failed {
+                if model.phase == .failed && model.snapshot == nil {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Done") { model.complete() }
+                    }
+                } else {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { model.cancel() }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        sendToolbarButton
                     }
                 }
             }
@@ -665,10 +695,10 @@ private struct ShareComposerView: View {
 
     private var composer: some View {
         ScrollView {
-            VStack(spacing: 14) {
+            VStack(spacing: TesseraeComposerLayout.sectionSpacing) {
+                displaysCard
                 contentCard
                 layoutCard
-                displaysCard
 
                 if let errorMessage = model.errorMessage {
                     Label(errorMessage, systemImage: "exclamationmark.triangle")
@@ -677,27 +707,32 @@ private struct ShareComposerView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .tesseraeCard()
                 }
-
-                Button {
-                    Task { await model.send() }
-                } label: {
-                    if model.phase == .submitting {
-                        ProgressView()
-                            .frame(maxWidth: .infinity)
-                    } else {
-                        Label(
-                            model.phase == .failed ? "Retry Now" : "Send",
-                            systemImage: "paperplane.fill"
-                        )
-                        .frame(maxWidth: .infinity)
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(!model.canSend && model.phase != .failed)
             }
-            .padding(16)
+            .padding(TesseraeComposerLayout.pagePadding)
         }
+    }
+
+    private var sendToolbarButton: some View {
+        Button {
+            Task {
+                await model.send(framing: outgoingImageFraming)
+            }
+        } label: {
+            if model.phase == .submitting {
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(minWidth: 32)
+            } else {
+                Text(model.phase == .failed ? "Retry" : "Send")
+            }
+        }
+        .buttonStyle(.borderedProminent)
+        .disabled(!model.canSend && model.phase != .failed)
+        .accessibilityLabel(
+            model.phase == .submitting
+                ? "Sending"
+                : model.phase == .failed ? "Retry" : "Send"
+        )
     }
 
     @ViewBuilder
@@ -713,21 +748,12 @@ private struct ShareComposerView: View {
     }
 
     private var imageCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Image")
-                    .font(.headline)
-                Spacer()
-                Label(
-                    ByteCountFormatter.string(
-                        fromByteCount: Int64(model.imageByteCount),
-                        countStyle: .file
-                    ),
-                    systemImage: "photo"
-                )
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-            }
+        VStack(
+            alignment: .leading,
+            spacing: TesseraeComposerLayout.contentCardSpacing
+        ) {
+            Text("Preview")
+                .font(.headline)
 
             if let previewDisplay = model.previewDisplay {
                 TesseraePanelImagePreview(
@@ -737,21 +763,24 @@ private struct ShareComposerView: View {
                     maximumCanvasHeight: 220,
                     emptyTitle: String(localized: "Loading shared image…"),
                     accessibilityIdentifier: "share-panel-preview",
-                    imageAccessibilityIdentifier: "shared-image-preview"
+                    imageAccessibilityIdentifier: "shared-image-preview",
+                    framing: model.framingEditorIsActive
+                        ? $imageFraming
+                        : nil,
+                    maximumFramingZoom: model.maximumFramingZoom,
+                    prioritizesFramingGesture: true
                 )
                 .accessibilityLabel("Display image preview")
                 .accessibilityValue(
-                    "\(model.fit.rawValue), \(previewDisplay.panel.width) by \(previewDisplay.panel.height)"
+                    previewAccessibilityValue(panel: previewDisplay.panel)
+                )
+                .accessibilityHint(
+                    model.framingEditorIsActive
+                        ? "Drag to reposition the photo and pinch to zoom."
+                        : ""
                 )
 
-                Text(
-                    "\(previewDisplay.name) · \(previewDisplay.panel.width) × \(previewDisplay.panel.height)"
-                )
-                .font(.caption.monospaced())
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
+                previewTargetPicker
             } else {
                 ContentUnavailableView {
                     Label("No display selected", systemImage: "rectangle.slash")
@@ -765,7 +794,10 @@ private struct ShareComposerView: View {
     }
 
     private var linkCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(
+            alignment: .leading,
+            spacing: TesseraeComposerLayout.contentCardSpacing
+        ) {
             Text("Link")
                 .font(.headline)
 
@@ -811,41 +843,18 @@ private struct ShareComposerView: View {
     }
 
     private var layoutCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Layout")
+        VStack(
+            alignment: .leading,
+            spacing: TesseraeComposerLayout.controlCardSpacing
+        ) {
+            Text("Image Fit")
                 .font(.headline)
-            HStack(spacing: 10) {
-                Picker("Layout", selection: $model.fit) {
-                    ForEach(primaryFitModes, id: \.self) { mode in
-                        Text(mode.displayName).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-
-                if !advancedFitModes.isEmpty {
-                    Menu {
-                        ForEach(advancedFitModes, id: \.self) { mode in
-                            Button {
-                                model.fit = mode
-                            } label: {
-                                if model.fit == mode {
-                                    Label(mode.displayName, systemImage: "checkmark")
-                                } else {
-                                    Text(mode.displayName)
-                                }
-                            }
-                        }
-                    } label: {
-                        Label(
-                            advancedFitModes.contains(model.fit)
-                                ? model.fit.displayName
-                                : "More",
-                            systemImage: "ellipsis.circle"
-                        )
-                    }
-                    .buttonStyle(.bordered)
+            Picker("Image Fit", selection: $model.fit) {
+                ForEach(model.fitModes, id: \.self) { mode in
+                    Text(mode.displayName).tag(mode)
                 }
             }
+            .pickerStyle(.segmented)
             Text(model.fit.helpText)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
@@ -853,46 +862,32 @@ private struct ShareComposerView: View {
         .tesseraeCard()
     }
 
-    private var primaryFitModes: [ImageFitMode] {
-        model.fitModes.filter { $0 != .stretch && $0 != .center }
-    }
-
-    private var advancedFitModes: [ImageFitMode] {
-        model.fitModes.filter { $0 == .stretch || $0 == .center }
-    }
-
     private var displaysCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(
+            alignment: .leading,
+            spacing: TesseraeComposerLayout.selectionCardSpacing
+        ) {
             Text("Displays")
                 .font(.headline)
             ForEach(model.displays) { display in
                 Button {
                     if model.selectedDeviceIDs.contains(display.id) {
                         model.selectedDeviceIDs.remove(display.id)
+                        if model.previewDeviceID == display.id {
+                            model.previewDeviceID = model.displays.first {
+                                model.selectedDeviceIDs.contains($0.id)
+                            }?.id
+                        }
                     } else {
                         model.selectedDeviceIDs.insert(display.id)
+                        model.previewDeviceID = display.id
                     }
                 } label: {
-                    HStack {
-                        Image(
-                            systemName: model.selectedDeviceIDs.contains(display.id)
-                                ? "checkmark.circle.fill"
-                                : "circle"
-                        )
-                        .foregroundStyle(
-                            model.selectedDeviceIDs.contains(display.id)
-                                ? TesseraeTheme.accent
-                                : .secondary
-                        )
-                        Text(display.name)
-                            .foregroundStyle(.primary)
-                        Spacer()
-                        Text("\(display.panel.width)×\(display.panel.height)")
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
-                    }
-                    .contentShape(Rectangle())
-                    .padding(.vertical, 6)
+                    TesseraeDisplaySelectionRow(
+                        name: display.name,
+                        resolution: "\(display.panel.width)×\(display.panel.height)",
+                        isSelected: model.selectedDeviceIDs.contains(display.id)
+                    )
                 }
                 .buttonStyle(.plain)
             }
@@ -900,15 +895,98 @@ private struct ShareComposerView: View {
         .tesseraeCard()
     }
 
-    private var acceptedDescription: String {
-        switch model.contentKind {
-        case .image:
-            String(localized: "The server will render and publish the image.")
-        case .link:
-            String(localized: "The server will fetch or render and publish the link.")
-        case nil:
-            String(localized: "The server accepted the shared item.")
+    @ViewBuilder
+    private var previewTargetPicker: some View {
+        if model.selectedDisplays.count > 1 {
+            Menu {
+                ForEach(model.selectedDisplays) { display in
+                    Button {
+                        model.previewDeviceID = display.id
+                    } label: {
+                        Label(
+                            display.name,
+                            systemImage: model.previewDisplay?.id == display.id
+                                ? "checkmark.circle.fill"
+                                : "circle"
+                        )
+                    }
+                }
+            } label: {
+                previewTargetLabel(showsChevron: true)
+            }
+            .menuIndicator(.hidden)
+            .accessibilityIdentifier("share-preview-display-picker")
+        } else {
+            previewTargetLabel(showsChevron: false)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(previewTargetSummary)
+                .accessibilityIdentifier("share-preview-display-picker")
         }
+    }
+
+    private func previewTargetLabel(showsChevron: Bool) -> some View {
+        HStack(spacing: 5) {
+            Image(
+                systemName: model.selectedDisplays.isEmpty
+                    ? "rectangle.slash"
+                    : "rectangle.on.rectangle"
+            )
+            Text(previewTargetSummary)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                .truncationMode(.middle)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
+            if showsChevron {
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.bold))
+            }
+        }
+        .font(.footnote.weight(.semibold))
+        .foregroundStyle(TesseraeTheme.accent)
+        .padding(.horizontal, 2)
+        .padding(.vertical, 7)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: previewTargetPickerHeight,
+            alignment: .center
+        )
+        .contentShape(Rectangle())
+        .layoutPriority(1)
+    }
+
+    private var previewTargetSummary: String {
+        guard let display = model.previewDisplay else {
+            return String(localized: "None selected")
+        }
+        return "\(display.name) · \(display.panel.width) × \(display.panel.height)"
+    }
+
+    private var previewTargetPickerHeight: CGFloat {
+        let lineHeight = UIFont.preferredFont(
+            forTextStyle: .footnote
+        ).lineHeight
+        let lineCount: CGFloat = dynamicTypeSize.isAccessibilitySize ? 2 : 1
+        return max(32, ceil(lineHeight * lineCount + 14))
+    }
+
+    private func previewAccessibilityValue(panel: PanelProfile) -> String {
+        if model.framingEditorIsActive {
+            return "fill, \(panel.width) by \(panel.height), \(imageFraming.zoom.formatted(.number.precision(.fractionLength(1...2)))) times zoom"
+        }
+        return "\(model.fit.rawValue), \(panel.width) by \(panel.height)"
+    }
+
+    private var outgoingImageFraming: ImageFraming? {
+        guard model.framingEditorIsActive else { return nil }
+        return ImageFraming(
+            focusX: min(max(imageFraming.focusX, 0), 1),
+            focusY: min(max(imageFraming.focusY, 0), 1),
+            zoom: min(
+                max(imageFraming.zoom, 1),
+                model.maximumFramingZoom
+            )
+        )
     }
 
     private func linkKindName(_ kind: LinkPushKind) -> String {

@@ -1292,6 +1292,7 @@ final class AppModel {
                 fileName: submitting.fileName,
                 contentType: submitting.contentType,
                 fit: submitting.fit,
+                framing: submitting.framing,
                 deviceIDs: submitting.deviceIDs,
                 overrideQuietHours: submitting.overrideQuietHours,
                 idempotencyKey: submitting.idempotencyKey,
@@ -1700,8 +1701,21 @@ final class AppModel {
         for dashboard: DashboardSummary,
         deviceID: String?
     ) -> PreviewImageState? {
+        dashboardPreview(
+            id: dashboard.id,
+            deviceID: deviceID ?? dashboard.deviceIDs.first
+        )
+    }
+
+    func dashboardPreview(
+        id dashboardID: String,
+        deviceID: String?
+    ) -> PreviewImageState? {
         dashboardPreviews[
-            dashboardPreviewKey(dashboard, deviceID: deviceID)
+            DashboardPreviewKey(
+                dashboardID: dashboardID,
+                deviceID: deviceID
+            )
         ]
     }
 
@@ -1709,10 +1723,23 @@ final class AppModel {
         _ dashboard: DashboardSummary,
         deviceID: String? = nil
     ) async {
+        await loadDashboardPreview(
+            id: dashboard.id,
+            deviceID: deviceID ?? dashboard.deviceIDs.first
+        )
+    }
+
+    func loadDashboardPreview(
+        id dashboardID: String,
+        deviceID: String?
+    ) async {
         guard supportsPreviews, let instance = activeInstance else {
             return
         }
-        let key = dashboardPreviewKey(dashboard, deviceID: deviceID)
+        let key = DashboardPreviewKey(
+            dashboardID: dashboardID,
+            deviceID: deviceID
+        )
         let stored = dashboardPreviews[key] ?? .idle
         let previous = stored.phase == .loading
             ? PreviewImageState(
@@ -1733,7 +1760,7 @@ final class AppModel {
             for attempt in 0..<8 {
                 try Task.checkCancellation()
                 let result = try await activeClient.fetchDashboardPreview(
-                    id: dashboard.id,
+                    id: dashboardID,
                     deviceID: key.deviceID,
                     ifNoneMatch: previous.data == nil ? nil : previous.eTag,
                     instance: instance
@@ -1795,16 +1822,6 @@ final class AppModel {
             )
             dashboardPreviewRequestIDs[key] = nil
         }
-    }
-
-    private func dashboardPreviewKey(
-        _ dashboard: DashboardSummary,
-        deviceID: String?
-    ) -> DashboardPreviewKey {
-        DashboardPreviewKey(
-            dashboardID: dashboard.id,
-            deviceID: deviceID ?? dashboard.deviceIDs.first
-        )
     }
 
     func loadHistoryPreview(_ item: HistoryItem) async {

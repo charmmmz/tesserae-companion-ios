@@ -16,6 +16,7 @@ struct TesseraeCompanionApp: App {
         let activityThumbnails: any ActivityThumbnailStoring
         let discovery: any TesseraeDiscovering
         let demoLatency: Duration
+        let demoLineupIntent: LineupIntent
 #if DEBUG
         if let rawLatency = ProcessInfo.processInfo.environment[
             "TESSERAE_UI_TEST_DEMO_LATENCY_MS"
@@ -24,6 +25,9 @@ struct TesseraeCompanionApp: App {
         } else {
             demoLatency = .milliseconds(180)
         }
+        demoLineupIntent = ProcessInfo.processInfo.environment[
+            "TESSERAE_UI_TEST_LINEUP_INTENT"
+        ].flatMap(LineupIntent.init(rawValue:)) ?? .manual
         if ProcessInfo.processInfo.environment[
             "TESSERAE_USE_IN_MEMORY_CREDENTIALS"
         ] == "1" {
@@ -78,6 +82,7 @@ struct TesseraeCompanionApp: App {
         )
         discovery = BonjourDiscoveryService()
         demoLatency = .milliseconds(180)
+        demoLineupIntent = .manual
 #endif
         let liveClient = LiveTesseraeClient(
             credentials: credentials,
@@ -89,7 +94,10 @@ struct TesseraeCompanionApp: App {
         _model = State(
             initialValue: AppModel(
                 liveClient: liveClient,
-                demoClient: MockTesseraeClient(latency: demoLatency),
+                demoClient: MockTesseraeClient(
+                    latency: demoLatency,
+                    lineupIntent: demoLineupIntent
+                ),
                 credentials: credentials,
                 stateStore: stateStore,
                 sendPreferences: sendPreferences,

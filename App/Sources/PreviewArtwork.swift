@@ -30,6 +30,7 @@ struct PreviewArtwork: View {
     let imageLabel: String
     let accessibilityIdentifier: String
     var placeholderDetail: String?
+    var contentMode: ContentMode = .fit
 
     var body: some View {
         ZStack {
@@ -40,11 +41,7 @@ struct PreviewArtwork: View {
             )
 
             if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .interpolation(.none)
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                previewImage(image)
             } else {
                 VStack(spacing: 4) {
                     Image(systemName: placeholderSystemName)
@@ -75,5 +72,23 @@ struct PreviewArtwork: View {
 
     private var image: UIImage? {
         PreviewImageCache.shared.image(for: state?.data)
+    }
+
+    @ViewBuilder
+    private func previewImage(_ image: UIImage) -> some View {
+        if contentMode == .fill {
+            Image(uiImage: image)
+                .resizable()
+                .interpolation(.none)
+                .scaledToFill()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+        } else {
+            Image(uiImage: image)
+                .resizable()
+                .interpolation(.none)
+                .scaledToFit()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
     }
 }

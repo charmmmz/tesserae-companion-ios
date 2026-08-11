@@ -71,7 +71,7 @@
       "fallback_page_id": null,
       "native_editable": true,
       "requires_web_reason": null,
-      "web_url": "/decks/kitchen-deck"
+      "web_url": "/decks/kitchen-deck/edit"
     },
     {
       "id": "whole-home-cycle",
@@ -148,7 +148,7 @@
       "fallback_page_id": "pantry",
       "native_editable": false,
       "requires_web_reason": "has conditions on one or more dashboards",
-      "web_url": "/decks/whole-home-cycle"
+      "web_url": "/decks/whole-home-cycle/edit"
     }
   ]
 }

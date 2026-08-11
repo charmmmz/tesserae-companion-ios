@@ -8,9 +8,15 @@ public actor MockTesseraeClient: TesseraeServing {
     private var completedJobs: [String: PushJob] = [:]
     private var jobsByIdempotencyKey: [String: PushJob] = [:]
     private var lineupEnabled = true
+    private var lineupCurrentPageID = "pantry"
+    private let lineupIntent: LineupIntent
 
-    public init(latency: Duration = .milliseconds(180)) {
+    public init(
+        latency: Duration = .milliseconds(180),
+        lineupIntent: LineupIntent = .manual
+    ) {
         self.latency = latency
+        self.lineupIntent = lineupIntent
     }
 
     public func probe(baseURL: URL) async throws -> ServerCapabilities {
@@ -216,7 +222,7 @@ public actor MockTesseraeClient: TesseraeServing {
         guard Set(targets).isSubset(of: Set(lineup.deviceIDs)) else {
             throw TesseraeClientError.unavailable
         }
-        return try await acceptJob(
+        let job = try await acceptJob(
             kind: .lineupAction,
             label: lineup.name,
             deviceIDs: targets,
@@ -225,6 +231,22 @@ public actor MockTesseraeClient: TesseraeServing {
             resultReason: action.rawValue,
             historyEventIDs: ["history-demo-lineup"]
         )
+        let pageIDs = lineup.dashboards.map(\.pageID)
+        switch action {
+        case .play:
+            lineupCurrentPageID = pageID ?? lineupCurrentPageID
+        case .next:
+            if let currentIndex = pageIDs.firstIndex(of: lineupCurrentPageID) {
+                lineupCurrentPageID = pageIDs[(currentIndex + 1) % pageIDs.count]
+            }
+        case .previous:
+            if let currentIndex = pageIDs.firstIndex(of: lineupCurrentPageID) {
+                lineupCurrentPageID = pageIDs[
+                    (currentIndex - 1 + pageIDs.count) % pageIDs.count
+                ]
+            }
+        }
+        return job
     }
 
     public func fetchDevicePreview(
@@ -491,45 +513,80 @@ public actor MockTesseraeClient: TesseraeServing {
     }
 
     private func demoLineup(enabled: Bool = true) -> Lineup {
-        Lineup(
+        let isManual = lineupIntent == .manual
+        let name: String
+        let trigger: LineupTrigger?
+        let intervalMinutes: Int?
+        switch lineupIntent {
+        case .daily:
+            name = "Daily weather"
+            trigger = .daily
+            intervalMinutes = nil
+        case .interval:
+            name = "News interval"
+            trigger = .interval
+            intervalMinutes = 45
+        case .cycle:
+            name = "Morning cycle"
+            trigger = .cycle
+            intervalMinutes = 30
+        case .manual:
+            name = "Kitchen deck"
+            trigger = nil
+            intervalMinutes = nil
+        }
+        let dashboards = [
+            LineupDashboard(
+                pageID: "pantry",
+                name: "Pantry",
+                dwellMinutes: lineupIntent == .cycle ? 20 : 30,
+                missing: false,
+                refreshIntervalMinutes: nil,
+                links: isManual
+                    ? [LineupLink(targetPageID: "morning", button: "right")]
+                    : [],
+                conditions: []
+            ),
+            LineupDashboard(
+                pageID: "morning",
+                name: "Morning",
+                dwellMinutes: lineupIntent == .cycle ? 40 : 30,
+                missing: false,
+                refreshIntervalMinutes: nil,
+                links: isManual
+                    ? [LineupLink(targetPageID: "pantry", button: "left")]
+                    : [],
+                conditions: []
+            ),
+        ]
+
+        return Lineup(
             id: "kitchen-deck",
-            name: "Kitchen deck",
+            name: name,
             enabled: enabled,
-            intent: .manual,
+            intent: lineupIntent,
             deviceIDs: ["picpak-kitchen"],
-            dashboards: [
-                LineupDashboard(
-                    pageID: "pantry",
-                    name: "Pantry",
-                    dwellMinutes: 30,
-                    missing: false,
-                    refreshIntervalMinutes: nil,
-                    links: [LineupLink(targetPageID: "morning", button: "right")],
-                    conditions: []
-                ),
-                LineupDashboard(
-                    pageID: "morning",
-                    name: "Morning",
-                    dwellMinutes: 30,
-                    missing: false,
-                    refreshIntervalMinutes: nil,
-                    links: [LineupLink(targetPageID: "pantry", button: "left")],
-                    conditions: []
-                ),
+            dashboards: lineupIntent == .daily ? [dashboards[0]] : dashboards,
+            current: [
+                LineupCurrent(
+                    deviceID: "picpak-kitchen",
+                    pageID: lineupCurrentPageID
+                )
             ],
-            current: [LineupCurrent(deviceID: "picpak-kitchen", pageID: "pantry")],
             nextAdvanceEpoch: nil,
-            advance: .manual,
-            trigger: nil,
-            intervalMinutes: nil,
-            firesAt: nil,
-            anchor: nil,
+            advance: isManual ? .manual : .timer,
+            trigger: trigger,
+            intervalMinutes: intervalMinutes,
+            firesAt: lineupIntent == .daily ? "07:30" : nil,
+            anchor: lineupIntent == .cycle ? "06:00" : nil,
             entryPageID: "pantry",
             homePageID: nil,
             homeTimeoutMinutes: 0,
             refreshIntervalMinutes: 15,
             endAt: nil,
-            daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+            daysOfWeek: lineupIntent == .daily
+                ? [0, 1, 2, 3, 4]
+                : [0, 1, 2, 3, 4, 5, 6],
             priority: 0,
             smartSync: false,
             smartSyncLeadSeconds: 10,
@@ -540,7 +597,7 @@ public actor MockTesseraeClient: TesseraeServing {
             fallbackPageID: nil,
             nativeEditable: true,
             requiresWebReason: nil,
-            webURL: "/decks/kitchen-deck"
+            webURL: "/decks/kitchen-deck/edit"
         )
     }
 

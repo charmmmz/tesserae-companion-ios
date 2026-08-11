@@ -142,7 +142,7 @@ final class CompanionStateStoreTests: XCTestCase {
             fallbackPageID: nil,
             nativeEditable: true,
             requiresWebReason: nil,
-            webURL: "/decks/morning-cycle"
+            webURL: "/decks/morning-cycle/edit"
         )
     }
 

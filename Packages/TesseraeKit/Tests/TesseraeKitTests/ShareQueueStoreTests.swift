@@ -58,6 +58,36 @@ final class ShareQueueStoreTests: XCTestCase {
         }
     }
 
+    func testReadsLegacyQueuedImageWithoutFraming() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "TesseraeShareQueueTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let queueDirectory = directory.appending(
+            path: "ShareQueue",
+            directoryHint: .isDirectory
+        )
+        try FileManager.default.createDirectory(
+            at: queueDirectory,
+            withIntermediateDirectories: true
+        )
+
+        let encoded = try TesseraeJSON.encoder().encode(fixtureRequest)
+        var legacyJSON = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        legacyJSON.removeValue(forKey: "framing")
+        try JSONSerialization.data(withJSONObject: legacyJSON).write(
+            to: queueDirectory.appending(path: "request-1.json")
+        )
+
+        let restored = try await FileShareQueueStore(
+            directoryURL: directory
+        ).requests()
+        XCTAssertEqual(restored.count, 1)
+        XCTAssertNil(restored.first?.framing)
+    }
+
     private var fixtureRequest: SharedImageRequest {
         SharedImageRequest(
             id: "request-1",
@@ -65,6 +95,11 @@ final class ShareQueueStoreTests: XCTestCase {
             fileName: "shared-photo.jpg",
             contentType: "image/jpeg",
             fit: .fill,
+            framing: ImageFraming(
+                focusX: 0.62,
+                focusY: 0.38,
+                zoom: 1.5
+            ),
             deviceIDs: ["picpak-fridge"],
             idempotencyKey: "idempotency-1",
             createdAt: Date(timeIntervalSince1970: 10),

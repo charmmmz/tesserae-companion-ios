@@ -523,14 +523,15 @@ final class TesseraeCompanionUITests: XCTestCase {
         let sendButtonHeight = sendButton.frame.height
         sendButton.tap()
 
-        let sentAlert = app.alerts["Sent"]
-        XCTAssertTrue(sentAlert.waitForExistence(timeout: 3))
+        let sentBanner = app.descendants(matching: .any)[
+            "send-success-banner"
+        ]
+        XCTAssertTrue(sentBanner.waitForExistence(timeout: 3))
         XCTAssertEqual(
             sendButton.frame.height,
             sendButtonHeight,
             accuracy: 1
         )
-        sentAlert.buttons["OK"].tap()
 
         tabBar.buttons["Activity"].tap()
         XCTAssertTrue(app.staticTexts["Shared Photo"].waitForExistence(timeout: 2))
@@ -709,14 +710,15 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(sendButton.isEnabled)
         sendButton.tap()
 
-        let sentAlert = app.alerts["Sent"]
-        XCTAssertTrue(sentAlert.waitForExistence(timeout: 3))
+        let sentBanner = app.descendants(matching: .any)[
+            "send-success-banner"
+        ]
+        XCTAssertTrue(sentBanner.waitForExistence(timeout: 3))
         XCTAssertTrue(
-            sentAlert.staticTexts[
+            sentBanner.label.contains(
                 "Tesserae accepted the link. Follow its progress in Activity."
-            ].exists
+            )
         )
-        sentAlert.buttons["OK"].tap()
 
         app.tabBars.firstMatch.buttons["Activity"].tap()
         XCTAssertTrue(
@@ -1094,14 +1096,15 @@ final class TesseraeCompanionUITests: XCTestCase {
         let previewSendButtonHeight = previewSendButton.frame.height
         previewSendButton.tap()
 
-        let sentAlert = app.alerts["Sent"]
-        XCTAssertTrue(sentAlert.waitForExistence(timeout: 3))
+        let sentBanner = app.descendants(matching: .any)[
+            "send-success-banner"
+        ]
+        XCTAssertTrue(sentBanner.waitForExistence(timeout: 3))
         XCTAssertEqual(
             previewSendButton.frame.height,
             previewSendButtonHeight,
             accuracy: 1
         )
-        sentAlert.buttons["OK"].tap()
 
         tabBar.buttons["Activity"].tap()
         XCTAssertTrue(app.staticTexts["Shared Photo"].waitForExistence(timeout: 2))

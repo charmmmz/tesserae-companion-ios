@@ -1512,6 +1512,7 @@ components:
           type: string
           nullable: true
         web_url:
+          description: Relative URL for editing this Lineup in Tesserae Web
           type: string
     LocalTime:
       type: string

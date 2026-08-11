@@ -16,7 +16,8 @@ struct TesseraePanelImagePreview: View {
     let framing: Binding<ImageFraming>?
     let maximumFramingZoom: Double
     let onCanvasTap: (() -> Void)?
-    @State private var gestureStartFraming: ImageFraming?
+    let prioritizesFramingGesture: Bool
+    @GestureState private var framingGestureState = FramingGestureState()
     @State private var isFramingGestureActive = false
     @State private var framingControlsRevealTask: Task<Void, Never>?
 
@@ -30,7 +31,8 @@ struct TesseraePanelImagePreview: View {
         imageAccessibilityIdentifier: String,
         framing: Binding<ImageFraming>? = nil,
         maximumFramingZoom: Double = 1,
-        onCanvasTap: (() -> Void)? = nil
+        onCanvasTap: (() -> Void)? = nil,
+        prioritizesFramingGesture: Bool = false
     ) {
         self.image = image
         self.panel = panel
@@ -42,6 +44,7 @@ struct TesseraePanelImagePreview: View {
         self.framing = framing
         self.maximumFramingZoom = maximumFramingZoom
         self.onCanvasTap = onCanvasTap
+        self.prioritizesFramingGesture = prioritizesFramingGesture
     }
 
     var body: some View {
@@ -86,7 +89,26 @@ struct TesseraePanelImagePreview: View {
                 if let framing {
                     let sourceWidth = image.size.width * image.scale
                     let sourceHeight = image.size.height * image.scale
-                    let rect = framing.wrappedValue.framedPreviewRect(
+                    let previewFraming = framing.wrappedValue
+                        .applyingPreviewGesture(
+                            translationX: Double(
+                                framingGestureState.translation.width
+                            ),
+                            translationY: Double(
+                                framingGestureState.translation.height
+                            ),
+                            magnification: Double(
+                                framingGestureState.magnification
+                            ),
+                            canvasWidth: Double(size.width),
+                            canvasHeight: Double(size.height),
+                            sourceWidth: Double(sourceWidth),
+                            sourceHeight: Double(sourceHeight),
+                            targetWidth: Double(panel.width),
+                            targetHeight: Double(panel.height),
+                            maximumZoom: maximumFramingZoom
+                        )
+                    let rect = previewFraming.framedPreviewRect(
                         sourceWidth: sourceWidth,
                         sourceHeight: sourceHeight,
                         canvasWidth: size.width,
@@ -163,7 +185,11 @@ struct TesseraePanelImagePreview: View {
         }
         .gesture(
             framingGesture(size: size, image: image),
-            including: framing == nil || image == nil ? .none : .all
+            including: framingGestureMask(prioritized: false, image: image)
+        )
+        .highPriorityGesture(
+            framingGesture(size: size, image: image),
+            including: framingGestureMask(prioritized: true, image: image)
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Display image preview")
@@ -220,7 +246,6 @@ struct TesseraePanelImagePreview: View {
     }
 
     private func resetFraming(_ framing: Binding<ImageFraming>) {
-        gestureStartFraming = nil
         framingControlsRevealTask?.cancel()
         framingControlsRevealTask = nil
         framing.wrappedValue = .centeredFill
@@ -233,43 +258,74 @@ struct TesseraePanelImagePreview: View {
         size: CGSize,
         image: UIImage?
     ) -> some Gesture {
-        DragGesture(minimumDistance: 1)
+        DragGesture(minimumDistance: prioritizesFramingGesture ? 0 : 1)
             .simultaneously(with: MagnificationGesture())
-            .onChanged { value in
-                guard let image, let framing else { return }
-                let start = gestureStartFraming ?? framing.wrappedValue
-                if gestureStartFraming == nil {
-                    framingControlsRevealTask?.cancel()
-                    framingControlsRevealTask = nil
-                    gestureStartFraming = start
-                    isFramingGestureActive = true
-                }
-                framing.wrappedValue = start.applyingPreviewGesture(
-                    translationX: Double(value.first?.translation.width ?? 0),
-                    translationY: Double(value.first?.translation.height ?? 0),
-                    magnification: Double(value.second ?? 1),
-                    canvasWidth: Double(size.width),
-                    canvasHeight: Double(size.height),
-                    sourceWidth: Double(image.size.width * image.scale),
-                    sourceHeight: Double(image.size.height * image.scale),
-                    targetWidth: Double(panel.width),
-                    targetHeight: Double(panel.height),
-                    maximumZoom: maximumFramingZoom
+            .updating($framingGestureState) { value, state, _ in
+                state = FramingGestureState(
+                    translation: value.first?.translation ?? .zero,
+                    magnification: value.second ?? 1
                 )
             }
-            .onEnded { _ in
-                gestureStartFraming = nil
-                framingControlsRevealTask?.cancel()
-                framingControlsRevealTask = Task { @MainActor in
-                    try? await Task.sleep(for: .seconds(2))
-                    guard !Task.isCancelled else { return }
-                    withAnimation(.easeOut(duration: 0.18)) {
-                        isFramingGestureActive = false
-                    }
+            .onChanged { _ in
+                guard image != nil, framing != nil else { return }
+                if !isFramingGestureActive {
+                    framingControlsRevealTask?.cancel()
                     framingControlsRevealTask = nil
+                    isFramingGestureActive = true
                 }
             }
+            .onEnded { value in
+                guard let image, let framing else { return }
+                let translation = value.first?.translation ?? .zero
+                let magnification = value.second ?? 1
+                framing.wrappedValue = framing.wrappedValue
+                    .applyingPreviewGesture(
+                        translationX: Double(
+                            translation.width
+                        ),
+                        translationY: Double(
+                            translation.height
+                        ),
+                        magnification: Double(magnification),
+                        canvasWidth: Double(size.width),
+                        canvasHeight: Double(size.height),
+                        sourceWidth: Double(image.size.width * image.scale),
+                        sourceHeight: Double(image.size.height * image.scale),
+                        targetWidth: Double(panel.width),
+                        targetHeight: Double(panel.height),
+                        maximumZoom: maximumFramingZoom
+                    )
+                endFramingInteraction()
+            }
     }
+
+    private func framingGestureMask(
+        prioritized: Bool,
+        image: UIImage?
+    ) -> GestureMask {
+        guard framing != nil, image != nil,
+              prioritizesFramingGesture == prioritized else {
+            return .none
+        }
+        return .all
+    }
+
+    private func endFramingInteraction() {
+        framingControlsRevealTask?.cancel()
+        framingControlsRevealTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.18)) {
+                isFramingGestureActive = false
+            }
+            framingControlsRevealTask = nil
+        }
+    }
+}
+
+private struct FramingGestureState {
+    var translation = CGSize.zero
+    var magnification: CGFloat = 1
 }
 
 private struct PanelAspectLayout: Layout {

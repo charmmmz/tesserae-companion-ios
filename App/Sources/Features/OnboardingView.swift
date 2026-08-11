@@ -223,6 +223,8 @@ private struct ManualConnectionView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .tesseraeScreenBackground()
             .navigationTitle("Connect Manually")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

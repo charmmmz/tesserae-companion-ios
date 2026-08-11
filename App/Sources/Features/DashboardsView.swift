@@ -901,10 +901,11 @@ private struct DashboardPushSheet: View {
                     Button("Cancel") {
                         dismiss()
                     }
+                    .tesseraeModalChromeButtonStyle()
                     Spacer()
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, TesseraeComposerLayout.pagePadding)
             .padding(.top, 24)
             .padding(.bottom, 12)
 
@@ -944,8 +945,8 @@ private struct DashboardPushSheet: View {
                 selectedDeviceIDs.isEmpty
                     || model.activeOperationIDs.contains(dashboard.id)
             )
-            .padding(.horizontal, 16)
-            .padding(.bottom, 16)
+            .padding(.horizontal, TesseraeComposerLayout.pagePadding)
+            .padding(.bottom, TesseraeComposerLayout.pagePadding)
         }
         .task(id: context.id) {
             loadInitialSelection()
@@ -968,7 +969,10 @@ private struct DashboardPushSheet: View {
     }
 
     private var dashboardPushContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(
+            alignment: .leading,
+            spacing: TesseraeComposerLayout.sectionSpacing
+        ) {
             VStack(alignment: .leading, spacing: 12) {
                 Text(dashboard.name)
                     .font(.title3.weight(.semibold))
@@ -1014,8 +1018,8 @@ private struct DashboardPushSheet: View {
                 boundDisplaysPicker
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
+        .padding(.horizontal, TesseraeComposerLayout.pagePadding)
+        .padding(.top, TesseraeComposerLayout.pagePadding)
         .padding(.bottom, 12)
     }
 
