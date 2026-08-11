@@ -136,6 +136,7 @@ public enum TesseraeClientError: Error, Equatable, LocalizedError, Sendable {
     case pairingUnavailable
     case unavailable
     case unauthorized
+    case forbidden(message: String, requestID: String?)
     case invalidResponse
     case httpStatus(Int)
     case transport(String)
@@ -162,6 +163,12 @@ public enum TesseraeClientError: Error, Equatable, LocalizedError, Sendable {
             "The Tesserae instance is unavailable."
         case .unauthorized:
             "The Tesserae credential is invalid or has been revoked."
+        case let .forbidden(message, requestID):
+            if let requestID {
+                "\(message) (request \(requestID))"
+            } else {
+                message
+            }
         case .invalidResponse:
             "The server returned an invalid HTTP response."
         case let .httpStatus(status):

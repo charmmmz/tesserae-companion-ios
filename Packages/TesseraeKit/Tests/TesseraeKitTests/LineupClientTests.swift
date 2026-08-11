@@ -105,6 +105,38 @@ final class LineupClientTests: XCTestCase {
         XCTAssertEqual(body?["action"] as? String, "disable")
     }
 
+    func testMissingLineupScopeIsForbiddenRatherThanUnauthorized() async throws {
+        let body = """
+        {
+          "error": {
+            "code": "forbidden",
+            "message": "Grant this permission in Tesserae Settings.",
+            "request_id": "req_forbidden_01"
+          }
+        }
+        """
+        let transport = RecordingLineupTransport(
+            response: TesseraeHTTPResponse(
+                data: Data(body.utf8),
+                statusCode: 403
+            )
+        )
+        let client = try await makeClient(transport: transport)
+
+        do {
+            _ = try await client.fetchLineups(instance: instance)
+            XCTFail("Expected forbidden")
+        } catch {
+            XCTAssertEqual(
+                error as? TesseraeClientError,
+                .forbidden(
+                    message: "Grant this permission in Tesserae Settings.",
+                    requestID: "req_forbidden_01"
+                )
+            )
+        }
+    }
+
     private func makeClient(
         transport: RecordingLineupTransport
     ) async throws -> LiveTesseraeClient {

@@ -10,13 +10,16 @@ public actor MockTesseraeClient: TesseraeServing {
     private var lineupEnabled = true
     private var lineupCurrentPageID = "pantry"
     private let lineupIntent: LineupIntent
+    private let lineupFetchError: TesseraeClientError?
 
     public init(
         latency: Duration = .milliseconds(180),
-        lineupIntent: LineupIntent = .manual
+        lineupIntent: LineupIntent = .manual,
+        lineupFetchError: TesseraeClientError? = nil
     ) {
         self.latency = latency
         self.lineupIntent = lineupIntent
+        self.lineupFetchError = lineupFetchError
     }
 
     public func probe(baseURL: URL) async throws -> ServerCapabilities {
@@ -174,6 +177,9 @@ public actor MockTesseraeClient: TesseraeServing {
 
     public func fetchLineups(instance: TesseraeInstance) async throws -> [Lineup] {
         try await pause()
+        if let lineupFetchError {
+            throw lineupFetchError
+        }
         return [demoLineup(enabled: lineupEnabled)]
     }
 

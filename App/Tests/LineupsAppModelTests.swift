@@ -119,6 +119,27 @@ final class LineupsAppModelTests: XCTestCase {
         XCTAssertEqual(model.lineups.map(\.id), ["kitchen-deck"])
     }
 
+    func testForbiddenLineupsKeepTheServerConnectedAndAskForRepairing() async {
+        let client = MockTesseraeClient(
+            latency: .milliseconds(0),
+            lineupFetchError: .forbidden(
+                message: "Grant this permission in Tesserae Settings.",
+                requestID: nil
+            )
+        )
+        let model = makeAppModel(client: client)
+
+        await model.connectDemo()
+
+        XCTAssertEqual(model.connectionHealth, .connected)
+        XCTAssertNotNil(model.activeInstance)
+        XCTAssertTrue(model.lineups.isEmpty)
+        XCTAssertEqual(
+            model.lastError,
+            "This pairing does not include Lineups access. Pair again to use Lineups."
+        )
+    }
+
     func testEnableAndPaintControlsUpdateStateAndActivity() async throws {
         let model = makeAppModel()
         await model.connectDemo()
@@ -159,8 +180,11 @@ final class LineupsAppModelTests: XCTestCase {
         )
     }
 
-    private func makeAppModel() -> AppModel {
-        let client = MockTesseraeClient(latency: .milliseconds(0))
+    private func makeAppModel(
+        client: MockTesseraeClient = MockTesseraeClient(
+            latency: .milliseconds(0)
+        )
+    ) -> AppModel {
         return AppModel(
             liveClient: client,
             demoClient: client,

@@ -198,6 +198,7 @@
 "Discard" = "丢弃";
 "Something Went Wrong" = "出现问题";
 "The saved Tesserae pairing is no longer available. Pair again to reconnect." = "已保存的 Tesserae 配对不可用，请重新配对。";
+"This pairing does not include Lineups access. Pair again to use Lineups." = "当前配对不包含 Lineups 访问权限。请重新配对后使用 Lineups。";
 "This Tesserae credential was revoked or expired. Pair again to reconnect." = "此 Tesserae 凭据已被撤销或过期，请重新配对。";
 "Tesserae Dashboard" = "Tesserae 仪表盘";
 "Tesserae dashboard" = "Tesserae 仪表盘";

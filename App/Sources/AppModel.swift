@@ -386,9 +386,17 @@ final class AppModel {
             displays = try await activeClient.fetchDisplays(instance: currentInstance)
             dashboards = try await activeClient.fetchDashboards(instance: currentInstance)
             if supportsLineups {
-                lineups = try await activeClient.fetchLineups(
-                    instance: currentInstance
-                )
+                do {
+                    lineups = try await activeClient.fetchLineups(
+                        instance: currentInstance
+                    )
+                } catch let error as TesseraeClientError {
+                    guard case .forbidden = error else { throw error }
+                    lineups = []
+                    if showErrors {
+                        presentLineupsPermissionError()
+                    }
+                }
             } else {
                 lineups = []
             }
@@ -680,6 +688,15 @@ final class AppModel {
         } catch is CancellationError {
             return
         } catch let error as TesseraeClientError {
+            if case .forbidden = error {
+                connectionHealth = .connected
+                connectionNotice = nil
+                lineups = []
+                if showErrors {
+                    presentLineupsPermissionError()
+                }
+                return
+            }
             if showErrors
                 || error == .unauthorized
                 || error == .missingCredential
@@ -809,6 +826,12 @@ final class AppModel {
             await persistSnapshot()
             return true
         } catch {
+            if let error = error as? TesseraeClientError,
+               case .forbidden = error
+            {
+                presentLineupsPermissionError()
+                return false
+            }
             await presentOperationError(error)
             return false
         }
@@ -848,6 +871,12 @@ final class AppModel {
             await refreshLineups(showErrors: false)
             return true
         } catch {
+            if let error = error as? TesseraeClientError,
+               case .forbidden = error
+            {
+                presentLineupsPermissionError()
+                return false
+            }
             await presentOperationError(error)
             return false
         }
@@ -1991,6 +2020,12 @@ final class AppModel {
     private func handleConnectionError(
         _ error: TesseraeClientError
     ) async {
+        if case .forbidden = error {
+            connectionHealth = .connected
+            connectionNotice = nil
+            lastError = error.localizedDescription
+            return
+        }
         // Connection state is already presented persistently in RootView's
         // top banner. Clear any modal error so one failure never produces
         // both the banner and a blocking alert.
@@ -2039,6 +2074,14 @@ final class AppModel {
             connectionHealth = .offline
             connectionNotice = error.localizedDescription
         }
+    }
+
+    private func presentLineupsPermissionError() {
+        connectionHealth = .connected
+        connectionNotice = nil
+        lastError = String(
+            localized: "This pairing does not include Lineups access. Pair again to use Lineups."
+        )
     }
 
     private func presentOperationError(_ error: Error) async {

@@ -47,6 +47,7 @@ CASES = {
     "job-webpage-blocked.json": "JobResponse",
     "job-lineup-action.json": "JobResponse",
     "error-response.json": "ErrorResponse",
+    "error-forbidden.json": "ErrorResponse",
 }
 
 
@@ -227,16 +228,17 @@ def test_preview_endpoints_are_read_only_and_conditional() -> None:
     assert set(device) == {"parameters", "get"}
     assert set(dashboard) == {"parameters", "get"}
     assert set(history) == {"parameters", "get"}
-    assert set(device["get"]["responses"]) == {"200", "304", "401", "404"}
+    assert set(device["get"]["responses"]) == {"200", "304", "401", "403", "404"}
     assert set(dashboard["get"]["responses"]) == {
         "200",
         "202",
         "304",
         "400",
         "401",
+        "403",
         "404",
     }
-    assert set(history["get"]["responses"]) == {"200", "304", "401", "404"}
+    assert set(history["get"]["responses"]) == {"200", "304", "401", "403", "404"}
     features = SPEC["components"]["schemas"]["Capabilities"]["properties"][
         "features"
     ]["items"]["enum"]
@@ -248,6 +250,25 @@ def test_preview_endpoints_are_read_only_and_conditional() -> None:
     )
     assert "previews" not in base["features"]
     assert "previews" in extension["features"]
+
+
+def test_scoped_routes_distinguish_invalid_credentials_from_missing_scopes() -> None:
+    forbidden_ref = {"$ref": "#/components/responses/Forbidden"}
+    scoped_operations = []
+    for path, path_item in SPEC["paths"].items():
+        for method, operation in path_item.items():
+            if method not in {"get", "post", "put", "patch", "delete"}:
+                continue
+            responses = operation.get("responses", {})
+            if "401" in responses and path != "/api/app/v1/session":
+                scoped_operations.append((path, method))
+                assert responses.get("403") == forbidden_ref
+
+    assert scoped_operations
+    assert "forbidden" in SPEC["components"]["schemas"]["ErrorResponse"][
+        "properties"
+    ]["error"]["properties"]["code"]["enum"]
+    assert "403" not in SPEC["paths"]["/api/app/v1/session"]["delete"]["responses"]
 
 
 def test_pending_render_identifies_an_exact_preview_revision() -> None:

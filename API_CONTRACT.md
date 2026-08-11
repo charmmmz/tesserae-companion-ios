@@ -118,6 +118,13 @@ migrated by this client; the user re-pairs to receive a current token.
 `lineups:write` remains a separate, optional server-side authoring permission
 and is not granted by pairing or used by this read/control slice.
 
+A missing, invalid, or revoked credential returns `401 unauthorized`. A valid
+credential that lacks a route's required scope returns `403 forbidden`; the
+client must keep the pairing and present a permission remedy rather than
+treating the server as offline. For the default Lineups read/control scopes,
+an older pairing can be replaced by pairing again. Future optional permissions
+such as `lineups:write` are granted per client in Tesserae Settings instead.
+
 ## Capabilities and resource limits
 
 `GET /api/app/v1` advertises actual server limits rather than making the app

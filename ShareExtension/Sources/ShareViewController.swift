@@ -462,6 +462,7 @@ private final class ShareComposerModel: ObservableObject {
              .pairingUnavailable:
             return false
         case .decoding,
+             .forbidden,
              .incompatibleServer,
              .invalidResponse,
              .missingCredential,

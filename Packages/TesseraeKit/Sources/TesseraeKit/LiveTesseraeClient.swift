@@ -725,10 +725,18 @@ public actor LiveTesseraeClient: TesseraeServing {
         if response.statusCode == 401 {
             return .unauthorized
         }
-        if let decoded = try? TesseraeJSON.decoder().decode(
+        let decoded = try? TesseraeJSON.decoder().decode(
             APIErrorResponse.self,
             from: response.data
-        ) {
+        )
+        if response.statusCode == 403 {
+            return .forbidden(
+                message: decoded?.error.message
+                    ?? "This Tesserae pairing does not have permission for this request.",
+                requestID: decoded?.error.requestID
+            )
+        }
+        if let decoded {
             if decoded.error.code == "pairing_expired"
                 || decoded.error.code == "pairing_code_used"
             {
