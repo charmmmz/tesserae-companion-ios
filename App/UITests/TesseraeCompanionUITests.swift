@@ -242,13 +242,19 @@ final class TesseraeCompanionUITests: XCTestCase {
         layoutToggle.tap()
         XCTAssertEqual(layoutToggle.label, "Use Card View")
         XCTAssertFalse(pantryPreviewButton.exists)
-        XCTAssertTrue(pantryPushButton.isHittable)
+        XCTAssertFalse(pantryPushButton.exists)
+        XCTAssertFalse(app.staticTexts["1200 × 1600"].exists)
+        XCTAssertFalse(app.staticTexts["800 × 480"].exists)
+        let pantryListRow = app.buttons[
+            "dashboard-row-pantry-display-picpak-kitchen"
+        ]
+        XCTAssertTrue(pantryListRow.isHittable)
         let listLayoutScreenshot = XCTAttachment(screenshot: app.screenshot())
         listLayoutScreenshot.name = "Dashboard List Layout"
         listLayoutScreenshot.lifetime = .keepAlways
         add(listLayoutScreenshot)
 
-        pantryPushButton.tap()
+        pantryListRow.tap()
         XCTAssertTrue(
             app.staticTexts["dashboard-push-sheet-title"]
                 .waitForExistence(timeout: 2)
@@ -263,6 +269,14 @@ final class TesseraeCompanionUITests: XCTestCase {
         layoutToggle.tap()
         XCTAssertEqual(layoutToggle.label, "Use List View")
         XCTAssertTrue(pantryPreviewButton.waitForExistence(timeout: 2))
+        for _ in 0..<4 where !pantryPushButton.isHittable {
+            app.swipeUp()
+        }
+        XCTAssertTrue(pantryPushButton.isHittable)
+        let cardLayoutScreenshot = XCTAttachment(screenshot: app.screenshot())
+        cardLayoutScreenshot.name = "Dashboard Card Layout"
+        cardLayoutScreenshot.lifetime = .keepAlways
+        add(cardLayoutScreenshot)
 
         group.tap()
         XCTAssertEqual(group.value as? String, "Collapsed")

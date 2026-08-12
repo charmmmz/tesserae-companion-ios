@@ -14,22 +14,25 @@ interface.
 
 1. If you paired with an earlier build, pair again when prompted so the app can
    request the new Lineups permissions.
-2. Open Lineups from Displays. Check that Manual, Daily, Interval, and Cycle
+2. Switch Dashboards between Card and List layouts. Check that Dashboard icons
+   align in a dedicated leading position, Display groups omit resolution text,
+   compact rows open the preview and Push sheet, and preview cards retain Push.
+3. Open Lineups from Displays. Check that Manual, Daily, Interval, and Cycle
    Lineups are grouped under the correct display and show clear status,
    Dashboard count, and current playback information.
-3. Open a Manual Lineup and tap a Dashboard row. Check its fitted preview,
+4. Open a Manual Lineup and tap a Dashboard row. Check its fitted preview,
    select a target when offered, and play it. Confirm the current Dashboard is
    highlighted with a pause control and its preview action says Now Playing.
-4. Turn a Lineup off and on. Confirm its status updates immediately; turning it
+5. Turn a Lineup off and on. Confirm its status updates immediately; turning it
    off should pause its automation while explicit manual controls remain
    available.
-5. Review Daily, Interval, and Cycle details. Check that times, days, frequency,
+6. Review Daily, Interval, and Cycle details. Check that times, days, frequency,
    reset, Home Dashboard, and return-home information appear only when relevant.
-6. Use Open in Tesserae from a Lineup and confirm it opens that Lineup's editor.
-7. Send a photo from both Send and the Share Sheet using Fill. Test dragging,
+7. Use Open in Tesserae from a Lineup and confirm it opens that Lineup's editor.
+8. Send a photo from both Send and the Share Sheet using Fill. Test dragging,
    pinching, Reset, and switching the preview display; queued retries should
    preserve the chosen framing.
-8. Check that successful sends use brief, non-blocking feedback and that the
+9. Check that successful sends use brief, non-blocking feedback and that the
    Send and Share Sheet layouts remain readable with larger text sizes.
 
 Please include the iPhone model, iOS version, Tesserae version, and whether the

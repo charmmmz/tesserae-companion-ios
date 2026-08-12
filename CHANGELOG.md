@@ -13,6 +13,11 @@ capabilities.
 
 ### Changed
 
+- Dashboard browsing now shares the same information hierarchy as Lineups:
+  ordinary Display groups omit diagnostic resolution text, Dashboard icons use
+  a dedicated leading position, and compact rows open preview and Push options
+  through a standard disclosure indicator. Preview cards retain their explicit
+  Push shortcut.
 - The Clear Activity menu now uses the same red destructive trash icon as its
   confirmation action.
 - Lineup overview rows now prioritize the currently shown Dashboard beneath

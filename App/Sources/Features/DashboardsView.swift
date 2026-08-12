@@ -358,9 +358,11 @@ struct DashboardsView: View {
                         .font(.headline)
                         .foregroundStyle(.primary)
 
-                    Text(sectionSubtitle(section))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    if let subtitle = sectionSubtitle(section) {
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Spacer()
@@ -471,10 +473,10 @@ struct DashboardsView: View {
         }
     }
 
-    private func sectionSubtitle(_ section: DashboardSection) -> String {
+    private func sectionSubtitle(_ section: DashboardSection) -> String? {
         switch section.kind {
-        case let .display(display):
-            "\(display.panel.width) × \(display.panel.height)"
+        case .display:
+            nil
         case .shared:
             String(localized: "Dashboards bound to multiple displays")
         case .unassigned:
@@ -524,7 +526,9 @@ struct DashboardsView: View {
             spacing: layoutMode == .cards && isExpanded ? 14 : 0
         ) {
             if layoutMode == .cards {
-                HStack(alignment: .center, spacing: 14) {
+                HStack(alignment: .center, spacing: 12) {
+                    dashboardIdentityIcon(dashboard)
+
                     dashboardCardDetails(
                         dashboard,
                         occurrenceID: occurrenceID,
@@ -549,19 +553,29 @@ struct DashboardsView: View {
                     .transition(.opacity)
                 }
             } else {
-                HStack(alignment: .center, spacing: 12) {
-                    dashboardListDetails(
-                        dashboard,
-                        occurrenceID: occurrenceID,
-                        pushContext: pushContext
-                    )
+                Button {
+                    dashboardToPush = pushContext
+                } label: {
+                    HStack(alignment: .center, spacing: 12) {
+                        dashboardIdentityIcon(dashboard)
 
-                    dashboardPushButton(
-                        dashboard,
-                        occurrenceID: occurrenceID,
-                        pushContext: pushContext
-                    )
+                        dashboardListDetails(
+                            dashboard,
+                            occurrenceID: occurrenceID,
+                            pushContext: pushContext
+                        )
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier(
+                    "dashboard-row-\(occurrenceID.accessibilitySuffix)"
+                )
+                .accessibilityHint("Opens Dashboard preview and Push options.")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -626,19 +640,14 @@ struct DashboardsView: View {
         _ dashboard: DashboardSummary,
         occurrenceID: DashboardOccurrenceID
     ) -> some View {
-        HStack(alignment: .center, spacing: 8) {
-            dashboardIcon(dashboard)
-                .frame(width: 24, height: 24)
-
-            Text(dashboard.name)
-                .font(.headline)
-                .lineLimit(2)
-                .minimumScaleFactor(0.82)
-                .layoutPriority(1)
-                .accessibilityIdentifier(
-                    "dashboard-title-\(occurrenceID.accessibilitySuffix)"
-                )
-        }
+        Text(dashboard.name)
+            .font(.headline)
+            .lineLimit(2)
+            .minimumScaleFactor(0.82)
+            .layoutPriority(1)
+            .accessibilityIdentifier(
+                "dashboard-title-\(occurrenceID.accessibilitySuffix)"
+            )
     }
 
     private func dashboardPushButton(
@@ -696,8 +705,20 @@ struct DashboardsView: View {
         }
     }
 
-    private func dashboardIcon(_ dashboard: DashboardSummary) -> some View {
-        PhosphorIcon(name: dashboard.canonicalIconName, size: 19)
+    private func dashboardIdentityIcon(
+        _ dashboard: DashboardSummary
+    ) -> some View {
+        PhosphorIcon(
+            name: dashboard.canonicalIconName,
+            size: 18,
+            color: TesseraeTheme.accent
+        )
+        .frame(width: 36, height: 36)
+        .background(
+            TesseraeTheme.accent.opacity(0.09),
+            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+        )
+        .accessibilityHidden(true)
     }
 
     private func dashboardPreview(
