@@ -42,6 +42,7 @@
 "Battery" = "电量";
 "Signal" = "信号";
 "Not reported" = "未报告";
+"Next change" = "下次切换";
 "Hardware" = "硬件";
 "Manufacturer" = "制造商";
 "Model" = "型号";

@@ -15,6 +15,19 @@ capabilities.
 
 - The Clear Activity menu now uses the same red destructive trash icon as its
   confirmation action.
+- Lineup overview rows now prioritize the currently shown Dashboard beneath
+  each name, move the Lineup type and Dashboard count into quieter supporting
+  metadata, and omit the generic subtitle from ordinary Display groups.
+- Tapping a Dashboard inside a Lineup now opens the same fitted preview sheet
+  used by Dashboards, with playback-specific `Play on` actions and target
+  selection. The existing play button remains available as a direct shortcut,
+  while the current Dashboard is identified as Now Playing instead of being
+  pushed again.
+- Lineup details now use the Dashboard list as the single playback surface.
+  Each Dashboard can be selected directly, the current one remains highlighted,
+  and redundant preview-theme, Previous, and Next controls no longer repeat the
+  same state above the list. Unreported state and the next automatic change stay
+  visible in the list header when relevant.
 
 ## [0.6.0] - 2026-08-11
 

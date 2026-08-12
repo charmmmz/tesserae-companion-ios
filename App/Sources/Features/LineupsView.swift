@@ -191,9 +191,11 @@ struct LineupsView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(section.title)
                     .font(.headline)
-                Text(section.subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if let subtitle = section.subtitle {
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Spacer()
@@ -290,10 +292,10 @@ private struct LineupListSection: Identifiable {
         }
     }
 
-    var subtitle: String {
+    var subtitle: String? {
         switch kind {
         case .display:
-            String(localized: "Schedules, decks, and rotations")
+            nil
         case .shared:
             String(localized: "Controls more than one display")
         case .unassigned:
@@ -320,37 +322,41 @@ private struct LineupListRow: View {
                     .font(.headline)
                     .lineLimit(1)
 
-                HStack(alignment: .center, spacing: 6) {
-                    Text(lineup.intent?.displayName ?? String(localized: "Advanced"))
-                        .fontWeight(.semibold)
-                        .foregroundStyle(TesseraeTheme.accent)
-                        .fixedSize()
-                        .frame(height: 18)
+                HStack(spacing: 5) {
+                    Image(systemName: currentPresentation.symbolName)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(
+                            currentPresentation.isShowing
+                                ? TesseraeTheme.accent
+                                : Color.secondary
+                        )
+                        .frame(width: 14, height: 18)
 
-                    metadataDivider
-
-                    HStack(spacing: 3) {
-                        Image(systemName: "rectangle.stack")
-                            .font(.caption2.weight(.semibold))
-                            .frame(width: 14, height: 18)
-                        Text(lineup.dashboards.count, format: .number)
-                    }
-                    .fixedSize()
-
-                    metadataDivider
-
-                    HStack(spacing: 3) {
-                        Image(systemName: currentPresentation.symbolName)
-                            .font(.caption2.weight(.semibold))
-                            .frame(width: 14, height: 18)
-                        Text(currentPresentation.title)
-                            .lineLimit(1)
-                    }
-                    .frame(height: 18)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(currentPresentation.title)
+                        .lineLimit(1)
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .frame(height: 18)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                HStack(spacing: 5) {
+                    Text(
+                        lineup.intent?.displayName
+                            ?? String(localized: "Advanced")
+                    )
+                        .fontWeight(.semibold)
+                        .foregroundStyle(TesseraeTheme.accent)
+
+                    Text("·")
+                        .foregroundStyle(.tertiary)
+
+                    Text(dashboardCountTitle)
+                        .foregroundStyle(.secondary)
+                }
+                .font(.caption)
+                .lineLimit(1)
+                .frame(height: 18)
             }
 
             Spacer(minLength: 6)
@@ -415,11 +421,10 @@ private struct LineupListRow: View {
             : .white
     }
 
-    private var metadataDivider: some View {
-        Capsule()
-            .fill(Color.secondary.opacity(0.24))
-            .frame(width: 1, height: 12)
-            .accessibilityHidden(true)
+    private var dashboardCountTitle: String {
+        lineup.dashboards.count == 1
+            ? String(localized: "1 dashboard")
+            : String(localized: "\(lineup.dashboards.count) dashboards")
     }
 
     private var rowSummary: String {
@@ -437,7 +442,8 @@ private struct LineupListRow: View {
             return LineupListCurrentPresentation(
                 symbolName: "circle.dashed",
                 title: String(localized: "Not showing"),
-                accessibilityTitle: String(localized: "Nothing showing")
+                accessibilityTitle: String(localized: "Nothing showing"),
+                isShowing: false
             )
         }
         if pageIDs.count == 1, let pageID = pageIDs.first {
@@ -446,13 +452,15 @@ private struct LineupListRow: View {
             return LineupListCurrentPresentation(
                 symbolName: "play.fill",
                 title: name,
-                accessibilityTitle: String(localized: "Showing \(name)")
+                accessibilityTitle: String(localized: "Showing \(name)"),
+                isShowing: true
             )
         }
         return LineupListCurrentPresentation(
             symbolName: "square.stack.3d.up.fill",
             title: String(localized: "Multiple"),
-            accessibilityTitle: String(localized: "Different dashboards showing")
+            accessibilityTitle: String(localized: "Different dashboards showing"),
+            isShowing: true
         )
     }
 }
@@ -461,16 +469,26 @@ private struct LineupListCurrentPresentation {
     let symbolName: String
     let title: String
     let accessibilityTitle: String
+    let isShowing: Bool
+}
+
+private struct LineupDashboardPlayContext: Identifiable {
+    let lineupID: String
+    let dashboard: LineupDashboard
+
+    var id: String {
+        "\(lineupID)|\(dashboard.pageID)"
+    }
 }
 
 private struct LineupDetailView: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.openURL) private var openURL
     @State private var selectedDeviceIDs: Set<String> = []
     @State private var didLoadInitialTargets = false
     @State private var detailsExpanded = false
     @State private var targetsPresented = false
+    @State private var dashboardToPreview: LineupDashboardPlayContext?
     @State private var pendingEnabled: Bool?
     @State private var isUpdatingEnabled = false
 
@@ -485,7 +503,6 @@ private struct LineupDetailView: View {
             if let lineup {
                 ScrollView {
                     VStack(spacing: 14) {
-                        nowShowingCard(lineup)
                         summaryRow(lineup)
                         dashboardsCard(lineup)
 
@@ -548,6 +565,32 @@ private struct LineupDetailView: View {
                     deviceIDs: lineup.deviceIDs,
                     displays: model.displays,
                     selection: $selectedDeviceIDs
+                )
+            }
+        }
+        .sheet(item: $dashboardToPreview) { context in
+            if let lineup = model.lineups.first(where: {
+                $0.id == context.lineupID
+            }) {
+                let availableTargetIDs = Set(displayDeviceIDs(for: lineup))
+                let initialTargetIDs = presentationDeviceIDs(for: lineup)
+                    .intersection(availableTargetIDs)
+                let displays = model.sortedDisplays.filter {
+                    availableTargetIDs.contains($0.id)
+                }
+
+                DashboardPreviewActionSheet(
+                    dashboardID: context.dashboard.pageID,
+                    dashboardName: context.dashboard.name,
+                    previewDeviceID: initialTargetIDs.sorted().first
+                        ?? displays.first?.id,
+                    displays: displays,
+                    initialDeviceIDs: initialTargetIDs,
+                    showsDisplayPicker: displays.count != 1,
+                    action: .playLineup(
+                        lineupID: context.lineupID,
+                        pageID: context.dashboard.pageID
+                    )
                 )
             }
         }
@@ -628,111 +671,9 @@ private struct LineupDetailView: View {
         }
     }
 
-    private func nowShowingCard(_ lineup: Lineup) -> some View {
-        let state = currentState(lineup)
-
-        return VStack(spacing: 14) {
-            Text("Now Showing")
-                .font(.caption.weight(.semibold))
-                .textCase(.uppercase)
-                .tracking(0.8)
-                .foregroundStyle(.secondary)
-
-            VStack(spacing: 4) {
-                Text(state.title)
-                    .font(.title2.weight(.semibold))
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-
-                Text(state.subtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-            }
-            .frame(maxWidth: .infinity)
-            .id(state.pageID)
-            .transition(.opacity)
-
-            if let nextAdvanceEpoch = lineup.nextAdvanceEpoch {
-                Label {
-                    Text(
-                        Date(timeIntervalSince1970: TimeInterval(nextAdvanceEpoch)),
-                        format: .dateTime.month(.abbreviated).day().hour().minute()
-                    )
-                } icon: {
-                    Image(systemName: "clock")
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity)
-            }
-        }
-        .padding(16)
-        .background {
-            nowShowingBackground(state, lineup: lineup)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .animation(.easeInOut(duration: 0.42), value: state.pageID)
-        .task(id: previewTaskID(for: state, lineup: lineup)) {
-            guard let pageID = state.pageID else { return }
-            await model.loadDashboardPreview(
-                id: pageID,
-                deviceID: previewDeviceID(for: lineup)
-            )
-        }
-    }
-
-    @ViewBuilder
-    private func nowShowingBackground(
-        _ state: LineupCurrentPresentation,
-        lineup: Lineup
-    ) -> some View {
-        let cardColor = colorScheme == .dark
-            ? Color(red: 24 / 255, green: 27 / 255, blue: 34 / 255)
-            : Color.white
-
-        ZStack {
-            cardColor
-
-            if let pageID = state.pageID,
-               let dashboard = lineup.dashboards.first(where: { $0.pageID == pageID })
-            {
-                PreviewArtwork(
-                    state: model.dashboardPreview(
-                        id: pageID,
-                        deviceID: previewDeviceID(for: lineup)
-                    ),
-                    placeholderSystemName: "square.grid.2x2",
-                    placeholderLabel: "Dashboard preview placeholder",
-                    imageLabel: "Blurred preview for \(dashboard.name)",
-                    accessibilityIdentifier: "lineup-current-preview",
-                    contentMode: .fill
-                )
-                .scaleEffect(1.08)
-                .blur(radius: 9)
-                .saturation(0.90)
-                .opacity(colorScheme == .dark ? 0.78 : 0.72)
-                .id(pageID)
-                .transition(.opacity)
-                .accessibilityHidden(true)
-            }
-
-            LinearGradient(
-                colors: [
-                    cardColor.opacity(colorScheme == .dark ? 0.28 : 0.22),
-                    cardColor.opacity(colorScheme == .dark ? 0.58 : 0.48),
-                ],
-                startPoint: .topTrailing,
-                endPoint: .bottomLeading
-            )
-        }
-    }
-
     private func dashboardsCard(_ lineup: Lineup) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Dashboards")
-                .font(.headline)
+            dashboardsHeader(lineup)
                 .padding(.bottom, 7)
 
             ForEach(Array(lineup.dashboards.enumerated()), id: \.element.pageID) {
@@ -744,6 +685,46 @@ private struct LineupDetailView: View {
             }
         }
         .tesseraeCard()
+    }
+
+    @ViewBuilder
+    private func dashboardsHeader(_ lineup: Lineup) -> some View {
+        let state = currentState(lineup)
+
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Dashboards")
+                .font(.headline)
+
+            if state.pageID == nil {
+                Text(state.title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("lineup-playback-status")
+            } else if let nextAdvanceEpoch = lineup.nextAdvanceEpoch {
+                Label {
+                    HStack(spacing: 4) {
+                        Text("Next change")
+                        Text(
+                            Date(
+                                timeIntervalSince1970: TimeInterval(
+                                    nextAdvanceEpoch
+                                )
+                            ),
+                            format: .dateTime
+                                .month(.abbreviated)
+                                .day()
+                                .hour()
+                                .minute()
+                        )
+                    }
+                } icon: {
+                    Image(systemName: "clock")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            }
+        }
     }
 
     private func dashboardRow(
@@ -762,38 +743,61 @@ private struct LineupDetailView: View {
         let isOperating = model.isOperatingOnLineup(lineup.id)
 
         return HStack(alignment: .center, spacing: 11) {
-            Text("\(position)")
-                .font(.caption.monospacedDigit().weight(.semibold))
-                .foregroundStyle(isCurrent ? Color.white : Color.secondary)
-                .frame(width: 24, height: 24)
-                .background(
-                    isCurrent
-                        ? TesseraeTheme.accent
-                        : Color.primary.opacity(0.055),
-                    in: Circle()
+            Button {
+                dashboardToPreview = LineupDashboardPlayContext(
+                    lineupID: lineup.id,
+                    dashboard: dashboard
                 )
+            } label: {
+                HStack(alignment: .center, spacing: 11) {
+                    Text("\(position)")
+                        .font(.caption.monospacedDigit().weight(.semibold))
+                        .foregroundStyle(
+                            isCurrent ? Color.white : Color.secondary
+                        )
+                        .frame(width: 24, height: 24)
+                        .background(
+                            isCurrent
+                                ? TesseraeTheme.accent
+                                : Color.primary.opacity(0.055),
+                            in: Circle()
+                        )
 
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(dashboard.name)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(dashboard.missing ? .secondary : .primary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 6) {
+                            Text(dashboard.name)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(
+                                    dashboard.missing ? .secondary : .primary
+                                )
 
-                    if dashboard.missing {
-                        Text("Missing")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(TesseraeTheme.terracotta)
+                            if dashboard.missing {
+                                Text("Missing")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(TesseraeTheme.terracotta)
+                            }
+                        }
+
+                        if let metadata = dashboardMetadata(
+                            dashboard,
+                            lineup: lineup
+                        ) {
+                            Text(metadata)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
-                }
 
-                if let metadata = dashboardMetadata(dashboard, lineup: lineup) {
-                    Text(metadata)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 4)
                 }
+                .contentShape(Rectangle())
             }
-
-            Spacer(minLength: 4)
+            .buttonStyle(.plain)
+            .disabled(dashboard.missing)
+            .accessibilityLabel("Preview \(dashboard.name)")
+            .accessibilityIdentifier(
+                "lineup-dashboard-\(dashboard.pageID)"
+            )
 
             if model.supportsLineupControl {
                 if isCurrent {
@@ -1122,7 +1126,6 @@ private struct LineupDetailView: View {
         guard !selectedTargets.isEmpty else {
             return LineupCurrentPresentation(
                 title: String(localized: "Select a target"),
-                subtitle: String(localized: "Choose at least one bound display."),
                 pageID: nil
             )
         }
@@ -1131,13 +1134,11 @@ private struct LineupDetailView: View {
             if pageIDs.isEmpty {
                 return LineupCurrentPresentation(
                     title: String(localized: "Not reported"),
-                    subtitle: targetSummary(lineup),
                     pageID: nil
                 )
             }
             return LineupCurrentPresentation(
                 title: String(localized: "Different dashboards"),
-                subtitle: String(localized: "Selected displays are at different positions."),
                 pageID: nil
             )
         }
@@ -1145,25 +1146,12 @@ private struct LineupDetailView: View {
         let dashboard = lineup.dashboards.first { $0.pageID == pageID }
         return LineupCurrentPresentation(
             title: dashboard?.name ?? pageID,
-            subtitle: targetSummary(lineup),
             pageID: pageID
         )
     }
 
     private func effectiveSelectedDeviceIDs(for lineup: Lineup) -> Set<String> {
         didLoadInitialTargets ? selectedDeviceIDs : Set(lineup.deviceIDs)
-    }
-
-    private func previewDeviceID(for lineup: Lineup) -> String? {
-        presentationDeviceIDs(for: lineup).sorted().first
-    }
-
-    private func previewTaskID(
-        for state: LineupCurrentPresentation,
-        lineup: Lineup
-    ) -> String? {
-        guard let pageID = state.pageID else { return nil }
-        return "\(pageID)|\(previewDeviceID(for: lineup) ?? "default")|\(model.previewGeneration)"
     }
 
     private func targetSummary(_ lineup: Lineup) -> String {
@@ -1455,7 +1443,6 @@ func lineupAdvancedSetupMessage(
 
 private struct LineupCurrentPresentation {
     let title: String
-    let subtitle: String
     let pageID: String?
 }
 

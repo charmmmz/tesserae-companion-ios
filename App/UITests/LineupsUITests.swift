@@ -27,7 +27,11 @@ final class LineupsUITests: XCTestCase {
         XCTAssertTrue(lineupCard.waitForExistence(timeout: 3))
         XCTAssertTrue(lineupCard.label.contains("Kitchen deck"))
         XCTAssertTrue(lineupCard.label.contains("enabled"))
+        XCTAssertTrue(lineupCard.label.contains("Showing Pantry"))
         XCTAssertFalse(app.staticTexts["Enabled"].exists)
+        XCTAssertFalse(
+            app.staticTexts["Schedules, decks, and rotations"].exists
+        )
 
         let listScreenshot = XCTAttachment(screenshot: app.screenshot())
         listScreenshot.name = "Lineups List"
@@ -50,6 +54,11 @@ final class LineupsUITests: XCTestCase {
 
         XCTAssertFalse(app.staticTexts["Select a target"].exists)
         XCTAssertTrue(app.staticTexts["Kitchen"].exists)
+        XCTAssertFalse(app.staticTexts["Now Showing"].exists)
+        XCTAssertFalse(
+            app.descendants(matching: .any)["lineup-current-preview"].exists
+        )
+        XCTAssertFalse(app.buttons["lineup-previous"].exists)
         XCTAssertFalse(app.buttons["lineup-next"].exists)
         XCTAssertFalse(app.staticTexts["1 of 2"].exists)
         XCTAssertFalse(app.staticTexts["Current"].exists)
@@ -57,6 +66,21 @@ final class LineupsUITests: XCTestCase {
             app.descendants(matching: .any)["lineup-playing-pantry"].exists
         )
         XCTAssertFalse(app.staticTexts["30 min"].exists)
+
+        let currentDashboard = app.buttons["lineup-dashboard-pantry"]
+        XCTAssertTrue(currentDashboard.exists)
+        currentDashboard.tap()
+        XCTAssertTrue(
+            app.staticTexts["lineup-dashboard-sheet-title"]
+                .waitForExistence(timeout: 2)
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)[
+                "lineup-dashboard-preview-pantry"
+            ].waitForExistence(timeout: 2)
+        )
+        XCTAssertFalse(app.buttons["Now Playing"].isEnabled)
+        app.buttons["Cancel"].tap()
 
         app.swipeUp()
         let details = app.buttons["lineup-details-disclosure"]
@@ -79,7 +103,24 @@ final class LineupsUITests: XCTestCase {
 
         app.swipeDown()
         app.swipeDown()
-        app.buttons["lineup-play-morning"].tap()
+        XCTAssertTrue(app.buttons["lineup-play-morning"].exists)
+        app.buttons["lineup-dashboard-morning"].tap()
+        XCTAssertTrue(
+            app.staticTexts["lineup-dashboard-sheet-title"]
+                .waitForExistence(timeout: 2)
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)[
+                "lineup-dashboard-preview-morning"
+            ].waitForExistence(timeout: 2)
+        )
+        let playOnKitchen = app.buttons["Play on Kitchen"]
+        XCTAssertTrue(playOnKitchen.isEnabled)
+        let previewSheetScreenshot = XCTAttachment(screenshot: app.screenshot())
+        previewSheetScreenshot.name = "Lineup Dashboard Preview Sheet"
+        previewSheetScreenshot.lifetime = .keepAlways
+        add(previewSheetScreenshot)
+        playOnKitchen.tap()
         let morningIsShowing = NSPredicate(format: "exists == true")
         expectation(
             for: morningIsShowing,

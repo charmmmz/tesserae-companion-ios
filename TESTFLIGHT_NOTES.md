@@ -12,19 +12,25 @@ interface.
 
 ## What to test
 
-1. Discover your Tesserae server, or use the QR/manual fallback, then pair.
-2. Refresh Displays and Dashboards and relaunch the app to verify restoration.
-3. Confirm Displays and Dashboards show real previews on a server advertising
-   `previews`, and retain placeholders on a base-only server.
-4. Push one saved Dashboard to its bound displays and to a different one-time
-   target; confirm its server bindings do not change.
-5. Send one photo from the app and Share Sheet. Confirm the last display and
-   layout selection carry across both surfaces.
-6. Take the server offline, send from the Share Sheet or Shortcuts, then use
-   the visible Activity queue to retry or discard the saved request.
-7. Run the Tesserae actions from Shortcuts, including Fit, Fill, Blur, Stretch,
-   and Center on a compatible server.
-8. Revoke this client in Tesserae and confirm the app asks to pair again.
+1. If you paired with an earlier build, pair again when prompted so the app can
+   request the new Lineups permissions.
+2. Open Lineups from Displays. Check that Manual, Daily, Interval, and Cycle
+   Lineups are grouped under the correct display and show clear status,
+   Dashboard count, and current playback information.
+3. Open a Manual Lineup and tap a Dashboard row. Check its fitted preview,
+   select a target when offered, and play it. Confirm the current Dashboard is
+   highlighted with a pause control and its preview action says Now Playing.
+4. Turn a Lineup off and on. Confirm its status updates immediately; turning it
+   off should pause its automation while explicit manual controls remain
+   available.
+5. Review Daily, Interval, and Cycle details. Check that times, days, frequency,
+   reset, Home Dashboard, and return-home information appear only when relevant.
+6. Use Open in Tesserae from a Lineup and confirm it opens that Lineup's editor.
+7. Send a photo from both Send and the Share Sheet using Fill. Test dragging,
+   pinching, Reset, and switching the preview display; queued retries should
+   preserve the chosen framing.
+8. Check that successful sends use brief, non-blocking feedback and that the
+   Send and Share Sheet layouts remain readable with larger text sizes.
 
 Please include the iPhone model, iOS version, Tesserae version, and whether the
 server uses LAN HTTP or HTTPS in feedback. Redact server addresses, tokens,
@@ -33,6 +39,8 @@ display names, Dashboard names, photos, and household information.
 ## Known limitations
 
 - Requires a Tesserae server with the complete Companion API v1 surface.
+- Lineups require a server advertising the Companion 0.8 Lineups capabilities;
+  older pairings may need to pair again for the additional permissions.
 - History/resend and richer previews appear only when the paired server
   advertises those optional Companion capabilities.
 - Pairing and a Photos Share Sheet publish have passed on a physical iPhone;

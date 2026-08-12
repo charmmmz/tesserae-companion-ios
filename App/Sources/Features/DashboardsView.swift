@@ -70,6 +70,25 @@ private struct DashboardPushContext: Identifiable {
             []
         }
     }
+
+    var boundDisplays: [DisplaySummary] {
+        switch scope {
+        case let .display(display):
+            [display]
+        case let .shared(displays):
+            displays
+        case .unassigned:
+            []
+        }
+    }
+
+    var showsDisplayPicker: Bool {
+        if case .display = scope {
+            false
+        } else {
+            true
+        }
+    }
 }
 
 struct DashboardsView: View {
@@ -873,10 +892,37 @@ struct DashboardsView: View {
 }
 
 private struct DashboardPushSheet: View {
+    let context: DashboardPushContext
+
+    var body: some View {
+        DashboardPreviewActionSheet(
+            dashboardID: context.dashboard.id,
+            dashboardName: context.dashboard.name,
+            previewDeviceID: context.previewDeviceID,
+            displays: context.boundDisplays,
+            initialDeviceIDs: context.initialDeviceIDs,
+            showsDisplayPicker: context.showsDisplayPicker,
+            action: .push(context.dashboard)
+        )
+    }
+}
+
+enum DashboardPreviewAction {
+    case push(DashboardSummary)
+    case playLineup(lineupID: String, pageID: String)
+}
+
+struct DashboardPreviewActionSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
 
-    let context: DashboardPushContext
+    let dashboardID: String
+    let dashboardName: String
+    let previewDeviceID: String?
+    let displays: [DisplaySummary]
+    let initialDeviceIDs: Set<String>
+    let showsDisplayPicker: Bool
+    let action: DashboardPreviewAction
 
     @State private var selectedDeviceIDs: Set<String> = []
     @State private var didLoadInitialSelection = false
@@ -885,17 +931,13 @@ private struct DashboardPushSheet: View {
 
     private let maximumContentHeight: CGFloat = 460
 
-    private var dashboard: DashboardSummary {
-        context.dashboard
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
-                Text("Push Dashboard")
+                Text(sheetTitle)
                     .font(.headline)
                     .accessibilityAddTraits(.isHeader)
-                    .accessibilityIdentifier("dashboard-push-sheet-title")
+                    .accessibilityIdentifier("\(identifierPrefix)-sheet-title")
 
                 HStack {
                     Button("Cancel") {
@@ -922,20 +964,12 @@ private struct DashboardPushSheet: View {
 
             Button {
                 Task {
-                    let sent = await model.push(
-                        dashboard,
-                        deviceIDs: Array(selectedDeviceIDs).sorted()
-                    )
-                    if sent {
-                        dismiss()
-                    }
+                    await performAction()
                 }
             } label: {
                 Label(
-                    model.activeOperationIDs.contains(dashboard.id)
-                        ? "Sending…"
-                        : pushButtonTitle,
-                    systemImage: "paperplane.fill"
+                    actionButtonTitle,
+                    systemImage: actionSystemImage
                 )
                 .frame(maxWidth: .infinity)
             }
@@ -943,16 +977,18 @@ private struct DashboardPushSheet: View {
             .controlSize(.large)
             .disabled(
                 selectedDeviceIDs.isEmpty
-                    || model.activeOperationIDs.contains(dashboard.id)
+                    || isOperating
+                    || isPlayingOnAllSelectedDisplays
+                    || !canPerformAction
             )
             .padding(.horizontal, TesseraeComposerLayout.pagePadding)
             .padding(.bottom, TesseraeComposerLayout.pagePadding)
         }
-        .task(id: context.id) {
+        .task(id: taskID) {
             loadInitialSelection()
             await model.loadDashboardPreview(
-                dashboard,
-                deviceID: context.previewDeviceID
+                id: dashboardID,
+                deviceID: previewDeviceID
             )
         }
         .tesseraeScreenBackground()
@@ -974,7 +1010,7 @@ private struct DashboardPushSheet: View {
             spacing: TesseraeComposerLayout.sectionSpacing
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                Text(dashboard.name)
+                Text(dashboardName)
                     .font(.title3.weight(.semibold))
 
                 if let previewImage {
@@ -1004,10 +1040,10 @@ private struct DashboardPushSheet: View {
                     )
                     .frame(maxWidth: .infinity, alignment: .center)
                     .accessibilityIdentifier(
-                        "dashboard-push-preview-\(dashboard.id)"
+                        "\(identifierPrefix)-preview-\(dashboardID)"
                     )
                     .accessibilityLabel(
-                        "Preview for \(dashboard.name)"
+                        "Preview for \(dashboardName)"
                     )
                 }
             }
@@ -1025,65 +1061,205 @@ private struct DashboardPushSheet: View {
 
     private var previewImage: UIImage? {
         model.dashboardPreview(
-            for: dashboard,
-            deviceID: context.previewDeviceID
+            id: dashboardID,
+            deviceID: previewDeviceID
         )?
             .data
             .flatMap(UIImage.init(data:))
     }
 
-    private var boundDisplays: [DisplaySummary] {
-        switch context.scope {
-        case let .display(display):
-            [display]
-        case let .shared(displays):
-            displays
-        case .unassigned:
-            []
-        }
-    }
-
     private var boundDeviceIDs: Set<String> {
-        Set(boundDisplays.map(\.id))
+        Set(displays.map(\.id))
     }
 
     private func loadInitialSelection() {
         guard !didLoadInitialSelection else { return }
         didLoadInitialSelection = true
 
-        selectedDeviceIDs = context.initialDeviceIDs
+        selectedDeviceIDs = initialDeviceIDs
     }
 
-    private var showsDisplayPicker: Bool {
-        if case .display = context.scope {
-            false
-        } else {
+    private var sheetTitle: String {
+        switch action {
+        case .push:
+            String(localized: "Push Dashboard")
+        case .playLineup:
+            String(localized: "Dashboard Preview")
+        }
+    }
+
+    private var identifierPrefix: String {
+        switch action {
+        case .push:
+            "dashboard-push"
+        case .playLineup:
+            "lineup-dashboard"
+        }
+    }
+
+    private var taskID: String {
+        switch action {
+        case .push:
+            "push|\(dashboardID)|\(previewDeviceID ?? "default")"
+        case let .playLineup(lineupID, pageID):
+            "lineup|\(lineupID)|\(pageID)|\(previewDeviceID ?? "default")"
+        }
+    }
+
+    private var isOperating: Bool {
+        switch action {
+        case let .push(dashboard):
+            model.activeOperationIDs.contains(dashboard.id)
+        case let .playLineup(lineupID, _):
+            model.isOperatingOnLineup(lineupID)
+        }
+    }
+
+    private var isPlayingOnAllSelectedDisplays: Bool {
+        guard
+            case let .playLineup(lineupID, pageID) = action,
+            !selectedDeviceIDs.isEmpty,
+            let lineup = model.lineups.first(where: { $0.id == lineupID })
+        else {
+            return false
+        }
+
+        return selectedDeviceIDs.allSatisfy { deviceID in
+            lineup.current.contains {
+                $0.deviceID == deviceID && $0.pageID == pageID
+            }
+        }
+    }
+
+    private var actionButtonTitle: String {
+        if !canPerformAction {
+            return String(localized: "Preview Only")
+        }
+        if isOperating {
+            switch action {
+            case .push:
+                return String(localized: "Sending…")
+            case .playLineup:
+                return String(localized: "Playing…")
+            }
+        }
+        if isPlayingOnAllSelectedDisplays {
+            return String(localized: "Now Playing")
+        }
+        return targetActionTitle
+    }
+
+    private var canPerformAction: Bool {
+        switch action {
+        case .push:
             true
+        case .playLineup:
+            model.supportsLineupControl
         }
     }
 
-    private var pushButtonTitle: String {
-        if case let .display(display) = context.scope {
-            return String(localized: "Push to \(display.name)")
+    private var actionSystemImage: String {
+        switch action {
+        case .push:
+            "paperplane.fill"
+        case .playLineup:
+            "play.fill"
         }
-        if selectedDeviceIDs.count == 1,
-           let selectedID = selectedDeviceIDs.first,
-           let display = boundDisplays.first(where: { $0.id == selectedID })
-        {
-            return String(localized: "Push to \(display.name)")
+    }
+
+    private var displayPickerTitle: String {
+        switch action {
+        case .push:
+            String(localized: "Bound Displays")
+        case .playLineup:
+            String(localized: "Play On")
         }
-        if selectedDeviceIDs.count > 1 {
-            return String(
-                localized: "Push to \(selectedDeviceIDs.count) Displays"
+    }
+
+    private var emptyDisplaysTitle: String {
+        switch action {
+        case .push:
+            String(localized: "No Bound Displays")
+        case .playLineup:
+            String(localized: "No Available Displays")
+        }
+    }
+
+    private var emptyDisplaysDescription: String {
+        switch action {
+        case .push:
+            String(
+                localized: "Bind this dashboard to at least one display in Tesserae before pushing it from the app."
+            )
+        case .playLineup:
+            String(
+                localized: "This Lineup has no available display target for playback."
             )
         }
-        return String(localized: "Push to Selected Displays")
+    }
+
+    @MainActor
+    private func performAction() async {
+        let deviceIDs = Array(selectedDeviceIDs).sorted()
+        let succeeded: Bool
+
+        switch action {
+        case let .push(dashboard):
+            succeeded = await model.push(dashboard, deviceIDs: deviceIDs)
+        case let .playLineup(lineupID, pageID):
+            guard let lineup = model.lineups.first(where: { $0.id == lineupID })
+            else {
+                return
+            }
+            succeeded = await model.controlLineup(
+                lineup,
+                action: .play,
+                pageID: pageID,
+                deviceIDs: deviceIDs
+            )
+        }
+
+        if succeeded {
+            dismiss()
+        }
+    }
+
+    private var targetActionTitle: String {
+        if selectedDeviceIDs.count == 1,
+           let selectedID = selectedDeviceIDs.first,
+           let display = displays.first(where: { $0.id == selectedID })
+        {
+            switch action {
+            case .push:
+                return String(localized: "Push to \(display.name)")
+            case .playLineup:
+                return String(localized: "Play on \(display.name)")
+            }
+        }
+        if selectedDeviceIDs.count > 1 {
+            switch action {
+            case .push:
+                return String(
+                    localized: "Push to \(selectedDeviceIDs.count) Displays"
+                )
+            case .playLineup:
+                return String(
+                    localized: "Play on \(selectedDeviceIDs.count) Displays"
+                )
+            }
+        }
+        switch action {
+        case .push:
+            return String(localized: "Push to Selected Displays")
+        case .playLineup:
+            return String(localized: "Play on Selected Displays")
+        }
     }
 
     private var boundDisplaysPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Bound Displays")
+                Text(displayPickerTitle)
                     .font(.headline)
                 Spacer()
                 if !boundDeviceIDs.isEmpty {
@@ -1094,21 +1270,19 @@ private struct DashboardPushSheet: View {
                 }
             }
 
-            if boundDisplays.isEmpty {
+            if displays.isEmpty {
                 ContentUnavailableView {
                     Label(
-                        "No Bound Displays",
+                        emptyDisplaysTitle,
                         systemImage: "rectangle.badge.xmark"
                     )
                 } description: {
-                    Text(
-                        "Bind this dashboard to at least one display in Tesserae before pushing it from the app."
-                    )
+                    Text(emptyDisplaysDescription)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
             } else {
-                ForEach(boundDisplays) { display in
+                ForEach(displays) { display in
                     Button {
                         if selectedDeviceIDs.contains(display.id) {
                             selectedDeviceIDs.remove(display.id)
@@ -1146,7 +1320,7 @@ private struct DashboardPushSheet: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier(
-                        "dashboard-push-device-\(display.id)"
+                        "\(identifierPrefix)-device-\(display.id)"
                     )
                 }
             }
