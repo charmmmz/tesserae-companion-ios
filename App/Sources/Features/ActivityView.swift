@@ -97,10 +97,12 @@ struct ActivityView: View {
                     Button(role: .destructive) {
                         clearActivityConfirmationPresented = true
                     } label: {
-                        Label(
-                            "Clear Activity on This iPhone…",
-                            systemImage: "trash"
-                        )
+                        Label {
+                            Text("Clear Activity on This iPhone…")
+                        } icon: {
+                            Image(systemName: "trash")
+                                .foregroundStyle(.red)
+                        }
                     }
                     .accessibilityIdentifier("clear-local-activity")
                 } label: {

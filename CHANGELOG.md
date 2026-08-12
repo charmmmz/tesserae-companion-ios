@@ -11,6 +11,11 @@ capabilities.
 
 ## [Unreleased]
 
+### Changed
+
+- The Clear Activity menu now uses the same red destructive trash icon as its
+  confirmation action.
+
 ## [0.6.0] - 2026-08-11
 
 ### Added
