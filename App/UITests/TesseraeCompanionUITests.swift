@@ -452,10 +452,19 @@ final class TesseraeCompanionUITests: XCTestCase {
                 "Choose one or more displays already bound to this dashboard."
             ].exists
         )
-        XCTAssertTrue(
-            app.descendants(matching: .any)[
-                "dashboard-push-preview-pantry"
-            ].exists
+        let pantryPushPreview = app.descendants(matching: .any)[
+            "dashboard-push-preview-pantry"
+        ]
+        XCTAssertTrue(pantryPushPreview.exists)
+        let pantryPushCaption = app.staticTexts[
+            "dashboard-push-preview-caption-pantry"
+        ]
+        XCTAssertTrue(pantryPushCaption.waitForExistence(timeout: 2))
+        XCTAssertEqual(pantryPushCaption.label, "Pantry · 800 × 480")
+        XCTAssertGreaterThan(
+            pantryPushCaption.frame.minY,
+            pantryPushPreview.frame.maxY,
+            "Dashboard name and resolution should sit below the preview."
         )
         XCTAssertFalse(app.staticTexts["Bound Displays"].exists)
         XCTAssertFalse(

@@ -137,3 +137,39 @@ struct TesseraeCompanionApp: App {
 #endif
     }
 }
+
+#if DEBUG
+@MainActor
+struct TesseraePreviewHost<Content: View>: View {
+    @State private var model: AppModel
+    private let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        let client = MockTesseraeClient(latency: .milliseconds(0))
+        _model = State(
+            initialValue: AppModel(
+                liveClient: client,
+                demoClient: client,
+                credentials: InMemoryCredentialStore(),
+                stateStore: InMemoryCompanionStateStore(),
+                sendPreferences: InMemoryCompanionSendPreferencesStore(),
+                shareQueue: InMemoryShareQueueStore(),
+                linkShareQueue: InMemoryLinkShareQueueStore(),
+                activityThumbnails: InMemoryActivityThumbnailStore(),
+                discovery: StaticDiscoveryService(results: [])
+            )
+        )
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .environment(model)
+            .tint(TesseraeTheme.accent)
+            .task {
+                guard model.connectionMode != .demo else { return }
+                await model.connectDemo()
+            }
+    }
+}
+#endif

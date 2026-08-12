@@ -1003,7 +1003,6 @@ struct DashboardPreviewActionSheet: View {
                     || !canPerformAction
             )
             .padding(.horizontal, TesseraeComposerLayout.pagePadding)
-            .padding(.bottom, TesseraeComposerLayout.pagePadding)
         }
         .task(id: taskID) {
             loadInitialSelection()
@@ -1026,22 +1025,20 @@ struct DashboardPreviewActionSheet: View {
     }
 
     private var dashboardPushContent: some View {
-        VStack(
+        let image = previewImage
+
+        return VStack(
             alignment: .leading,
             spacing: TesseraeComposerLayout.sectionSpacing
         ) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text(dashboardName)
-                    .font(.title3.weight(.semibold))
-
-                if let previewImage {
+            VStack(spacing: 9) {
+                if let image {
                     FittedPreviewLayout(
-                        aspectRatio: previewImage.size.width
-                            / previewImage.size.height,
+                        aspectRatio: image.size.width / image.size.height,
                         maximumHeight: 220,
                         shrinksWidthAtMaximumHeight: true
                     ) {
-                        Image(uiImage: previewImage)
+                        Image(uiImage: image)
                             .resizable()
                             .interpolation(.none)
                             .scaledToFit()
@@ -1067,8 +1064,20 @@ struct DashboardPreviewActionSheet: View {
                         "Preview for \(dashboardName)"
                     )
                 }
+
+                Text(previewCaption(for: image))
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .accessibilityIdentifier(
+                        "\(identifierPrefix)-preview-caption-\(dashboardID)"
+                    )
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .center)
             .tesseraeCard()
 
             if showsDisplayPicker {
@@ -1087,6 +1096,24 @@ struct DashboardPreviewActionSheet: View {
         )?
             .data
             .flatMap(UIImage.init(data:))
+    }
+
+    private func previewCaption(for image: UIImage?) -> String {
+        guard let resolution = previewResolution(for: image) else {
+            return dashboardName
+        }
+        return "\(dashboardName) · \(resolution)"
+    }
+
+    private func previewResolution(for image: UIImage?) -> String? {
+        if let previewDeviceID,
+           let display = displays.first(where: { $0.id == previewDeviceID })
+        {
+            return "\(display.panel.width) × \(display.panel.height)"
+        }
+
+        guard let cgImage = image?.cgImage else { return nil }
+        return "\(cgImage.width) × \(cgImage.height)"
     }
 
     private var boundDeviceIDs: Set<String> {
@@ -1349,3 +1376,14 @@ struct DashboardPreviewActionSheet: View {
         .tesseraeCard()
     }
 }
+
+#if DEBUG
+#Preview("Dashboard Cards") {
+    TesseraePreviewHost {
+        NavigationStack {
+            DashboardsView(isActive: false)
+                .navigationTitle("Dashboards")
+        }
+    }
+}
+#endif

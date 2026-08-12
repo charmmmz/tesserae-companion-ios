@@ -17,10 +17,13 @@ interface.
 2. Switch Dashboards between Card and List layouts. Check that Dashboard icons
    align in a dedicated leading position, Display groups omit resolution text,
    compact rows open the preview and Push sheet, and preview cards retain Push.
+   In the Push sheet, confirm the Dashboard name and target resolution appear
+   centered beneath the preview image.
 3. Open Lineups from Displays. Check that Manual, Daily, Interval, and Cycle
    Lineups are grouped under the correct display and show clear status,
    Dashboard count, and current playback information.
 4. Open a Manual Lineup and tap a Dashboard row. Check its fitted preview,
+   name, and target resolution use the same image-first layout as Dashboard Push;
    select a target when offered, and play it. Confirm the current Dashboard is
    highlighted with a pause control and its preview action says Now Playing.
 5. Turn a Lineup off and on. Confirm its status updates immediately; turning it

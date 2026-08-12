@@ -74,10 +74,19 @@ final class LineupsUITests: XCTestCase {
             app.staticTexts["lineup-dashboard-sheet-title"]
                 .waitForExistence(timeout: 2)
         )
-        XCTAssertTrue(
-            app.descendants(matching: .any)[
-                "lineup-dashboard-preview-pantry"
-            ].waitForExistence(timeout: 2)
+        let pantryPreview = app.descendants(matching: .any)[
+            "lineup-dashboard-preview-pantry"
+        ]
+        XCTAssertTrue(pantryPreview.waitForExistence(timeout: 2))
+        let pantryCaption = app.staticTexts[
+            "lineup-dashboard-preview-caption-pantry"
+        ]
+        XCTAssertTrue(pantryCaption.waitForExistence(timeout: 2))
+        XCTAssertEqual(pantryCaption.label, "Pantry · 800 × 480")
+        XCTAssertGreaterThan(
+            pantryCaption.frame.minY,
+            pantryPreview.frame.maxY,
+            "Dashboard name and resolution should sit below the preview."
         )
         XCTAssertFalse(app.buttons["Now Playing"].isEnabled)
         app.buttons["Cancel"].tap()
@@ -109,10 +118,19 @@ final class LineupsUITests: XCTestCase {
             app.staticTexts["lineup-dashboard-sheet-title"]
                 .waitForExistence(timeout: 2)
         )
-        XCTAssertTrue(
-            app.descendants(matching: .any)[
-                "lineup-dashboard-preview-morning"
-            ].waitForExistence(timeout: 2)
+        let morningPreview = app.descendants(matching: .any)[
+            "lineup-dashboard-preview-morning"
+        ]
+        XCTAssertTrue(morningPreview.waitForExistence(timeout: 2))
+        let morningCaption = app.staticTexts[
+            "lineup-dashboard-preview-caption-morning"
+        ]
+        XCTAssertTrue(morningCaption.waitForExistence(timeout: 2))
+        XCTAssertEqual(morningCaption.label, "Morning · 800 × 480")
+        XCTAssertGreaterThan(
+            morningCaption.frame.minY,
+            morningPreview.frame.maxY,
+            "Lineup Dashboard name and resolution should sit below the preview."
         )
         let playOnKitchen = app.buttons["Play on Kitchen"]
         XCTAssertTrue(playOnKitchen.isEnabled)

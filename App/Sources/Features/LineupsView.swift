@@ -1555,3 +1555,13 @@ private extension LineupMode {
         }
     }
 }
+
+#if DEBUG
+#Preview("Lineups") {
+    TesseraePreviewHost {
+        NavigationStack {
+            LineupsView(isActive: false)
+        }
+    }
+}
+#endif
