@@ -11,8 +11,13 @@ capabilities.
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-08-13
+
 ### Changed
 
+- Dashboard Push and Lineup playback preview sheets now place the Dashboard
+  name and target resolution beneath the image, matching Send's preview
+  hierarchy, and avoid adding extra bottom spacing above the system safe area.
 - Dashboard browsing now shares the same information hierarchy as Lineups:
   ordinary Display groups omit diagnostic resolution text, Dashboard icons use
   a dedicated leading position, and compact rows open preview and Push options
@@ -616,7 +621,8 @@ capabilities.
 - Required Keychain storage, scoped credentials, revocation, redacted
   diagnostics, direct-to-instance photo transfer, and idempotent writes.
 
-[Unreleased]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.5.0...v0.5.1
