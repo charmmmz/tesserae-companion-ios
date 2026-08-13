@@ -1,51 +1,111 @@
-# Tesserae Companion
+<p align="center">
+  <img src="App/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png" width="112" alt="Tesserae Companion app icon">
+</p>
 
-Tesserae Companion is the official native iOS app for
-[Tesserae](https://github.com/dmellok/tesserae). It is intended to make
-the small, frequent interactions around a household's displays feel at
-home on iPhone: finding the server, checking displays, sending a saved
-dashboard, sharing a photo, bridging selected personal data with explicit
-privacy controls, and running the same actions from Shortcuts.
+<h1 align="center">Tesserae Companion</h1>
 
-The app is maintained in this public repository and works directly with the
-user's own Tesserae server.
+<p align="center">
+  The official native iOS companion for <a href="https://github.com/dmellok/tesserae">Tesserae</a>.<br>
+  Control displays, send content, and run everyday actions from your iPhone.
+</p>
 
-## Project status
+<p align="center">
+  <a href="https://testflight.apple.com/join/gjQar3TK"><img alt="TestFlight beta" src="https://img.shields.io/badge/TestFlight-Join_the_beta-0D96F6?style=flat-square&logo=testflight&logoColor=white"></a>
+  <img alt="iOS 18 or later" src="https://img.shields.io/badge/iOS-18%2B-111111?style=flat-square&logo=apple&logoColor=white">
+  <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6-F05138?style=flat-square&logo=swift&logoColor=white">
+  <a href="LICENSE"><img alt="Apache 2.0 license" src="https://img.shields.io/badge/License-Apache_2.0-2F855A?style=flat-square"></a>
+</p>
 
-- Product status: official iOS app, external TestFlight beta
-- Document version: 0.6.1
-- Planned first App Store release: 1.0.0
-- Included product scope: native V1 plus Share Sheet and Shortcuts integrations
-- iOS implementation: native Swift and SwiftUI
-- Server dependency: the complete scoped `/api/app/v1` surface
+<p align="center">
+  <strong><a href="https://testflight.apple.com/join/gjQar3TK">Join the TestFlight beta</a></strong>
+  &nbsp;&middot;&nbsp;
+  <a href="https://github.com/dmellok/tesserae">View Tesserae</a>
+  &nbsp;&middot;&nbsp;
+  <a href="PRIVACY.md">Privacy</a>
+</p>
 
-The first release deliberately keeps dashboard creation, Canvas editing,
-plugins, themes, schedules, rotations, firmware, and advanced device
-management in Tesserae's existing web UI.
+## Made for everyday display tasks
 
-## Documents
+<table>
+  <tr>
+    <td align="center"><a href="docs/images/readme/pairing.png"><img src="docs/images/readme/pairing.png" width="220" alt="Manual Tesserae server pairing form"></a></td>
+    <td align="center"><a href="docs/images/readme/displays.png"><img src="docs/images/readme/displays.png" width="220" alt="Displays screen showing two connected e-paper displays"></a></td>
+    <td align="center"><a href="docs/images/readme/send-photo.png"><img src="docs/images/readme/send-photo.png" width="220" alt="Send screen editing a photo for selected displays"></a></td>
+    <td align="center"><a href="docs/images/readme/activity.png"><img src="docs/images/readme/activity.png" width="220" alt="Activity screen showing recently published photos and dashboards"></a></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><strong>Pairing</strong><br>Connect directly to your server</sub></td>
+    <td align="center"><sub><strong>Displays</strong><br>See status and what is showing</sub></td>
+    <td align="center"><sub><strong>Send</strong><br>Fit, fill, and frame photos</sub></td>
+    <td align="center"><sub><strong>Activity</strong><br>Follow sends and retry content</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/images/readme/dashboards.png"><img src="docs/images/readme/dashboards.png" width="220" alt="Dashboards screen with previews and Push actions"></a></td>
+    <td align="center"><a href="docs/images/readme/share-sheet.png"><img src="docs/images/readme/share-sheet.png" width="220" alt="Share Sheet composer sending a photo to selected Tesserae displays"></a></td>
+    <td align="center"><a href="docs/images/readme/lineup-create.png"><img src="docs/images/readme/lineup-create.png" width="220" alt="New Lineup guide for choosing Daily, Keep Fresh, Cycle, or Manual behavior"></a></td>
+    <td align="center"><a href="docs/images/readme/lineup-editor.png"><img src="docs/images/readme/lineup-editor.png" width="220" alt="Lineup editor showing its name, target display, and ordered dashboards"></a></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><strong>Dashboards</strong><br>Preview and push saved content</sub></td>
+    <td align="center"><sub><strong>Share Sheet</strong><br>Send from other iOS apps</sub></td>
+    <td align="center"><sub><strong>New Lineup</strong><br>Choose how playback should behave</sub></td>
+    <td align="center"><sub><strong>Edit Lineup</strong><br>Update targets and Dashboard order</sub></td>
+  </tr>
+</table>
 
-- [DESIGN.md](DESIGN.md) is the product, UX, architecture, delivery, and
-  acceptance-criteria source of truth.
-- [API_CONTRACT.md](API_CONTRACT.md) is the proposed server contract to
-  review and refine with the Tesserae maintainer.
-- [Contracts/app-v1.openapi.yaml](Contracts/app-v1.openapi.yaml) and
-  [Contracts/Fixtures](Contracts/Fixtures) are the machine-readable contract
-  and shared server/client examples.
-- [CHANGELOG.md](CHANGELOG.md) records decisions and user-visible changes.
-- [PRIVACY.md](PRIVACY.md) records local data flow, retention, permissions,
-  and the draft App Store privacy position.
-- [TESTFLIGHT_CHECKLIST.md](TESTFLIGHT_CHECKLIST.md) and
-  [TESTFLIGHT_NOTES.md](TESTFLIGHT_NOTES.md) track release checks, beta
-  metadata, and tester guidance for TestFlight builds.
-- [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and
-  [ATTRIBUTION.md](ATTRIBUTION.md) define repository, reporting, and upstream
-  boundaries.
+Tesserae Companion keeps frequent display interactions close at hand while
+leaving authoring and administration in Tesserae's web interface.
 
-## Prototype
+- Monitor display health and preview current or upcoming content.
+- Browse, preview, and push saved Dashboards.
+- Inspect and control server-managed Lineups.
+- Send photos, image URLs, and webpage snapshots with display-aware layouts.
+- Share an image or link to Tesserae directly from other iOS apps.
+- Run common display actions from Shortcuts.
+- Bridge selected Apple Reminders data with explicit permission and retention
+  controls.
 
-The repository now contains an iOS 18+ SwiftUI application generated with
-[XcodeGen](https://github.com/yonaskolb/XcodeGen):
+## Your server, your data
+
+The app connects directly to your own Tesserae server. There is no separate
+Companion cloud account, and the built-in demo journey works without a server
+when you just want to explore the interface.
+
+Personal-data bridges are opt-in. Selected Reminders lists stay on the iPhone;
+only the minimal expiring snapshot needed by Tesserae is uploaded. See
+[PRIVACY.md](PRIVACY.md) for data flow, storage, permissions, and draft App
+Store privacy details.
+
+## Get the beta
+
+1. Install [TestFlight](https://apps.apple.com/app/testflight/id899247664) on
+   your iPhone.
+2. [Join the Tesserae Companion beta](https://testflight.apple.com/join/gjQar3TK).
+3. Open the app and discover a Tesserae server on your local network, or enter
+   its address manually.
+4. Pair with the code shown by Tesserae.
+
+Tesserae Companion requires iOS 18 or later. The core app expects a Tesserae
+server with the scoped `/api/app/v1` surface; optional features are shown only
+when the server advertises their capabilities. The current compatibility and
+physical-validation record lives in [COMPATIBILITY.md](COMPATIBILITY.md).
+
+## Product scope
+
+The native app focuses on quick household interactions: Displays, Dashboards,
+Lineups, Send, Activity, Share Sheet, Shortcuts, and privacy-controlled personal
+data bridges.
+
+Dashboard creation, Canvas editing, plugins, themes, schedules, rotations,
+firmware, and advanced device management remain in Tesserae's web UI. The
+planned first App Store release is 1.0.0; the public build is currently an
+external TestFlight beta.
+
+## Development
+
+The repository contains a native Swift 6 and SwiftUI application generated with
+[XcodeGen](https://github.com/yonaskolb/XcodeGen). `TesseraeKit` owns the shared
+models, Keychain boundary, and HTTP transport.
 
 ```text
 App/
@@ -57,142 +117,75 @@ Packages/
 └── TesseraeKit/
     ├── Sources/TesseraeKit/
     └── Tests/TesseraeKitTests/
+ShareExtension/
+Contracts/
 project.yml
 ```
 
-`TesseraeKit` owns the proposed models, Keychain boundary, and HTTP transport.
-The app can use `LiveTesseraeClient` with a compatible `/api/app/v1` server,
-while `MockTesseraeClient` remains available for previews and the built-in
-demo journey.
-
-Generate and open the project:
+Generate and open the Xcode project:
 
 ```sh
 xcodegen generate
 open TesseraeCompanion.xcodeproj
 ```
 
-Run the package tests:
+Run the Swift package and OpenAPI fixture tests:
 
 ```sh
 swift test --package-path Packages/TesseraeKit
+python -m pytest Contracts
 ```
 
-Run the local contract server and exercise the live manual-connection flow:
+Run the stateful local contract server for the manual-connection and UI-test
+journeys:
 
 ```sh
 python3 Contracts/fixture_server.py --port 8765
 ```
 
-In the app, enter `http://127.0.0.1:8765` and any six-digit pairing code.
-The fixture server is stateful enough to test capability probing, pairing,
-authenticated lists, idempotent Dashboard and History resend writes, image
-multipart uploads, remote-image and webpage Job contracts, strict URL-policy
-rejection, History pagination/preview, and Job polling. It is development
-infrastructure, not a Tesserae server.
+Then connect to `http://127.0.0.1:8765` with any six-digit pairing code. This
+fixture is development infrastructure, not a Tesserae server.
 
-Run the OpenAPI fixture checks with a Python environment containing the
-small dependencies in `Contracts/requirements.txt`:
+The app includes Simplified Chinese resources, privacy manifests, and an
+embedded Share Extension. English remains the development language. Automatic
+signing is configured for the maintainer's Apple Developer team; Xcode must be
+signed into that team before it can create development provisioning profiles.
 
-```sh
-python -m pytest Contracts
-```
+## Documentation
 
-The generated Xcode scheme also includes a simulator UI test that walks the
-fixture-backed onboarding, Displays, Dashboards, Send, and Activity flow.
-The app and Share Extension include Simplified Chinese resources and privacy
-manifests. English remains the development language.
+| Document | Purpose |
+| --- | --- |
+| [DESIGN.md](DESIGN.md) | Product, UX, architecture, and acceptance criteria |
+| [API_CONTRACT.md](API_CONTRACT.md) | Companion server contract and ownership boundaries |
+| [Contracts/app-v1.openapi.yaml](Contracts/app-v1.openapi.yaml) | Machine-readable API contract |
+| [COMPATIBILITY.md](COMPATIBILITY.md) | Capability gates and validation evidence |
+| [PRIVACY.md](PRIVACY.md) | Local data flow, retention, and permissions |
+| [TESTFLIGHT_CHECKLIST.md](TESTFLIGHT_CHECKLIST.md) | Beta release checks |
+| [TESTFLIGHT_NOTES.md](TESTFLIGHT_NOTES.md) | Tester guidance and beta metadata |
+| [CHANGELOG.md](CHANGELOG.md) | Notable user-visible changes |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution and contract-change workflow |
+| [SECURITY.md](SECURITY.md) | Security reporting |
+| [ATTRIBUTION.md](ATTRIBUTION.md) | Tesserae name, mark, and upstream boundaries |
 
-The application identifier is `com.charmmmz.tesseraecompanion`; the embedded
-Share Extension is `com.charmmmz.tesseraecompanion.share`. Both use
-`group.com.charmmmz.tesseraecompanion` and a shared Keychain access group.
-Automatic signing is configured for the maintainer's Apple Developer team.
-Xcode must be signed into that team before it can create development
-provisioning profiles.
-
-### Still pending
-
-- the remaining physical-device permission and failure-mode test matrix;
-- public TestFlight distribution, external-tester validation, and follow-up
-  builds;
-- live server implementation and physical validation of the optional
-  History/resend, image-URL, and webpage contracts.
-
-The Share Extension is implemented against the proposed contract: it accepts
-one still image or web URL, gates link actions against the server-advertised
-capabilities, selects targets and a server-advertised layout mode, then stores
-a protected retry record before submitting. Ordinary web URLs default to a
-Webpage Snapshot and can be switched to Image URL. An interrupted request is
-retried by the containing app with the same idempotency key and is purged after
-24 hours.
-
-Shortcuts can push a saved Dashboard, send one still image to selected
-displays, or open the paired Tesserae web UI. The image action uses the same
-24-hour retry queue and idempotency guarantees as the Share Extension.
-
-Upstream `main` contains the complete base `/api/app/v1` implementation at
-commit `3e4d481` (reported server version `0.207.0`) and the additive preview
-extension at commit `76521718` (deployed here as Tesserae `0.208.0`). A physical
-iPhone has paired with the base implementation and published a photo through
-the Share Extension to a real display. Upstream PR
-[#148](https://github.com/dmellok/tesserae/pull/148) corrected the shared
-renderer path so arbitrary photos are fitted at composition dimensions before
-firmware-native rotation. See [COMPATIBILITY.md](COMPATIBILITY.md) for the
-capability gates and validation evidence.
+Contract changes should be discussed with the Tesserae maintainer and recorded
+in the API contract before the app depends on them. A proposed API is not a
+compatibility guarantee until the matching Tesserae release and minimum server
+version are documented.
 
 ## Repository boundary
 
-The iOS app lives in the public
-[`charmmmz/tesserae-companion-ios`](https://github.com/charmmmz/tesserae-companion-ios)
-repository because it has a separate Xcode, signing, App Store, issue, and
-release lifecycle from the Tesserae server.
-The Tesserae server repository should own only the server implementation,
-server-facing OpenAPI integration, and server contract tests.
+The iOS app lives in this repository because it has a separate Xcode, signing,
+App Store, issue, and release lifecycle from the Tesserae server. The Tesserae
+repository owns the server implementation, server-facing OpenAPI integration,
+and server contract tests.
 
-The repository is licensed under Apache-2.0. See [LICENSE](LICENSE),
-[NOTICE](NOTICE), and [ATTRIBUTION.md](ATTRIBUTION.md).
+Tesserae's maintainer has designated **Tesserae Companion** as the official iOS
+app and granted permission to use the Tesserae name and mark subject to the
+boundaries in [ATTRIBUTION.md](ATTRIBUTION.md).
 
 ## Licence
 
 Tesserae Companion's original code and documentation are available under the
-[Apache License 2.0](LICENSE). Tesserae itself is a separate project under
-AGPL-3.0-or-later; using this client licence does not change the Tesserae
-server's licence or grant rights to its name and marks.
-
-## Collaboration workflow
-
-1. Discuss a change in GitHub Discussions or an issue before changing a
-   stable contract.
-2. Record accepted product or architecture decisions in the decision log
-   in `DESIGN.md`.
-3. Update `API_CONTRACT.md` in the same change as any server-contract
-   decision.
-4. Add a concise entry under `[Unreleased]` in `CHANGELOG.md`.
-5. Link the implementing Tesserae PR and iOS PR from the relevant
-   requirement or decision.
-6. Move an item to Done only after its acceptance criteria have passed on
-   a physical iPhone and a real Tesserae-backed display.
-
-Document-only changes can land before server or app implementation. An API
-item marked **Proposed** is not safe for the app to depend on until the
-matching Tesserae release and minimum compatible version are recorded.
-
-## Naming and App Store position
-
-- App Store name: **Tesserae Companion**
-- Installed home-screen name: **Tesserae**
-- Store description: **The official iOS companion for Tesserae**
-- Publisher: the current iOS app maintainer's Apple Developer account
-- Official status: designated by Tesserae's maintainer as the official native
-  iOS app
-
-Tesserae's maintainer has designated **Tesserae Companion** as the official
-iOS app and granted permission to use the Tesserae name and mark, subject to
-the privacy, advertising, data-use, and web-feature boundaries recorded in
-[`ATTRIBUTION.md`](ATTRIBUTION.md).
-
-If maintenance stops, the iOS app maintainer will give advance public
-notice and first seek to transfer the repository and App Store listing to a
-mutually acceptable successor. If no responsible successor is available,
-new distribution will stop rather than leave an unmaintained listing in
-place, while the final source and release remain available where practical.
+[Apache License 2.0](LICENSE). Tesserae is a separate project under
+AGPL-3.0-or-later; this client licence does not change the Tesserae server's
+licence or grant additional rights to its name and marks.

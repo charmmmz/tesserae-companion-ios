@@ -21,21 +21,33 @@ interface.
    centered beneath the preview image.
 3. Open Lineups from Displays. Check that Manual, Daily, Interval, and Cycle
    Lineups are grouped under the correct display and show clear status,
-   Dashboard count, and current playback information.
-4. Open a Manual Lineup and tap a Dashboard row. Check its fitted preview,
+   Dashboard count, and current playback information. Include a Daily or
+   Interval Lineup created on the web with no explicit Lineup display binding;
+   it should still use the server-resolved Dashboard display and current state.
+4. In Tesserae Settings → Companion, grant Create and edit Lineups to this
+   iPhone. Create each available Lineup type in the app, select and reorder
+   Dashboards, optionally assign Displays, and confirm saving the definition
+   does not immediately refresh a Display. Remove the grant, reopen Create or
+   Edit, and confirm the permission action opens this client's Companion
+   settings page without requiring another pairing.
+5. Edit a native Lineup's name, Dashboard order, schedule, and dwell values.
+   Confirm advanced Lineups still open on the web, a removed grant shows a
+   permission remedy without disconnecting the app, and a concurrent web edit
+   asks the app to reload instead of overwriting it.
+6. Open a Manual Lineup and tap a Dashboard row. Check its fitted preview,
    name, and target resolution use the same image-first layout as Dashboard Push;
    select a target when offered, and play it. Confirm the current Dashboard is
    highlighted with a pause control and its preview action says Now Playing.
-5. Turn a Lineup off and on. Confirm its status updates immediately; turning it
+7. Turn a Lineup off and on. Confirm its status updates immediately; turning it
    off should pause its automation while explicit manual controls remain
    available.
-6. Review Daily, Interval, and Cycle details. Check that times, days, frequency,
+8. Review Daily, Interval, and Cycle details. Check that times, days, frequency,
    reset, Home Dashboard, and return-home information appear only when relevant.
-7. Use Open in Tesserae from a Lineup and confirm it opens that Lineup's editor.
-8. Send a photo from both Send and the Share Sheet using Fill. Test dragging,
+9. Use Open in Tesserae from a Lineup and confirm it opens that Lineup's editor.
+10. Send a photo from both Send and the Share Sheet using Fill. Test dragging,
    pinching, Reset, and switching the preview display; queued retries should
    preserve the chosen framing.
-9. Check that successful sends use brief, non-blocking feedback and that the
+11. Check that successful sends use brief, non-blocking feedback and that the
    Send and Share Sheet layouts remain readable with larger text sizes.
 
 Please include the iPhone model, iOS version, Tesserae version, and whether the
@@ -45,8 +57,9 @@ display names, Dashboard names, photos, and household information.
 ## Known limitations
 
 - Requires a Tesserae server with the complete Companion API v1 surface.
-- Lineups require a server advertising the Companion 0.8 Lineups capabilities;
-  older pairings may need to pair again for the additional permissions.
+- Lineups read/control requires its advertised server capabilities; native
+  create/edit additionally requires `lineup_authoring` and the optional
+  per-client `lineups:write` grant in Tesserae Settings.
 - History/resend and richer previews appear only when the paired server
   advertises those optional Companion capabilities.
 - Pairing and a Photos Share Sheet publish have passed on a physical iPhone;

@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Status | Implemented base contract plus reviewed and proposed gated extensions |
-| Contract version | 0.8.0 |
+| Contract version | 0.9.0 |
 | Namespace | `/api/app/v1` |
 | Authentication | Revocable per-client Companion bearer token |
 | Machine-readable source | [`Contracts/app-v1.openapi.yaml`](Contracts/app-v1.openapi.yaml) |
@@ -16,8 +16,9 @@ the compatibility floor; `previews`, `history`, `image_url_push`,
 `personal_data_reminders` feature remains for the published fridge widget;
 new personal-data schemas are advertised directly through
 `personal_data.sources` rather than one feature flag per source. `lineups` and
-`lineup_control` are independently gated extensions for the first native
-Lineups slice, aligned with Tesserae v0.289.2.
+`lineup_control`, and `lineup_authoring` independently gate Lineups read,
+playback, and native definition editing. `session_read` advertises the live
+per-client permission reader used by authoring guidance.
 
 The proposal reflects the maintainer reviews in
 [Discussion #147](https://github.com/dmellok/tesserae/discussions/147),
@@ -25,7 +26,7 @@ The proposal reflects the maintainer reviews in
 [Discussion #160](https://github.com/dmellok/tesserae/discussions/160),
 [Discussion #176](https://github.com/dmellok/tesserae/discussions/176), and
 [Discussion #203](https://github.com/dmellok/tesserae/discussions/203).
-Dashboard editing, plugin administration, Lineup authoring, firmware controls,
+Dashboard editing, plugin administration, firmware controls,
 History deletion/administration, and general server administration remain
 outside this contract.
 
@@ -44,6 +45,9 @@ outside this contract.
 - Lineup `next`, `previous`, and `play` actions are asynchronous Jobs and never
   save definitions. `enable` and `disable` use the same action endpoint but
   synchronously return the updated Lineup without touching a display.
+- Lineup authoring is an ordinary synchronous resource write. Create returns
+  `201` with an ETag; edit is partial, requires that ETag through `If-Match`,
+  and returns `412 precondition_failed` instead of overwriting another editor.
 - Tesserae remains authoritative for target validation, rendering, quiet
   hours, publishing, and resource limits.
 
@@ -53,6 +57,7 @@ outside this contract.
 | --- | --- | --- |
 | `GET` | `/api/app/v1` | Unauthenticated capability and limit probe |
 | `POST` | `/api/app/v1/pair` | Redeem a single-use Companion pairing code |
+| `GET` | `/api/app/v1/session` | Read the presented client's current optional permissions |
 | `DELETE` | `/api/app/v1/session` | Revoke the presented client token |
 | `GET` | `/api/app/v1/devices` | List stable display targets and lightweight status |
 | `GET` | `/api/app/v1/devices/{device_id}/preview` | Read the last-served device-specific logical preview |
@@ -63,7 +68,9 @@ outside this contract.
 | `POST` | `/api/app/v1/image-urls` | Fetch and send one public image URL |
 | `POST` | `/api/app/v1/webpages` | Render and send one public webpage |
 | `GET` | `/api/app/v1/lineups` | Read complete Lineup definitions and runtime summaries |
+| `POST` | `/api/app/v1/lineups` | Create a native-editable Lineup from a supported intent |
 | `GET` | `/api/app/v1/lineups/{lineup_id}` | Read one complete Lineup |
+| `PATCH` | `/api/app/v1/lineups/{lineup_id}` | Partially edit a native-editable Lineup with `If-Match` |
 | `POST` | `/api/app/v1/lineups/{lineup_id}/actions` | Enable/disable synchronously or run a display action as a Job |
 | `GET` | `/api/app/v1/personal-data/status` | Read source freshness metadata without personal values |
 | `PUT` | `/api/app/v1/personal-data/{source_id}` | Replace the latest strict snapshot for one source |
@@ -116,7 +123,13 @@ New pairings receive `lineups:read` and `lineups:control` when the server
 supports the resource. Tokens created before those scopes existed are not
 migrated by this client; the user re-pairs to receive a current token.
 `lineups:write` remains a separate, optional server-side authoring permission
-and is not granted by pairing or used by this read/control slice.
+and is not granted by pairing. The operator enables it for one paired client
+in Tesserae Settings; capability-gated `GET /session` returns the current
+scopes and `settings_url` so that client can refresh the grant and open the
+correct settings surface without receiving or replacing its credential. An
+older server that advertises authoring without `session_read` can still enforce
+the permission on `POST`/`PATCH`; the client falls back to its save-time `403`
+remedy.
 
 A missing, invalid, or revoked credential returns `401 unauthorized`. A valid
 credential that lacks a route's required scope returns `403 forbidden`; the
@@ -201,7 +214,7 @@ The first fixtures use a 24-hour stale threshold and 48-hour maximum TTL as a
 reviewable proposal. Both values remain server-advertised so the accepted
 policy can change without an app release.
 
-Contract 0.8.0 prepares Lineups read and control without defining authoring:
+Contract 0.9.0 extends the 0.8.0 Lineups read/control surface with authoring:
 
 - `lineups` exposes the public resource while Tesserae may continue using
   `Deck` internally;
@@ -220,14 +233,30 @@ Contract 0.8.0 prepares Lineups read and control without defining authoring:
 - `POST /lineups/{id}/actions` accepts `enable`, `disable`, `next`, `previous`,
   and `play`. The state actions return `200 LineupResponse`; paint actions
   require `Idempotency-Key` plus `override_quiet_hours` and return `202 Job`;
-- a paint action may target all bound displays or a bound `device_ids` subset.
+- `device_ids` remains the explicit authored binding while
+  `resolved_device_ids` is the server-computed action target set. When the
+  explicit set is empty, the server resolves the union of member Dashboard
+  bindings; a paint action may target all resolved displays or a subset.
   `play` also requires a `page_id` in the Lineup;
 - paint jobs use `lineup_action` so Activity can distinguish explicit Lineup
   control from an ordinary dashboard push, while History source remains
   `companion`;
-- create, replace, reorder, scheduling, binding, condition, and delete writes
-  remain a separate authoring contract. Tesserae now has one internal write
-  path, but it does not yet expose Companion authoring endpoints.
+- `lineup_authoring` advertises the native write surface separately from read
+  and control; the optional `lineups:write` scope is never inferred from it;
+- `POST /lineups` creates Daily, Interval/Keep Fresh, Cycle, or Manual Lineups
+  through the same server-owned builder as Tesserae Web and returns an ETag;
+- the request may explicitly bind selected, currently unassigned Dashboards to
+  its first Display, but the server never silently moves an existing binding;
+- `PATCH /lineups/{id}` is partial, keeps every omitted stored field, refuses
+  advanced records, and requires `If-Match` so concurrent app/web edits cannot
+  flatten one another;
+- changing the authoring grant does not require re-pairing. The authenticated
+  `GET /session` response returns `token_id`, current `scopes`, and the
+  server-resolved Companion `settings_url`; `session_read` advertises this
+  surface, while save-time `403 forbidden` remains the compatibility fallback;
+- deleting Lineups and editing advanced conditions, graph navigation, home
+  behavior, priority, windows, or other web-only fields remain outside native
+  authoring.
 
 Upstream PR [#175](https://github.com/dmellok/tesserae/pull/175) merged the
 underlying normalized `SourceCrop` renderer primitive. It does not by itself

@@ -101,12 +101,17 @@ enable/disable toggle. Paint actions use Jobs and History; enable/disable uses
 the same action endpoint but returns the updated Lineup synchronously and does
 not refresh a panel.
 
-Tesserae now has one internal write path over its unified Deck model, but native
-authoring still needs its own reviewed Companion contract and optional
-`lineups:write` grant. The four user-facing intents remain daily, interval,
-cycle, and manual. Until that API is agreed, the app must not infer authoring
-permission from read/control access or reduce an advanced read-only record to
-the fields the native editor happens to understand.
+The second phase adds server-gated native authoring for daily, interval/Keep
+Fresh, cycle, and manual Lineups. It uses the server's unified web/app builder,
+an optional per-client `lineups:write` grant, and partial `If-Match` edits. The
+app never infers authoring permission from read/control access and never reduces
+an advanced read-only record to the fields the native editor understands.
+The `session_read` capability lets the app refresh the current token grant and
+open the server-provided Companion settings route without re-pairing. Playback
+uses the server's `resolved_device_ids`; an empty explicit binding is never
+expanded into action authorization by the app.
+Deleting Lineups and editing advanced conditions, navigation, home, priority,
+or window behavior continue to open Tesserae Web.
 
 ### Native integrations included in release 1.0
 
@@ -124,7 +129,8 @@ the fields the native editor happens to understand.
 - Canvas or dashboard editing;
 - widget/plugin installation or configuration;
 - theme editing;
-- schedule, rotation, and deck editing;
+- advanced schedule, navigation, condition, and deck editing outside the four
+  native Lineup intents;
 - firmware installation, calibration, and destructive device settings;
 - a Tesserae cloud account or mandatory remote relay;
 - APNs-based remote notifications;
