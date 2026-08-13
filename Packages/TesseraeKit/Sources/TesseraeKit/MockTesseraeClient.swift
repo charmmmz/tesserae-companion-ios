@@ -9,17 +9,22 @@ public actor MockTesseraeClient: TesseraeServing {
     private var jobsByIdempotencyKey: [String: PushJob] = [:]
     private var lineupEnabled = true
     private var lineupCurrentPageID = "pantry"
+    private var authoredLineups: [String: Lineup] = [:]
+    private var lineupVersions: [String: Int] = [:]
     private let lineupIntent: LineupIntent
     private let lineupFetchError: TesseraeClientError?
+    private let lineupAuthoringGranted: Bool
 
     public init(
         latency: Duration = .milliseconds(180),
         lineupIntent: LineupIntent = .manual,
-        lineupFetchError: TesseraeClientError? = nil
+        lineupFetchError: TesseraeClientError? = nil,
+        lineupAuthoringGranted: Bool = true
     ) {
         self.latency = latency
         self.lineupIntent = lineupIntent
         self.lineupFetchError = lineupFetchError
+        self.lineupAuthoringGranted = lineupAuthoringGranted
     }
 
     public func probe(baseURL: URL) async throws -> ServerCapabilities {
@@ -42,6 +47,8 @@ public actor MockTesseraeClient: TesseraeServing {
                 "image_framing",
                 "lineups",
                 "lineup_control",
+                "lineup_authoring",
+                "session_read",
             ],
             limits: CompanionLimits(
                 imageUploadBytes: 26_214_400,
@@ -75,19 +82,43 @@ public actor MockTesseraeClient: TesseraeServing {
             timezone: "Asia/Shanghai",
             webURL: "/"
         )
+        var scopes = [
+            "devices:read",
+            "dashboards:read",
+            "push:write",
+            "media:write",
+            "lineups:read",
+            "lineups:control",
+        ]
+        if lineupAuthoringGranted {
+            scopes.append("lineups:write")
+        }
         return PairedSession(
             instance: instance,
             token: "fixture-token-for-\(clientName)",
             tokenID: "ct_fixture",
-            scopes: [
-                "devices:read",
-                "dashboards:read",
-                "push:write",
-                "media:write",
-                "lineups:read",
-                "lineups:control",
-            ],
+            scopes: scopes,
             createdAt: .now
+        )
+    }
+
+    public func fetchSessionAuthorization(
+        instance: TesseraeInstance
+    ) async throws -> CompanionSessionAuthorization? {
+        try await pause()
+        var scopes: Set<String> = [
+            "devices:read",
+            "dashboards:read",
+            "lineups:read",
+            "lineups:control",
+        ]
+        if lineupAuthoringGranted {
+            scopes.insert("lineups:write")
+        }
+        return CompanionSessionAuthorization(
+            tokenID: "ct_fixture",
+            scopes: scopes,
+            settingsURL: "/settings/companion"
         )
     }
 
@@ -180,7 +211,12 @@ public actor MockTesseraeClient: TesseraeServing {
         if let lineupFetchError {
             throw lineupFetchError
         }
-        return [demoLineup(enabled: lineupEnabled)]
+        let primary = authoredLineups["kitchen-deck"]
+            ?? demoLineup(enabled: lineupEnabled)
+        let created = authoredLineups.values
+            .filter { $0.id != "kitchen-deck" }
+            .sorted { $0.name < $1.name }
+        return [primary] + created
     }
 
     public func fetchLineup(
@@ -188,10 +224,173 @@ public actor MockTesseraeClient: TesseraeServing {
         instance: TesseraeInstance
     ) async throws -> Lineup {
         try await pause()
+        if let authored = authoredLineups[id] {
+            return authored
+        }
         guard id == "kitchen-deck" else {
             throw TesseraeClientError.unavailable
         }
         return demoLineup(enabled: lineupEnabled)
+    }
+
+    public func fetchVersionedLineup(
+        id: String,
+        instance: TesseraeInstance
+    ) async throws -> VersionedLineup {
+        let lineup = try await fetchLineup(id: id, instance: instance)
+        return VersionedLineup(lineup: lineup, eTag: mockETag(for: id))
+    }
+
+    public func createLineup(
+        _ request: LineupCreateRequest,
+        instance: TesseraeInstance
+    ) async throws -> VersionedLineup {
+        try await pause()
+        guard lineupAuthoringGranted else {
+            throw TesseraeClientError.forbidden(
+                message: "Grant Create and edit Lineups in Tesserae Settings.",
+                requestID: nil
+            )
+        }
+        let dashboardCatalog = try await fetchDashboards(instance: instance)
+        let names = Dictionary(uniqueKeysWithValues: dashboardCatalog.map { ($0.id, $0.name) })
+        let resolvedDeviceIDs = resolveLineupDeviceIDs(
+            explicitDeviceIDs: request.deviceIDs,
+            pageIDs: request.pageIDs,
+            dashboardCatalog: dashboardCatalog
+        )
+        let id = uniqueLineupID(for: request.name)
+        let trigger: LineupTrigger?
+        let advance: LineupAdvance
+        switch request.intent {
+        case .manual:
+            advance = .manual
+            trigger = nil
+        case .daily:
+            advance = .timer
+            trigger = .daily
+        case .interval:
+            advance = .timer
+            trigger = .interval
+        case .cycle:
+            advance = .timer
+            trigger = .cycle
+        }
+        let dashboards = request.pageIDs.map { pageID in
+            LineupDashboard(
+                pageID: pageID,
+                name: names[pageID] ?? pageID,
+                dwellMinutes: request.dwellMinutes?[pageID]
+                    ?? request.intervalMinutes
+                    ?? 30,
+                missing: names[pageID] == nil,
+                refreshIntervalMinutes: nil,
+                links: [],
+                conditions: []
+            )
+        }
+        let lineup = Lineup(
+            id: id,
+            name: request.name,
+            enabled: true,
+            intent: request.intent,
+            deviceIDs: request.deviceIDs,
+            resolvedDeviceIDs: resolvedDeviceIDs,
+            dashboards: dashboards,
+            current: [],
+            nextAdvanceEpoch: nil,
+            advance: advance,
+            trigger: trigger,
+            intervalMinutes: request.intent == .manual ? nil : request.intervalMinutes,
+            firesAt: request.firesAt,
+            anchor: request.intent == .manual ? nil : request.anchor,
+            entryPageID: request.pageIDs.first,
+            homePageID: nil,
+            homeTimeoutMinutes: nil,
+            refreshIntervalMinutes: nil,
+            endAt: nil,
+            daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+            priority: 0,
+            smartSync: false,
+            smartSyncLeadSeconds: nil,
+            mode: .scheduled,
+            minHoldMinutes: nil,
+            windowStart: nil,
+            windowEnd: nil,
+            fallbackPageID: nil,
+            nativeEditable: true,
+            requiresWebReason: nil,
+            webURL: "/decks/\(id)/edit"
+        )
+        authoredLineups[id] = lineup
+        lineupVersions[id] = 1
+        return VersionedLineup(lineup: lineup, eTag: mockETag(for: id))
+    }
+
+    public func updateLineup(
+        id: String,
+        eTag: String,
+        patch: LineupPatchRequest,
+        instance: TesseraeInstance
+    ) async throws -> VersionedLineup {
+        try await pause()
+        guard lineupAuthoringGranted else {
+            throw TesseraeClientError.forbidden(
+                message: "Grant Create and edit Lineups in Tesserae Settings.",
+                requestID: nil
+            )
+        }
+        guard eTag == mockETag(for: id) else {
+            throw TesseraeClientError.server(
+                code: "precondition_failed",
+                message: "The lineup changed since you loaded it; re-read it and try again.",
+                requestID: nil
+            )
+        }
+        let existing = try await fetchLineup(id: id, instance: instance)
+        let dashboardCatalog = try await fetchDashboards(instance: instance)
+        let names = Dictionary(uniqueKeysWithValues: dashboardCatalog.map { ($0.id, $0.name) })
+        let pageIDs = patch.pageIDs ?? existing.dashboards.map(\.pageID)
+        let deviceIDs = patch.deviceIDs ?? existing.deviceIDs
+        let resolvedDeviceIDs = resolveLineupDeviceIDs(
+            explicitDeviceIDs: deviceIDs,
+            pageIDs: pageIDs,
+            dashboardCatalog: dashboardCatalog
+        )
+        let previous = Dictionary(uniqueKeysWithValues: existing.dashboards.map { ($0.pageID, $0) })
+        let dashboards = pageIDs.map { pageID in
+            let old = previous[pageID]
+            return LineupDashboard(
+                pageID: pageID,
+                name: names[pageID] ?? old?.name ?? pageID,
+                dwellMinutes: patch.dwellMinutes?[pageID]
+                    ?? old?.dwellMinutes
+                    ?? patch.intervalMinutes
+                    ?? existing.intervalMinutes
+                    ?? 30,
+                missing: names[pageID] == nil,
+                refreshIntervalMinutes: old?.refreshIntervalMinutes,
+                links: old?.links,
+                conditions: old?.conditions
+            )
+        }
+        let updated = copying(
+            existing,
+            name: patch.name ?? existing.name,
+            enabled: patch.enabled ?? existing.enabled,
+            deviceIDs: deviceIDs,
+            resolvedDeviceIDs: resolvedDeviceIDs,
+            dashboards: dashboards,
+            intervalMinutes: patch.intervalMinutes ?? existing.intervalMinutes,
+            firesAt: patch.firesAt ?? existing.firesAt,
+            anchor: patch.anchor ?? existing.anchor
+        )
+        authoredLineups[id] = updated
+        if id == "kitchen-deck" {
+            lineupEnabled = updated.enabled
+        }
+        lineupVersions[id, default: 1] += 1
+        return VersionedLineup(lineup: updated, eTag: mockETag(for: id))
     }
 
     public func setLineupEnabled(
@@ -199,9 +398,14 @@ public actor MockTesseraeClient: TesseraeServing {
         enabled: Bool,
         instance: TesseraeInstance
     ) async throws -> Lineup {
-        _ = try await fetchLineup(id: id, instance: instance)
-        lineupEnabled = enabled
-        return demoLineup(enabled: enabled)
+        let existing = try await fetchLineup(id: id, instance: instance)
+        let updated = copying(existing, enabled: enabled)
+        authoredLineups[id] = updated
+        lineupVersions[id, default: 1] += 1
+        if id == "kitchen-deck" {
+            lineupEnabled = enabled
+        }
+        return updated
     }
 
     public func controlLineup(
@@ -221,11 +425,12 @@ public actor MockTesseraeClient: TesseraeServing {
         if action != .play, pageID != nil {
             throw TesseraeClientError.unavailable
         }
-        let targets = deviceIDs ?? lineup.deviceIDs
+        let resolvedDeviceIDs = lineup.resolvedDeviceIDs ?? lineup.deviceIDs
+        let targets = deviceIDs ?? resolvedDeviceIDs
         guard !targets.isEmpty else {
             throw TesseraeClientError.noTargets
         }
-        guard Set(targets).isSubset(of: Set(lineup.deviceIDs)) else {
+        guard Set(targets).isSubset(of: Set(resolvedDeviceIDs)) else {
             throw TesseraeClientError.unavailable
         }
         let job = try await acceptJob(
@@ -252,6 +457,21 @@ public actor MockTesseraeClient: TesseraeServing {
                 ]
             }
         }
+        var currentByDevice = Dictionary(
+            uniqueKeysWithValues: lineup.current.map { ($0.deviceID, $0.pageID) }
+        )
+        for target in targets {
+            currentByDevice[target] = lineupCurrentPageID
+        }
+        authoredLineups[id] = copying(
+            lineup,
+            current: currentByDevice.keys.sorted().map {
+                LineupCurrent(
+                    deviceID: $0,
+                    pageID: currentByDevice[$0] ?? lineupCurrentPageID
+                )
+            }
+        )
         return job
     }
 
@@ -518,6 +738,73 @@ public actor MockTesseraeClient: TesseraeServing {
         return "\(host)\(path)"
     }
 
+    private func uniqueLineupID(for name: String) -> String {
+        let base = name.lowercased()
+            .map { $0.isLetter || $0.isNumber ? String($0) : "_" }
+            .joined()
+            .split(separator: "_")
+            .joined(separator: "_")
+        let candidate = base.isEmpty ? "lineup" : base
+        let taken = Set(["kitchen-deck"] + authoredLineups.keys)
+        guard taken.contains(candidate) else { return candidate }
+        var suffix = 2
+        while taken.contains("\(candidate)_\(suffix)") {
+            suffix += 1
+        }
+        return "\(candidate)_\(suffix)"
+    }
+
+    private func mockETag(for id: String) -> String {
+        "\"mock-\(id)-\(lineupVersions[id, default: 1])\""
+    }
+
+    private func copying(
+        _ lineup: Lineup,
+        name: String? = nil,
+        enabled: Bool? = nil,
+        deviceIDs: [String]? = nil,
+        resolvedDeviceIDs: [String]? = nil,
+        dashboards: [LineupDashboard]? = nil,
+        current: [LineupCurrent]? = nil,
+        intervalMinutes: Int? = nil,
+        firesAt: String? = nil,
+        anchor: String? = nil
+    ) -> Lineup {
+        Lineup(
+            id: lineup.id,
+            name: name ?? lineup.name,
+            enabled: enabled ?? lineup.enabled,
+            intent: lineup.intent,
+            deviceIDs: deviceIDs ?? lineup.deviceIDs,
+            resolvedDeviceIDs: resolvedDeviceIDs ?? lineup.resolvedDeviceIDs,
+            dashboards: dashboards ?? lineup.dashboards,
+            current: current ?? lineup.current,
+            nextAdvanceEpoch: lineup.nextAdvanceEpoch,
+            advance: lineup.advance,
+            trigger: lineup.trigger,
+            intervalMinutes: intervalMinutes ?? lineup.intervalMinutes,
+            firesAt: firesAt ?? lineup.firesAt,
+            anchor: anchor ?? lineup.anchor,
+            entryPageID: lineup.entryPageID,
+            homePageID: lineup.homePageID,
+            homeTimeoutMinutes: lineup.homeTimeoutMinutes,
+            refreshIntervalMinutes: lineup.refreshIntervalMinutes,
+            endAt: lineup.endAt,
+            daysOfWeek: lineup.daysOfWeek,
+            priority: lineup.priority,
+            smartSync: lineup.smartSync,
+            smartSyncLeadSeconds: lineup.smartSyncLeadSeconds,
+            mode: lineup.mode,
+            minHoldMinutes: lineup.minHoldMinutes,
+            windowStart: lineup.windowStart,
+            windowEnd: lineup.windowEnd,
+            fallbackPageID: lineup.fallbackPageID,
+            nativeEditable: lineup.nativeEditable,
+            requiresWebReason: lineup.requiresWebReason,
+            webURL: lineup.webURL
+        )
+    }
+
     private func demoLineup(enabled: Bool = true) -> Lineup {
         let isManual = lineupIntent == .manual
         let name: String
@@ -572,6 +859,7 @@ public actor MockTesseraeClient: TesseraeServing {
             enabled: enabled,
             intent: lineupIntent,
             deviceIDs: ["picpak-kitchen"],
+            resolvedDeviceIDs: ["picpak-kitchen"],
             dashboards: lineupIntent == .daily ? [dashboards[0]] : dashboards,
             current: [
                 LineupCurrent(
@@ -609,5 +897,19 @@ public actor MockTesseraeClient: TesseraeServing {
 
     private func pause() async throws {
         try await Task.sleep(for: latency)
+    }
+
+    private func resolveLineupDeviceIDs(
+        explicitDeviceIDs: [String],
+        pageIDs: [String],
+        dashboardCatalog: [DashboardSummary]
+    ) -> [String] {
+        let candidates = explicitDeviceIDs.isEmpty
+            ? dashboardCatalog
+                .filter { pageIDs.contains($0.id) }
+                .flatMap(\.deviceIDs)
+            : explicitDeviceIDs
+        var seen: Set<String> = []
+        return candidates.filter { seen.insert($0).inserted }
     }
 }

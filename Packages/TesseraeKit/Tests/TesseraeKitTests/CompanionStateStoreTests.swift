@@ -108,6 +108,7 @@ final class CompanionStateStoreTests: XCTestCase {
             enabled: true,
             intent: .cycle,
             deviceIDs: ["display"],
+            resolvedDeviceIDs: ["display"],
             dashboards: [
                 LineupDashboard(
                     pageID: "morning",

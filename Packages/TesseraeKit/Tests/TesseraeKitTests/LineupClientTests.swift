@@ -14,6 +14,10 @@ final class LineupClientTests: XCTestCase {
         XCTAssertEqual(advanced.smartSync, true)
         XCTAssertEqual(advanced.current.count, 2)
         XCTAssertEqual(
+            advanced.resolvedDeviceIDs,
+            ["picpak-kitchen", "e1004-desk"]
+        )
+        XCTAssertEqual(
             advanced.current.last?.pageID,
             "morning"
         )
@@ -34,8 +38,23 @@ final class LineupClientTests: XCTestCase {
 
         XCTAssertEqual(lineup.trigger, .cycle)
         XCTAssertEqual(lineup.current.first?.pageID, "pantry")
+        XCTAssertNil(lineup.resolvedDeviceIDs)
         XCTAssertNil(lineup.homeTimeoutMinutes)
         XCTAssertNil(lineup.dashboards.first?.conditions)
+    }
+
+    func testDailyLineupUsesServerResolvedTargetsWhenAuthoredBindingIsEmpty() throws {
+        let data = try Data(
+            contentsOf: fixtureURL("lineup-daily-resolved-response.json")
+        )
+        let response = try TesseraeJSON.decoder().decode(
+            LineupResponse.self,
+            from: data
+        )
+
+        XCTAssertEqual(response.lineup.deviceIDs, [])
+        XCTAssertEqual(response.lineup.resolvedDeviceIDs, ["picpak-kitchen"])
+        XCTAssertEqual(response.lineup.current.first?.deviceID, "picpak-kitchen")
     }
 
     func testDisplayActionUsesJobEndpointAndIdempotency() async throws {
@@ -135,6 +154,125 @@ final class LineupClientTests: XCTestCase {
                 )
             )
         }
+    }
+
+    func testCurrentSessionScopesCanBeRefreshedAfterPairing() async throws {
+        let body = """
+        {
+          "token_id": "ct_lineup",
+          "scopes": ["lineups:read", "lineups:control", "lineups:write"],
+          "settings_url": "/settings/companion"
+        }
+        """
+        let transport = RecordingLineupTransport(
+            response: TesseraeHTTPResponse(
+                data: Data(body.utf8),
+                statusCode: 200
+            )
+        )
+        let client = try await makeClient(transport: transport)
+
+        let authorization = try await client.fetchSessionAuthorization(
+            instance: instance
+        )
+
+        XCTAssertEqual(authorization?.tokenID, "ct_lineup")
+        XCTAssertEqual(authorization?.canAuthorLineups, true)
+        XCTAssertEqual(authorization?.settingsURL, "/settings/companion")
+        let capturedRequest = await transport.lastRequest()
+        let request = try XCTUnwrap(capturedRequest)
+        XCTAssertEqual(request.url?.path, "/api/app/v1/session")
+        XCTAssertEqual(request.httpMethod, "GET")
+    }
+
+    func testMissingSessionReaderFallsBackWithoutBreakingAuthoring() async throws {
+        let transport = RecordingLineupTransport(
+            response: TesseraeHTTPResponse(data: Data(), statusCode: 405)
+        )
+        let client = try await makeClient(transport: transport)
+
+        let authorization = try await client.fetchSessionAuthorization(
+            instance: instance
+        )
+
+        XCTAssertNil(authorization)
+    }
+
+    func testCreateLineupEncodesIntentAndReturnsETag() async throws {
+        let fixtureData = try Data(contentsOf: fixtureURL("lineup-response.json"))
+        let transport = RecordingLineupTransport(
+            response: TesseraeHTTPResponse(
+                data: fixtureData,
+                statusCode: 201,
+                headers: ["etag": "\"lineup-v1\""]
+            )
+        )
+        let client = try await makeClient(transport: transport)
+
+        let result = try await client.createLineup(
+            LineupCreateRequest(
+                intent: .cycle,
+                name: "Morning cycle",
+                pageIDs: ["pantry", "morning"],
+                deviceIDs: ["picpak-kitchen"],
+                dwellMinutes: ["pantry": 20, "morning": 40],
+                intervalMinutes: 30,
+                anchor: "06:00",
+                bindUnassignedDashboards: true
+            ),
+            instance: instance
+        )
+
+        XCTAssertEqual(result.eTag, "\"lineup-v1\"")
+        let capturedRequest = await transport.lastRequest()
+        let request = try XCTUnwrap(capturedRequest)
+        XCTAssertEqual(request.url?.path, "/api/app/v1/lineups")
+        XCTAssertEqual(request.httpMethod, "POST")
+        let body = try XCTUnwrap(
+            JSONSerialization.jsonObject(
+                with: try XCTUnwrap(request.httpBody)
+            ) as? [String: Any]
+        )
+        XCTAssertEqual(body["intent"] as? String, "cycle")
+        XCTAssertEqual(body["page_ids"] as? [String], ["pantry", "morning"])
+        XCTAssertEqual(body["anchor"] as? String, "06:00")
+        XCTAssertEqual(body["bind_unassigned_dashboards"] as? Bool, true)
+    }
+
+    func testPatchLineupSendsIfMatchAndOnlyChangedFields() async throws {
+        let fixtureData = try Data(contentsOf: fixtureURL("lineup-response.json"))
+        let transport = RecordingLineupTransport(
+            response: TesseraeHTTPResponse(
+                data: fixtureData,
+                statusCode: 200,
+                headers: ["ETag": "\"lineup-v2\""]
+            )
+        )
+        let client = try await makeClient(transport: transport)
+
+        let result = try await client.updateLineup(
+            id: "kitchen-deck",
+            eTag: "\"lineup-v1\"",
+            patch: LineupPatchRequest(name: "Renamed"),
+            instance: instance
+        )
+
+        XCTAssertEqual(result.eTag, "\"lineup-v2\"")
+        let capturedRequest = await transport.lastRequest()
+        let request = try XCTUnwrap(capturedRequest)
+        XCTAssertEqual(request.url?.path, "/api/app/v1/lineups/kitchen-deck")
+        XCTAssertEqual(request.httpMethod, "PATCH")
+        XCTAssertEqual(
+            request.value(forHTTPHeaderField: "If-Match"),
+            "\"lineup-v1\""
+        )
+        let body = try XCTUnwrap(
+            JSONSerialization.jsonObject(
+                with: try XCTUnwrap(request.httpBody)
+            ) as? [String: Any]
+        )
+        XCTAssertEqual(body.keys.sorted(), ["name"])
+        XCTAssertEqual(body["name"] as? String, "Renamed")
     }
 
     private func makeClient(

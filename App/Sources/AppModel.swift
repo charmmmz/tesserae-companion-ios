@@ -39,6 +39,21 @@ final class AppModel {
         case requiresPairing
     }
 
+    enum LineupAuthoringPermission: Equatable {
+        case unavailable
+        case unknown
+        case checking
+        case granted
+        case denied
+    }
+
+    enum LineupSaveOutcome {
+        case saved(Lineup)
+        case conflict
+        case permissionRequired
+        case failed(String)
+    }
+
     private let liveClient: any TesseraeServing
     private let demoClient: any TesseraeServing
     private var activeClient: any TesseraeServing
@@ -66,6 +81,8 @@ final class AppModel {
     var displays: [DisplaySummary] = []
     var dashboards: [DashboardSummary] = []
     var lineups: [Lineup] = []
+    var lineupAuthoringPermission: LineupAuthoringPermission = .unknown
+    var lineupAuthoringSettingsURL: String?
     var jobs: [PushJob] = []
     var historyItems: [HistoryItem] = []
     var historyNextBeforeID: String?
@@ -111,6 +128,14 @@ final class AppModel {
 
     var supportsLineupControl: Bool {
         capabilities?.features.contains("lineup_control") == true
+    }
+
+    var supportsLineupAuthoring: Bool {
+        capabilities?.features.contains("lineup_authoring") == true
+    }
+
+    var supportsSessionRead: Bool {
+        capabilities?.features.contains("session_read") == true
     }
 
     var supportsRemindersPersonalData: Bool {
@@ -264,6 +289,14 @@ final class AppModel {
             connectionMode = mode
             connectionHealth = .connected
             self.capabilities = capabilities
+            lineupAuthoringPermission = if capabilities.features.contains(
+                "lineup_authoring"
+            ) {
+                session.scopes.contains("lineups:write") ? .granted : .denied
+            } else {
+                .unavailable
+            }
+            lineupAuthoringSettingsURL = nil
             activeInstance = session.instance.updatingServerVersion(
                 to: capabilities.serverVersion
             )
@@ -326,6 +359,10 @@ final class AppModel {
             loadDashboardOrder(for: snapshot.activeInstance.id)
             loadCollapsedDashboardSections(for: snapshot.activeInstance.id)
             capabilities = snapshot.capabilities
+            lineupAuthoringPermission = supportsLineupAuthoring
+                ? .unknown
+                : .unavailable
+            lineupAuthoringSettingsURL = nil
             displays = snapshot.displays
             dashboards = snapshot.dashboards
             lineups = snapshot.lineups ?? []
@@ -339,6 +376,10 @@ final class AppModel {
                 baseURL: snapshot.activeInstance.baseURL
             )
             capabilities = currentCapabilities
+            if !supportsLineupAuthoring {
+                lineupAuthoringPermission = .unavailable
+                lineupAuthoringSettingsURL = nil
+            }
             activeInstance = snapshot.activeInstance.updatingServerVersion(
                 to: currentCapabilities.serverVersion
             )
@@ -400,6 +441,7 @@ final class AppModel {
             } else {
                 lineups = []
             }
+            await refreshLineupAuthoringPermission(showErrors: false)
             if supportsHistory {
                 let history = try await activeClient.fetchHistory(
                     beforeID: nil,
@@ -681,6 +723,7 @@ final class AppModel {
             lineups = refreshedLineups
             connectionHealth = .connected
             connectionNotice = nil
+            await refreshLineupAuthoringPermission(showErrors: false)
 
             if connectionMode == .live, saveSnapshot {
                 await persistSnapshot(showErrors: showErrors)
@@ -709,6 +752,155 @@ final class AppModel {
                 connectionNotice = error.localizedDescription
                 lastError = nil
             }
+        }
+    }
+
+    func refreshLineupAuthoringPermission(
+        showErrors: Bool = false
+    ) async {
+        guard supportsLineupAuthoring, let currentInstance = activeInstance else {
+            lineupAuthoringPermission = .unavailable
+            lineupAuthoringSettingsURL = nil
+            return
+        }
+        guard supportsSessionRead else {
+            // Authoring servers before v0.295.0 enforce lineups:write at save
+            // time but do not expose the token's current optional grants.
+            lineupAuthoringPermission = .unknown
+            lineupAuthoringSettingsURL = nil
+            return
+        }
+        guard lineupAuthoringPermission != .checking else { return }
+
+        lineupAuthoringPermission = .checking
+        do {
+            let authorization = try await activeClient.fetchSessionAuthorization(
+                instance: currentInstance
+            )
+            guard activeInstance?.id == currentInstance.id else { return }
+            if let authorization {
+                lineupAuthoringPermission = authorization.canAuthorLineups
+                    ? .granted
+                    : .denied
+                lineupAuthoringSettingsURL = authorization.settingsURL
+            } else {
+                // Servers released before the authenticated session reader
+                // still advertise authoring and enforce it on POST/PATCH.
+                lineupAuthoringPermission = .unknown
+                lineupAuthoringSettingsURL = nil
+            }
+        } catch is CancellationError {
+            lineupAuthoringPermission = .unknown
+            lineupAuthoringSettingsURL = nil
+        } catch let error as TesseraeClientError {
+            lineupAuthoringPermission = .unknown
+            lineupAuthoringSettingsURL = nil
+            if showErrors {
+                await presentOperationError(error)
+            }
+        } catch {
+            lineupAuthoringPermission = .unknown
+            lineupAuthoringSettingsURL = nil
+            if showErrors {
+                lastError = error.localizedDescription
+            }
+        }
+    }
+
+    func fetchLineupForEditing(_ lineupID: String) async throws -> VersionedLineup {
+        guard supportsLineupAuthoring, let activeInstance else {
+            throw TesseraeClientError.unavailable
+        }
+        return try await activeClient.fetchVersionedLineup(
+            id: lineupID,
+            instance: activeInstance
+        )
+    }
+
+    func createLineup(
+        _ request: LineupCreateRequest
+    ) async -> LineupSaveOutcome {
+        guard supportsLineupAuthoring, let activeInstance else {
+            return .failed(
+                String(localized: "This Tesserae server does not support Lineup authoring.")
+            )
+        }
+        let operationID = "lineup-create"
+        activeOperationIDs.insert(operationID)
+        defer { activeOperationIDs.remove(operationID) }
+
+        do {
+            let versioned = try await activeClient.createLineup(
+                request,
+                instance: activeInstance
+            )
+            lineupAuthoringPermission = .granted
+            replaceLineup(versioned.lineup)
+            if connectionMode == .live {
+                await persistSnapshot(showErrors: false)
+            }
+            return .saved(versioned.lineup)
+        } catch let error as TesseraeClientError {
+            if case .forbidden = error {
+                lineupAuthoringPermission = .denied
+                return .permissionRequired
+            }
+            await presentOperationError(error)
+            return .failed(error.localizedDescription)
+        } catch {
+            lastError = error.localizedDescription
+            return .failed(error.localizedDescription)
+        }
+    }
+
+    func updateLineup(
+        id: String,
+        eTag: String,
+        patch: LineupPatchRequest
+    ) async -> LineupSaveOutcome {
+        guard supportsLineupAuthoring, let activeInstance else {
+            return .failed(
+                String(localized: "This Tesserae server does not support Lineup authoring.")
+            )
+        }
+        guard !patch.isEmpty else {
+            if let lineup = lineups.first(where: { $0.id == id }) {
+                return .saved(lineup)
+            }
+            return .failed(String(localized: "This Lineup is no longer available."))
+        }
+        let operationID = "lineup-edit:\(id)"
+        activeOperationIDs.insert(operationID)
+        defer { activeOperationIDs.remove(operationID) }
+
+        do {
+            let versioned = try await activeClient.updateLineup(
+                id: id,
+                eTag: eTag,
+                patch: patch,
+                instance: activeInstance
+            )
+            lineupAuthoringPermission = .granted
+            replaceLineup(versioned.lineup)
+            if connectionMode == .live {
+                await persistSnapshot(showErrors: false)
+            }
+            return .saved(versioned.lineup)
+        } catch let error as TesseraeClientError {
+            if case .forbidden = error {
+                lineupAuthoringPermission = .denied
+                return .permissionRequired
+            }
+            if case let .server(code, _, _) = error,
+               code == "precondition_failed"
+            {
+                return .conflict
+            }
+            await presentOperationError(error)
+            return .failed(error.localizedDescription)
+        } catch {
+            lastError = error.localizedDescription
+            return .failed(error.localizedDescription)
         }
     }
 
@@ -1990,6 +2182,8 @@ final class AppModel {
         connectionHealth = .idle
         connectionNotice = nil
         capabilities = nil
+        lineupAuthoringPermission = .unknown
+        lineupAuthoringSettingsURL = nil
         displays = []
         dashboards = []
         lineups = []
@@ -2044,6 +2238,8 @@ final class AppModel {
             activeInstance = nil
             connectionMode = nil
             capabilities = nil
+            lineupAuthoringPermission = .unknown
+            lineupAuthoringSettingsURL = nil
             displays = []
             dashboards = []
             lineups = []

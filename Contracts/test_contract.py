@@ -20,9 +20,11 @@ CASES = {
     "capabilities-extended.json": "Capabilities",
     "capabilities-framing.json": "Capabilities",
     "capabilities-lineups.json": "Capabilities",
+    "capabilities-lineup-authoring.json": "Capabilities",
     "pair-request.json": "PairingRequest",
     "pair-response.json": "PairingResponse",
     "pair-response-lineups.json": "PairingResponse",
+    "session-authorization.json": "CompanionSessionAuthorization",
     "devices-response.json": "DevicesResponse",
     "dashboards-response.json": "DashboardsResponse",
     "dashboard-push-request.json": "DashboardPushRequest",
@@ -35,6 +37,9 @@ CASES = {
     "history-resend-request.json": "HistoryResendRequest",
     "lineups-response.json": "LineupsResponse",
     "lineup-response.json": "LineupResponse",
+    "lineup-daily-resolved-response.json": "LineupResponse",
+    "lineup-create-request.json": "LineupCreateRequest",
+    "lineup-patch-request.json": "LineupPatchRequest",
     "lineup-action-request.json": "LineupActionRequest",
     "lineup-state-action-request.json": "LineupActionRequest",
     "job-accepted.json": "JobResponse",
@@ -83,7 +88,7 @@ def _json_schema(value: Any) -> Any:
 
 def test_openapi_shape_and_operation_ids_are_stable() -> None:
     assert SPEC["openapi"] == "3.0.3"
-    assert SPEC["info"]["version"] == "0.8.0"
+    assert SPEC["info"]["version"] == "0.9.0"
     assert set(SPEC["paths"]) == {
         "/api/app/v1",
         "/api/app/v1/pair",

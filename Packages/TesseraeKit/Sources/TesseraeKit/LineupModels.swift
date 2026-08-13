@@ -184,6 +184,10 @@ public struct Lineup: Codable, Identifiable, Hashable, Sendable {
     public let enabled: Bool
     public let intent: LineupIntent?
     public let deviceIDs: [String]
+    // Added in Tesserae v0.295.0. Keep optional so snapshots and responses
+    // from older servers remain readable; when absent, only the explicit
+    // authored binding is safe to use for control.
+    public let resolvedDeviceIDs: [String]?
     public let dashboards: [LineupDashboard]
     public let current: [LineupCurrent]
     public let nextAdvanceEpoch: Int64?
@@ -221,6 +225,7 @@ public struct Lineup: Codable, Identifiable, Hashable, Sendable {
         case enabled
         case intent
         case deviceIDs = "deviceIds"
+        case resolvedDeviceIDs = "resolvedDeviceIds"
         case dashboards
         case current
         case nextAdvanceEpoch
@@ -255,6 +260,141 @@ public struct LineupsResponse: Codable, Hashable, Sendable {
 
 public struct LineupResponse: Codable, Hashable, Sendable {
     public let lineup: Lineup
+}
+
+public struct VersionedLineup: Hashable, Sendable {
+    public let lineup: Lineup
+    public let eTag: String
+
+    public init(lineup: Lineup, eTag: String) {
+        self.lineup = lineup
+        self.eTag = eTag
+    }
+}
+
+public struct CompanionSessionAuthorization: Codable, Hashable, Sendable {
+    public let tokenID: String
+    public let scopes: Set<String>
+    public let settingsURL: String?
+
+    public init(
+        tokenID: String,
+        scopes: Set<String>,
+        settingsURL: String? = nil
+    ) {
+        self.tokenID = tokenID
+        self.scopes = scopes
+        self.settingsURL = settingsURL
+    }
+
+    public var canAuthorLineups: Bool {
+        scopes.contains("lineups:write")
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case tokenID = "tokenId"
+        case scopes
+        case settingsURL = "settingsUrl"
+    }
+}
+
+public struct LineupCreateRequest: Codable, Hashable, Sendable {
+    public let intent: LineupIntent
+    public let name: String
+    public let pageIDs: [String]
+    public let deviceIDs: [String]
+    public let dwellMinutes: [String: Int]?
+    public let intervalMinutes: Int?
+    public let firesAt: String?
+    public let anchor: String?
+    public let bindUnassignedDashboards: Bool
+
+    public init(
+        intent: LineupIntent,
+        name: String,
+        pageIDs: [String],
+        deviceIDs: [String],
+        dwellMinutes: [String: Int]? = nil,
+        intervalMinutes: Int? = nil,
+        firesAt: String? = nil,
+        anchor: String? = nil,
+        bindUnassignedDashboards: Bool = false
+    ) {
+        self.intent = intent
+        self.name = name
+        self.pageIDs = pageIDs
+        self.deviceIDs = deviceIDs
+        self.dwellMinutes = dwellMinutes
+        self.intervalMinutes = intervalMinutes
+        self.firesAt = firesAt
+        self.anchor = anchor
+        self.bindUnassignedDashboards = bindUnassignedDashboards
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case intent
+        case name
+        case pageIDs = "pageIds"
+        case deviceIDs = "deviceIds"
+        case dwellMinutes
+        case intervalMinutes
+        case firesAt
+        case anchor
+        case bindUnassignedDashboards
+    }
+}
+
+public struct LineupPatchRequest: Codable, Hashable, Sendable {
+    public let name: String?
+    public let enabled: Bool?
+    public let deviceIDs: [String]?
+    public let pageIDs: [String]?
+    public let dwellMinutes: [String: Int]?
+    public let intervalMinutes: Int?
+    public let firesAt: String?
+    public let anchor: String?
+
+    public init(
+        name: String? = nil,
+        enabled: Bool? = nil,
+        deviceIDs: [String]? = nil,
+        pageIDs: [String]? = nil,
+        dwellMinutes: [String: Int]? = nil,
+        intervalMinutes: Int? = nil,
+        firesAt: String? = nil,
+        anchor: String? = nil
+    ) {
+        self.name = name
+        self.enabled = enabled
+        self.deviceIDs = deviceIDs
+        self.pageIDs = pageIDs
+        self.dwellMinutes = dwellMinutes
+        self.intervalMinutes = intervalMinutes
+        self.firesAt = firesAt
+        self.anchor = anchor
+    }
+
+    public var isEmpty: Bool {
+        name == nil
+            && enabled == nil
+            && deviceIDs == nil
+            && pageIDs == nil
+            && dwellMinutes == nil
+            && intervalMinutes == nil
+            && firesAt == nil
+            && anchor == nil
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case name
+        case enabled
+        case deviceIDs = "deviceIds"
+        case pageIDs = "pageIds"
+        case dwellMinutes
+        case intervalMinutes
+        case firesAt
+        case anchor
+    }
 }
 
 public struct LineupStateActionRequest: Codable, Hashable, Sendable {

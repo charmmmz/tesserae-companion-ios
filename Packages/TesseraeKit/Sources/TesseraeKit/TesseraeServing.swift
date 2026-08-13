@@ -3,11 +3,28 @@ import Foundation
 public protocol TesseraeServing: Sendable {
     func probe(baseURL: URL) async throws -> ServerCapabilities
     func pair(baseURL: URL, code: String, clientName: String) async throws -> PairedSession
+    func fetchSessionAuthorization(
+        instance: TesseraeInstance
+    ) async throws -> CompanionSessionAuthorization?
     func revokeSession(instance: TesseraeInstance) async throws
     func fetchDisplays(instance: TesseraeInstance) async throws -> [DisplaySummary]
     func fetchDashboards(instance: TesseraeInstance) async throws -> [DashboardSummary]
     func fetchLineups(instance: TesseraeInstance) async throws -> [Lineup]
     func fetchLineup(id: String, instance: TesseraeInstance) async throws -> Lineup
+    func fetchVersionedLineup(
+        id: String,
+        instance: TesseraeInstance
+    ) async throws -> VersionedLineup
+    func createLineup(
+        _ request: LineupCreateRequest,
+        instance: TesseraeInstance
+    ) async throws -> VersionedLineup
+    func updateLineup(
+        id: String,
+        eTag: String,
+        patch: LineupPatchRequest,
+        instance: TesseraeInstance
+    ) async throws -> VersionedLineup
     func setLineupEnabled(
         id: String,
         enabled: Bool,

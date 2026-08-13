@@ -152,6 +152,102 @@ final class LineupsUITests: XCTestCase {
         add(screenshot)
     }
 
+    func testCreateManualLineupFlow() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
+        app.launch()
+
+        XCTAssertTrue(
+            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
+        )
+        app.buttons["Explore with Demo Data"].tap()
+        XCTAssertTrue(app.buttons["manage-lineups"].waitForExistence(timeout: 3))
+        app.buttons["manage-lineups"].tap()
+
+        let createButton = app.buttons["lineup-create"]
+        XCTAssertTrue(createButton.waitForExistence(timeout: 3))
+        createButton.tap()
+        app.buttons["lineup-intent-manual"].tap()
+
+        let nameField = app.textFields["lineup-editor-name"]
+        XCTAssertTrue(nameField.waitForExistence(timeout: 2))
+        nameField.tap()
+        nameField.typeText("Weekend Rotation")
+
+        let keyboard = app.keyboards.firstMatch
+        XCTAssertTrue(keyboard.waitForExistence(timeout: 2))
+        app.swipeUp()
+        expectation(
+            for: NSPredicate(format: "exists == false"),
+            evaluatedWith: keyboard
+        )
+        waitForExpectations(timeout: 2)
+
+        app.buttons["lineup-editor-displays"].tap()
+        app.buttons["lineup-editor-display-picpak-kitchen"].tap()
+
+        app.buttons["lineup-editor-dashboards"].tap()
+        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 2))
+        XCTAssertTrue(app.staticTexts["Kitchen"].exists)
+        app.buttons["lineup-editor-dashboard-pantry"].tap()
+        app.buttons["lineup-editor-dashboard-photo-frame"].tap()
+        XCTAssertFalse(app.buttons["Edit"].exists)
+        XCTAssertTrue(
+            app.descendants(matching: .any)[
+                "lineup-editor-selected-dashboard-pantry"
+            ].exists
+        )
+        app.navigationBars["Dashboards"].buttons.firstMatch.tap()
+
+        let saveButton = app.buttons["lineup-editor-save"]
+        XCTAssertTrue(saveButton.isEnabled)
+        let editorScreenshot = XCTAttachment(screenshot: app.screenshot())
+        editorScreenshot.name = "Manual Lineup Editor"
+        editorScreenshot.lifetime = .keepAlways
+        add(editorScreenshot)
+        saveButton.tap()
+
+        let created = app.buttons["lineup-card-weekend_rotation"]
+        XCTAssertTrue(created.waitForExistence(timeout: 3))
+        XCTAssertTrue(created.label.contains("Weekend Rotation"))
+    }
+
+    func testCreateIntervalUsesDashboardBindingAndDurationWheels() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
+        app.launch()
+
+        XCTAssertTrue(
+            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
+        )
+        app.buttons["Explore with Demo Data"].tap()
+        XCTAssertTrue(app.buttons["manage-lineups"].waitForExistence(timeout: 3))
+        app.buttons["manage-lineups"].tap()
+        XCTAssertTrue(app.buttons["lineup-create"].waitForExistence(timeout: 3))
+        app.buttons["lineup-create"].tap()
+        app.buttons["lineup-intent-interval"].tap()
+
+        XCTAssertFalse(app.buttons["lineup-editor-displays"].exists)
+        app.buttons["lineup-editor-dashboards"].tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 2))
+        search.tap()
+        search.typeText("Pantry")
+        XCTAssertTrue(
+            app.buttons["lineup-editor-dashboard-pantry"]
+                .waitForExistence(timeout: 2)
+        )
+        app.buttons["lineup-editor-dashboard-pantry"].tap()
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)["lineup-editor-interval"]
+                .waitForExistence(timeout: 2)
+        )
+        XCTAssertGreaterThanOrEqual(app.pickers.count, 2)
+    }
+
     func testDailyLineupUsesFocusedScheduleDetails() {
         assertAutomatedLineupDetails(
             intent: "daily",

@@ -89,6 +89,31 @@ public actor LiveTesseraeClient: TesseraeServing {
         )
     }
 
+    public func fetchSessionAuthorization(
+        instance: TesseraeInstance
+    ) async throws -> CompanionSessionAuthorization? {
+        let request = try await authenticatedRequest(
+            instance: instance,
+            path: ["session"],
+            method: "GET"
+        )
+        let response = try await response(for: request)
+        if response.statusCode == 404 || response.statusCode == 405 {
+            return nil
+        }
+        guard response.statusCode == 200 else {
+            throw try serverError(from: response)
+        }
+        do {
+            return try TesseraeJSON.decoder().decode(
+                CompanionSessionAuthorization.self,
+                from: response.data
+            )
+        } catch {
+            throw TesseraeClientError.decoding(String(describing: error))
+        }
+    }
+
     public func revokeSession(instance: TesseraeInstance) async throws {
         let request = try await authenticatedRequest(
             instance: instance,
@@ -169,6 +194,56 @@ public actor LiveTesseraeClient: TesseraeServing {
             expectedStatusCodes: [200]
         )
         return response.lineup
+    }
+
+    public func fetchVersionedLineup(
+        id: String,
+        instance: TesseraeInstance
+    ) async throws -> VersionedLineup {
+        let request = try await authenticatedRequest(
+            instance: instance,
+            path: ["lineups", id],
+            method: "GET"
+        )
+        return try await performVersionedLineup(
+            request,
+            expectedStatusCodes: [200]
+        )
+    }
+
+    public func createLineup(
+        _ requestBody: LineupCreateRequest,
+        instance: TesseraeInstance
+    ) async throws -> VersionedLineup {
+        let request = try await authenticatedRequest(
+            instance: instance,
+            path: ["lineups"],
+            method: "POST",
+            body: TesseraeJSON.encoder().encode(requestBody)
+        )
+        return try await performVersionedLineup(
+            request,
+            expectedStatusCodes: [201]
+        )
+    }
+
+    public func updateLineup(
+        id: String,
+        eTag: String,
+        patch: LineupPatchRequest,
+        instance: TesseraeInstance
+    ) async throws -> VersionedLineup {
+        var request = try await authenticatedRequest(
+            instance: instance,
+            path: ["lineups", id],
+            method: "PATCH",
+            body: TesseraeJSON.encoder().encode(patch)
+        )
+        request.setValue(eTag, forHTTPHeaderField: "If-Match")
+        return try await performVersionedLineup(
+            request,
+            expectedStatusCodes: [200]
+        )
     }
 
     public func setLineupEnabled(
@@ -660,6 +735,33 @@ public actor LiveTesseraeClient: TesseraeServing {
             throw try serverError(from: response)
         }
         return response
+    }
+
+    private func performVersionedLineup(
+        _ request: URLRequest,
+        expectedStatusCodes: Set<Int>
+    ) async throws -> VersionedLineup {
+        let response = try await response(for: request)
+        guard expectedStatusCodes.contains(response.statusCode) else {
+            throw try serverError(from: response)
+        }
+        let eTag = response.headers.first {
+            $0.key.caseInsensitiveCompare("etag") == .orderedSame
+        }?.value
+        guard let eTag, !eTag.isEmpty else {
+            throw TesseraeClientError.invalidResponse
+        }
+        do {
+            let decoded = try TesseraeJSON.decoder().decode(
+                LineupResponse.self,
+                from: response.data
+            )
+            return VersionedLineup(lineup: decoded.lineup, eTag: eTag)
+        } catch let error as TesseraeClientError {
+            throw error
+        } catch {
+            throw TesseraeClientError.decoding(String(describing: error))
+        }
     }
 
     private func previewResponse(

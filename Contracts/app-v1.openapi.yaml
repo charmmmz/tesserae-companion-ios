@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Tesserae Companion API
-  version: 0.8.0
+  version: 0.9.0
   description: >-
     Companion API contract for community-built clients. Previews, History,
     resend, remote-image push, webpage push, and server-advertised image fit
@@ -62,6 +62,23 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
   /api/app/v1/session:
+    get:
+      tags: [Pairing]
+      operationId: getCompanionSessionAuthorization
+      summary: Read the presented credential's current optional permissions
+      description: >-
+        Returns current scopes after an operator changes an optional grant in
+        Tesserae Settings. Advertised by the session_read capability. Clients
+        may fall back to save-time 403 handling on older authoring servers.
+      responses:
+        "200":
+          description: Current credential identity and scopes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanionSessionAuthorization"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
     delete:
       tags: [Pairing]
       operationId: revokeCompanionSession
@@ -421,6 +438,38 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Lineups]
+      operationId: createCompanionLineup
+      summary: Create a native-editable Lineup from one of four intents
+      description: >-
+        Requires the optional lineups:write scope. Uses the same server-owned
+        builder as Tesserae Web; saving the definition does not refresh a
+        display. Binding an unassigned Dashboard is explicit and opt-in.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LineupCreateRequest"
+      responses:
+        "201":
+          description: Created Lineup and its edit validator
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LineupResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/app/v1/lineups/{lineup_id}:
     parameters:
       - $ref: "#/components/parameters/LineupID"
@@ -431,6 +480,9 @@ paths:
       responses:
         "200":
           description: Complete Lineup definition and runtime state
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -441,6 +493,47 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Lineups]
+      operationId: updateCompanionLineup
+      summary: Partially edit a native-editable Lineup
+      description: >-
+        Requires lineups:write and the ETag returned by GET. Omitted fields
+        retain their server values. A stale validator returns 412 instead of
+        overwriting a concurrent web or app edit, and advanced Lineups remain
+        web-only.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LineupPatchRequest"
+      responses:
+        "200":
+          description: Updated Lineup and its new edit validator
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LineupResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          description: If-Match no longer identifies the stored Lineup version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/app/v1/lineups/{lineup_id}/actions:
     parameters:
       - $ref: "#/components/parameters/LineupID"
@@ -676,9 +769,16 @@ components:
       description: ETag from a previously returned preview
       schema:
         type: string
+    IfMatch:
+      in: header
+      name: If-Match
+      required: true
+      description: ETag returned when the Lineup was read
+      schema:
+        type: string
   headers:
     ETag:
-      description: Content-addressed preview validator
+      description: Content-addressed resource validator
       schema:
         type: string
   responses:
@@ -783,6 +883,8 @@ components:
               - personal_data_reminders
               - lineups
               - lineup_control
+              - lineup_authoring
+              - session_read
         personal_data:
           $ref: "#/components/schemas/PersonalDataCapabilities"
         limits:
@@ -921,6 +1023,30 @@ components:
           format: date-time
         instance:
           $ref: "#/components/schemas/Instance"
+    CompanionSessionAuthorization:
+      type: object
+      additionalProperties: false
+      required: [token_id, scopes, settings_url]
+      properties:
+        token_id:
+          type: string
+        scopes:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - devices:read
+              - dashboards:read
+              - push:write
+              - media:write
+              - personal_data:write
+              - lineups:read
+              - lineups:control
+              - lineups:write
+        settings_url:
+          description: Relative URL for this token's Companion permission settings
+          type: string
     Instance:
       type: object
       additionalProperties: false
@@ -1398,6 +1524,89 @@ components:
       properties:
         lineup:
           $ref: "#/components/schemas/Lineup"
+    LineupCreateRequest:
+      description: >-
+        Intent selects the server-owned native builder. Daily and interval use
+        exactly one page; cycle and manual accept an ordered list. The server
+        validates all referenced Dashboard and Display identifiers.
+      type: object
+      additionalProperties: false
+      required: [intent, name, page_ids]
+      properties:
+        intent:
+          type: string
+          enum: [daily, interval, cycle, manual]
+        name:
+          type: string
+          minLength: 1
+        page_ids:
+          type: array
+          minItems: 1
+          items:
+            type: string
+        device_ids:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+        dwell_minutes:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 1
+            maximum: 10080
+        interval_minutes:
+          type: integer
+          minimum: 1
+          maximum: 10080
+        fires_at:
+          $ref: "#/components/schemas/LocalTime"
+        anchor:
+          $ref: "#/components/schemas/LocalTime"
+        bind_unassigned_dashboards:
+          description: >-
+            When true, assign selected Dashboards with no existing binding to
+            the first selected Display. Never moves a Dashboard already bound
+            elsewhere.
+          type: boolean
+          default: false
+    LineupPatchRequest:
+      description: >-
+        Partial native edit. Omitted fields retain their stored values; intent
+        and advanced fields are deliberately not writable through this route.
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+        enabled:
+          type: boolean
+        device_ids:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+        page_ids:
+          type: array
+          minItems: 1
+          items:
+            type: string
+        dwell_minutes:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 1
+            maximum: 10080
+        interval_minutes:
+          type: integer
+          minimum: 1
+          maximum: 10080
+        fires_at:
+          $ref: "#/components/schemas/LocalTime"
+        anchor:
+          $ref: "#/components/schemas/LocalTime"
     Lineup:
       description: >-
         Public read projection of the server's unified Deck model. Fields through
@@ -1413,6 +1622,7 @@ components:
         - enabled
         - intent
         - device_ids
+        - resolved_device_ids
         - dashboards
         - current
         - next_advance_epoch
@@ -1455,7 +1665,15 @@ components:
           enum: [daily, interval, cycle, manual]
           nullable: true
         device_ids:
-          description: Displays bound to this Lineup
+          description: Explicit displays authored on this Lineup; may be empty
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+        resolved_device_ids:
+          description: >-
+            Server-computed displays an action may touch. Uses device_ids when
+            present, otherwise the union of member Dashboard bindings.
           type: array
           uniqueItems: true
           items:
@@ -1887,6 +2105,7 @@ components:
                 - idempotency_conflict
                 - not_resendable
                 - temporarily_unavailable
+                - precondition_failed
             message:
               type: string
             request_id:

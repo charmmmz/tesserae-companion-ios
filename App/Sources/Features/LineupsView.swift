@@ -4,6 +4,9 @@ import TesseraeKit
 struct LineupsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.openURL) private var openURL
+    @State private var creatingLineup = false
+    @State private var permissionAlertPresented = false
 
     let isActive: Bool
 
@@ -87,11 +90,7 @@ struct LineupsView: View {
     private func displayDeviceIDs(for lineup: Lineup) -> [String] {
         resolvedLineupDeviceIDs(
             explicitDeviceIDs: lineup.deviceIDs,
-            dashboardDeviceIDs: lineup.dashboards.compactMap { lineupDashboard in
-                model.dashboards.first {
-                    $0.id == lineupDashboard.pageID
-                }?.deviceIDs
-            }
+            serverResolvedDeviceIDs: lineup.resolvedDeviceIDs
         )
     }
 
@@ -141,14 +140,24 @@ struct LineupsView: View {
                 ContentUnavailableView {
                     Label("No Lineups", systemImage: "rectangle.stack")
                 } description: {
-                    Text(
-                        "Build a schedule, deck, or rotation in Tesserae's web interface, then refresh."
-                    )
+                    if model.supportsLineupAuthoring {
+                        Text("Create a Lineup to schedule or control your Dashboards.")
+                    } else {
+                        Text(
+                            "Build a schedule, deck, or rotation in Tesserae's web interface, then refresh."
+                        )
+                    }
                 } actions: {
+                    if model.supportsLineupAuthoring {
+                        Button("Create Lineup") {
+                            beginCreatingLineup()
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
                     Button("Refresh") {
                         Task { await model.refreshLineups() }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.bordered)
                 }
             }
         }
@@ -175,7 +184,53 @@ struct LineupsView: View {
             }
         }
         .navigationTitle("Lineups")
+        .toolbar {
+            if model.supportsLineupAuthoring {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Create Lineup", systemImage: "plus") {
+                        beginCreatingLineup()
+                    }
+                    .accessibilityIdentifier("lineup-create")
+                }
+            }
+        }
+        .sheet(isPresented: $creatingLineup) {
+            LineupCreateFlow { _ in }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .alert("Permission Required", isPresented: $permissionAlertPresented) {
+            Button("Open Tesserae") {
+                if let url = lineupAuthoringWebURL(model: model) {
+                    openURL(url)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(
+                "Enable Create and edit Lineups for this iPhone in Tesserae Settings → Companion. You do not need to pair again."
+            )
+        }
+        .task(id: model.supportsLineupAuthoring) {
+            guard model.supportsLineupAuthoring else { return }
+            await model.refreshLineupAuthoringPermission()
+        }
         .tesseraeScreenBackground()
+    }
+
+    private func beginCreatingLineup() {
+        if model.lineupAuthoringPermission == .denied {
+            Task {
+                await model.refreshLineupAuthoringPermission()
+                if model.lineupAuthoringPermission == .denied {
+                    permissionAlertPresented = true
+                } else {
+                    creatingLineup = true
+                }
+            }
+        } else {
+            creatingLineup = true
+        }
     }
 
     private func sectionHeader(_ section: LineupListSection) -> some View {
@@ -262,11 +317,9 @@ func lineupDisplayGrouping(
 
 func resolvedLineupDeviceIDs(
     explicitDeviceIDs: [String],
-    dashboardDeviceIDs: [[String]]
+    serverResolvedDeviceIDs: [String]?
 ) -> [String] {
-    let candidates = explicitDeviceIDs.isEmpty
-        ? dashboardDeviceIDs.flatMap { $0 }
-        : explicitDeviceIDs
+    let candidates = serverResolvedDeviceIDs ?? explicitDeviceIDs
     var seen: Set<String> = []
     return candidates.filter { seen.insert($0).inserted }
 }
@@ -491,6 +544,8 @@ private struct LineupDetailView: View {
     @State private var dashboardToPreview: LineupDashboardPlayContext?
     @State private var pendingEnabled: Bool?
     @State private var isUpdatingEnabled = false
+    @State private var editingLineup = false
+    @State private var authoringPermissionAlertPresented = false
 
     let lineupID: String
 
@@ -521,8 +576,8 @@ private struct LineupDetailView: View {
                 .refreshable {
                     await model.refreshLineups()
                 }
-                .task(id: lineup.deviceIDs) {
-                    reconcileTargets(lineup.deviceIDs)
+                .task(id: displayDeviceIDs(for: lineup)) {
+                    reconcileTargets(displayDeviceIDs(for: lineup))
                 }
             } else {
                 ContentUnavailableView {
@@ -540,6 +595,18 @@ private struct LineupDetailView: View {
         .navigationTitle(lineup?.name ?? String(localized: "Lineup"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            if let lineup,
+               lineup.nativeEditable,
+               model.supportsLineupAuthoring
+            {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Edit", systemImage: "pencil") {
+                        beginEditingLineup()
+                    }
+                    .accessibilityIdentifier("lineup-edit")
+                }
+            }
+
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     if let lineup,
@@ -559,10 +626,34 @@ private struct LineupDetailView: View {
                 .accessibilityIdentifier("lineup-more-menu")
             }
         }
+        .sheet(isPresented: $editingLineup) {
+            LineupEditFlow(lineupID: lineupID) { _ in }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .alert(
+            "Permission Required",
+            isPresented: $authoringPermissionAlertPresented
+        ) {
+            Button("Open Tesserae") {
+                if let url = lineupAuthoringWebURL(model: model) {
+                    openURL(url)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(
+                "Enable Create and edit Lineups for this iPhone in Tesserae Settings → Companion. You do not need to pair again."
+            )
+        }
+        .task(id: model.supportsLineupAuthoring) {
+            guard model.supportsLineupAuthoring else { return }
+            await model.refreshLineupAuthoringPermission()
+        }
         .sheet(isPresented: $targetsPresented) {
             if let lineup {
                 LineupTargetSelectionSheet(
-                    deviceIDs: lineup.deviceIDs,
+                    deviceIDs: displayDeviceIDs(for: lineup),
                     displays: model.displays,
                     selection: $selectedDeviceIDs
                 )
@@ -959,7 +1050,8 @@ private struct LineupDetailView: View {
 
     @ViewBuilder
     private func targetRow(_ lineup: Lineup) -> some View {
-        if lineup.deviceIDs.count > 1 {
+        let deviceIDs = displayDeviceIDs(for: lineup)
+        if deviceIDs.count > 1 {
             Button {
                 targetsPresented = true
             } label: {
@@ -982,16 +1074,14 @@ private struct LineupDetailView: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("lineup-targets")
-        } else if lineup.deviceIDs.isEmpty,
-                  !displayDeviceIDs(for: lineup).isEmpty
-        {
+        } else if !deviceIDs.isEmpty {
             HStack(spacing: 10) {
                 Label("Target", systemImage: "display")
                     .font(.subheadline.weight(.semibold))
 
                 Spacer()
 
-                Text(displayNames(displayDeviceIDs(for: lineup)))
+                Text(displayNames(deviceIDs))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -1003,8 +1093,7 @@ private struct LineupDetailView: View {
                 Spacer()
 
                 Text(
-                    lineup.deviceIDs.first.map(displayName)
-                        ?? String(localized: "No display")
+                    String(localized: "No display")
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -1151,14 +1240,14 @@ private struct LineupDetailView: View {
     }
 
     private func effectiveSelectedDeviceIDs(for lineup: Lineup) -> Set<String> {
-        didLoadInitialTargets ? selectedDeviceIDs : Set(lineup.deviceIDs)
+        didLoadInitialTargets
+            ? selectedDeviceIDs
+            : Set(displayDeviceIDs(for: lineup))
     }
 
     private func targetSummary(_ lineup: Lineup) -> String {
         let selectedTargets = presentationDeviceIDs(for: lineup)
-        let availableTargetCount = lineup.deviceIDs.isEmpty
-            ? displayDeviceIDs(for: lineup).count
-            : lineup.deviceIDs.count
+        let availableTargetCount = displayDeviceIDs(for: lineup).count
         if selectedTargets.isEmpty {
             return String(localized: "No targets")
         }
@@ -1176,20 +1265,13 @@ private struct LineupDetailView: View {
     }
 
     private func presentationDeviceIDs(for lineup: Lineup) -> Set<String> {
-        if lineup.deviceIDs.isEmpty {
-            return Set(displayDeviceIDs(for: lineup))
-        }
         return effectiveSelectedDeviceIDs(for: lineup)
     }
 
     private func displayDeviceIDs(for lineup: Lineup) -> [String] {
         resolvedLineupDeviceIDs(
             explicitDeviceIDs: lineup.deviceIDs,
-            dashboardDeviceIDs: lineup.dashboards.compactMap { lineupDashboard in
-                model.dashboards.first {
-                    $0.id == lineupDashboard.pageID
-                }?.deviceIDs
-            }
+            serverResolvedDeviceIDs: lineup.resolvedDeviceIDs
         )
     }
 
@@ -1376,6 +1458,21 @@ private struct LineupDetailView: View {
             lineupID: lineup.id,
             relativeTo: baseURL
         )
+    }
+
+    private func beginEditingLineup() {
+        if model.lineupAuthoringPermission == .denied {
+            Task {
+                await model.refreshLineupAuthoringPermission()
+                if model.lineupAuthoringPermission == .denied {
+                    authoringPermissionAlertPresented = true
+                } else {
+                    editingLineup = true
+                }
+            }
+        } else {
+            editingLineup = true
+        }
     }
 }
 

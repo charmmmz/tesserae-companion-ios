@@ -31,20 +31,27 @@ final class LineupsAppModelTests: XCTestCase {
         )
     }
 
-    func testLineupDisplayResolutionFallsBackToDashboardBindings() {
+    func testLineupDisplayResolutionUsesServerAuthority() {
         XCTAssertEqual(
             resolvedLineupDeviceIDs(
                 explicitDeviceIDs: [],
-                dashboardDeviceIDs: [["black-picpak"], ["black-picpak"]]
+                serverResolvedDeviceIDs: ["black-picpak", "black-picpak"]
             ),
             ["black-picpak"]
         )
         XCTAssertEqual(
             resolvedLineupDeviceIDs(
                 explicitDeviceIDs: ["explicit-display"],
-                dashboardDeviceIDs: [["dashboard-display"]]
+                serverResolvedDeviceIDs: nil
             ),
             ["explicit-display"]
+        )
+        XCTAssertEqual(
+            resolvedLineupDeviceIDs(
+                explicitDeviceIDs: [],
+                serverResolvedDeviceIDs: nil
+            ),
+            []
         )
     }
 
@@ -116,7 +123,142 @@ final class LineupsAppModelTests: XCTestCase {
 
         XCTAssertTrue(model.supportsLineups)
         XCTAssertTrue(model.supportsLineupControl)
+        XCTAssertTrue(model.supportsLineupAuthoring)
+        XCTAssertTrue(model.supportsSessionRead)
+        XCTAssertEqual(model.lineupAuthoringPermission, .granted)
+        XCTAssertEqual(
+            model.lineupAuthoringSettingsURL,
+            "/settings/companion"
+        )
+        XCTAssertEqual(
+            lineupAuthoringWebURL(model: model)?.absoluteString,
+            "http://tesserae.local:8765/settings/companion"
+        )
         XCTAssertEqual(model.lineups.map(\.id), ["kitchen-deck"])
+    }
+
+    func testCreateAndEditLineupUpdatesLocalCollection() async throws {
+        let model = makeAppModel()
+        await model.connectDemo()
+
+        let created = await model.createLineup(
+            LineupCreateRequest(
+                intent: .manual,
+                name: "Weekend Rotation",
+                pageIDs: ["pantry", "photo-frame"],
+                deviceIDs: ["picpak-kitchen"]
+            )
+        )
+
+        let createdLineup: Lineup
+        switch created {
+        case let .saved(lineup):
+            createdLineup = lineup
+        default:
+            return XCTFail("Expected the Lineup to be created")
+        }
+        XCTAssertEqual(createdLineup.id, "weekend_rotation")
+        XCTAssertEqual(model.lineups.count, 2)
+
+        let versioned = try await model.fetchLineupForEditing(createdLineup.id)
+        let updated = await model.updateLineup(
+            id: createdLineup.id,
+            eTag: versioned.eTag,
+            patch: LineupPatchRequest(name: "Weekend")
+        )
+
+        switch updated {
+        case let .saved(lineup):
+            XCTAssertEqual(lineup.name, "Weekend")
+            XCTAssertEqual(
+                model.lineups.first { $0.id == createdLineup.id }?.name,
+                "Weekend"
+            )
+        default:
+            XCTFail("Expected the Lineup to be edited")
+        }
+
+        let stale = try await model.fetchLineupForEditing(createdLineup.id)
+        _ = await model.setLineupEnabled(stale.lineup, enabled: false)
+        let conflict = await model.updateLineup(
+            id: stale.lineup.id,
+            eTag: stale.eTag,
+            patch: LineupPatchRequest(name: "Stale edit")
+        )
+        guard case .conflict = conflict else {
+            return XCTFail("Expected a concurrent edit conflict")
+        }
+    }
+
+    func testMissingWriteScopeKeepsPairingAndReturnsPermissionRemedy() async {
+        let client = MockTesseraeClient(
+            latency: .milliseconds(0),
+            lineupAuthoringGranted: false
+        )
+        let model = makeAppModel(client: client)
+        await model.connectDemo()
+
+        let outcome = await model.createLineup(
+            LineupCreateRequest(
+                intent: .daily,
+                name: "Weather",
+                pageIDs: ["pantry"],
+                deviceIDs: []
+            )
+        )
+
+        guard case .permissionRequired = outcome else {
+            return XCTFail("Expected a permission remedy")
+        }
+        XCTAssertEqual(model.lineupAuthoringPermission, .denied)
+        XCTAssertEqual(model.connectionHealth, .connected)
+        XCTAssertNotNil(model.activeInstance)
+    }
+
+    func testLineupEditorDraftValidatesIntentAndBuildsPartialPatch() async throws {
+        let model = makeAppModel()
+        await model.connectDemo()
+        let lineup = try XCTUnwrap(model.lineups.first)
+
+        var daily = LineupEditorDraft(intent: .daily)
+        daily.name = "Weather"
+        daily.pageIDs = ["pantry", "morning"]
+        XCTAssertFalse(daily.isValid)
+        daily.pageIDs = ["pantry"]
+        daily.firesAtMinutes = 7 * 60 + 5
+        XCTAssertTrue(daily.isValid)
+        XCTAssertEqual(daily.createRequest.firesAt, "07:05")
+
+        var interval = LineupEditorDraft(intent: .interval)
+        interval.name = "Keep Weather Fresh"
+        interval.pageIDs = ["pantry"]
+        interval.intervalMinutes = 45
+        interval.anchorMinutes = 6 * 60
+        XCTAssertEqual(interval.createRequest.intervalMinutes, 45)
+        XCTAssertEqual(interval.createRequest.anchor, "06:00")
+
+        var cycle = LineupEditorDraft(intent: .cycle)
+        cycle.name = "Morning Cycle"
+        cycle.pageIDs = ["pantry", "morning"]
+        XCTAssertFalse(cycle.isValid)
+        cycle.deviceIDs = ["picpak-kitchen"]
+        cycle.dwellMinutes = ["pantry": 15, "morning": 30]
+        cycle.anchorMinutes = 5 * 60 + 30
+        XCTAssertTrue(cycle.isValid)
+        XCTAssertEqual(
+            cycle.createRequest.dwellMinutes,
+            ["pantry": 15, "morning": 30]
+        )
+        XCTAssertEqual(cycle.createRequest.anchor, "05:30")
+
+        var edit = LineupEditorDraft(lineup: lineup)
+        edit.name = "Renamed"
+        let patch = edit.patch(comparedTo: lineup)
+        XCTAssertEqual(patch.name, "Renamed")
+        XCTAssertNil(patch.deviceIDs)
+        XCTAssertNil(patch.pageIDs)
+        XCTAssertNil(patch.dwellMinutes)
+        XCTAssertNil(patch.intervalMinutes)
     }
 
     func testForbiddenLineupsKeepTheServerConnectedAndAskForRepairing() async {

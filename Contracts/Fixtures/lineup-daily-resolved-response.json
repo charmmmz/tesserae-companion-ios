@@ -1,10 +1,10 @@
 {
   "lineup": {
-    "id": "kitchen-deck",
-    "name": "Kitchen deck",
+    "id": "daily-weather",
+    "name": "Daily weather",
     "enabled": true,
-    "intent": "manual",
-    "device_ids": ["picpak-kitchen"],
+    "intent": "daily",
+    "device_ids": [],
     "resolved_device_ids": ["picpak-kitchen"],
     "dashboards": [
       {
@@ -21,27 +21,27 @@
       {"device_id": "picpak-kitchen", "page_id": "pantry"}
     ],
     "next_advance_epoch": null,
-    "advance": "manual",
-    "trigger": null,
+    "advance": "timer",
+    "trigger": "daily",
     "interval_minutes": null,
-    "fires_at": null,
+    "fires_at": "07:30",
     "anchor": null,
     "entry_page_id": "pantry",
     "home_page_id": null,
     "home_timeout_minutes": 0,
-    "refresh_interval_minutes": 15,
+    "refresh_interval_minutes": 0,
     "end_at": null,
     "days_of_week": [0, 1, 2, 3, 4, 5, 6],
     "priority": 0,
     "smart_sync": false,
     "smart_sync_lead_seconds": 10,
     "mode": "scheduled",
-    "min_hold_minutes": 5,
+    "min_hold_minutes": 0,
     "window_start": null,
     "window_end": null,
     "fallback_page_id": null,
     "native_editable": true,
     "requires_web_reason": null,
-    "web_url": "/decks/kitchen-deck/edit"
+    "web_url": "/decks/daily-weather/edit"
   }
 }
