@@ -11,6 +11,38 @@ capabilities.
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-08-14
+
+### Added
+
+- Added server-gated native Lineup creation and editing for Daily, Keep Fresh,
+  Cycle, and Manual setups. The sheet-based editor follows Tesserae's guided
+  setup semantics while adapting them for iPhone: Daily and Keep Fresh derive
+  their display from one Dashboard, Manual and Cycle choose one target before
+  selecting two or more compatible Dashboards, and the grouped picker supports
+  search and ordered selection. Wheel-style time and duration controls provide
+  selection feedback; selected Dashboards support direct drag reordering and
+  swipe-to-remove interactions, and unassigned Dashboards are bound only when
+  needed. Native permission guidance and conflict-safe saves use the Lineup
+  version returned by Tesserae. Playback and grouping use Tesserae's resolved
+  action targets instead of inferring authorization from Dashboard bindings in
+  the app.
+
+### Changed
+
+- Primary tabs now use one consistent trailing toolbar: Settings remains in a
+  stable rightmost position, while Dashboards places its view-specific action
+  immediately beside it in the same system-rendered group. The low-frequency,
+  destructive Clear Activity action now lives with Apple Reminders under the
+  renamed Data & Privacy settings section instead of occupying Activity's
+  toolbar.
+
+### Fixed
+
+- New and edited Lineup forms now dismiss the name keyboard when the user
+  drags vertically, including short forms that do not have enough content to
+  begin native scrolling.
+
 ## [0.6.1] - 2026-08-13
 
 ### Changed
@@ -621,7 +653,8 @@ capabilities.
 - Required Keychain storage, scoped credentials, revocation, redacted
   diagnostics, direct-to-instance photo transfer, and idempotent writes.
 
-[Unreleased]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.5.1...v0.5.2
