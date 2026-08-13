@@ -94,6 +94,7 @@ private struct DashboardPushContext: Identifiable {
 struct DashboardsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.presentTesseraeSettings) private var presentSettings
     @State private var draggedOccurrenceID: DashboardOccurrenceID?
     @State private var dropTargetOccurrenceID: DashboardOccurrenceID?
     @State private var expandedOccurrenceID: DashboardOccurrenceID?
@@ -275,7 +276,7 @@ struct DashboardsView: View {
                 .environment(model)
         }
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
                 Button {
                     toggleLayoutMode()
                 } label: {
@@ -289,6 +290,8 @@ struct DashboardsView: View {
                     )
                 }
                 .accessibilityIdentifier("dashboard-layout-toggle")
+
+                TesseraeSettingsToolbarButton(openSettings: presentSettings)
             }
         }
         .overlay {

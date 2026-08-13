@@ -5,6 +5,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
     @Environment(RemindersBridgeModel.self) private var remindersBridgeModel
+    @State private var clearActivityConfirmationPresented = false
 
     var body: some View {
         NavigationStack {
@@ -34,7 +35,7 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("Personal Data") {
+                Section {
                     NavigationLink {
                         RemindersBridgeView()
                     } label: {
@@ -44,6 +45,24 @@ struct SettingsView: View {
                             Label("Apple Reminders", systemImage: "checklist")
                         }
                     }
+
+                    Button(role: .destructive) {
+                        clearActivityConfirmationPresented = true
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "trash")
+                                .foregroundStyle(.red)
+                            Text("Clear Activity on This iPhone")
+                                .foregroundStyle(.red)
+                        }
+                    }
+                    .accessibilityIdentifier("clear-local-activity")
+                } header: {
+                    Text("Data & Privacy")
+                } footer: {
+                    Text(
+                        "Clearing Activity affects only this Tesserae instance on this iPhone. Server History remains available in Tesserae."
+                    )
                 }
 
                 Section("About") {
@@ -69,6 +88,21 @@ struct SettingsView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
+            }
+            .alert(
+                "Clear Local Activity?",
+                isPresented: $clearActivityConfirmationPresented
+            ) {
+                Button("Clear Local Activity", role: .destructive) {
+                    Task {
+                        await model.clearLocalActivity()
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(
+                    "This clears the Activity list for this Tesserae instance and hides existing server History on this iPhone. Server History remains available in Tesserae."
+                )
             }
         }
     }

@@ -10,6 +10,7 @@ private struct DisplayPreviewRefreshID: Hashable {
 struct DisplaysView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.presentTesseraeSettings) private var presentSettings
     @State private var draggedDisplayID: String?
     @State private var dropTargetDisplayID: String?
     @State private var selectedDisplay: DisplaySummary?
@@ -177,6 +178,11 @@ struct DisplaysView: View {
                     showErrors: false,
                     saveSnapshot: false
                 )
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                TesseraeSettingsToolbarButton(openSettings: presentSettings)
             }
         }
         .tesseraeScreenBackground()

@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 struct SendView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.presentTesseraeSettings) private var presentSettings
     @State private var source: SendSource = .photo
     @State private var pickerItem: PhotosPickerItem?
     @State private var isPhotoPickerPresented = false
@@ -135,6 +136,11 @@ struct SendView: View {
         }
         .onDisappear {
             sentConfirmationTask?.cancel()
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                TesseraeSettingsToolbarButton(openSettings: presentSettings)
+            }
         }
         .tesseraeScreenBackground()
     }

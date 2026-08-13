@@ -1,5 +1,27 @@
 import SwiftUI
 
+private struct TesseraeSettingsActionKey: EnvironmentKey {
+    static let defaultValue: @MainActor @Sendable () -> Void = {}
+}
+
+extension EnvironmentValues {
+    var presentTesseraeSettings: @MainActor @Sendable () -> Void {
+        get { self[TesseraeSettingsActionKey.self] }
+        set { self[TesseraeSettingsActionKey.self] = newValue }
+    }
+}
+
+struct TesseraeSettingsToolbarButton: View {
+    let openSettings: @MainActor @Sendable () -> Void
+
+    var body: some View {
+        Button("Settings", systemImage: "gearshape") {
+            openSettings()
+        }
+        .accessibilityIdentifier("root-settings")
+    }
+}
+
 private enum AppTab: Hashable {
     case displays
     case dashboards
@@ -44,6 +66,9 @@ struct MainTabView: View {
             .tabItem { Label("Activity", systemImage: "clock.arrow.circlepath") }
             .tag(AppTab.activity)
         }
+        .environment(\.presentTesseraeSettings) {
+            settingsPresented = true
+        }
         .sheet(isPresented: $settingsPresented) {
             SettingsView()
         }
@@ -56,13 +81,6 @@ struct MainTabView: View {
         NavigationStack {
             content()
                 .navigationTitle(title)
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Settings", systemImage: "gearshape") {
-                            settingsPresented = true
-                        }
-                    }
-                }
         }
     }
 }

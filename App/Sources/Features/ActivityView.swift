@@ -6,10 +6,10 @@ import UIKit
 struct ActivityView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.presentTesseraeSettings) private var presentSettings
     @State private var expandedQueuedImageID: String?
     @State private var expandedJobID: String?
     @State private var expandedHistoryID: String?
-    @State private var clearActivityConfirmationPresented = false
     private let previewCanvasSize = CGSize(width: 112, height: 118)
 
     let isActive: Bool
@@ -93,37 +93,8 @@ struct ActivityView: View {
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button(role: .destructive) {
-                        clearActivityConfirmationPresented = true
-                    } label: {
-                        Label {
-                            Text("Clear Activity on This iPhone…")
-                        } icon: {
-                            Image(systemName: "trash")
-                                .foregroundStyle(.red)
-                        }
-                    }
-                    .accessibilityIdentifier("clear-local-activity")
-                } label: {
-                    Label("Activity Actions", systemImage: "ellipsis.circle")
-                }
+                TesseraeSettingsToolbarButton(openSettings: presentSettings)
             }
-        }
-        .alert(
-            "Clear Local Activity?",
-            isPresented: $clearActivityConfirmationPresented
-        ) {
-            Button("Clear Local Activity", role: .destructive) {
-                Task {
-                    await model.clearLocalActivity()
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text(
-                "This clears the Activity list for this Tesserae instance and hides existing server History on this iPhone. Server History remains available in Tesserae."
-            )
         }
         .tesseraeScreenBackground()
     }

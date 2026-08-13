@@ -169,6 +169,8 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.buttons["Settings"].tap()
         XCTAssertTrue(app.staticTexts["Demo Mode"].waitForExistence(timeout: 2))
         XCTAssertTrue(app.staticTexts["Local data"].exists)
+        XCTAssertTrue(app.staticTexts["Data & Privacy"].exists)
+        XCTAssertFalse(app.staticTexts["Personal Data"].exists)
         XCTAssertTrue(app.staticTexts["Apple Reminders"].exists)
         XCTAssertTrue(app.staticTexts["Server update required"].exists)
         XCTAssertTrue(app.staticTexts["App Version"].exists)
@@ -176,7 +178,11 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Product"].exists)
         XCTAssertFalse(app.staticTexts["API mode"].exists)
         XCTAssertFalse(app.staticTexts["Local Storage"].exists)
-        XCTAssertFalse(app.buttons["clear-local-activity"].exists)
+        XCTAssertTrue(app.buttons["clear-local-activity"].isHittable)
+        let dataPrivacyScreenshot = XCTAttachment(screenshot: app.screenshot())
+        dataPrivacyScreenshot.name = "Settings Data and Privacy"
+        dataPrivacyScreenshot.lifetime = .keepAlways
+        add(dataPrivacyScreenshot)
 
         app.staticTexts["Demo Mode"].tap()
         XCTAssertTrue(
@@ -186,9 +192,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Companion API"].exists)
         XCTAssertTrue(app.buttons["Exit Demo"].exists)
         app.navigationBars["Server Details"].buttons["Settings"].tap()
-        app.buttons["Done"].tap()
 
-        app.buttons["Activity Actions"].tap()
         let clearLocalActivityButton = app.buttons["clear-local-activity"]
         XCTAssertTrue(clearLocalActivityButton.waitForExistence(timeout: 2))
         clearLocalActivityButton.tap()
@@ -196,9 +200,70 @@ final class TesseraeCompanionUITests: XCTestCase {
         let confirmation = app.alerts["Clear Local Activity?"]
         XCTAssertTrue(confirmation.waitForExistence(timeout: 2))
         confirmation.buttons["Clear Local Activity"].tap()
+        app.buttons["Done"].tap()
         XCTAssertTrue(
             app.staticTexts["No Activity Yet"].waitForExistence(timeout: 2)
         )
+    }
+
+    func testRootToolbarsKeepSettingsAndContextActionsConsistent() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launch()
+
+        XCTAssertTrue(
+            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
+        )
+        app.buttons["Explore with Demo Data"].tap()
+
+        let tabBar = app.tabBars.firstMatch
+        let settings = app.buttons["root-settings"]
+
+        XCTAssertTrue(settings.waitForExistence(timeout: 2))
+        XCTAssertTrue(settings.isHittable)
+        XCTAssertLessThanOrEqual(settings.frame.maxX, app.frame.maxX)
+        XCTAssertFalse(app.buttons["dashboard-layout-toggle"].exists)
+        XCTAssertFalse(app.buttons["clear-local-activity"].exists)
+
+        tabBar.buttons["Dashboards"].tap()
+        XCTAssertTrue(settings.waitForExistence(timeout: 2))
+        XCTAssertTrue(settings.isHittable)
+        XCTAssertLessThanOrEqual(settings.frame.maxX, app.frame.maxX)
+        XCTAssertTrue(
+            app.buttons["dashboard-layout-toggle"]
+                .waitForExistence(timeout: 2)
+        )
+        XCTAssertGreaterThan(
+            settings.frame.minX,
+            app.buttons["dashboard-layout-toggle"].frame.maxX
+        )
+        XCTAssertFalse(app.buttons["clear-local-activity"].exists)
+        let dashboardsToolbarScreenshot = XCTAttachment(
+            screenshot: app.screenshot()
+        )
+        dashboardsToolbarScreenshot.name = "Dashboards Root Toolbar"
+        dashboardsToolbarScreenshot.lifetime = .keepAlways
+        add(dashboardsToolbarScreenshot)
+
+        tabBar.buttons["Send"].tap()
+        XCTAssertTrue(settings.waitForExistence(timeout: 2))
+        XCTAssertTrue(settings.isHittable)
+        XCTAssertLessThanOrEqual(settings.frame.maxX, app.frame.maxX)
+        XCTAssertFalse(app.buttons["dashboard-layout-toggle"].exists)
+        XCTAssertFalse(app.buttons["clear-local-activity"].exists)
+
+        tabBar.buttons["Activity"].tap()
+        XCTAssertTrue(settings.waitForExistence(timeout: 2))
+        XCTAssertTrue(settings.isHittable)
+        XCTAssertLessThanOrEqual(settings.frame.maxX, app.frame.maxX)
+        XCTAssertFalse(app.buttons["clear-local-activity"].exists)
+        XCTAssertFalse(app.buttons["dashboard-layout-toggle"].exists)
+        let activityToolbarScreenshot = XCTAttachment(
+            screenshot: app.screenshot()
+        )
+        activityToolbarScreenshot.name = "Activity Root Toolbar"
+        activityToolbarScreenshot.lifetime = .keepAlways
+        add(activityToolbarScreenshot)
     }
 
     func testDashboardGroupCollapseAndExpand() {
@@ -635,7 +700,10 @@ final class TesseraeCompanionUITests: XCTestCase {
             ).firstMatch.exists
         )
 
-        app.buttons["Activity Actions"].tap()
+        app.buttons["root-settings"].tap()
+        XCTAssertTrue(
+            app.staticTexts["Data & Privacy"].waitForExistence(timeout: 2)
+        )
         let clearLocalActivityButton = app.buttons["clear-local-activity"]
         XCTAssertTrue(clearLocalActivityButton.waitForExistence(timeout: 2))
         XCTAssertTrue(clearLocalActivityButton.isHittable)
@@ -644,6 +712,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         let confirmation = app.alerts["Clear Local Activity?"]
         XCTAssertTrue(confirmation.waitForExistence(timeout: 2))
         confirmation.buttons["Clear Local Activity"].tap()
+        app.buttons["Done"].tap()
 
         XCTAssertFalse(
             app.buttons[localActivityCardIdentifier]
