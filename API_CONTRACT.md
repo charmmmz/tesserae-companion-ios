@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Status | Implemented base contract plus reviewed and proposed gated extensions |
-| Contract version | 0.11.0 |
+| Contract version | 0.12.0 |
 | Namespace | `/api/app/v1` |
 | Authentication | Revocable per-client Companion bearer token |
 | Machine-readable source | [`Contracts/app-v1.openapi.yaml`](Contracts/app-v1.openapi.yaml) |
@@ -329,9 +329,26 @@ Contract 0.11.0 adds the first native Gallery management slice accepted in
   allow-list. Offline Album authoring remains a later API slice that reuses
   this field.
 
-The Gallery contract is forward-looking until the Tesserae adapter lands.
-Contract fixtures and the local stateful fixture server prove the client/server
-boundary without claiming that a current stable Tesserae release serves it.
+Tesserae edge v0.300.0 implements this Gallery slice. Contract fixtures and the
+local stateful fixture server continue to prove the client/server boundary
+without requiring a live operator library.
+
+Contract 0.12.0 records four additive clarifications from that implementation:
+
+- `GalleryUploadContentType` describes accepted source uploads, while
+  `GalleryStoredContentType` describes files returned by the library. HEIC and
+  HEIF sources are normalized to JPEG and therefore never appear as stored
+  content types. The 0.11 `GalleryImageContentType` name remains as a deprecated
+  upload-type alias so generated clients do not lose a public schema symbol;
+- existing GIF and BMP files are valid stored Gallery images even though the
+  Companion upload route does not accept those source types;
+- a newly created internal `GalleryFolder.name` is the authoritative normalized
+  storage name returned by both the Companion and Web surfaces, not a preserved
+  display label from the create request;
+- `stale_heartbeat` distinguishes an old report from a device that has never
+  reported. It remains `unknown`, preserves its non-null `observed_at`, and is
+  judged against the device's own poll cadence rather than a fixed client
+  threshold.
 
 Upstream PR [#175](https://github.com/dmellok/tesserae/pull/175) merged the
 underlying normalized `SourceCrop` renderer primitive. It does not by itself

@@ -194,18 +194,25 @@ The server advertises Gallery-specific upload bytes, accepted media types, and
 an advisory client batch size. Uploads are normalized server-side: location
 metadata is removed, orientation is baked into pixels, and the ICC profile is
 preserved. A client queues separate requests and does not infer a batch API.
+Contract 0.12 distinguishes those accepted upload types from stored image
+types: HEIC and HEIF uploads return JPEG resources, while an existing GIF or
+BMP can be browsed even though Companion cannot upload a new one.
+
+Folder creation also returns the authoritative normalized storage name. The
+app must replace its pending input with the returned `GalleryFolder.name`
+rather than assuming the spelling, case, spaces, or punctuation survive.
 
 Optional `Device.capability_support` entries are computed from current device
 reports rather than model names. Under the Gallery contract, `frame_cache`
 distinguishes supported, unsupported, and unknown targets for a future Offline
 Album surface; ordinary Gallery browsing and online Send do not require that
-device capability.
+device capability. An unknown `stale_heartbeat` state retains the last report's
+`observed_at`; the server owns the poll-cadence-aware freshness threshold.
 
 The contract was accepted in
-[Discussion #225](https://github.com/dmellok/tesserae/discussions/225), but the
-production server adapter and native app surface are separate follow-ups. The
-fixtures must not be interpreted as evidence that a current stable Tesserae
-release advertises Gallery.
+[Discussion #225](https://github.com/dmellok/tesserae/discussions/225), and the
+first server adapter is available on Tesserae edge from v0.300.0. The native app
+surface remains a separate capability-gated follow-up.
 
 ## Physical validation
 

@@ -28,6 +28,15 @@ capabilities.
   contract tests are included; HealthKit authorization, queries, settings UI,
   server storage, and widgets remain separate follow-up implementations.
 
+### Changed
+
+- Refined the Gallery contract after the first Tesserae server implementation:
+  accepted upload types and stored image types are now distinct, existing GIF
+  and BMP files remain browseable, HEIC and HEIF uploads explicitly normalize
+  to JPEG, folder names are documented as server-normalized storage names, and
+  stale device reports carry a dedicated capability reason without being
+  mistaken for unsupported hardware.
+
 ## [0.6.2] - 2026-08-14
 
 ### Added
