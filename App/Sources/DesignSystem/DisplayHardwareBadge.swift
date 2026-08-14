@@ -31,8 +31,13 @@ struct DisplayHardwareBadge: View {
             .resizable()
             .renderingMode(brand.renderingMode(for: colorScheme))
             .foregroundStyle(brand.foregroundColor(for: colorScheme))
-            .scaledToFit()
-            .frame(width: brand.logoWidth, height: 20)
+            .aspectRatio(contentMode: brand.contentMode)
+            .frame(
+                width: brand.logoWidth,
+                height: 20,
+                alignment: brand.logoAlignment
+            )
+            .clipped()
             .offset(x: brand.opticalLeadingCorrection)
             .frame(width: brand.logoWidth, alignment: .leading)
             .accessibilityLabel(brand.displayName)
@@ -81,10 +86,10 @@ private extension DisplayHardwareBrand {
 
     func renderingMode(for colorScheme: ColorScheme) -> Image.TemplateRenderingMode {
         switch (self, colorScheme) {
-        case (.seeedStudio, .dark), (.xteink, .dark), (.trmnl, _):
+        case (.seeedStudio, .dark), (.pimoroni, _), (.trmnl, _),
+            (.xteink, .dark):
             .template
-        case (.seeedStudio, _), (.pimoroni, _), (.waveshare, _), (.picPak, _),
-            (.xteink, _):
+        case (.seeedStudio, _), (.waveshare, _), (.picPak, _), (.xteink, _):
             .original
         }
     }
@@ -94,6 +99,9 @@ private extension DisplayHardwareBrand {
             // Sampled from the official colour wordmark: RGB 141, 194, 31.
             return Color(red: 141 / 255, green: 194 / 255, blue: 31 / 255)
         }
+        if self == .pimoroni {
+            return .secondary
+        }
         return .primary
     }
 
@@ -102,16 +110,24 @@ private extension DisplayHardwareBrand {
         case .seeedStudio:
             78
         case .pimoroni:
-            18
+            58
         case .trmnl:
             20
         case .waveshare:
-            66
+            20
         case .picPak:
             52
         case .xteink:
             68
         }
+    }
+
+    var contentMode: ContentMode {
+        self == .waveshare ? .fill : .fit
+    }
+
+    var logoAlignment: Alignment {
+        self == .waveshare ? .leading : .center
     }
 
     var opticalLeadingCorrection: CGFloat {
