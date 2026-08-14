@@ -47,6 +47,14 @@ final class AppModel {
         case denied
     }
 
+    enum GalleryWritePermission: Equatable {
+        case unavailable
+        case unknown
+        case checking
+        case granted
+        case denied
+    }
+
     enum LineupSaveOutcome {
         case saved(Lineup)
         case conflict
@@ -83,6 +91,11 @@ final class AppModel {
     var lineups: [Lineup] = []
     var lineupAuthoringPermission: LineupAuthoringPermission = .unknown
     var lineupAuthoringSettingsURL: String?
+    var galleryFolders: [GalleryFolder] = []
+    var galleryFolderDetails: [String: GalleryFolderDetail] = [:]
+    var galleryWritePermission: GalleryWritePermission = .unknown
+    var galleryWriteSettingsURL: String?
+    var galleryThumbnailStates: [String: PreviewImageState] = [:]
     var jobs: [PushJob] = []
     var historyItems: [HistoryItem] = []
     var historyNextBeforeID: String?
@@ -104,6 +117,8 @@ final class AppModel {
     var isRefreshing = false
     var isRefreshingDashboards = false
     var isRefreshingLineups = false
+    var isRefreshingGallery = false
+    var loadingGalleryFolderIDs: Set<String> = []
     var isDiscovering = false
     var isRestoringConnection = true
     var isRetryingSharedImages = false
@@ -136,6 +151,10 @@ final class AppModel {
 
     var supportsSessionRead: Bool {
         capabilities?.features.contains("session_read") == true
+    }
+
+    var supportsGallery: Bool {
+        capabilities?.supportsGallery == true
     }
 
     var supportsRemindersPersonalData: Bool {
@@ -297,6 +316,12 @@ final class AppModel {
                 .unavailable
             }
             lineupAuthoringSettingsURL = nil
+            galleryWritePermission = if capabilities.supportsGallery {
+                session.scopes.contains("gallery:write") ? .granted : .denied
+            } else {
+                .unavailable
+            }
+            galleryWriteSettingsURL = nil
             activeInstance = session.instance.updatingServerVersion(
                 to: capabilities.serverVersion
             )
@@ -308,6 +333,9 @@ final class AppModel {
             historyNextBeforeID = nil
             activityClearedBefore = nil
             lineups = []
+            galleryFolders = []
+            galleryFolderDetails = [:]
+            galleryThumbnailStates = [:]
             historyPreviews = [:]
             displayPreviews = [:]
             displayPreviewRequestIDs = [:]
@@ -363,6 +391,8 @@ final class AppModel {
                 ? .unknown
                 : .unavailable
             lineupAuthoringSettingsURL = nil
+            galleryWritePermission = supportsGallery ? .unknown : .unavailable
+            galleryWriteSettingsURL = nil
             displays = snapshot.displays
             dashboards = snapshot.dashboards
             lineups = snapshot.lineups ?? []
@@ -807,6 +837,274 @@ final class AppModel {
         }
     }
 
+    func refreshGallery(showErrors: Bool = true) async {
+        guard
+            supportsGallery,
+            let currentInstance = activeInstance,
+            !isRefreshingGallery
+        else {
+            return
+        }
+        isRefreshingGallery = true
+        defer { isRefreshingGallery = false }
+
+        do {
+            let folders = try await activeClient.fetchGalleryFolders(
+                instance: currentInstance
+            )
+            guard activeInstance?.id == currentInstance.id else { return }
+            galleryFolders = folders
+            let folderIDs = Set(folders.map(\.id))
+            galleryFolderDetails = galleryFolderDetails.filter {
+                folderIDs.contains($0.key)
+            }
+            let liveThumbnailPaths = Set(
+                folders.compactMap(\.coverThumbnailURL)
+                    + galleryFolderDetails.values.flatMap {
+                        $0.images.map(\.thumbnailURL)
+                    }
+            )
+            galleryThumbnailStates = galleryThumbnailStates.filter {
+                liveThumbnailPaths.contains($0.key)
+            }
+            connectionHealth = .connected
+            connectionNotice = nil
+            await refreshGalleryWritePermission(showErrors: false)
+        } catch is CancellationError {
+            return
+        } catch let error as TesseraeClientError {
+            if showErrors || error == .unauthorized || error == .missingCredential {
+                await presentOperationError(error)
+            }
+        } catch {
+            if showErrors {
+                lastError = error.localizedDescription
+            }
+        }
+    }
+
+    func refreshGalleryFolder(
+        id: String,
+        showErrors: Bool = true
+    ) async {
+        guard
+            supportsGallery,
+            let currentInstance = activeInstance,
+            !loadingGalleryFolderIDs.contains(id)
+        else {
+            return
+        }
+        loadingGalleryFolderIDs.insert(id)
+        defer { loadingGalleryFolderIDs.remove(id) }
+
+        do {
+            let detail = try await activeClient.fetchGalleryFolder(
+                id: id,
+                instance: currentInstance
+            )
+            guard activeInstance?.id == currentInstance.id else { return }
+            galleryFolderDetails[id] = detail
+            replaceGalleryFolder(detail.folder)
+            connectionHealth = .connected
+            connectionNotice = nil
+        } catch is CancellationError {
+            return
+        } catch let error as TesseraeClientError {
+            if showErrors || error == .unauthorized || error == .missingCredential {
+                await presentOperationError(error)
+            }
+        } catch {
+            if showErrors {
+                lastError = error.localizedDescription
+            }
+        }
+    }
+
+    func refreshGalleryWritePermission(showErrors: Bool = false) async {
+        guard supportsGallery, let currentInstance = activeInstance else {
+            galleryWritePermission = .unavailable
+            galleryWriteSettingsURL = nil
+            return
+        }
+        guard supportsSessionRead else {
+            galleryWritePermission = .unknown
+            galleryWriteSettingsURL = nil
+            return
+        }
+        guard galleryWritePermission != .checking else { return }
+
+        galleryWritePermission = .checking
+        do {
+            let authorization = try await activeClient.fetchSessionAuthorization(
+                instance: currentInstance
+            )
+            guard activeInstance?.id == currentInstance.id else { return }
+            if let authorization {
+                galleryWritePermission = authorization.canWriteGallery
+                    ? .granted
+                    : .denied
+                galleryWriteSettingsURL = authorization.settingsURL
+            } else {
+                galleryWritePermission = .unknown
+                galleryWriteSettingsURL = nil
+            }
+        } catch is CancellationError {
+            galleryWritePermission = .unknown
+            galleryWriteSettingsURL = nil
+        } catch {
+            galleryWritePermission = .unknown
+            galleryWriteSettingsURL = nil
+            if showErrors {
+                await presentOperationError(error)
+            }
+        }
+    }
+
+    func createGalleryFolder(name: String) async throws -> GalleryFolderDetail {
+        guard supportsGallery, let currentInstance = activeInstance else {
+            throw TesseraeClientError.unavailable
+        }
+        let detail: GalleryFolderDetail
+        do {
+            detail = try await activeClient.createGalleryFolder(
+                name: name,
+                instance: currentInstance
+            )
+        } catch let error as TesseraeClientError {
+            if case .forbidden = error {
+                galleryWritePermission = .denied
+            }
+            throw error
+        }
+        guard activeInstance?.id == currentInstance.id else {
+            throw CancellationError()
+        }
+        galleryFolderDetails[detail.folder.id] = detail
+        replaceGalleryFolder(detail.folder)
+        return detail
+    }
+
+    func uploadGalleryImage(
+        folderID: String,
+        data: Data,
+        fileName: String,
+        contentType: String,
+        idempotencyKey: String
+    ) async throws -> GalleryImage {
+        guard supportsGallery, let currentInstance = activeInstance else {
+            throw TesseraeClientError.unavailable
+        }
+        let image: GalleryImage
+        do {
+            image = try await activeClient.uploadGalleryImage(
+                folderID: folderID,
+                data: data,
+                fileName: fileName,
+                contentType: contentType,
+                idempotencyKey: idempotencyKey,
+                instance: currentInstance
+            )
+        } catch let error as TesseraeClientError {
+            if case .forbidden = error {
+                galleryWritePermission = .denied
+            }
+            throw error
+        }
+        guard activeInstance?.id == currentInstance.id else {
+            throw CancellationError()
+        }
+        if var detail = galleryFolderDetails[folderID],
+           !detail.images.contains(where: { $0.id == image.id })
+        {
+            let images = detail.images + [image]
+            let folder = GalleryFolder(
+                id: detail.folder.id,
+                name: detail.folder.name,
+                kind: detail.folder.kind,
+                writable: detail.folder.writable,
+                imageCount: images.count,
+                coverThumbnailURL: detail.folder.coverThumbnailURL
+                    ?? image.thumbnailURL
+            )
+            detail = GalleryFolderDetail(folder: folder, images: images)
+            galleryFolderDetails[folderID] = detail
+            replaceGalleryFolder(folder)
+        }
+        return image
+    }
+
+    func fetchGalleryImageContent(
+        _ image: GalleryImage
+    ) async throws -> Data {
+        guard supportsGallery, let currentInstance = activeInstance else {
+            throw TesseraeClientError.unavailable
+        }
+        let result = try await activeClient.fetchGalleryResource(
+            path: image.contentURL,
+            ifNoneMatch: nil,
+            instance: currentInstance
+        )
+        guard case let .image(data, _) = result else {
+            throw TesseraeClientError.invalidResponse
+        }
+        return data
+    }
+
+    func loadGalleryThumbnail(path: String) async {
+        guard supportsGallery, let currentInstance = activeInstance else { return }
+        let current = galleryThumbnailStates[path] ?? .idle
+        guard current.phase != .loading, current.phase != .ready else { return }
+        galleryThumbnailStates[path] = PreviewImageState(
+            data: current.data,
+            eTag: current.eTag,
+            phase: .loading
+        )
+        do {
+            let result = try await activeClient.fetchGalleryResource(
+                path: path,
+                ifNoneMatch: current.eTag,
+                instance: currentInstance
+            )
+            guard activeInstance?.id == currentInstance.id else { return }
+            switch result {
+            case let .image(data, eTag):
+                galleryThumbnailStates[path] = PreviewImageState(
+                    data: data,
+                    eTag: eTag,
+                    phase: .ready
+                )
+            case .notModified:
+                galleryThumbnailStates[path] = PreviewImageState(
+                    data: current.data,
+                    eTag: current.eTag,
+                    phase: current.data == nil ? .unavailable : .ready
+                )
+            case .notFound, .preparing:
+                galleryThumbnailStates[path] = PreviewImageState(
+                    data: nil,
+                    eTag: nil,
+                    phase: .unavailable
+                )
+            }
+        } catch is CancellationError {
+            galleryThumbnailStates[path] = current
+        } catch {
+            galleryThumbnailStates[path] = PreviewImageState(
+                data: current.data,
+                eTag: current.eTag,
+                phase: current.data == nil ? .unavailable : .ready
+            )
+        }
+    }
+
+    private func replaceGalleryFolder(_ folder: GalleryFolder) {
+        if let index = galleryFolders.firstIndex(where: { $0.id == folder.id }) {
+            galleryFolders[index] = folder
+        } else {
+            galleryFolders.append(folder)
+        }
+    }
+
     func fetchLineupForEditing(_ lineupID: String) async throws -> VersionedLineup {
         guard supportsLineupAuthoring, let activeInstance else {
             throw TesseraeClientError.unavailable
@@ -1133,6 +1431,60 @@ final class AppModel {
             sourceID: .reminders,
             instance: activeInstance
         )
+    }
+
+    func sendImage(
+        data: Data,
+        fit: ImageFitMode,
+        targetGroups: [ImageSendTargetGroup],
+        idempotencyKeys: [String: String],
+        contentType: String
+    ) async -> Bool {
+        guard let activeInstance, !targetGroups.isEmpty else { return false }
+        activeOperationIDs.insert("image")
+        defer { activeOperationIDs.remove("image") }
+
+        var acceptedJobs: [PushJob] = []
+        var firstError: (any Error)?
+        for group in targetGroups {
+            do {
+                let job = try await activeClient.sendImage(
+                    data: data,
+                    fileName: imageFileName(for: contentType),
+                    contentType: contentType,
+                    fit: fit,
+                    framing: group.framing,
+                    deviceIDs: group.deviceIDs,
+                    overrideQuietHours: ManualSendPolicy.overridesQuietHours,
+                    idempotencyKey: idempotencyKeys[group.id]
+                        ?? UUID().uuidString,
+                    instance: activeInstance
+                )
+                await rememberActivityThumbnail(
+                    imageData: data,
+                    for: job,
+                    instanceID: activeInstance.id
+                )
+                if !jobs.contains(where: { $0.id == job.id }) {
+                    jobs.insert(job, at: 0)
+                }
+                acceptedJobs.append(job)
+                await persistSnapshot(showErrors: false)
+            } catch {
+                if firstError == nil {
+                    firstError = error
+                }
+            }
+        }
+
+        for job in acceptedJobs {
+            await updateUntilTerminal(job, instance: activeInstance)
+        }
+        if let firstError {
+            await presentOperationError(firstError)
+            return false
+        }
+        return true
     }
 
     func sendImage(
@@ -2184,9 +2536,14 @@ final class AppModel {
         capabilities = nil
         lineupAuthoringPermission = .unknown
         lineupAuthoringSettingsURL = nil
+        galleryWritePermission = .unknown
+        galleryWriteSettingsURL = nil
         displays = []
         dashboards = []
         lineups = []
+        galleryFolders = []
+        galleryFolderDetails = [:]
+        galleryThumbnailStates = [:]
         jobs = []
         historyItems = []
         historyNextBeforeID = nil
@@ -2240,9 +2597,14 @@ final class AppModel {
             capabilities = nil
             lineupAuthoringPermission = .unknown
             lineupAuthoringSettingsURL = nil
+            galleryWritePermission = .unknown
+            galleryWriteSettingsURL = nil
             displays = []
             dashboards = []
             lineups = []
+            galleryFolders = []
+            galleryFolderDetails = [:]
+            galleryThumbnailStates = [:]
             jobs = []
             historyItems = []
             historyNextBeforeID = nil

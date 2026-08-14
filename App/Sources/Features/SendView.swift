@@ -4,8 +4,15 @@ import TesseraeKit
 import UIKit
 import UniformTypeIdentifiers
 
+struct SendImageDraft: Identifiable {
+    let id = UUID()
+    let data: Data
+    let contentType: String
+}
+
 struct SendView: View {
     @Environment(AppModel.self) private var model
+    @Environment(TesseraeMessageCenter.self) private var messageCenter
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.presentTesseraeSettings) private var presentSettings
     @State private var source: SendSource = .photo
@@ -17,13 +24,28 @@ struct SendView: View {
     @State private var linkText = ""
     @State private var linkKind: LinkPushKind = .webpage
     @State private var fitMode: ImageFitMode = .fill
-    @State private var imageFraming = ImageFraming.centeredFill
+    @State private var imageFramingsByAspect: [PanelAspectRatio: ImageFraming] = [:]
+    @State private var imageRevision = UUID()
+    @State private var imageSendAttempt: ImageSendAttempt?
     @State private var selectedDeviceIDs: Set<String> = []
     @State private var previewDeviceID: String?
     @State private var didLoadSendPreferences = false
-    @State private var sentConfirmationMessage: String?
-    @State private var sentConfirmationTask: Task<Void, Never>?
     @FocusState private var linkFieldIsFocused: Bool
+    private let prioritizesFramingGesture: Bool
+
+    init(
+        initialImage: SendImageDraft? = nil,
+        prioritizesFramingGesture: Bool = false
+    ) {
+        self.prioritizesFramingGesture = prioritizesFramingGesture
+        _imageData = State(initialValue: initialImage?.data)
+        _previewImage = State(
+            initialValue: initialImage.flatMap { UIImage(data: $0.data) }
+        )
+        _imageContentType = State(
+            initialValue: initialImage?.contentType ?? "image/jpeg"
+        )
+    }
 
     private var previewSlotHeight: CGFloat {
         276 + 9 + previewTargetPickerHeight
@@ -45,19 +67,29 @@ struct SendView: View {
 
                 Button {
                     Task {
+                        showSendingMessage()
                         let sent: Bool
                         switch source {
                         case .photo:
-                            guard let imageData else { return }
+                            guard let imageData else {
+                                messageCenter.dismiss(id: "send.submission")
+                                return
+                            }
+                            let targetGroups = outgoingImageTargetGroups
                             sent = await model.sendImage(
                                 data: imageData,
                                 fit: fitMode,
-                                framing: outgoingImageFraming,
-                                deviceIDs: Array(selectedDeviceIDs),
+                                targetGroups: targetGroups,
+                                idempotencyKeys: imageIdempotencyKeys(
+                                    for: targetGroups
+                                ),
                                 contentType: imageContentType
                             )
                         case .link:
-                            guard let linkURL else { return }
+                            guard let linkURL else {
+                                messageCenter.dismiss(id: "send.submission")
+                                return
+                            }
                             sent = await model.sendLink(
                                 url: linkURL,
                                 kind: linkKind,
@@ -69,23 +101,13 @@ struct SendView: View {
                             linkFieldIsFocused = false
                             showSentConfirmation(confirmationMessage)
                             clearSubmittedSource()
+                        } else {
+                            messageCenter.dismiss(id: "send.submission")
                         }
                     }
                 } label: {
                     Label("Send to Displays", systemImage: "paperplane.fill")
                         .frame(maxWidth: .infinity)
-                        .opacity(isSending ? 0 : 1)
-                        .overlay {
-                            if isSending {
-                                ProgressView()
-                                    .tint(.white)
-                                    .transition(.opacity)
-                            }
-                        }
-                        .animation(
-                            .easeInOut(duration: 0.18),
-                            value: isSending
-                        )
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
@@ -122,21 +144,6 @@ struct SendView: View {
             selection: $pickerItem,
             matching: .images
         )
-        .overlay(alignment: .top) {
-            if let sentConfirmationMessage {
-                TesseraeSuccessBanner(message: sentConfirmationMessage)
-                    .padding(.horizontal, TesseraeComposerLayout.pagePadding)
-                    .padding(.top, 8)
-                    .transition(
-                        .move(edge: .top)
-                            .combined(with: .opacity)
-                    )
-                    .allowsHitTesting(false)
-            }
-        }
-        .onDisappear {
-            sentConfirmationTask?.cancel()
-        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 TesseraeSettingsToolbarButton(openSettings: presentSettings)
@@ -238,7 +245,7 @@ struct SendView: View {
                     imageData = sample.jpegData(compressionQuality: 0.9)
                     previewImage = sample
                     imageContentType = "image/jpeg"
-                    imageFraming = .centeredFill
+                    resetImageFramingState()
                 }
                 .buttonStyle(.bordered)
             }
@@ -301,11 +308,10 @@ struct SendView: View {
                     emptyTitle: imageSelectionLabel,
                     accessibilityIdentifier: "send-panel-preview",
                     imageAccessibilityIdentifier: "selected-image-preview",
-                    framing: framingEditorIsActive
-                        ? $imageFraming
-                        : nil,
+                    framing: previewImageFramingBinding,
                     maximumFramingZoom: maximumFramingZoom,
-                    onCanvasTap: choosePhotoFromPreview
+                    onCanvasTap: choosePhotoFromPreview,
+                    prioritizesFramingGesture: prioritizesFramingGesture
                 )
                 .accessibilityValue(
                     previewAccessibilityValue(
@@ -360,7 +366,7 @@ struct SendView: View {
                         previewDeviceID = display.id
                     } label: {
                         Label(
-                            display.name,
+                            "\(display.name) · \(PanelAspectRatio(panel: display.panel).displayName)",
                             systemImage: previewDisplay?.id == display.id
                                 ? "checkmark.circle.fill"
                                 : "circle"
@@ -421,7 +427,8 @@ struct SendView: View {
         guard !selectedDisplays.isEmpty, let panel = previewDisplay?.panel else {
             return previewTargetName
         }
-        return "\(previewTargetName) · \(panel.width) × \(panel.height)"
+        let aspect = PanelAspectRatio(panel: panel).displayName
+        return "\(previewTargetName) · \(panel.width) × \(panel.height) · \(aspect)"
     }
 
     private var previewTargetPickerHeight: CGFloat {
@@ -566,22 +573,29 @@ struct SendView: View {
     }
 
     private func showSentConfirmation(_ message: String) {
-        sentConfirmationTask?.cancel()
-        withAnimation(.snappy) {
-            sentConfirmationMessage = message
-        }
-        sentConfirmationTask = Task { @MainActor in
-            do {
-                try await Task.sleep(for: .seconds(3))
-            } catch {
-                return
-            }
-            guard !Task.isCancelled else { return }
-            withAnimation(.easeOut(duration: 0.2)) {
-                sentConfirmationMessage = nil
-            }
-            sentConfirmationTask = nil
-        }
+        messageCenter.post(
+            TesseraeMessage(
+                id: "send.submission",
+                text: message,
+                kind: .success,
+                lifetime: .automatic(seconds: 3),
+                priority: .normal,
+                accessibilityIdentifier: "send-success-banner"
+            )
+        )
+    }
+
+    private func showSendingMessage() {
+        messageCenter.post(
+            TesseraeMessage(
+                id: "send.submission",
+                text: String(localized: "Sending to Displays…"),
+                kind: .progress(fraction: nil),
+                lifetime: .persistent,
+                priority: .normal,
+                accessibilityIdentifier: "send-progress-capsule"
+            )
+        )
     }
 
     private var previewDisplay: DisplaySummary? {
@@ -616,18 +630,40 @@ struct SendView: View {
             && supportsImageFraming
     }
 
-    private var outgoingImageFraming: ImageFraming? {
-        guard framingEditorIsActive else { return nil }
-        return ImageFraming(
-            focusX: min(max(imageFraming.focusX, 0), 1),
-            focusY: min(max(imageFraming.focusY, 0), 1),
-            zoom: min(max(imageFraming.zoom, 1), maximumFramingZoom)
+    private var previewAspectRatio: PanelAspectRatio? {
+        previewDisplay.map { PanelAspectRatio(panel: $0.panel) }
+    }
+
+    private var previewImageFraming: ImageFraming {
+        guard let previewAspectRatio else { return .centeredFill }
+        return imageFramingsByAspect[previewAspectRatio] ?? .centeredFill
+    }
+
+    private var previewImageFramingBinding: Binding<ImageFraming>? {
+        guard framingEditorIsActive, let previewAspectRatio else { return nil }
+        return Binding(
+            get: {
+                imageFramingsByAspect[previewAspectRatio] ?? .centeredFill
+            },
+            set: { framing in
+                imageFramingsByAspect[previewAspectRatio] = framing
+            }
+        )
+    }
+
+    private var outgoingImageTargetGroups: [ImageSendTargetGroup] {
+        imageSendTargetGroups(
+            displays: model.sortedDisplays,
+            selectedDeviceIDs: selectedDeviceIDs,
+            framingsByAspect: imageFramingsByAspect,
+            separatesByAspect: framingEditorIsActive,
+            maximumZoom: maximumFramingZoom
         )
     }
 
     private func previewAccessibilityValue(panel: PanelProfile) -> String {
         if framingEditorIsActive {
-            return "fill, \(panel.width) by \(panel.height), \(imageFraming.zoom.formatted(.number.precision(.fractionLength(1...2)))) times zoom"
+            return "fill, \(panel.width) by \(panel.height), \(previewImageFraming.zoom.formatted(.number.precision(.fractionLength(1...2)))) times zoom"
         }
         return "\(fitMode.rawValue), \(panel.width) by \(panel.height)"
     }
@@ -703,7 +739,7 @@ struct SendView: View {
             imageData = nil
             previewImage = nil
             pickerItem = nil
-            imageFraming = .centeredFill
+            resetImageFramingState()
         case .link:
             linkText = ""
         }
@@ -713,7 +749,7 @@ struct SendView: View {
         guard let item else {
             imageData = nil
             previewImage = nil
-            imageFraming = .centeredFill
+            resetImageFramingState()
             return
         }
         do {
@@ -734,13 +770,40 @@ struct SendView: View {
             imageData = prepared.data
             imageContentType = prepared.contentType
             previewImage = UIImage(data: prepared.data)
-            imageFraming = .centeredFill
+            resetImageFramingState()
         } catch {
             imageData = nil
             previewImage = nil
-            imageFraming = .centeredFill
+            resetImageFramingState()
             model.lastError = error.localizedDescription
         }
+    }
+
+    private func resetImageFramingState() {
+        imageFramingsByAspect = [:]
+        imageRevision = UUID()
+        imageSendAttempt = nil
+    }
+
+    private func imageIdempotencyKeys(
+        for groups: [ImageSendTargetGroup]
+    ) -> [String: String] {
+        let signature = ImageSendBatchSignature(
+            imageRevision: imageRevision,
+            fit: fitMode,
+            groups: groups
+        )
+        if let imageSendAttempt, imageSendAttempt.signature == signature {
+            return imageSendAttempt.idempotencyKeys
+        }
+        let keys = Dictionary(uniqueKeysWithValues: groups.map {
+            ($0.id, UUID().uuidString)
+        })
+        imageSendAttempt = ImageSendAttempt(
+            signature: signature,
+            idempotencyKeys: keys
+        )
+        return keys
     }
 
     private var imagePreparationMaxEdge: Int {
@@ -795,4 +858,15 @@ private extension LinkPushKind {
 private struct SendPreferenceSelection: Equatable {
     let deviceIDs: [String]
     let fit: ImageFitMode
+}
+
+private struct ImageSendBatchSignature: Hashable {
+    let imageRevision: UUID
+    let fit: ImageFitMode
+    let groups: [ImageSendTargetGroup]
+}
+
+private struct ImageSendAttempt {
+    let signature: ImageSendBatchSignature
+    let idempotencyKeys: [String: String]
 }

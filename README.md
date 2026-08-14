@@ -59,6 +59,8 @@ leaving authoring and administration in Tesserae's web interface.
 - Monitor display health and preview current or upcoming content.
 - Browse, preview, and push saved Dashboards.
 - Inspect and control server-managed Lineups.
+- Browse server-managed Gallery folders in a pinch-zoomable square or
+  original-ratio photo grid, add photos, and hand existing images into Send.
 - Send photos, image URLs, and webpage snapshots with display-aware layouts.
 - Share an image or link to Tesserae directly from other iOS apps.
 - Run common display actions from Shortcuts.

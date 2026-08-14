@@ -15,7 +15,13 @@ SDK, analytics SDK, tracking, or telemetry.
 - Photos selected in the app, Share Sheet, or Shortcuts are sent directly to
   the user's selected Tesserae instance. They do not pass through a service
   operated by the iOS app maintainer.
-- Display and Dashboard preview PNGs are fetched directly from that instance
+- Photos added to Gallery are queued only in memory while the import sheet is
+  open and uploaded one at a time to the selected Tesserae instance. Tesserae
+  removes location metadata, normalizes orientation, and retains the resulting
+  Gallery image in server-owned storage; server operators control its retention
+  and deletion. Companion keeps authenticated Gallery thumbnails only in
+  memory.
+- Display, Dashboard, and Gallery preview images are fetched directly from that instance
   only when it advertises the optional feature. The app keeps them in memory
   with their ETags and does not write them to the App Group or photo library.
 - A photo whose upload is interrupted is stored with iOS file protection in

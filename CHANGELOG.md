@@ -13,6 +13,15 @@ capabilities.
 
 ### Added
 
+- Added a server-gated native Gallery for browsing internal and external
+  folders, creating server-normalized internal folders, and importing multiple
+  Photos selections through a per-image upload queue with stable idempotency
+  keys and individual retry state. Authenticated thumbnails stay in memory,
+  external folders follow the server's read-only decision, and existing Gallery
+  images can enter the current display-aware Send composer without depending on
+  Offline Album or device frame-cache support. Folder details use a dense
+  Photos-style grid with persistent square/original-ratio modes and pinch or
+  menu zoom controls.
 - Defined the accepted native Gallery contract for browsing internal and
   external folders, creating internal folders, and uploading Photos one image
   per idempotent request. Gallery-specific limits, default read/write scopes,
@@ -30,12 +39,64 @@ capabilities.
 
 ### Changed
 
+- Fill sends to displays with different aspect ratios now keep independent
+  framing for each ratio while same-ratio displays share one position and zoom.
+  The existing display preview picker switches between those framings, and both
+  Companion and the Share extension submit and retry one existing image request
+  per ratio group without changing Tesserae's server contract.
+- Replaced the bright square Pimoroni mark in Displays with the official
+  horizontal wordmark, rendered in a quieter adaptive monochrome treatment.
+- Replaced the slogan-bearing Waveshare wordmark in Displays with its compact
+  official green glyph.
+- Presented Gallery as the top-level Library destination so photo browsing,
+  uploads, framing, sending, and Offline Albums read as reusable content
+  management rather than plugin configuration. Send is now a raised global
+  action at the bottom-right that opens a large composer sheet and returns to
+  the previous tab, leaving the bottom bar to four persistent destinations.
+- Gallery photo imports now run as an app-level queue with a compact progress
+  capsule at the top of the screen. Selecting photos no longer opens a blocking
+  detail sheet; tapping the capsule reveals per-photo status and retry controls,
+  while successful batches briefly confirm completion and failed batches remain
+  available for review. Upload progress and Send success feedback now share the
+  same app-level message center and compact capsule treatment. The center
+  replaces duplicate updates in place, prioritizes urgent persistent notices,
+  queues lower-priority feedback until it is visible, and only then starts its
+  automatic dismissal timer. Connection failures now use the same persistent
+  capsule with an inline Retry action.
 - Refined the Gallery contract after the first Tesserae server implementation:
   accepted upload types and stored image types are now distinct, existing GIF
   and BMP files remain browseable, HEIC and HEIF uploads explicitly normalize
   to JPEG, folder names are documented as server-normalized storage names, and
   stale device reports carry a dedicated capability reason without being
   mistaken for unsupported hardware.
+
+### Fixed
+
+- Send submissions now report their in-flight state through the shared top
+  message capsule instead of replacing the Sheet button with a local spinner.
+  Transient messages also retire with the Sheet that presented them rather than
+  replaying as a second notification on the root screen; persistent upload and
+  connection notices still hand off across presentation layers.
+- Send sheets opened from Library or the global Send action now prioritize
+  photo-framing drags over interactive sheet dismissal, preventing the first
+  drag from being swallowed and the photo from jumping when framing begins.
+- Gallery grid modes now use deterministic full-width sizing: Square Photo Grid
+  strictly center-crops every thumbnail into an equal square, while Aspect Ratio
+  Grid remains populated and preserves each photo's reported dimensions after
+  switching modes or changing density.
+- Gallery browsing now animates grid-density changes from anywhere in the folder
+  canvas, suppresses accidental photo opens after a pinch, pages through folder
+  photos in order with a visible position count, and offers a chrome-free
+  full-screen viewer with isolated pinch/double-tap zoom, panning, horizontal
+  paging, and swipe-down dismissal.
+- Gallery loading indicators now keep their labels on one readable line instead
+  of collapsing into a narrow vertical stack while an empty folder view loads.
+- Gallery photo details now load the authenticated full image and keep the
+  preview, metadata, and Send action in a stable full-width layout instead of
+  allowing the preview container to collapse to a thin vertical strip.
+- Daily and Keep Fresh Lineups no longer send an empty explicit Display target
+  list when they rely on Dashboard bindings, allowing Tesserae to create them
+  without reporting an unknown target.
 
 ## [0.6.2] - 2026-08-14
 

@@ -3,6 +3,8 @@ import SwiftUI
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @Environment(RemindersBridgeModel.self) private var remindersBridgeModel
+    @Environment(GalleryUploadCoordinator.self) private var galleryUploads
+    @Environment(TesseraeMessageCenter.self) private var messageCenter
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -23,32 +25,11 @@ struct RootView: View {
             }
         }
         .animation(.snappy, value: model.activeInstance?.id)
-        .safeAreaInset(edge: .top) {
-            if let notice = model.connectionNotice {
-                HStack(alignment: .top, spacing: 10) {
-                    Image(
-                        systemName: model.connectionHealth == .requiresPairing
-                            ? "key.slash"
-                            : "wifi.exclamationmark"
-                    )
-                    Text(notice)
-                        .font(.footnote)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    if model.activeInstance != nil {
-                        Button("Retry") {
-                            Task { await model.refresh() }
-                        }
-                        .font(.footnote.weight(.semibold))
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(.thinMaterial)
-            }
-        }
+        .tesseraeMessageCenterOverlay()
         .task {
             await model.restoreConnectionIfNeeded()
             model.openWebIfRequested()
+            synchronizeConnectionMessage()
         }
         .task(id: model.activeInstance?.id) {
             await remindersBridgeModel.load(using: model)
@@ -69,6 +50,15 @@ struct RootView: View {
                 }
             }
         }
+        .onChange(of: model.activeInstance?.id) { previousID, currentID in
+            if previousID != nil, previousID != currentID {
+                galleryUploads.cancelAndClear()
+                messageCenter.dismiss(id: "gallery.uploads")
+            }
+        }
+        .onChange(of: connectionMessageRevision) { _, _ in
+            synchronizeConnectionMessage()
+        }
         .alert(
             "Something Went Wrong",
             isPresented: Binding(
@@ -86,5 +76,49 @@ struct RootView: View {
         } message: {
             Text(model.lastError ?? "")
         }
+    }
+
+    private var connectionMessageRevision: String {
+        let health: String = switch model.connectionHealth {
+        case .idle: "idle"
+        case .restoring: "restoring"
+        case .connected: "connected"
+        case .offline: "offline"
+        case .requiresPairing: "requires-pairing"
+        }
+        return [model.connectionNotice ?? "", health, model.activeInstance?.id ?? ""]
+            .joined(separator: "|")
+    }
+
+    private func synchronizeConnectionMessage() {
+        guard let notice = model.connectionNotice else {
+            messageCenter.dismiss(id: "connection.status")
+            return
+        }
+
+        let retryAction: TesseraeMessageAction? = if model.activeInstance != nil {
+            TesseraeMessageAction(title: String(localized: "Retry")) {
+                Task { await model.refresh() }
+            }
+        } else {
+            nil
+        }
+
+        messageCenter.post(
+            TesseraeMessage(
+                id: "connection.status",
+                text: notice,
+                kind: model.connectionHealth == .requiresPairing
+                    ? .warning
+                    : .error,
+                lifetime: .persistent,
+                priority: .high,
+                systemImage: model.connectionHealth == .requiresPairing
+                    ? "key.slash"
+                    : "wifi.exclamationmark",
+                accessibilityIdentifier: "connection-message-capsule",
+                action: retryAction
+            )
+        )
     }
 }

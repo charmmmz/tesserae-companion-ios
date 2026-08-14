@@ -9,6 +9,28 @@ public protocol TesseraeServing: Sendable {
     func revokeSession(instance: TesseraeInstance) async throws
     func fetchDisplays(instance: TesseraeInstance) async throws -> [DisplaySummary]
     func fetchDashboards(instance: TesseraeInstance) async throws -> [DashboardSummary]
+    func fetchGalleryFolders(instance: TesseraeInstance) async throws -> [GalleryFolder]
+    func fetchGalleryFolder(
+        id: String,
+        instance: TesseraeInstance
+    ) async throws -> GalleryFolderDetail
+    func createGalleryFolder(
+        name: String,
+        instance: TesseraeInstance
+    ) async throws -> GalleryFolderDetail
+    func uploadGalleryImage(
+        folderID: String,
+        data: Data,
+        fileName: String,
+        contentType: String,
+        idempotencyKey: String,
+        instance: TesseraeInstance
+    ) async throws -> GalleryImage
+    func fetchGalleryResource(
+        path: String,
+        ifNoneMatch: String?,
+        instance: TesseraeInstance
+    ) async throws -> PreviewFetchResult
     func fetchLineups(instance: TesseraeInstance) async throws -> [Lineup]
     func fetchLineup(id: String, instance: TesseraeInstance) async throws -> Lineup
     func fetchVersionedLineup(

@@ -11,6 +11,9 @@ public actor MockTesseraeClient: TesseraeServing {
     private var lineupCurrentPageID = "pantry"
     private var authoredLineups: [String: Lineup] = [:]
     private var lineupVersions: [String: Int] = [:]
+    private var galleryFoldersByID: [String: GalleryFolder]
+    private var galleryImagesByFolderID: [String: [GalleryImage]]
+    private var galleryImagesByIdempotencyKey: [String: GalleryImage] = [:]
     private let lineupIntent: LineupIntent
     private let lineupFetchError: TesseraeClientError?
     private let lineupAuthoringGranted: Bool
@@ -25,13 +28,113 @@ public actor MockTesseraeClient: TesseraeServing {
         self.lineupIntent = lineupIntent
         self.lineupFetchError = lineupFetchError
         self.lineupAuthoringGranted = lineupAuthoringGranted
+        let family = GalleryFolder(
+            id: "folder_family",
+            name: "family",
+            kind: .internal,
+            writable: true,
+            imageCount: 5,
+            coverThumbnailURL: "/api/app/v1/gallery/images/image_family_01/thumbnail"
+        )
+        let archive = GalleryFolder(
+            id: "folder_archive",
+            name: "nas-archive",
+            kind: .external,
+            writable: false,
+            imageCount: 1,
+            coverThumbnailURL: "/api/app/v1/gallery/images/image_archive_01/thumbnail"
+        )
+        galleryFoldersByID = [family.id: family, archive.id: archive]
+        galleryImagesByFolderID = [
+            family.id: [
+                GalleryImage(
+                    id: "image_family_01",
+                    folderID: family.id,
+                    name: "family-portrait.png",
+                    contentType: "image/png",
+                    bytes: Self.dashboardPreviewData.count,
+                    width: 1200,
+                    height: 1600,
+                    eTag: "\"gallery-image-family-01\"",
+                    thumbnailURL: "/api/app/v1/gallery/images/image_family_01/thumbnail",
+                    contentURL: "/api/app/v1/gallery/images/image_family_01/content",
+                    createdAt: .now.addingTimeInterval(-3_600)
+                ),
+                GalleryImage(
+                    id: "image_family_02",
+                    folderID: family.id,
+                    name: "picnic.jpg",
+                    contentType: "image/jpeg",
+                    bytes: Self.dashboardPreviewData.count,
+                    width: 1600,
+                    height: 1200,
+                    eTag: "\"gallery-image-family-02\"",
+                    thumbnailURL: "/api/app/v1/gallery/images/image_family_02/thumbnail",
+                    contentURL: "/api/app/v1/gallery/images/image_family_02/content",
+                    createdAt: .now.addingTimeInterval(-1_800)
+                ),
+                GalleryImage(
+                    id: "image_family_03",
+                    folderID: family.id,
+                    name: "birthday-square.png",
+                    contentType: "image/png",
+                    bytes: Self.dashboardPreviewData.count,
+                    width: 1_000,
+                    height: 1_000,
+                    eTag: "\"gallery-image-family-03\"",
+                    thumbnailURL: "/api/app/v1/gallery/images/image_family_03/thumbnail",
+                    contentURL: "/api/app/v1/gallery/images/image_family_03/content",
+                    createdAt: .now.addingTimeInterval(-1_200)
+                ),
+                GalleryImage(
+                    id: "image_family_04",
+                    folderID: family.id,
+                    name: "panorama.png",
+                    contentType: "image/png",
+                    bytes: Self.dashboardPreviewData.count,
+                    width: 2_000,
+                    height: 800,
+                    eTag: "\"gallery-image-family-04\"",
+                    thumbnailURL: "/api/app/v1/gallery/images/image_family_04/thumbnail",
+                    contentURL: "/api/app/v1/gallery/images/image_family_04/content",
+                    createdAt: .now.addingTimeInterval(-600)
+                ),
+                GalleryImage(
+                    id: "image_family_05",
+                    folderID: family.id,
+                    name: "portrait.png",
+                    contentType: "image/png",
+                    bytes: Self.dashboardPreviewData.count,
+                    width: 800,
+                    height: 1_600,
+                    eTag: "\"gallery-image-family-05\"",
+                    thumbnailURL: "/api/app/v1/gallery/images/image_family_05/thumbnail",
+                    contentURL: "/api/app/v1/gallery/images/image_family_05/content",
+                    createdAt: .now.addingTimeInterval(-300)
+                ),
+            ],
+            archive.id: [
+                GalleryImage(
+                    id: "image_archive_01",
+                    folderID: archive.id,
+                    name: "archive.jpg",
+                    contentType: "image/jpeg",
+                    bytes: Self.dashboardPreviewData.count,
+                    width: 800,
+                    height: 480,
+                    eTag: "\"gallery-image-archive-01\"",
+                    thumbnailURL: "/api/app/v1/gallery/images/image_archive_01/thumbnail",
+                    contentURL: "/api/app/v1/gallery/images/image_archive_01/content"
+                ),
+            ],
+        ]
     }
 
     public func probe(baseURL: URL) async throws -> ServerCapabilities {
         try await pause()
         return ServerCapabilities(
             product: "tesserae",
-            serverVersion: "0.205.0",
+            serverVersion: "0.300.0",
             api: CompanionAPI(version: 1),
             pairing: PairingCapabilities(supported: true, codeLength: 6, ttlSeconds: 600),
             features: [
@@ -49,6 +152,7 @@ public actor MockTesseraeClient: TesseraeServing {
                 "lineup_control",
                 "lineup_authoring",
                 "session_read",
+                "gallery",
             ],
             limits: CompanionLimits(
                 imageUploadBytes: 26_214_400,
@@ -62,6 +166,15 @@ public actor MockTesseraeClient: TesseraeServing {
                 ],
                 imageFitModes: ImageFitMode.allCases,
                 imageFramingMaxZoom: 4,
+                galleryUploadBytes: 20_971_520,
+                galleryImageContentTypes: [
+                    "image/jpeg",
+                    "image/png",
+                    "image/heic",
+                    "image/heif",
+                    "image/webp",
+                ],
+                galleryUploadBatchSize: 20,
                 jobRetentionSeconds: 86_400,
                 idempotencyRetentionSeconds: 86_400
             ),
@@ -78,7 +191,7 @@ public actor MockTesseraeClient: TesseraeServing {
             id: "demo-home",
             name: "Home",
             baseURL: baseURL,
-            serverVersion: "0.205.0",
+            serverVersion: "0.300.0",
             timezone: "Asia/Shanghai",
             webURL: "/"
         )
@@ -89,6 +202,8 @@ public actor MockTesseraeClient: TesseraeServing {
             "media:write",
             "lineups:read",
             "lineups:control",
+            "gallery:read",
+            "gallery:write",
         ]
         if lineupAuthoringGranted {
             scopes.append("lineups:write")
@@ -111,6 +226,8 @@ public actor MockTesseraeClient: TesseraeServing {
             "dashboards:read",
             "lineups:read",
             "lineups:control",
+            "gallery:read",
+            "gallery:write",
         ]
         if lineupAuthoringGranted {
             scopes.insert("lineups:write")
@@ -204,6 +321,136 @@ public actor MockTesseraeClient: TesseraeServing {
                 webURL: "/pages/photo-frame"
             ),
         ]
+    }
+
+    public func fetchGalleryFolders(
+        instance: TesseraeInstance
+    ) async throws -> [GalleryFolder] {
+        try await pause()
+        return galleryFoldersByID.values.sorted {
+            $0.name.localizedStandardCompare($1.name) == .orderedAscending
+        }
+    }
+
+    public func fetchGalleryFolder(
+        id: String,
+        instance: TesseraeInstance
+    ) async throws -> GalleryFolderDetail {
+        try await pause()
+        guard let folder = galleryFoldersByID[id] else {
+            throw TesseraeClientError.unavailable
+        }
+        return GalleryFolderDetail(
+            folder: folder,
+            images: galleryImagesByFolderID[id] ?? []
+        )
+    }
+
+    public func createGalleryFolder(
+        name: String,
+        instance: TesseraeInstance
+    ) async throws -> GalleryFolderDetail {
+        try await pause()
+        let normalized = name
+            .lowercased()
+            .replacingOccurrences(
+                of: "[^a-z0-9_-]+",
+                with: "-",
+                options: .regularExpression
+            )
+            .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        guard !normalized.isEmpty else {
+            throw TesseraeClientError.server(
+                code: "invalid_gallery_folder",
+                message: "Enter a folder name containing letters or numbers.",
+                requestID: nil
+            )
+        }
+        guard !galleryFoldersByID.values.contains(where: { $0.name == normalized }) else {
+            throw TesseraeClientError.server(
+                code: "gallery_folder_exists",
+                message: "A Gallery folder with this name already exists.",
+                requestID: nil
+            )
+        }
+        let folder = GalleryFolder(
+            id: "folder_\(UUID().uuidString.lowercased())",
+            name: normalized,
+            kind: .internal,
+            writable: true,
+            imageCount: 0
+        )
+        galleryFoldersByID[folder.id] = folder
+        galleryImagesByFolderID[folder.id] = []
+        return GalleryFolderDetail(folder: folder, images: [])
+    }
+
+    public func uploadGalleryImage(
+        folderID: String,
+        data: Data,
+        fileName: String,
+        contentType: String,
+        idempotencyKey: String,
+        instance: TesseraeInstance
+    ) async throws -> GalleryImage {
+        try await pause()
+        if let existing = galleryImagesByIdempotencyKey[idempotencyKey] {
+            return existing
+        }
+        guard let folder = galleryFoldersByID[folderID] else {
+            throw TesseraeClientError.unavailable
+        }
+        guard folder.writable else {
+            throw TesseraeClientError.server(
+                code: "gallery_folder_read_only",
+                message: "This Gallery folder is read-only.",
+                requestID: nil
+            )
+        }
+        let storedContentType = ["image/heic", "image/heif"].contains(contentType)
+            ? "image/jpeg"
+            : contentType
+        let imageID = "image_\(UUID().uuidString.lowercased())"
+        let image = GalleryImage(
+            id: imageID,
+            folderID: folderID,
+            name: fileName,
+            contentType: storedContentType,
+            bytes: data.count,
+            width: 1200,
+            height: 1600,
+            eTag: "\"\(imageID)\"",
+            thumbnailURL: "/api/app/v1/gallery/images/\(imageID)/thumbnail",
+            contentURL: "/api/app/v1/gallery/images/\(imageID)/content",
+            createdAt: .now
+        )
+        galleryImagesByIdempotencyKey[idempotencyKey] = image
+        galleryImagesByFolderID[folderID, default: []].append(image)
+        galleryFoldersByID[folderID] = GalleryFolder(
+            id: folder.id,
+            name: folder.name,
+            kind: folder.kind,
+            writable: folder.writable,
+            imageCount: galleryImagesByFolderID[folderID]?.count ?? 0,
+            coverThumbnailURL: folder.coverThumbnailURL ?? image.thumbnailURL
+        )
+        return image
+    }
+
+    public func fetchGalleryResource(
+        path: String,
+        ifNoneMatch: String?,
+        instance: TesseraeInstance
+    ) async throws -> PreviewFetchResult {
+        try await pause()
+        guard path.hasPrefix("/api/app/v1/gallery/images/") else {
+            throw TesseraeClientError.invalidResponse
+        }
+        let eTag = "\"mock-gallery-resource\""
+        if ifNoneMatch == eTag {
+            return .notModified
+        }
+        return .image(data: Self.dashboardPreviewData, eTag: eTag)
     }
 
     public func fetchLineups(instance: TesseraeInstance) async throws -> [Lineup] {

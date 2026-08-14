@@ -28,6 +28,9 @@ public struct CompanionLimits: Codable, Hashable, Sendable {
     public let imageContentTypes: [String]
     public let imageFitModes: [ImageFitMode]
     public let imageFramingMaxZoom: Double?
+    public let galleryUploadBytes: Int?
+    public let galleryImageContentTypes: [String]?
+    public let galleryUploadBatchSize: Int?
     public let personalDataStaleAfterSeconds: Int?
     public let personalDataMaxTTLSeconds: Int?
     public let jobRetentionSeconds: Int
@@ -39,6 +42,9 @@ public struct CompanionLimits: Codable, Hashable, Sendable {
         imageContentTypes: [String],
         imageFitModes: [ImageFitMode] = ImageFitMode.legacyModes,
         imageFramingMaxZoom: Double? = nil,
+        galleryUploadBytes: Int? = nil,
+        galleryImageContentTypes: [String]? = nil,
+        galleryUploadBatchSize: Int? = nil,
         personalDataStaleAfterSeconds: Int? = nil,
         personalDataMaxTTLSeconds: Int? = nil,
         jobRetentionSeconds: Int,
@@ -49,6 +55,9 @@ public struct CompanionLimits: Codable, Hashable, Sendable {
         self.imageContentTypes = imageContentTypes
         self.imageFitModes = imageFitModes
         self.imageFramingMaxZoom = imageFramingMaxZoom
+        self.galleryUploadBytes = galleryUploadBytes
+        self.galleryImageContentTypes = galleryImageContentTypes
+        self.galleryUploadBatchSize = galleryUploadBatchSize
         self.personalDataStaleAfterSeconds = personalDataStaleAfterSeconds
         self.personalDataMaxTTLSeconds = personalDataMaxTTLSeconds
         self.jobRetentionSeconds = jobRetentionSeconds
@@ -61,6 +70,9 @@ public struct CompanionLimits: Codable, Hashable, Sendable {
         case imageContentTypes
         case imageFitModes
         case imageFramingMaxZoom
+        case galleryUploadBytes
+        case galleryImageContentTypes
+        case galleryUploadBatchSize
         case personalDataStaleAfterSeconds
         case personalDataMaxTTLSeconds = "personalDataMaxTtlSeconds"
         case jobRetentionSeconds
@@ -82,6 +94,18 @@ public struct CompanionLimits: Codable, Hashable, Sendable {
         imageFramingMaxZoom = try container.decodeIfPresent(
             Double.self,
             forKey: .imageFramingMaxZoom
+        )
+        galleryUploadBytes = try container.decodeIfPresent(
+            Int.self,
+            forKey: .galleryUploadBytes
+        )
+        galleryImageContentTypes = try container.decodeIfPresent(
+            [String].self,
+            forKey: .galleryImageContentTypes
+        )
+        galleryUploadBatchSize = try container.decodeIfPresent(
+            Int.self,
+            forKey: .galleryUploadBatchSize
         )
         personalDataStaleAfterSeconds = try container.decodeIfPresent(
             Int.self,
@@ -150,6 +174,10 @@ public struct ServerCapabilities: Codable, Hashable, Sendable {
     public var supportsImageFraming: Bool {
         features.contains("image_framing")
             && (limits.imageFramingMaxZoom ?? 0) >= 1
+    }
+
+    public var supportsGallery: Bool {
+        features.contains("gallery")
     }
 }
 

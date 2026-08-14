@@ -167,6 +167,107 @@ public actor LiveTesseraeClient: TesseraeServing {
         }
     }
 
+    public func fetchGalleryFolders(
+        instance: TesseraeInstance
+    ) async throws -> [GalleryFolder] {
+        let request = try await authenticatedRequest(
+            instance: instance,
+            path: ["gallery", "folders"],
+            method: "GET"
+        )
+        let response: GalleryFoldersResponse = try await perform(
+            request,
+            expectedStatusCodes: [200]
+        )
+        return response.folders
+    }
+
+    public func fetchGalleryFolder(
+        id: String,
+        instance: TesseraeInstance
+    ) async throws -> GalleryFolderDetail {
+        let request = try await authenticatedRequest(
+            instance: instance,
+            path: ["gallery", "folders", id],
+            method: "GET"
+        )
+        let response: GalleryFolderResponse = try await perform(
+            request,
+            expectedStatusCodes: [200]
+        )
+        return GalleryFolderDetail(
+            folder: response.folder,
+            images: response.images
+        )
+    }
+
+    public func createGalleryFolder(
+        name: String,
+        instance: TesseraeInstance
+    ) async throws -> GalleryFolderDetail {
+        let body = GalleryFolderCreateRequest(name: name)
+        let request = try await authenticatedRequest(
+            instance: instance,
+            path: ["gallery", "folders"],
+            method: "POST",
+            body: TesseraeJSON.encoder().encode(body)
+        )
+        let response: GalleryFolderResponse = try await perform(
+            request,
+            expectedStatusCodes: [201]
+        )
+        return GalleryFolderDetail(
+            folder: response.folder,
+            images: response.images
+        )
+    }
+
+    public func uploadGalleryImage(
+        folderID: String,
+        data: Data,
+        fileName: String,
+        contentType: String,
+        idempotencyKey: String,
+        instance: TesseraeInstance
+    ) async throws -> GalleryImage {
+        let boundary = "TesseraeGalleryBoundary-\(UUID().uuidString)"
+        let body = galleryMultipartBody(
+            boundary: boundary,
+            image: data,
+            fileName: fileName,
+            contentType: contentType
+        )
+        var request = try await authenticatedRequest(
+            instance: instance,
+            path: ["gallery", "folders", folderID, "images"],
+            method: "POST",
+            body: body,
+            contentType: "multipart/form-data; boundary=\(boundary)"
+        )
+        request.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
+        let response: GalleryImageResponse = try await perform(
+            request,
+            expectedStatusCodes: [201]
+        )
+        return response.image
+    }
+
+    public func fetchGalleryResource(
+        path: String,
+        ifNoneMatch: String?,
+        instance: TesseraeInstance
+    ) async throws -> PreviewFetchResult {
+        var request = try await authenticatedGalleryResourceRequest(
+            instance: instance,
+            path: path
+        )
+        configurePreviewRequest(&request, ifNoneMatch: ifNoneMatch)
+        return try await previewResponse(
+            for: request,
+            allowsPreparing: false
+        )
+    }
+
     public func fetchLineups(instance: TesseraeInstance) async throws -> [Lineup] {
         let request = try await authenticatedRequest(
             instance: instance,
@@ -651,6 +752,31 @@ public actor LiveTesseraeClient: TesseraeServing {
         return request
     }
 
+    private func authenticatedGalleryResourceRequest(
+        instance: TesseraeInstance,
+        path: String
+    ) async throws -> URLRequest {
+        guard let token = try await credentials.token(for: instance.id) else {
+            throw TesseraeClientError.missingCredential
+        }
+        let baseURL = try normalized(instance.baseURL)
+        guard
+            let endpoint = URL(string: path, relativeTo: baseURL)?.absoluteURL,
+            endpoint.scheme == baseURL.scheme,
+            endpoint.host == baseURL.host,
+            endpoint.port == baseURL.port,
+            endpoint.path.hasPrefix("/api/app/v1/gallery/")
+        else {
+            throw TesseraeClientError.invalidResponse
+        }
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 30
+        request.setValue("image/*", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        return request
+    }
+
     private func makeRequest(
         baseURL: URL,
         path: [String],
@@ -886,6 +1012,27 @@ public actor LiveTesseraeClient: TesseraeServing {
         body.appendUTF8("Content-Type: application/json\r\n\r\n")
         body.append(request)
         body.appendUTF8("\r\n--\(boundary)\r\n")
+        body.appendUTF8(
+            "Content-Disposition: form-data; name=\"image\"; filename=\"\(safeName)\"\r\n"
+        )
+        body.appendUTF8("Content-Type: \(contentType)\r\n\r\n")
+        body.append(image)
+        body.appendUTF8("\r\n--\(boundary)--\r\n")
+        return body
+    }
+
+    private func galleryMultipartBody(
+        boundary: String,
+        image: Data,
+        fileName: String,
+        contentType: String
+    ) -> Data {
+        let safeName = fileName
+            .replacingOccurrences(of: "\"", with: "")
+            .replacingOccurrences(of: "\r", with: "")
+            .replacingOccurrences(of: "\n", with: "")
+        var body = Data()
+        body.appendUTF8("--\(boundary)\r\n")
         body.appendUTF8(
             "Content-Disposition: form-data; name=\"image\"; filename=\"\(safeName)\"\r\n"
         )

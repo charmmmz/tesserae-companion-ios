@@ -29,7 +29,9 @@ final class LiveTesseraeClientTests: XCTestCase {
         XCTAssertTrue(capabilities.features.contains("image_framing"))
         XCTAssertTrue(capabilities.features.contains("lineups"))
         XCTAssertTrue(capabilities.features.contains("lineup_control"))
+        XCTAssertTrue(capabilities.supportsGallery)
         XCTAssertEqual(capabilities.limits.imageFramingMaxZoom, 4)
+        XCTAssertEqual(capabilities.limits.galleryUploadBatchSize, 20)
         XCTAssertEqual(
             capabilities.limits.imageFitModes,
             ImageFitMode.allCases
@@ -49,6 +51,39 @@ final class LiveTesseraeClientTests: XCTestCase {
         let dashboards = try await client.fetchDashboards(instance: session.instance)
         XCTAssertEqual(displays.first?.id, "picpak-kitchen")
         XCTAssertEqual(dashboards.first?.id, "pantry")
+
+        let galleryFolders = try await client.fetchGalleryFolders(
+            instance: session.instance
+        )
+        XCTAssertEqual(galleryFolders.first?.id, "folder_family")
+        let galleryFolder = try await client.fetchGalleryFolder(
+            id: "folder_family",
+            instance: session.instance
+        )
+        let galleryImage = try XCTUnwrap(galleryFolder.images.first)
+        XCTAssertEqual(galleryImage.folderID, "folder_family")
+        let galleryThumbnail = try await client.fetchGalleryResource(
+            path: galleryImage.thumbnailURL,
+            ifNoneMatch: nil,
+            instance: session.instance
+        )
+        guard case .image = galleryThumbnail else {
+            return XCTFail("Expected a Gallery thumbnail.")
+        }
+        let createdFolder = try await client.createGalleryFolder(
+            name: "Summer 2026!",
+            instance: session.instance
+        )
+        XCTAssertEqual(createdFolder.folder.name, "summer-2026")
+        let uploadedGalleryImage = try await client.uploadGalleryImage(
+            folderID: createdFolder.folder.id,
+            data: Data("gallery-fixture-image".utf8),
+            fileName: "holiday.heic",
+            contentType: "image/heic",
+            idempotencyKey: "swift-gallery-upload-0001",
+            instance: session.instance
+        )
+        XCTAssertEqual(uploadedGalleryImage.contentType, "image/jpeg")
 
         let lineups = try await client.fetchLineups(instance: session.instance)
         XCTAssertEqual(lineups.first?.id, "kitchen-deck")

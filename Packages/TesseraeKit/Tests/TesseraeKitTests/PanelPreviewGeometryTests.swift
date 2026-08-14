@@ -2,6 +2,77 @@ import XCTest
 @testable import TesseraeKit
 
 final class PanelPreviewGeometryTests: XCTestCase {
+    func testPanelAspectRatioReducesResolutionAndKeepsOrientationDistinct() {
+        XCTAssertEqual(
+            PanelAspectRatio(width: 400, height: 300),
+            PanelAspectRatio(width: 1_200, height: 900)
+        )
+        XCTAssertEqual(
+            PanelAspectRatio(width: 400, height: 300).displayName,
+            "4:3"
+        )
+        XCTAssertNotEqual(
+            PanelAspectRatio(width: 400, height: 300),
+            PanelAspectRatio(width: 1_200, height: 1_600)
+        )
+    }
+
+    func testImageSendTargetsShareFramingOnlyWithinOneAspectRatio() throws {
+        let landscape = PanelAspectRatio(width: 400, height: 300)
+        let portrait = PanelAspectRatio(width: 1_200, height: 1_600)
+        let groups = imageSendTargetGroups(
+            displays: [
+                display(id: "black", width: 400, height: 300),
+                display(id: "blue", width: 1_200, height: 900),
+                display(id: "living-room", width: 1_200, height: 1_600),
+            ],
+            selectedDeviceIDs: ["black", "blue", "living-room"],
+            framingsByAspect: [
+                landscape: ImageFraming(focusX: 0.4, focusY: 0.5, zoom: 1.2),
+                portrait: ImageFraming(focusX: 0.5, focusY: 0.7, zoom: 1.5),
+            ],
+            separatesByAspect: true,
+            maximumZoom: 4
+        )
+
+        XCTAssertEqual(groups.count, 2)
+        let landscapeGroup = try XCTUnwrap(
+            groups.first { $0.aspectRatio == landscape }
+        )
+        XCTAssertEqual(landscapeGroup.deviceIDs, ["black", "blue"])
+        XCTAssertEqual(
+            landscapeGroup.framing,
+            ImageFraming(focusX: 0.4, focusY: 0.5, zoom: 1.2)
+        )
+        let portraitGroup = try XCTUnwrap(
+            groups.first { $0.aspectRatio == portrait }
+        )
+        XCTAssertEqual(portraitGroup.deviceIDs, ["living-room"])
+        XCTAssertEqual(
+            portraitGroup.framing,
+            ImageFraming(focusX: 0.5, focusY: 0.7, zoom: 1.5)
+        )
+    }
+
+    func testImageSendTargetsStayInOneGroupWithoutFraming() throws {
+        let groups = imageSendTargetGroups(
+            displays: [
+                display(id: "landscape", width: 400, height: 300),
+                display(id: "portrait", width: 1_200, height: 1_600),
+            ],
+            selectedDeviceIDs: ["landscape", "portrait"],
+            framingsByAspect: [:],
+            separatesByAspect: false,
+            maximumZoom: 4
+        )
+
+        let group = try XCTUnwrap(groups.first)
+        XCTAssertEqual(groups.count, 1)
+        XCTAssertEqual(group.id, "all")
+        XCTAssertEqual(group.deviceIDs, ["landscape", "portrait"])
+        XCTAssertNil(group.framing)
+    }
+
     func testPortraitPanelFitsByHeightAndPreservesAspectRatio() {
         let panel = PanelProfile(
             width: 1_200,
@@ -256,5 +327,21 @@ final class PanelPreviewGeometryTests: XCTestCase {
         XCTAssertEqual(framing.focusX, 0.62, accuracy: 0.000_001)
         XCTAssertEqual(framing.focusY, 0.38, accuracy: 0.000_001)
         XCTAssertEqual(framing.zoom, 4, accuracy: 0.000_001)
+    }
+
+    private func display(id: String, width: Int, height: Int) -> DisplaySummary {
+        DisplaySummary(
+            id: id,
+            name: id,
+            kind: "test",
+            iconName: "display",
+            panel: PanelProfile(
+                width: width,
+                height: height,
+                gamut: "mono",
+                orientation: width >= height ? "landscape" : "portrait"
+            ),
+            freshness: .fresh
+        )
     }
 }

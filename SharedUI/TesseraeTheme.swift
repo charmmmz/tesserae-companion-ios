@@ -1,3 +1,4 @@
+import Observation
 import SwiftUI
 
 enum TesseraeTheme {
@@ -190,25 +191,362 @@ struct TesseraeDisplaySelectionRow: View {
     }
 }
 
-struct TesseraeSuccessBanner: View {
+struct TesseraeMessageCapsule<Leading: View, Trailing: View>: View {
     let message: String
+    @ViewBuilder let leading: Leading
+    @ViewBuilder let trailing: Trailing
 
     var body: some View {
-        Label(message, systemImage: "checkmark.circle.fill")
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(.primary)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 11)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                .regularMaterial,
-                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-            )
-            .shadow(color: .black.opacity(0.12), radius: 12, y: 5)
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("send-success-banner")
+        HStack(spacing: 10) {
+            leading
+                .frame(width: 20, height: 20)
+
+            Text(message)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+
+            trailing
+        }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 10)
+        .frame(minHeight: 44)
+        .background(.thinMaterial, in: Capsule())
+        .overlay {
+            Capsule()
+                .strokeBorder(.primary.opacity(0.08))
+        }
+        .shadow(color: .black.opacity(0.14), radius: 10, y: 4)
     }
 }
+
+enum TesseraeMessageKind: Equatable {
+    case info
+    case success
+    case progress(fraction: Double?)
+    case warning
+    case error
+}
+
+enum TesseraeMessageLifetime: Equatable {
+    case automatic(seconds: Double)
+    case persistent
+}
+
+enum TesseraeMessagePriority: Int {
+    case low = 0
+    case normal = 100
+    case high = 200
+    case critical = 300
+}
+
+struct TesseraeMessageAction {
+    let title: String
+    let perform: @MainActor () -> Void
+}
+
+struct TesseraeMessage: Identifiable {
+    let id: String
+    let text: String
+    let kind: TesseraeMessageKind
+    let lifetime: TesseraeMessageLifetime
+    let priority: TesseraeMessagePriority
+    let systemImage: String?
+    let accessibilityIdentifier: String?
+    let accessibilityHint: String?
+    let tapAction: (@MainActor () -> Void)?
+    let action: TesseraeMessageAction?
+
+    init(
+        id: String,
+        text: String,
+        kind: TesseraeMessageKind = .info,
+        lifetime: TesseraeMessageLifetime = .automatic(seconds: 3),
+        priority: TesseraeMessagePriority = .normal,
+        systemImage: String? = nil,
+        accessibilityIdentifier: String? = nil,
+        accessibilityHint: String? = nil,
+        tapAction: (@MainActor () -> Void)? = nil,
+        action: TesseraeMessageAction? = nil
+    ) {
+        self.id = id
+        self.text = text
+        self.kind = kind
+        self.lifetime = lifetime
+        self.priority = priority
+        self.systemImage = systemImage
+        self.accessibilityIdentifier = accessibilityIdentifier
+        self.accessibilityHint = accessibilityHint
+        self.tapAction = tapAction
+        self.action = action
+    }
+}
+
+@MainActor
+@Observable
+final class TesseraeMessageCenter {
+    private struct Entry {
+        var message: TesseraeMessage
+        let sequence: Int
+        var revision: Int
+    }
+
+    private var entries: [Entry] = []
+    private var nextSequence = 0
+    private var activeHostIDs: [UUID] = []
+    @ObservationIgnored private var dismissalTask: Task<Void, Never>?
+    @ObservationIgnored private var dismissalMarker: String?
+    @ObservationIgnored private var automaticMessageHostID: UUID?
+
+    var currentMessage: TesseraeMessage? {
+        currentEntry?.message
+    }
+
+    var queuedCount: Int {
+        entries.count
+    }
+
+    func post(_ message: TesseraeMessage) {
+        if let index = entries.firstIndex(where: {
+            $0.message.id == message.id
+        }) {
+            entries[index].message = message
+            entries[index].revision += 1
+        } else {
+            entries.append(
+                Entry(message: message, sequence: nextSequence, revision: 0)
+            )
+            nextSequence += 1
+        }
+        scheduleCurrentDismissal()
+    }
+
+    func dismiss(id: String) {
+        entries.removeAll { $0.message.id == id }
+        scheduleCurrentDismissal()
+    }
+
+    func dismissAll() {
+        entries = []
+        scheduleCurrentDismissal()
+    }
+
+    func activateHost(id: UUID) {
+        let previousHostID = activeHostIDs.last
+        activeHostIDs.removeAll { $0 == id }
+        activeHostIDs.append(id)
+
+        if let previousHostID,
+           previousHostID != id,
+           automaticMessageHostID == previousHostID,
+           let message = currentMessage,
+           case .automatic = message.lifetime
+        {
+            dismiss(id: message.id)
+        } else {
+            scheduleCurrentDismissal()
+        }
+    }
+
+    func deactivateHost(id: UUID) {
+        activeHostIDs.removeAll { $0 == id }
+
+        if automaticMessageHostID == id,
+           let message = currentMessage,
+           case .automatic = message.lifetime
+        {
+            dismiss(id: message.id)
+        } else {
+            scheduleCurrentDismissal()
+        }
+    }
+
+    func isActiveHost(id: UUID) -> Bool {
+        activeHostIDs.last == id
+    }
+
+    private var orderedEntries: [Entry] {
+        entries.sorted { left, right in
+            if left.message.priority.rawValue != right.message.priority.rawValue {
+                return left.message.priority.rawValue
+                    > right.message.priority.rawValue
+            }
+            return left.sequence < right.sequence
+        }
+    }
+
+    private var currentEntry: Entry? {
+        orderedEntries.first
+    }
+
+    private func scheduleCurrentDismissal() {
+        guard let entry = currentEntry,
+              case let .automatic(seconds) = entry.message.lifetime
+        else {
+            dismissalTask?.cancel()
+            dismissalTask = nil
+            dismissalMarker = nil
+            automaticMessageHostID = nil
+            return
+        }
+
+        guard let hostID = activeHostIDs.last else {
+            dismissalTask?.cancel()
+            dismissalTask = nil
+            dismissalMarker = nil
+            automaticMessageHostID = nil
+            return
+        }
+
+        let marker = "\(entry.sequence)|\(entry.revision)|\(hostID.uuidString)"
+        guard dismissalMarker != marker else { return }
+
+        dismissalTask?.cancel()
+        dismissalMarker = marker
+        automaticMessageHostID = hostID
+        let message = entry.message
+
+        dismissalTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(seconds))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled,
+                  self?.currentMessage?.id == message.id
+            else { return }
+            self?.dismiss(id: message.id)
+        }
+    }
+}
+
+private struct TesseraeMessageCenterHost: View {
+    @Environment(TesseraeMessageCenter.self) private var center
+    @State private var hostID = UUID()
+
+    var body: some View {
+        ZStack {
+            if center.isActiveHost(id: hostID),
+               let message = center.currentMessage
+            {
+                presentedMessage(message)
+                    .id(message.id)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .animation(.snappy, value: presentationRevision)
+        .onAppear {
+            center.activateHost(id: hostID)
+        }
+        .onDisappear {
+            center.deactivateHost(id: hostID)
+        }
+    }
+
+    private var presentationRevision: String {
+        guard let message = center.currentMessage else { return "none" }
+        return "\(message.id)|\(message.text)|\(String(describing: message.kind))"
+    }
+
+    @ViewBuilder
+    private func presentedMessage(_ message: TesseraeMessage) -> some View {
+        if let tapAction = message.tapAction {
+            Button(action: tapAction) {
+                capsule(message, showsDisclosure: true)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(message.text))
+            .accessibilityHint(Text(message.accessibilityHint ?? ""))
+            .accessibilityIdentifier(message.accessibilityIdentifier ?? message.id)
+        } else {
+            capsule(message, showsDisclosure: false)
+                .accessibilityElement(children: message.action == nil ? .combine : .contain)
+                .accessibilityIdentifier(message.accessibilityIdentifier ?? message.id)
+        }
+    }
+
+    private func capsule(
+        _ message: TesseraeMessage,
+        showsDisclosure: Bool
+    ) -> some View {
+        TesseraeMessageCapsule(message: message.text) {
+            statusGlyph(for: message)
+        } trailing: {
+            if let action = message.action {
+                Button(action.title, action: action.perform)
+                    .font(.subheadline.weight(.semibold))
+                    .buttonStyle(.plain)
+                    .foregroundStyle(TesseraeTheme.accent)
+            } else if showsDisclosure {
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: 480)
+    }
+
+    @ViewBuilder
+    private func statusGlyph(for message: TesseraeMessage) -> some View {
+        if let systemImage = message.systemImage {
+            Image(systemName: systemImage)
+                .foregroundStyle(color(for: message.kind))
+        } else {
+            switch message.kind {
+            case .info:
+                Image(systemName: "info.circle.fill")
+                    .foregroundStyle(TesseraeTheme.accent)
+            case .success:
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(TesseraeTheme.accent)
+            case let .progress(fraction):
+                if let fraction {
+                    ProgressView(value: fraction)
+                        .progressViewStyle(.circular)
+                } else {
+                    ProgressView()
+                }
+            case .warning:
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(TesseraeTheme.ochre)
+            case .error:
+                Image(systemName: "exclamationmark.circle.fill")
+                    .foregroundStyle(TesseraeTheme.terracotta)
+            }
+        }
+    }
+
+    private func color(for kind: TesseraeMessageKind) -> Color {
+        switch kind {
+        case .info, .success, .progress:
+            TesseraeTheme.accent
+        case .warning:
+            TesseraeTheme.ochre
+        case .error:
+            TesseraeTheme.terracotta
+        }
+    }
+}
+
+private struct TesseraeMessageCenterOverlayModifier: ViewModifier {
+    let topPadding: CGFloat
+
+    func body(content: Content) -> some View {
+        content.overlay(alignment: .top) {
+            TesseraeMessageCenterHost()
+                .padding(.horizontal, 16)
+                .safeAreaPadding(.top, topPadding)
+        }
+    }
+}
+
+extension View {
+    func tesseraeMessageCenterOverlay(topPadding: CGFloat = 8) -> some View {
+        modifier(TesseraeMessageCenterOverlayModifier(topPadding: topPadding))
+    }
+}
+
 
 private struct TesseraeScreenBackgroundModifier: ViewModifier {
     func body(content: Content) -> some View {

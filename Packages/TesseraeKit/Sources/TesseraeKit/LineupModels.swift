@@ -291,6 +291,10 @@ public struct CompanionSessionAuthorization: Codable, Hashable, Sendable {
         scopes.contains("lineups:write")
     }
 
+    public var canWriteGallery: Bool {
+        scopes.contains("gallery:write")
+    }
+
     private enum CodingKeys: String, CodingKey {
         case tokenID = "tokenId"
         case scopes
@@ -341,6 +345,24 @@ public struct LineupCreateRequest: Codable, Hashable, Sendable {
         case firesAt
         case anchor
         case bindUnassignedDashboards
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(intent, forKey: .intent)
+        try container.encode(name, forKey: .name)
+        try container.encode(pageIDs, forKey: .pageIDs)
+        if !deviceIDs.isEmpty {
+            try container.encode(deviceIDs, forKey: .deviceIDs)
+        }
+        try container.encodeIfPresent(dwellMinutes, forKey: .dwellMinutes)
+        try container.encodeIfPresent(intervalMinutes, forKey: .intervalMinutes)
+        try container.encodeIfPresent(firesAt, forKey: .firesAt)
+        try container.encodeIfPresent(anchor, forKey: .anchor)
+        try container.encode(
+            bindUnassignedDashboards,
+            forKey: .bindUnassignedDashboards
+        )
     }
 }
 

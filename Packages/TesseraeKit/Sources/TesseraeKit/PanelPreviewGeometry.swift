@@ -31,6 +31,93 @@ public struct PanelImagePreviewRect: Equatable, Hashable, Sendable {
     )
 }
 
+public struct PanelAspectRatio: Codable, Hashable, Sendable, Identifiable {
+    public let width: Int
+    public let height: Int
+
+    public var id: String { "\(width):\(height)" }
+    public var displayName: String { id }
+
+    public init(width: Int, height: Int) {
+        let safeWidth = max(width, 1)
+        let safeHeight = max(height, 1)
+        let divisor = Self.greatestCommonDivisor(safeWidth, safeHeight)
+        self.width = safeWidth / divisor
+        self.height = safeHeight / divisor
+    }
+
+    public init(panel: PanelProfile) {
+        self.init(width: panel.width, height: panel.height)
+    }
+
+    private static func greatestCommonDivisor(_ lhs: Int, _ rhs: Int) -> Int {
+        var a = abs(lhs)
+        var b = abs(rhs)
+        while b != 0 {
+            (a, b) = (b, a % b)
+        }
+        return max(a, 1)
+    }
+}
+
+public struct ImageSendTargetGroup: Hashable, Sendable, Identifiable {
+    public let id: String
+    public let aspectRatio: PanelAspectRatio?
+    public let deviceIDs: [String]
+    public let framing: ImageFraming?
+
+    public init(
+        id: String,
+        aspectRatio: PanelAspectRatio?,
+        deviceIDs: [String],
+        framing: ImageFraming?
+    ) {
+        self.id = id
+        self.aspectRatio = aspectRatio
+        self.deviceIDs = deviceIDs
+        self.framing = framing
+    }
+}
+
+public func imageSendTargetGroups(
+    displays: [DisplaySummary],
+    selectedDeviceIDs: Set<String>,
+    framingsByAspect: [PanelAspectRatio: ImageFraming],
+    separatesByAspect: Bool,
+    maximumZoom: Double
+) -> [ImageSendTargetGroup] {
+    let selected = displays.filter { selectedDeviceIDs.contains($0.id) }
+    guard !selected.isEmpty else { return [] }
+
+    guard separatesByAspect else {
+        return [
+            ImageSendTargetGroup(
+                id: "all",
+                aspectRatio: nil,
+                deviceIDs: selected.map(\.id),
+                framing: nil
+            ),
+        ]
+    }
+
+    let grouped = Dictionary(grouping: selected) {
+        PanelAspectRatio(panel: $0.panel)
+    }
+    return grouped.keys.sorted { $0.id < $1.id }.map { aspectRatio in
+        let framing = framingsByAspect[aspectRatio] ?? .centeredFill
+        return ImageSendTargetGroup(
+            id: aspectRatio.id,
+            aspectRatio: aspectRatio,
+            deviceIDs: grouped[aspectRatio, default: []].map(\.id),
+            framing: ImageFraming(
+                focusX: min(max(framing.focusX, 0), 1),
+                focusY: min(max(framing.focusY, 0), 1),
+                zoom: min(max(framing.zoom, 1), max(maximumZoom, 1))
+            )
+        )
+    }
+}
+
 public extension PanelProfile {
     /// Fits the panel inside a preview canvas without changing its native
     /// aspect ratio. The Companion contract guarantees positive panel

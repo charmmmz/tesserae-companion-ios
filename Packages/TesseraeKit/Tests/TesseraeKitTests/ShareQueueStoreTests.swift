@@ -58,6 +58,57 @@ final class ShareQueueStoreTests: XCTestCase {
         }
     }
 
+    func testSameImageCanQueueAndRemoveIndependentAspectGroups() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "TesseraeShareQueueTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let store = FileShareQueueStore(directoryURL: directory)
+        let image = Data("fixture-image".utf8)
+        let portrait = SharedImageRequest(
+            id: "request-portrait",
+            instanceID: "instance-home",
+            fileName: "shared-photo.jpg",
+            contentType: "image/jpeg",
+            fit: .fill,
+            framing: ImageFraming(focusX: 0.42, focusY: 0.55, zoom: 1.4),
+            deviceIDs: ["display-portrait"],
+            idempotencyKey: "idempotency-portrait",
+            createdAt: Date(timeIntervalSince1970: 10),
+            updatedAt: Date(timeIntervalSince1970: 10)
+        )
+        let landscape = SharedImageRequest(
+            id: "request-landscape",
+            instanceID: "instance-home",
+            fileName: "shared-photo.jpg",
+            contentType: "image/jpeg",
+            fit: .fill,
+            framing: ImageFraming(focusX: 0.68, focusY: 0.38, zoom: 1.8),
+            deviceIDs: ["display-landscape-a", "display-landscape-b"],
+            idempotencyKey: "idempotency-landscape",
+            createdAt: Date(timeIntervalSince1970: 10),
+            updatedAt: Date(timeIntervalSince1970: 10)
+        )
+
+        try await store.enqueue(imageData: image, request: portrait)
+        try await store.enqueue(imageData: image, request: landscape)
+        let queued = try await store.requests()
+        let portraitImage = try await store.imageData(for: portrait)
+        let landscapeImage = try await store.imageData(for: landscape)
+        XCTAssertEqual(
+            Set(queued),
+            Set([portrait, landscape])
+        )
+        XCTAssertEqual(portraitImage, image)
+        XCTAssertEqual(landscapeImage, image)
+
+        try await store.remove(portrait)
+        let remaining = try await store.requests()
+        let remainingImage = try await store.imageData(for: landscape)
+        XCTAssertEqual(remaining, [landscape])
+        XCTAssertEqual(remainingImage, image)
+    }
+
     func testReadsLegacyQueuedImageWithoutFraming() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appending(path: "TesseraeShareQueueTests-\(UUID().uuidString)")

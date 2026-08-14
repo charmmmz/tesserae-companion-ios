@@ -6,6 +6,8 @@ import TesseraeKit
 struct TesseraeCompanionApp: App {
     @State private var model: AppModel
     @State private var remindersBridgeModel: RemindersBridgeModel
+    @State private var galleryUploads: GalleryUploadCoordinator
+    @State private var messageCenter: TesseraeMessageCenter
 
     init() {
         let credentials: any CredentialStoring
@@ -18,6 +20,22 @@ struct TesseraeCompanionApp: App {
         let demoLatency: Duration
         let demoLineupIntent: LineupIntent
 #if DEBUG
+        if let galleryGridMode = ProcessInfo.processInfo.environment[
+            "TESSERAE_UI_TEST_GALLERY_GRID_MODE"
+        ] {
+            UserDefaults.standard.set(
+                galleryGridMode,
+                forKey: "gallery.grid.mode"
+            )
+        }
+        if let rawGalleryColumns = ProcessInfo.processInfo.environment[
+            "TESSERAE_UI_TEST_GALLERY_GRID_COLUMNS"
+        ], let galleryColumns = Int(rawGalleryColumns) {
+            UserDefaults.standard.set(
+                galleryColumns,
+                forKey: "gallery.grid.columns"
+            )
+        }
         if let rawLatency = ProcessInfo.processInfo.environment[
             "TESSERAE_UI_TEST_DEMO_LATENCY_MS"
         ], let milliseconds = Int64(rawLatency), milliseconds >= 0 {
@@ -108,6 +126,8 @@ struct TesseraeCompanionApp: App {
             )
         )
         _remindersBridgeModel = State(initialValue: RemindersBridgeModel())
+        _galleryUploads = State(initialValue: GalleryUploadCoordinator())
+        _messageCenter = State(initialValue: TesseraeMessageCenter())
     }
 
     var body: some Scene {
@@ -115,6 +135,8 @@ struct TesseraeCompanionApp: App {
             RootView()
                 .environment(model)
                 .environment(remindersBridgeModel)
+                .environment(galleryUploads)
+                .environment(messageCenter)
                 .tint(TesseraeTheme.accent)
                 .preferredColorScheme(uiTestColorScheme)
         }
@@ -142,6 +164,8 @@ struct TesseraeCompanionApp: App {
 @MainActor
 struct TesseraePreviewHost<Content: View>: View {
     @State private var model: AppModel
+    @State private var galleryUploads = GalleryUploadCoordinator()
+    @State private var messageCenter = TesseraeMessageCenter()
     private let content: Content
 
     init(@ViewBuilder content: () -> Content) {
@@ -165,6 +189,8 @@ struct TesseraePreviewHost<Content: View>: View {
     var body: some View {
         content
             .environment(model)
+            .environment(galleryUploads)
+            .environment(messageCenter)
             .tint(TesseraeTheme.accent)
             .task {
                 guard model.connectionMode != .demo else { return }

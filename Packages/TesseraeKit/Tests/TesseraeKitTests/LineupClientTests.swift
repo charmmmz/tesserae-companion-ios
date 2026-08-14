@@ -235,8 +235,30 @@ final class LineupClientTests: XCTestCase {
         )
         XCTAssertEqual(body["intent"] as? String, "cycle")
         XCTAssertEqual(body["page_ids"] as? [String], ["pantry", "morning"])
+        XCTAssertEqual(body["device_ids"] as? [String], ["picpak-kitchen"])
         XCTAssertEqual(body["anchor"] as? String, "06:00")
         XCTAssertEqual(body["bind_unassigned_dashboards"] as? Bool, true)
+    }
+
+    func testCreateLineupOmitsEmptyExplicitTargetList() throws {
+        let request = LineupCreateRequest(
+            intent: .interval,
+            name: "Keep Weather Fresh",
+            pageIDs: ["pantry"],
+            deviceIDs: [],
+            intervalMinutes: 45,
+            anchor: "06:00"
+        )
+
+        let body = try XCTUnwrap(
+            JSONSerialization.jsonObject(
+                with: TesseraeJSON.encoder().encode(request)
+            ) as? [String: Any]
+        )
+
+        XCTAssertNil(body["device_ids"])
+        XCTAssertEqual(body["intent"] as? String, "interval")
+        XCTAssertEqual(body["page_ids"] as? [String], ["pantry"])
     }
 
     func testPatchLineupSendsIfMatchAndOnlyChangedFields() async throws {

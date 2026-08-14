@@ -56,7 +56,7 @@ private final class ShareComposerModel: ObservableObject {
     private var imageData: Data?
     private var contentType = "image/jpeg"
     private var fileName = "shared-photo.jpg"
-    private var queuedRequest: SharedImageRequest?
+    private var queuedImageRequests: [SharedImageRequest] = []
     private var queuedLinkRequest: SharedLinkRequest?
     private var failedRequestRetained = false
 
@@ -259,7 +259,7 @@ private final class ShareComposerModel: ObservableObject {
         }
     }
 
-    func send(framing: ImageFraming? = nil) async {
+    func send(imageTargetGroups: [ImageSendTargetGroup] = []) async {
         guard
             let snapshot,
             !selectedDeviceIDs.isEmpty
@@ -272,25 +272,32 @@ private final class ShareComposerModel: ObservableObject {
         await savePreferences()
 
         do {
-            let job: PushJob
+            let submittedJobs: [PushJob]
+            var submissionError: (any Error)?
             switch contentKind {
             case .image:
                 guard let imageData else { return }
-                job = try await submitImage(
+                let outcome = try await submitImages(
                     imageData,
-                    framing: framing,
+                    targetGroups: imageTargetGroups,
                     snapshot: snapshot
                 )
+                submittedJobs = outcome.jobs
+                submissionError = outcome.firstError
             case .link:
                 guard let sharedURL else { return }
-                job = try await submitLink(
-                    sharedURL,
-                    snapshot: snapshot
-                )
+                submittedJobs = [
+                    try await submitLink(
+                        sharedURL,
+                        snapshot: snapshot
+                    ),
+                ]
             case nil:
                 return
             }
-            let jobs = [job] + snapshot.jobs.filter { $0.id != job.id }
+            let submittedIDs = Set(submittedJobs.map(\.id))
+            let jobs = submittedJobs
+                + snapshot.jobs.filter { !submittedIDs.contains($0.id) }
             try await stateStore.save(
                 CompanionSnapshot(
                     activeInstance: snapshot.activeInstance,
@@ -301,6 +308,16 @@ private final class ShareComposerModel: ObservableObject {
                     activityClearedBefore: snapshot.activityClearedBefore
                 )
             )
+            if let submissionError {
+                errorMessage = failedRequestRetained
+                    ? [
+                        submissionError.localizedDescription,
+                        queuedRetryMessage,
+                    ].joined(separator: " ")
+                    : submissionError.localizedDescription
+                phase = .failed
+                return
+            }
             complete()
         } catch {
             errorMessage = failedRequestRetained
@@ -313,64 +330,79 @@ private final class ShareComposerModel: ObservableObject {
         }
     }
 
-    private func submitImage(
+    private func submitImages(
         _ imageData: Data,
-        framing: ImageFraming?,
+        targetGroups: [ImageSendTargetGroup],
         snapshot: CompanionSnapshot
-    ) async throws -> PushJob {
-        let request = queuedRequest ?? SharedImageRequest(
-            instanceID: snapshot.activeInstance.id,
-            fileName: fileName,
-            contentType: contentType,
-            fit: fit,
-            framing: framing,
-            deviceIDs: Array(selectedDeviceIDs).sorted(),
-            overrideQuietHours: ManualSendPolicy.overridesQuietHours
-        )
-        do {
-            if queuedRequest == nil {
-                try await queueStore.enqueue(
-                    imageData: imageData,
-                    request: request
-                )
-                queuedRequest = request
+    ) async throws -> ImageSubmissionOutcome {
+        if queuedImageRequests.isEmpty {
+            guard !targetGroups.isEmpty else {
+                throw TesseraeClientError.noTargets
             }
+            queuedImageRequests = targetGroups.map { group in
+                SharedImageRequest(
+                    instanceID: snapshot.activeInstance.id,
+                    fileName: fileName,
+                    contentType: contentType,
+                    fit: fit,
+                    framing: group.framing,
+                    deviceIDs: group.deviceIDs,
+                    overrideQuietHours: ManualSendPolicy.overridesQuietHours
+                )
+            }
+        }
+
+        var jobs: [PushJob] = []
+        var remaining: [SharedImageRequest] = []
+        var firstError: (any Error)?
+        for request in queuedImageRequests {
             let submitting = request.updating(
                 status: .submitting,
                 error: nil
             )
-            try await queueStore.update(submitting)
-            queuedRequest = submitting
-            let job = try await client.sendImage(
-                data: imageData,
-                fileName: submitting.fileName,
-                contentType: submitting.contentType,
-                fit: submitting.fit,
-                framing: submitting.framing,
-                deviceIDs: submitting.deviceIDs,
-                overrideQuietHours: submitting.overrideQuietHours,
-                idempotencyKey: submitting.idempotencyKey,
-                instance: snapshot.activeInstance
-            )
-            _ = try? await activityThumbnails.save(
-                imageData: imageData,
-                jobID: job.id,
-                instanceID: snapshot.activeInstance.id,
-                createdAt: job.createdAt
-            )
-            try await queueStore.remove(submitting)
-            queuedRequest = nil
-            return job
-        } catch {
-            let failed = request.updating(
-                status: .failed,
-                error: error.localizedDescription
-            )
-            try? await queueStore.update(failed)
-            queuedRequest = failed
-            failedRequestRetained = true
-            throw error
+            do {
+                // Re-enqueueing is intentional: it gives every ratio group a
+                // stable request and idempotency key even if persistence failed
+                // part-way through the previous attempt.
+                try await queueStore.enqueue(
+                    imageData: imageData,
+                    request: request
+                )
+                try await queueStore.update(submitting)
+                let job = try await client.sendImage(
+                    data: imageData,
+                    fileName: submitting.fileName,
+                    contentType: submitting.contentType,
+                    fit: submitting.fit,
+                    framing: submitting.framing,
+                    deviceIDs: submitting.deviceIDs,
+                    overrideQuietHours: submitting.overrideQuietHours,
+                    idempotencyKey: submitting.idempotencyKey,
+                    instance: snapshot.activeInstance
+                )
+                _ = try? await activityThumbnails.save(
+                    imageData: imageData,
+                    jobID: job.id,
+                    instanceID: snapshot.activeInstance.id,
+                    createdAt: job.createdAt
+                )
+                try await queueStore.remove(submitting)
+                jobs.append(job)
+            } catch {
+                let failed = request.updating(
+                    status: .failed,
+                    error: error.localizedDescription
+                )
+                try? await queueStore.update(failed)
+                remaining.append(failed)
+                if firstError == nil {
+                    firstError = error
+                }
+            }
         }
+        queuedImageRequests = remaining
+        failedRequestRetained = !remaining.isEmpty
+        return ImageSubmissionOutcome(jobs: jobs, firstError: firstError)
     }
 
     private func submitLink(
@@ -634,11 +666,16 @@ private final class ShareComposerModel: ObservableObject {
     }
 }
 
+private struct ImageSubmissionOutcome {
+    let jobs: [PushJob]
+    let firstError: (any Error)?
+}
+
 private struct ShareComposerView: View {
     @ObservedObject var model: ShareComposerModel
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var imageFraming = ImageFraming.centeredFill
+    @State private var imageFramingsByAspect: [PanelAspectRatio: ImageFraming] = [:]
 
     var body: some View {
         NavigationStack {
@@ -716,7 +753,7 @@ private struct ShareComposerView: View {
     private var sendToolbarButton: some View {
         Button {
             Task {
-                await model.send(framing: outgoingImageFraming)
+                await model.send(imageTargetGroups: outgoingImageTargetGroups)
             }
         } label: {
             if model.phase == .submitting {
@@ -765,9 +802,7 @@ private struct ShareComposerView: View {
                     emptyTitle: String(localized: "Loading shared image…"),
                     accessibilityIdentifier: "share-panel-preview",
                     imageAccessibilityIdentifier: "shared-image-preview",
-                    framing: model.framingEditorIsActive
-                        ? $imageFraming
-                        : nil,
+                    framing: previewImageFramingBinding,
                     maximumFramingZoom: model.maximumFramingZoom,
                     prioritizesFramingGesture: true
                 )
@@ -905,7 +940,7 @@ private struct ShareComposerView: View {
                         model.previewDeviceID = display.id
                     } label: {
                         Label(
-                            display.name,
+                            "\(display.name) · \(PanelAspectRatio(panel: display.panel).displayName)",
                             systemImage: model.previewDisplay?.id == display.id
                                 ? "checkmark.circle.fill"
                                 : "circle"
@@ -960,7 +995,8 @@ private struct ShareComposerView: View {
         guard let display = model.previewDisplay else {
             return String(localized: "None selected")
         }
-        return "\(display.name) · \(display.panel.width) × \(display.panel.height)"
+        let aspect = PanelAspectRatio(panel: display.panel).displayName
+        return "\(display.name) · \(display.panel.width) × \(display.panel.height) · \(aspect)"
     }
 
     private var previewTargetPickerHeight: CGFloat {
@@ -973,20 +1009,41 @@ private struct ShareComposerView: View {
 
     private func previewAccessibilityValue(panel: PanelProfile) -> String {
         if model.framingEditorIsActive {
-            return "fill, \(panel.width) by \(panel.height), \(imageFraming.zoom.formatted(.number.precision(.fractionLength(1...2)))) times zoom"
+            return "fill, \(panel.width) by \(panel.height), \(previewImageFraming.zoom.formatted(.number.precision(.fractionLength(1...2)))) times zoom"
         }
         return "\(model.fit.rawValue), \(panel.width) by \(panel.height)"
     }
 
-    private var outgoingImageFraming: ImageFraming? {
-        guard model.framingEditorIsActive else { return nil }
-        return ImageFraming(
-            focusX: min(max(imageFraming.focusX, 0), 1),
-            focusY: min(max(imageFraming.focusY, 0), 1),
-            zoom: min(
-                max(imageFraming.zoom, 1),
-                model.maximumFramingZoom
-            )
+    private var previewAspectRatio: PanelAspectRatio? {
+        model.previewDisplay.map { PanelAspectRatio(panel: $0.panel) }
+    }
+
+    private var previewImageFraming: ImageFraming {
+        guard let previewAspectRatio else { return .centeredFill }
+        return imageFramingsByAspect[previewAspectRatio] ?? .centeredFill
+    }
+
+    private var previewImageFramingBinding: Binding<ImageFraming>? {
+        guard model.framingEditorIsActive, let previewAspectRatio else {
+            return nil
+        }
+        return Binding(
+            get: {
+                imageFramingsByAspect[previewAspectRatio] ?? .centeredFill
+            },
+            set: { framing in
+                imageFramingsByAspect[previewAspectRatio] = framing
+            }
+        )
+    }
+
+    private var outgoingImageTargetGroups: [ImageSendTargetGroup] {
+        imageSendTargetGroups(
+            displays: model.displays,
+            selectedDeviceIDs: model.selectedDeviceIDs,
+            framingsByAspect: imageFramingsByAspect,
+            separatesByAspect: model.framingEditorIsActive,
+            maximumZoom: model.maximumFramingZoom
         )
     }
 

@@ -23,6 +23,256 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertFalse(app.buttons["Scan Pairing QR"].exists)
     }
 
+    func testDemoGalleryBrowsesFoldersAndHandsPhotoToSend() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
+        app.launchEnvironment["TESSERAE_UI_TEST_GALLERY_GRID_MODE"] = "square"
+        app.launchEnvironment["TESSERAE_UI_TEST_GALLERY_GRID_COLUMNS"] = "3"
+        app.launch()
+
+        XCTAssertTrue(
+            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
+        )
+        app.buttons["Explore with Demo Data"].tap()
+
+        let galleryTab = app.tabBars.firstMatch.buttons["Library"]
+        XCTAssertTrue(galleryTab.waitForExistence(timeout: 3))
+        galleryTab.tap()
+
+        let family = app.buttons["gallery-folder-folder_family"]
+        let archive = app.buttons["gallery-folder-folder_archive"]
+        XCTAssertTrue(family.waitForExistence(timeout: 3))
+        XCTAssertTrue(archive.exists)
+        XCTAssertTrue(app.buttons["gallery-create-folder"].exists)
+
+        let foldersScreenshot = XCTAttachment(screenshot: app.screenshot())
+        foldersScreenshot.name = "Gallery Folders"
+        foldersScreenshot.lifetime = .keepAlways
+        add(foldersScreenshot)
+
+        family.tap()
+        let image = app.buttons["gallery-image-image_family_01"]
+        XCTAssertTrue(image.waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["gallery-add-photos"].exists)
+        XCTAssertTrue(app.buttons["gallery-grid-options"].exists)
+
+        let squareFrame = image.frame
+        XCTAssertEqual(squareFrame.width, squareFrame.height, accuracy: 1)
+
+        let gridScreenshot = XCTAttachment(screenshot: app.screenshot())
+        gridScreenshot.name = "Gallery Square Photo Grid"
+        gridScreenshot.lifetime = .keepAlways
+        add(gridScreenshot)
+
+        let photoGrid = app.descendants(matching: .any)
+            .matching(identifier: "gallery-photo-grid").firstMatch
+        XCTAssertTrue(photoGrid.exists)
+        let gridFrame = photoGrid.frame
+        let folderScroll = app.scrollViews["gallery-folder-scroll"]
+        XCTAssertTrue(folderScroll.exists)
+        folderScroll.pinch(withScale: 2, velocity: 1)
+        let gridZoomed = XCTNSPredicateExpectation(
+            predicate: NSPredicate { evaluated, _ in
+                guard let element = evaluated as? XCUIElement else { return false }
+                return element.frame.height > gridFrame.height * 1.5
+            },
+            object: photoGrid
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [gridZoomed], timeout: 2),
+            .completed
+        )
+        XCTAssertFalse(
+            app.descendants(matching: .any)[
+                "gallery-photo-page-image_family_01"
+            ].exists
+        )
+
+        app.buttons["gallery-grid-options"].tap()
+        let aspectRatioGrid = app.buttons["Aspect Ratio Grid"]
+        XCTAssertTrue(aspectRatioGrid.waitForExistence(timeout: 2))
+        aspectRatioGrid.tap()
+
+        let aspectFrameExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { evaluated, _ in
+                guard let element = evaluated as? XCUIElement else { return false }
+                let frame = element.frame
+                guard frame.width > 0, frame.height > 0 else { return false }
+                return abs(frame.width / frame.height - 0.75) < 0.05
+            },
+            object: image
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [aspectFrameExpectation], timeout: 2),
+            .completed
+        )
+        XCTAssertTrue(image.isHittable)
+
+        let aspectScreenshot = XCTAttachment(screenshot: app.screenshot())
+        aspectScreenshot.name = "Gallery Aspect Ratio Grid"
+        aspectScreenshot.lifetime = .keepAlways
+        add(aspectScreenshot)
+
+        image.tap()
+
+        let firstPage = app.descendants(matching: .any)[
+            "gallery-photo-page-image_family_01"
+        ]
+        XCTAssertTrue(firstPage.waitForExistence(timeout: 3))
+        XCTAssertTrue(
+            app.staticTexts["gallery-photo-position-image_family_01"].exists
+        )
+
+        firstPage.swipeLeft()
+        let secondPage = app.descendants(matching: .any)[
+            "gallery-photo-page-image_family_02"
+        ]
+        XCTAssertTrue(secondPage.waitForExistence(timeout: 3))
+        XCTAssertTrue(secondPage.isHittable)
+
+        let previewScreenshot = XCTAttachment(screenshot: app.screenshot())
+        previewScreenshot.name = "Gallery Paged Photo Preview"
+        previewScreenshot.lifetime = .keepAlways
+        add(previewScreenshot)
+
+        let secondPreview = app.buttons[
+            "gallery-image-preview-image_family_02"
+        ]
+        XCTAssertTrue(secondPreview.waitForExistence(timeout: 3))
+        secondPreview.tap()
+
+        let immersive = app.collectionViews["gallery-immersive-view"]
+        XCTAssertTrue(immersive.waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["gallery-immersive-close"].exists)
+        XCTAssertFalse(app.staticTexts["gallery-immersive-position"].exists)
+        let secondImmersivePhoto = app.descendants(matching: .any)[
+            "gallery-immersive-photo-image_family_02"
+        ]
+        XCTAssertTrue(secondImmersivePhoto.waitForExistence(timeout: 3))
+        secondImmersivePhoto.pinch(withScale: 2, velocity: 1)
+        XCTAssertNotEqual(secondImmersivePhoto.value as? String, "1.00×")
+        XCTAssertTrue(secondImmersivePhoto.isHittable)
+        XCTAssertFalse(
+            app.descendants(matching: .any)[
+                "gallery-immersive-photo-image_family_03"
+            ].isHittable
+        )
+        secondImmersivePhoto.pinch(withScale: 0.5, velocity: -1)
+        if secondImmersivePhoto.value as? String != "1.00×" {
+            secondImmersivePhoto.doubleTap()
+        }
+        let zoomReset = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@", "1.00×"),
+            object: secondImmersivePhoto
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [zoomReset], timeout: 2),
+            .completed
+        )
+
+        secondImmersivePhoto.swipeLeft()
+        let thirdImmersivePhoto = app.descendants(matching: .any)[
+            "gallery-immersive-photo-image_family_03"
+        ]
+        XCTAssertTrue(thirdImmersivePhoto.waitForExistence(timeout: 3))
+        XCTAssertTrue(thirdImmersivePhoto.isHittable)
+
+        let immersiveScreenshot = XCTAttachment(screenshot: app.screenshot())
+        immersiveScreenshot.name = "Gallery Immersive Photo"
+        immersiveScreenshot.lifetime = .keepAlways
+        add(immersiveScreenshot)
+
+        immersive.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
+            .press(
+                forDuration: 0.05,
+                thenDragTo: immersive.coordinate(
+                    withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75)
+                )
+            )
+        let immersiveDismissed = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "exists == false"),
+            object: immersive
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [immersiveDismissed], timeout: 2),
+            .completed
+        )
+
+        let sendImage = app.buttons["gallery-send-image"]
+        XCTAssertTrue(sendImage.waitForExistence(timeout: 3))
+        sendImage.tap()
+        XCTAssertTrue(
+            app.buttons["send-change-photo"].waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(app.buttons["Send to Displays"].exists)
+    }
+
+    func testDemoGalleryFolderLoadingLabelStaysReadable() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "3000"
+        app.launch()
+
+        XCTAssertTrue(
+            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
+        )
+        app.buttons["Explore with Demo Data"].tap()
+
+        let galleryTab = app.tabBars.firstMatch.buttons
+            .matching(identifier: "Library").firstMatch
+        XCTAssertTrue(galleryTab.waitForExistence(timeout: 8))
+        galleryTab.tap()
+
+        let family = app.buttons["gallery-folder-folder_family"]
+        XCTAssertTrue(family.waitForExistence(timeout: 8))
+        family.tap()
+
+        let loadingLabel = app.staticTexts["Loading Photos…"]
+        XCTAssertTrue(loadingLabel.waitForExistence(timeout: 1))
+        XCTAssertGreaterThan(loadingLabel.frame.width, 80)
+        XCTAssertLessThan(loadingLabel.frame.height, 40)
+    }
+
+    func testDemoGalleryUploadStartsCollapsedAndOpensDetailsOnTap() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
+        app.launchEnvironment["TESSERAE_UI_TEST_GALLERY_UPLOAD_CAPSULE"] = "1"
+        app.launch()
+
+        XCTAssertTrue(
+            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
+        )
+        app.buttons["Explore with Demo Data"].tap()
+
+        let capsule = app.buttons["gallery-upload-capsule"]
+        XCTAssertTrue(capsule.waitForExistence(timeout: 3))
+        XCTAssertEqual(capsule.label, "Uploading 2 of 5")
+        XCTAssertFalse(app.navigationBars["Upload Details"].exists)
+        let sendAction = app.buttons["root-send-action"]
+        XCTAssertTrue(sendAction.exists)
+        XCTAssertLessThan(capsule.frame.midY, app.frame.height * 0.2)
+        XCTAssertGreaterThan(sendAction.frame.midX, app.frame.midX)
+        XCTAssertGreaterThan(sendAction.frame.minY, app.frame.height * 0.7)
+        XCTAssertFalse(capsule.frame.intersects(sendAction.frame))
+
+        let capsuleScreenshot = XCTAttachment(screenshot: app.screenshot())
+        capsuleScreenshot.name = "Gallery Upload Capsule"
+        capsuleScreenshot.lifetime = .keepAlways
+        add(capsuleScreenshot)
+
+        capsule.tap()
+
+        XCTAssertTrue(
+            app.navigationBars["Upload Details"].waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(app.staticTexts["family"].exists)
+        XCTAssertTrue(app.staticTexts["2 of 5 finished"].exists)
+        app.buttons["Done"].tap()
+        XCTAssertTrue(capsule.waitForExistence(timeout: 2))
+    }
+
     func testDisplayManufacturerBadges() {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
@@ -245,13 +495,23 @@ final class TesseraeCompanionUITests: XCTestCase {
         dashboardsToolbarScreenshot.lifetime = .keepAlways
         add(dashboardsToolbarScreenshot)
 
-        tabBar.buttons["Send"].tap()
-        XCTAssertTrue(settings.waitForExistence(timeout: 2))
-        XCTAssertTrue(settings.isHittable)
-        XCTAssertLessThanOrEqual(settings.frame.maxX, app.frame.maxX)
-        XCTAssertFalse(app.buttons["dashboard-layout-toggle"].exists)
-        XCTAssertFalse(app.buttons["clear-local-activity"].exists)
+        XCTAssertFalse(tabBar.buttons["Send"].exists)
+        app.buttons["root-send-action"].tap()
+        let sendSettingsQuery = app.buttons.matching(
+            identifier: "root-settings"
+        )
+        XCTAssertTrue(sendSettingsQuery.firstMatch.waitForExistence(timeout: 2))
+        let sendSettings = sendSettingsQuery.allElementsBoundByIndex.first {
+            $0.isHittable
+        }
+        XCTAssertNotNil(sendSettings)
+        if let sendSettings {
+            XCTAssertLessThanOrEqual(sendSettings.frame.maxX, app.frame.maxX)
+        }
+        XCTAssertFalse(app.buttons["dashboard-layout-toggle"].isHittable)
+        XCTAssertFalse(app.buttons["clear-local-activity"].isHittable)
 
+        app.buttons["root-send-close"].tap()
         tabBar.buttons["Activity"].tap()
         XCTAssertTrue(settings.waitForExistence(timeout: 2))
         XCTAssertTrue(settings.isHittable)
@@ -604,7 +864,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         dashboardScreenshot.lifetime = .keepAlways
         add(dashboardScreenshot)
 
-        tabBar.buttons["Send"].tap()
+        app.buttons["root-send-action"].tap()
         app.buttons["Use Sample"].tap()
         let sendButton = app.buttons["Send to Displays"]
         XCTAssertTrue(sendButton.isEnabled)
@@ -621,6 +881,7 @@ final class TesseraeCompanionUITests: XCTestCase {
             accuracy: 1
         )
 
+        app.buttons["root-send-close"].tap()
         tabBar.buttons["Activity"].tap()
         XCTAssertTrue(app.staticTexts["Shared Photo"].waitForExistence(timeout: 2))
         let historyStatus = app.descendants(matching: .any)[
@@ -780,13 +1041,14 @@ final class TesseraeCompanionUITests: XCTestCase {
     func testDemoSendSupportsLinkActions() {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "500"
         app.launch()
 
         XCTAssertTrue(
             app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
         )
         app.buttons["Explore with Demo Data"].tap()
-        app.tabBars.firstMatch.buttons["Send"].tap()
+        app.buttons["root-send-action"].tap()
 
         XCTAssertTrue(app.buttons["Link"].waitForExistence(timeout: 2))
         app.buttons["Link"].tap()
@@ -802,6 +1064,14 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(sendButton.isEnabled)
         sendButton.tap()
 
+        let progressCapsule = app.descendants(matching: .any)[
+            "send-progress-capsule"
+        ]
+        XCTAssertTrue(progressCapsule.waitForExistence(timeout: 2))
+        XCTAssertFalse(
+            sendButton.descendants(matching: .activityIndicator).firstMatch.exists
+        )
+
         let sentBanner = app.descendants(matching: .any)[
             "send-success-banner"
         ]
@@ -812,6 +1082,15 @@ final class TesseraeCompanionUITests: XCTestCase {
             )
         )
 
+        app.buttons["root-send-close"].tap()
+        let transientMessageDismissed = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "exists == false"),
+            object: sentBanner
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [transientMessageDismissed], timeout: 2),
+            .completed
+        )
         app.tabBars.firstMatch.buttons["Activity"].tap()
         XCTAssertTrue(
             app.staticTexts["example.com/news"].waitForExistence(timeout: 3)
@@ -930,7 +1209,7 @@ final class TesseraeCompanionUITests: XCTestCase {
 
         XCTAssertLessThan(lower.frame.minY, upper.frame.minY)
 
-        app.tabBars.firstMatch.buttons["Send"].tap()
+        app.buttons["root-send-action"].tap()
         let movedTarget = app.buttons[
             movingKitchen
                 ? "send-display-picpak-kitchen"
@@ -998,8 +1277,10 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.buttons["Explore with Demo Data"].tap()
 
         let tabBar = app.tabBars.firstMatch
-        XCTAssertTrue(tabBar.buttons["Send"].waitForExistence(timeout: 3))
-        tabBar.buttons["Send"].tap()
+        XCTAssertTrue(
+            app.buttons["root-send-action"].waitForExistence(timeout: 3)
+        )
+        app.buttons["root-send-action"].tap()
 
         let deskTarget = app.buttons["send-display-e1004-desk"]
         let kitchenTarget = app.buttons["send-display-picpak-kitchen"]
@@ -1169,6 +1450,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         )
         waitForExpectations(timeout: 3)
         XCTAssertNotEqual(framingZoom.label, initialZoom)
+        let portraitZoom = framingZoom.label
         XCTAssertTrue(resetFraming.isEnabled)
         XCTAssertGreaterThanOrEqual(
             imagePreview.frame.minX,
@@ -1178,6 +1460,25 @@ final class TesseraeCompanionUITests: XCTestCase {
             imagePreview.frame.maxX,
             panelPreview.frame.maxX + 1
         )
+        previewPickerButton.tap()
+        let kitchenFramingOption = app.buttons[
+            "send-preview-display-picpak-kitchen"
+        ]
+        XCTAssertTrue(kitchenFramingOption.waitForExistence(timeout: 2))
+        kitchenFramingOption.tap()
+        XCTAssertTrue(previewPicker.label.contains("Kitchen"))
+        XCTAssertEqual(framingZoom.label, initialZoom)
+        XCTAssertFalse(resetFraming.isEnabled)
+
+        previewPickerButton.tap()
+        let deskFramingOption = app.buttons[
+            "send-preview-display-e1004-desk"
+        ]
+        XCTAssertTrue(deskFramingOption.waitForExistence(timeout: 2))
+        deskFramingOption.tap()
+        XCTAssertTrue(previewPicker.label.contains("Desk"))
+        XCTAssertEqual(framingZoom.label, portraitZoom)
+        XCTAssertTrue(resetFraming.isEnabled)
         let previewScreenshot = XCTAttachment(screenshot: app.screenshot())
         previewScreenshot.name = "Send Fill Preview"
         previewScreenshot.lifetime = .keepAlways
@@ -1198,6 +1499,7 @@ final class TesseraeCompanionUITests: XCTestCase {
             accuracy: 1
         )
 
+        app.buttons["root-send-close"].tap()
         tabBar.buttons["Activity"].tap()
         XCTAssertTrue(app.staticTexts["Shared Photo"].waitForExistence(timeout: 2))
         XCTAssertTrue(
