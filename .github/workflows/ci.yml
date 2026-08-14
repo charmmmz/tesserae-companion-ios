@@ -47,10 +47,38 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v7
-      - run: |
+      - name: Build iOS app
+        run: |
           xcodebuild \
             -project TesseraeCompanion.xcodeproj \
             -scheme TesseraeCompanion \
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO \
             build
+      - name: Run iOS app unit tests
+        run: |
+          destination_id="$(
+            xcrun simctl list devices available -j | python3 -c '
+          import json
+          import sys
+
+          devices_by_runtime = json.load(sys.stdin)["devices"]
+          candidates = [
+              device["udid"]
+              for runtime in sorted(devices_by_runtime, reverse=True)
+              for device in devices_by_runtime[runtime]
+              if device.get("isAvailable")
+              and "iPhone" in device.get("deviceTypeIdentifier", "")
+          ]
+          if not candidates:
+              raise SystemExit("No available iPhone simulator found")
+          print(candidates[0])
+          '
+          )"
+          xcodebuild \
+            -project TesseraeCompanion.xcodeproj \
+            -scheme TesseraeCompanion \
+            -destination "platform=iOS Simulator,id=${destination_id}" \
+            -only-testing:TesseraeCompanionTests \
+            CODE_SIGNING_ALLOWED=NO \
+            test
