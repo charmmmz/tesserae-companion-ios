@@ -582,6 +582,22 @@ public actor LiveTesseraeClient: TesseraeServing {
         )
     }
 
+    public func putHealthSummarySnapshot(
+        _ snapshot: HealthSummarySnapshot,
+        instance: TesseraeInstance
+    ) async throws -> PersonalDataSourceStatus {
+        let request = try await authenticatedRequest(
+            instance: instance,
+            path: ["personal-data", snapshot.sourceID.rawValue],
+            method: "PUT",
+            body: TesseraeJSON.encoder().encode(snapshot)
+        )
+        return try await perform(
+            request,
+            expectedStatusCodes: [200]
+        )
+    }
+
     public func deletePersonalData(
         sourceID: PersonalDataSourceID,
         instance: TesseraeInstance

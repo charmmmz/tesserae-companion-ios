@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import jsonschema
+import pytest
 import yaml
 
 
@@ -61,6 +63,12 @@ def test_personal_data_fixtures_match_strict_schemas() -> None:
     validate_fixture("personal-data-reminders-fridge.json", "PersonalDataSnapshot")
     validate_fixture("personal-data-reminders.json", "PersonalDataSnapshot")
     validate_fixture("personal-data-reminders-empty.json", "PersonalDataSnapshot")
+    validate_fixture("personal-data-health-summary.json", "PersonalDataSnapshot")
+    validate_fixture("personal-data-health-summary-partial.json", "PersonalDataSnapshot")
+    validate_fixture(
+        "personal-data-health-summary-put-response.json",
+        "PersonalDataSourceStatus",
+    )
     validate_fixture("personal-data-put-response.json", "PersonalDataSourceStatus")
     validate_fixture("personal-data-status.json", "PersonalDataStatusResponse")
 
@@ -112,7 +120,12 @@ def test_personal_data_is_independently_capability_and_scope_gated() -> None:
 
     assert "personal_data_reminders" not in base["features"]
     assert "personal_data_reminders" in extension["features"]
-    assert extension["personal_data"]["sources"] == ["reminders", "reminders.fridge"]
+    assert "personal_data_health" in extension["features"]
+    assert extension["personal_data"]["sources"] == [
+        "reminders",
+        "reminders.fridge",
+        "health.summary",
+    ]
     assert "personal_data_reminders_multi_list" not in extension["features"]
     assert extension["limits"]["personal_data_stale_after_seconds"] == 86_400
     assert extension["limits"]["personal_data_max_ttl_seconds"] == 172_800
@@ -120,6 +133,103 @@ def test_personal_data_is_independently_capability_and_scope_gated() -> None:
     assert "personal_data:write" in SPEC["components"]["schemas"]["PairingResponse"][
         "properties"
     ]["scopes"]["items"]["enum"]
+
+
+def test_health_summary_is_a_bounded_seven_date_snapshot() -> None:
+    snapshot = load_fixture("personal-data-health-summary.json")
+    data = snapshot["data"]
+    generated_at = datetime.fromisoformat(snapshot["generated_at"].replace("Z", "+00:00"))
+    expires_at = datetime.fromisoformat(snapshot["expires_at"].replace("Z", "+00:00"))
+    start = date.fromisoformat(data["window_start_date"])
+    end = date.fromisoformat(data["window_end_date"])
+
+    assert snapshot["version"] == "personal_data_bridge_v1"
+    assert snapshot["source_id"] == "health.summary"
+    assert expires_at - generated_at == timedelta(hours=48)
+    assert end - start == timedelta(days=6)
+    assert set(data) == {
+        "time_zone",
+        "window_start_date",
+        "window_end_date",
+        "activity",
+        "sleep",
+        "workouts",
+    }
+
+    days = data["activity"]["days"]
+    assert [date.fromisoformat(day["date"]) for day in days] == [
+        start + timedelta(days=offset) for offset in range(7)
+    ]
+    for day in days:
+        if day["move_mode"] == "active_energy":
+            assert day["move_minutes"] is None
+            assert day["move_goal_minutes"] is None
+        elif day["move_mode"] == "move_time":
+            assert day["active_energy_kcal"] is None
+            assert day["active_energy_goal_kcal"] is None
+
+
+def test_health_sleep_uses_wake_date_without_raw_samples() -> None:
+    snapshot = load_fixture("personal-data-health-summary.json")
+    data = snapshot["data"]
+    zone = ZoneInfo(data["time_zone"])
+    nights = data["sleep"]["nights"]
+
+    assert len({night["wake_date"] for night in nights}) == len(nights)
+    for night in nights:
+        end_at = datetime.fromisoformat(night["end_at"].replace("Z", "+00:00"))
+        assert night["wake_date"] == end_at.astimezone(zone).date().isoformat()
+        assert datetime.fromisoformat(night["start_at"].replace("Z", "+00:00")) < end_at
+        assert not ({"samples", "source", "device", "uuid"} & set(night))
+
+
+def test_health_workouts_keep_stable_opaque_shape_and_explicit_metrics() -> None:
+    snapshot = load_fixture("personal-data-health-summary.json")
+    workouts = snapshot["data"]["workouts"]["items"]
+    expected_metrics = {
+        "active_energy_kcal",
+        "walking_running_distance_meters",
+        "cycling_distance_meters",
+        "swimming_distance_meters",
+        "wheelchair_distance_meters",
+        "flights_climbed",
+        "swimming_stroke_count",
+    }
+
+    assert len({workout["id"] for workout in workouts}) == len(workouts)
+    assert sum(len(workout["segments"]) for workout in workouts) <= 256
+    for workout in workouts:
+        assert len(workout["id"]) == 24
+        assert set(workout) >= expected_metrics
+        assert not (
+            {"uuid", "route", "location", "heart_rate", "events", "metadata"}
+            & set(workout)
+        )
+        assert datetime.fromisoformat(
+            workout["start_at"].replace("Z", "+00:00")
+        ) < datetime.fromisoformat(workout["end_at"].replace("Z", "+00:00"))
+        assert [segment["ordinal"] for segment in workout["segments"]] == list(
+            range(len(workout["segments"]))
+        )
+
+
+def test_health_optional_sections_are_explicit_and_not_all_null() -> None:
+    partial = load_fixture("personal-data-health-summary-partial.json")
+    data = partial["data"]
+
+    assert data["activity"] is None
+    assert data["sleep"] == {"nights": []}
+    assert data["workouts"] is None
+
+    all_null = json.loads(json.dumps(partial))
+    all_null["data"]["sleep"] = None
+    schema = _json_schema(SPEC["components"]["schemas"]["PersonalDataSnapshot"])
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(
+            all_null,
+            schema,
+            format_checker=jsonschema.FormatChecker(),
+        )
 
 
 def test_status_metadata_cannot_carry_snapshot_values() -> None:

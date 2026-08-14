@@ -20,6 +20,19 @@ public extension MockTesseraeClient {
         )
     }
 
+    func putHealthSummarySnapshot(
+        _ snapshot: HealthSummarySnapshot,
+        instance: TesseraeInstance
+    ) async throws -> PersonalDataSourceStatus {
+        PersonalDataSourceStatus(
+            sourceID: snapshot.sourceID,
+            state: snapshot.expiresAt > Date() ? .fresh : .expired,
+            generatedAt: snapshot.generatedAt,
+            staleAt: snapshot.generatedAt.addingTimeInterval(86_400),
+            expiresAt: snapshot.expiresAt
+        )
+    }
+
     func deletePersonalData(
         sourceID: PersonalDataSourceID,
         instance: TesseraeInstance

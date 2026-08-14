@@ -145,10 +145,31 @@ separate follow-up in Draft PR
 [#183](https://github.com/dmellok/tesserae/pull/183); the native permission and
 sync surface and community widget remain independently versioned deliverables.
 
-Snapshot ingestion does not create a Job, rerender a dashboard, publish to a
-display, or write History. Existing schedules, rotations, decks, and manual
-pushes continue to control rendering until upstream's unified scheduling work
-defines a change-driven trigger model.
+Snapshot ingestion does not create a Job, render a dashboard, publish to a
+display, or write History before returning. A separate fire-and-forget event
+adapter may subsequently feed semantic changes into the existing opt-in page
+refresh path; its outcome never changes the PUT response.
+
+## Proposed contract 0.10 Apple Health summary
+
+Apple Health is independently gated. Companion requires both
+`personal_data_health` in the top-level feature set and `health.summary` in
+`personal_data.sources`; Reminders support never implies Health support. The
+source reuses the existing `personal_data:write` scope, generic PUT/DELETE/status
+routes, version-one envelope, ordering rules, 24-hour stale threshold, and
+48-hour maximum TTL.
+
+The snapshot is one atomic source with explicit nullable Activity, Sleep, and
+Workouts sections covering the active instance's latest seven calendar dates.
+Older clients ignore the new feature and source ID. A Health-capable client must
+not expose enablement against a server that omits either capability signal, and
+must not split the sections into independently expiring server records.
+
+The seven-day content window is not a retention promise. The server retains
+only the latest snapshot and deletes it at expiry or immediately after DELETE.
+Semantic changes may emit source-wide `personal_data.health.summary` into the
+existing opt-in page-refresh path after PUT returns; an envelope-only renewal
+does not. Section selectors remain a future additive extension.
 
 ## Physical validation
 

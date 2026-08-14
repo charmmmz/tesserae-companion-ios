@@ -1,16 +1,17 @@
 openapi: 3.0.3
 info:
   title: Tesserae Companion API
-  version: 0.9.0
+  version: 0.10.0
   description: >-
     Companion API contract for community-built clients. Previews, History,
     resend, remote-image push, webpage push, and server-advertised image fit
     modes are optional additive extensions over the five-feature compatibility
-    floor. Image framing and the privacy-preserving Reminders snapshot bridge
-    are independently capability-gated additive extensions. New Reminders
-    clients require `reminders` in `personal_data.sources`; they do not infer
-    generic support from the legacy feature flag or fall back to
-    `reminders.fridge`.
+    floor. Image framing and the privacy-preserving personal-data snapshot
+    bridge are independently capability-gated additive extensions. New
+    Reminders clients require `reminders` in `personal_data.sources`; they do
+    not infer generic support from the legacy feature flag or fall back to
+    `reminders.fridge`. Apple Health clients require both the separate
+    `personal_data_health` feature and `health.summary` source advertisement.
 servers:
   - url: /
 tags:
@@ -735,7 +736,7 @@ components:
       in: path
       name: source_id
       required: true
-      description: Source advertised by the corresponding capability flag
+      description: Strict source id advertised in personal_data.sources
       schema:
         $ref: "#/components/schemas/PersonalDataSourceID"
     IdempotencyKey:
@@ -881,6 +882,7 @@ components:
               - webpage_push
               - image_framing
               - personal_data_reminders
+              - personal_data_health
               - lineups
               - lineup_control
               - lineup_authoring
@@ -1067,6 +1069,7 @@ components:
       enum:
         - reminders
         - reminders.fridge
+        - health.summary
     PersonalDataSnapshot:
       description: >-
         Versioned, expiring snapshot envelope. Each source is a strict schema;
@@ -1074,11 +1077,13 @@ components:
       oneOf:
         - $ref: "#/components/schemas/RemindersSnapshot"
         - $ref: "#/components/schemas/RemindersFridgeSnapshot"
+        - $ref: "#/components/schemas/HealthSummarySnapshot"
       discriminator:
         propertyName: source_id
         mapping:
           reminders: "#/components/schemas/RemindersSnapshot"
           reminders.fridge: "#/components/schemas/RemindersFridgeSnapshot"
+          health.summary: "#/components/schemas/HealthSummarySnapshot"
     RemindersSnapshot:
       type: object
       additionalProperties: false
@@ -1209,6 +1214,506 @@ components:
           description: Defense-in-depth marker; the first source contains only incomplete items
           type: boolean
           enum: [false]
+    HealthSummarySnapshot:
+      description: >-
+        Latest-only Apple Health summary for the active instance's seven most
+        recent calendar dates. The iPhone performs selection, aggregation, and
+        redaction before upload; this schema never accepts raw HealthKit
+        samples, source identities, routes, heart rate, or free-form metadata.
+      type: object
+      additionalProperties: false
+      required: [version, source_id, generated_at, expires_at, data]
+      properties:
+        version:
+          type: string
+          enum: [personal_data_bridge_v1]
+        source_id:
+          type: string
+          enum: [health.summary]
+        generated_at:
+          type: string
+          format: date-time
+        expires_at:
+          description: >-
+            Required deletion deadline. The server's advertised maximum remains
+            48 hours even though the content covers seven calendar dates.
+          type: string
+          format: date-time
+        data:
+          $ref: "#/components/schemas/HealthSummaryData"
+    HealthSummaryData:
+      description: >-
+        Atomic optional sections selected for this Tesserae instance. All three
+        section keys are explicit and nullable; at least one is non-null. Null
+        does not disclose a specific HealthKit denial because Apple does not
+        reveal individual read authorization decisions to apps. When a selected
+        section is readable but contains no records, its object remains present
+        with an empty array or explicit nullable values.
+      type: object
+      additionalProperties: false
+      required:
+        - time_zone
+        - window_start_date
+        - window_end_date
+        - activity
+        - sleep
+        - workouts
+      anyOf:
+        - properties:
+            activity:
+              type: object
+        - properties:
+            sleep:
+              type: object
+        - properties:
+            workouts:
+              type: object
+      properties:
+        time_zone:
+          description: IANA time zone of the active Tesserae instance
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: "^[A-Za-z0-9._+-]+(?:/[A-Za-z0-9._+-]+)*$"
+        window_start_date:
+          type: string
+          format: date
+        window_end_date:
+          type: string
+          format: date
+        activity:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/HealthActivityData"
+        sleep:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/HealthSleepData"
+        workouts:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/HealthWorkoutsData"
+    HealthActivityData:
+      type: object
+      additionalProperties: false
+      required: [days]
+      properties:
+        days:
+          description: Exactly one ascending record for each date in the window
+          type: array
+          minItems: 7
+          maxItems: 7
+          items:
+            $ref: "#/components/schemas/HealthActivityDay"
+    HealthActivityDay:
+      type: object
+      additionalProperties: false
+      required:
+        - date
+        - steps
+        - walking_running_distance_meters
+        - move_mode
+        - active_energy_kcal
+        - active_energy_goal_kcal
+        - move_minutes
+        - move_goal_minutes
+        - exercise_minutes
+        - exercise_goal_minutes
+        - stand_hours
+        - stand_goal_hours
+      properties:
+        date:
+          type: string
+          format: date
+        steps:
+          type: integer
+          minimum: 0
+          maximum: 1000000
+          nullable: true
+        walking_running_distance_meters:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1000000
+          nullable: true
+        move_mode:
+          type: string
+          enum: [active_energy, move_time]
+          nullable: true
+        active_energy_kcal:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 100000
+          nullable: true
+        active_energy_goal_kcal:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 100000
+          nullable: true
+        move_minutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+          nullable: true
+        move_goal_minutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+          nullable: true
+        exercise_minutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+          nullable: true
+        exercise_goal_minutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+          nullable: true
+        stand_hours:
+          type: integer
+          minimum: 0
+          maximum: 24
+          nullable: true
+        stand_goal_hours:
+          type: integer
+          minimum: 0
+          maximum: 24
+          nullable: true
+    HealthSleepData:
+      type: object
+      additionalProperties: false
+      required: [nights]
+      properties:
+        nights:
+          description: At most one primary sleep episode per ascending wake date
+          type: array
+          maxItems: 7
+          items:
+            $ref: "#/components/schemas/HealthSleepNight"
+    HealthSleepNight:
+      type: object
+      additionalProperties: false
+      required:
+        - wake_date
+        - start_at
+        - end_at
+        - in_bed_minutes
+        - asleep_minutes
+        - awake_minutes
+        - core_minutes
+        - deep_minutes
+        - rem_minutes
+        - unspecified_minutes
+      properties:
+        wake_date:
+          description: Calendar date containing end_at in data.time_zone
+          type: string
+          format: date
+        start_at:
+          type: string
+          format: date-time
+        end_at:
+          type: string
+          format: date-time
+        in_bed_minutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+          nullable: true
+        asleep_minutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+          nullable: true
+        awake_minutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+          nullable: true
+        core_minutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+          nullable: true
+        deep_minutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+          nullable: true
+        rem_minutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+          nullable: true
+        unspecified_minutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+          nullable: true
+    HealthWorkoutsData:
+      type: object
+      additionalProperties: false
+      required: [items, items_truncated]
+      properties:
+        items:
+          description: Up to 100 workouts sorted by start_at ascending
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/HealthWorkout"
+        items_truncated:
+          type: boolean
+    HealthWorkout:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - activity_type
+        - start_at
+        - end_at
+        - duration_seconds
+        - active_energy_kcal
+        - walking_running_distance_meters
+        - cycling_distance_meters
+        - swimming_distance_meters
+        - wheelchair_distance_meters
+        - flights_climbed
+        - swimming_stroke_count
+        - segments
+        - segments_truncated
+      properties:
+        id:
+          description: >-
+            Stable per-instance publication id for the same workout across
+            snapshots; never a HealthKit UUID and not correlatable across
+            Tesserae instances.
+          type: string
+          pattern: "^[0-9a-f]{24}$"
+        activity_type:
+          $ref: "#/components/schemas/HealthWorkoutActivityType"
+        start_at:
+          type: string
+          format: date-time
+        end_at:
+          type: string
+          format: date-time
+        duration_seconds:
+          type: integer
+          minimum: 0
+          maximum: 604800
+        active_energy_kcal:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 100000
+          nullable: true
+        walking_running_distance_meters:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 10000000
+          nullable: true
+        cycling_distance_meters:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 10000000
+          nullable: true
+        swimming_distance_meters:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 10000000
+          nullable: true
+        wheelchair_distance_meters:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 10000000
+          nullable: true
+        flights_climbed:
+          type: integer
+          minimum: 0
+          maximum: 10000000
+          nullable: true
+        swimming_stroke_count:
+          type: integer
+          minimum: 0
+          maximum: 10000000
+          nullable: true
+        segments:
+          type: array
+          maxItems: 64
+          items:
+            $ref: "#/components/schemas/HealthWorkoutSegment"
+        segments_truncated:
+          type: boolean
+    HealthWorkoutSegment:
+      type: object
+      additionalProperties: false
+      required:
+        - ordinal
+        - activity_type
+        - start_at
+        - end_at
+        - duration_seconds
+        - active_energy_kcal
+        - walking_running_distance_meters
+        - cycling_distance_meters
+        - swimming_distance_meters
+        - wheelchair_distance_meters
+        - flights_climbed
+        - swimming_stroke_count
+      properties:
+        ordinal:
+          type: integer
+          minimum: 0
+          maximum: 63
+        activity_type:
+          $ref: "#/components/schemas/HealthWorkoutActivityType"
+        start_at:
+          type: string
+          format: date-time
+        end_at:
+          type: string
+          format: date-time
+        duration_seconds:
+          type: integer
+          minimum: 0
+          maximum: 604800
+        active_energy_kcal:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 100000
+          nullable: true
+        walking_running_distance_meters:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 10000000
+          nullable: true
+        cycling_distance_meters:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 10000000
+          nullable: true
+        swimming_distance_meters:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 10000000
+          nullable: true
+        wheelchair_distance_meters:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 10000000
+          nullable: true
+        flights_climbed:
+          type: integer
+          minimum: 0
+          maximum: 10000000
+          nullable: true
+        swimming_stroke_count:
+          type: integer
+          minimum: 0
+          maximum: 10000000
+          nullable: true
+    HealthWorkoutActivityType:
+      description: >-
+        Stable lowercase activity slug. Future HealthKit values map to other
+        until this enum is extended.
+      type: string
+      enum:
+        - american_football
+        - archery
+        - australian_football
+        - badminton
+        - barre
+        - baseball
+        - basketball
+        - bowling
+        - boxing
+        - cardio_dance
+        - climbing
+        - cooldown
+        - core_training
+        - cricket
+        - cross_country_skiing
+        - cross_training
+        - curling
+        - cycling
+        - dance
+        - dance_inspired_training
+        - disc_sports
+        - downhill_skiing
+        - elliptical
+        - equestrian_sports
+        - fencing
+        - fishing
+        - fitness_gaming
+        - flexibility
+        - functional_strength_training
+        - golf
+        - gymnastics
+        - hand_cycling
+        - handball
+        - high_intensity_interval_training
+        - hiking
+        - hockey
+        - hunting
+        - jump_rope
+        - kickboxing
+        - lacrosse
+        - martial_arts
+        - mind_and_body
+        - mixed_cardio
+        - mixed_metabolic_cardio_training
+        - other
+        - paddle_sports
+        - pickleball
+        - pilates
+        - play
+        - preparation_and_recovery
+        - racquetball
+        - rowing
+        - rugby
+        - running
+        - sailing
+        - skating_sports
+        - snow_sports
+        - snowboarding
+        - soccer
+        - social_dance
+        - softball
+        - squash
+        - stair_climbing
+        - stairs
+        - step_training
+        - surfing_sports
+        - swim_bike_run
+        - swimming
+        - table_tennis
+        - tai_chi
+        - tennis
+        - track_and_field
+        - traditional_strength_training
+        - transition
+        - underwater_diving
+        - volleyball
+        - walking
+        - water_fitness
+        - water_polo
+        - water_sports
+        - wheelchair_run_pace
+        - wheelchair_walk_pace
+        - wrestling
+        - yoga
     PersonalDataFreshness:
       type: string
       enum: [fresh, stale, expired]

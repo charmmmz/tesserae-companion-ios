@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Status | Implemented base contract plus reviewed and proposed gated extensions |
-| Contract version | 0.9.0 |
+| Contract version | 0.10.0 |
 | Namespace | `/api/app/v1` |
 | Authentication | Revocable per-client Companion bearer token |
 | Machine-readable source | [`Contracts/app-v1.openapi.yaml`](Contracts/app-v1.openapi.yaml) |
@@ -15,10 +15,12 @@ the compatibility floor; `previews`, `history`, `image_url_push`,
 `webpage_push`, and `image_framing` are additive capabilities. The legacy
 `personal_data_reminders` feature remains for the published fridge widget;
 new personal-data schemas are advertised directly through
-`personal_data.sources` rather than one feature flag per source. `lineups` and
-`lineup_control`, and `lineup_authoring` independently gate Lineups read,
-playback, and native definition editing. `session_read` advertises the live
-per-client permission reader used by authoring guidance.
+`personal_data.sources`. Apple Health additionally requires the separate
+`personal_data_health` feature so its consent boundary is never inferred from
+Reminders support. `lineups`, `lineup_control`, and `lineup_authoring`
+independently gate Lineups read, playback, and native definition editing.
+`session_read` advertises the live per-client permission reader used by
+authoring guidance.
 
 The proposal reflects the maintainer reviews in
 [Discussion #147](https://github.com/dmellok/tesserae/discussions/147),
@@ -41,7 +43,8 @@ outside this contract.
 - Render and publish writes require `Idempotency-Key`, persist asynchronous
   Jobs, and return `202 Accepted`.
 - Personal-data PUT is a synchronous, naturally idempotent latest-snapshot
-  replacement. It neither creates a Job nor triggers rendering or publishing.
+  replacement. It creates no Job and completes storage before any optional,
+  fire-and-forget data-change refresh enters the existing page machinery.
 - Lineup `next`, `previous`, and `play` actions are asynchronous Jobs and never
   save definitions. `enable` and `disable` use the same action endpoint but
   synchronously return the updated Lineup without touching a display.
@@ -258,6 +261,31 @@ Contract 0.9.0 extends the 0.8.0 Lineups read/control surface with authoring:
   behavior, priority, windows, or other web-only fields remain outside native
   authoring.
 
+Contract 0.10.0 adds the separately approved Apple Health source:
+
+- `personal_data_health` is the explicit top-level Health capability and
+  `health.summary` must also appear in `personal_data.sources`; neither signal
+  alone enables the integration;
+- the source reuses `personal_data:write` and the existing latest-only,
+  expiring `personal_data_bridge_v1` envelope;
+- one atomic snapshot contains nullable Activity, Sleep, and Workouts sections
+  for the active instance's latest seven calendar dates;
+- Activity carries daily steps, walking/running distance, Move, Exercise, and
+  Stand values and goals; Sleep carries one normalized primary night per wake
+  date with start/end and stage totals; Workouts carry stable per-instance
+  opaque IDs, start/end, duration, bounded metrics, and bounded segments;
+- every nullable value is explicit. Zero is a real measured zero, while null
+  means no readable value without claiming which HealthKit permission was
+  denied;
+- routes, coordinates, heart rate, raw samples, HealthKit UUIDs, device/source
+  identity, workout events, and free-form metadata are outside the schema;
+- the content window does not extend retention: the server still advertises a
+  24-hour stale threshold and enforces a maximum 48-hour snapshot TTL;
+- a semantic change may emit source-wide
+  `personal_data.health.summary` after the PUT returns. Timestamp- or
+  expiry-only renewal emits no data-change event, and the upload response never
+  waits for render or delivery.
+
 Upstream PR [#175](https://github.com/dmellok/tesserae/pull/175) merged the
 underlying normalized `SourceCrop` renderer primitive. It does not by itself
 add this Companion capability, request field, validation, History persistence,
@@ -268,7 +296,8 @@ its server adapter remains pending.
 ## Personal-data snapshot bridge
 
 The iPhone remains authoritative for data behind Apple frameworks. Contract
-0.7.0 covers only the first Reminders slice:
+0.7.0 introduced Reminders; contract 0.10.0 adds Apple Health without changing
+that authority boundary:
 
 ```text
 selected Reminders lists
@@ -305,25 +334,36 @@ the matching `DELETE /personal-data/{source_id}`. `GET /personal-data/status` re
 only source ID, fresh/stale/expired state, and generated/stale/expiry times. It
 is deliberately not a read API for snapshot contents.
 
-Ingestion and rendering remain separate in v1. Existing schedules, rotations,
-decks, and explicit dashboard pushes decide when a pull-based widget rerenders.
-No snapshot request discovers dependent dashboards, publishes to a display, or
-writes History. Change-triggered rerendering waits for the unified scheduling
-work tracked upstream in
-[Discussion #167](https://github.com/dmellok/tesserae/discussions/167).
+Ingestion and rendering remain separate. A PUT stores the snapshot and returns
+without rendering, publishing, or writing History. After a successful response,
+an accepted semantic change may fire a data-change event into the existing
+opt-in page-refresh machinery; render or delivery failure cannot change the PUT
+result. The Health source begins with source-wide matching, while timestamp- or
+TTL-only renewal emits no event. Existing schedules still handle date-boundary
+refreshes and any page that did not opt in.
 
 Raw snapshot values must not appear in logs, API errors, diagnostics, or normal
 backups. Render outputs are already excluded from Tesserae backups. While a
 render remains in the live cache, its ordinary History thumbnail necessarily
-contains whatever was displayed, including reminder titles; contract 0.7.0
-states that limitation rather than promising a separate thumbnail privacy
-class. Deleting a source does not retroactively alter an already rendered
-composition.
+contains whatever was displayed, including reminder titles or health values.
+Deleting a source does not retroactively alter an already rendered composition,
+and an e-ink panel retains its prior pixels until another frame replaces them.
 
-Calendar remains a later source under this family. HealthKit is not implied by
-the Reminders source: it requires a separate consent design, advertised source
-schema, and maintainer decision, and would carry daily aggregates rather than
-raw samples.
+`PUT /personal-data/health.summary` atomically replaces one seven-date summary.
+The user independently enables Activity, Sleep, and Workouts on the phone;
+Companion lists every requested HealthKit type and uploadable field before
+Apple's authorization sheet. It requests read access only. The three section
+keys remain explicit and nullable, at least one section is non-null, and no
+authorization status is uploaded because Apple does not expose individual read
+denials to apps. Sleep is assigned by wake date while preserving its UTC start
+and end. Workout publication IDs remain stable for the same workout on the same
+Tesserae instance, but cannot be correlated across instances.
+
+The Health source uses the same paired direct connection selected by the user.
+It introduces no developer-operated relay and no Health-specific transport
+path. The server operator remains responsible for protecting the Tesserae
+server, its network connection, and its access controls. Calendar remains a
+later source under this family.
 
 ## Photo framing
 
