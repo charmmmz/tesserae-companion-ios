@@ -96,7 +96,7 @@ def _json_schema(value: Any) -> Any:
 
 def test_openapi_shape_and_operation_ids_are_stable() -> None:
     assert SPEC["openapi"] == "3.0.3"
-    assert SPEC["info"]["version"] == "0.11.0"
+    assert SPEC["info"]["version"] == "0.12.0"
     assert set(SPEC["paths"]) == {
         "/api/app/v1",
         "/api/app/v1/pair",
@@ -553,6 +553,26 @@ def test_gallery_contract_is_capability_gated_and_non_destructive() -> None:
         "image/heif",
         "image/webp",
     ]
+    schemas = SPEC["components"]["schemas"]
+    assert schemas["GalleryUploadContentType"]["enum"] == gallery["limits"][
+        "gallery_image_content_types"
+    ]
+    assert schemas["GalleryImageContentType"]["deprecated"] is True
+    assert schemas["GalleryImageContentType"]["enum"] == schemas[
+        "GalleryUploadContentType"
+    ]["enum"]
+    assert schemas["GalleryStoredContentType"]["enum"] == [
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/gif",
+        "image/bmp",
+    ]
+    assert schemas["GalleryImage"]["properties"]["content_type"]["allOf"] == [
+        {"$ref": "#/components/schemas/GalleryStoredContentType"}
+    ]
+    assert "image/heic" not in schemas["GalleryStoredContentType"]["enum"]
+    assert "image/gif" not in schemas["GalleryUploadContentType"]["enum"]
 
     pairing_scopes = SPEC["components"]["schemas"]["PairingResponse"][
         "properties"
@@ -606,6 +626,7 @@ def test_gallery_upload_is_one_synchronous_idempotent_image() -> None:
     assert "removes all location metadata" in description
     assert "bakes orientation" in description
     assert "preserves the ICC colour profile" in description
+    assert "transcodes HEIC and HEIF sources to JPEG" in description
     assert "neither a Job nor History" in description
 
     error_codes = SPEC["components"]["schemas"]["ErrorResponse"]["properties"][
@@ -633,9 +654,19 @@ def test_device_capability_support_is_runtime_computed_and_tri_state() -> None:
         "reason_code": "no_usable_heartbeat",
         "observed_at": None,
     }
+    assert by_id["e1004-hallway"]["capability_support"]["frame_cache"] == {
+        "state": "unknown",
+        "reason_code": "stale_heartbeat",
+        "observed_at": "2026-08-13T20:00:00Z",
+    }
 
     field_description = SPEC["components"]["schemas"]["Device"]["properties"][
         "capability_support"
     ]["description"]
     assert "rather than device model" in field_description
     assert "must not infer support from an SD-card model list" in field_description
+    reason_description = SPEC["components"]["schemas"][
+        "DeviceCapabilitySupport"
+    ]["properties"]["reason_code"]["description"]
+    assert "stale_heartbeat" in reason_description
+    assert "device's poll cadence" in reason_description

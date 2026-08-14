@@ -5,12 +5,12 @@
       "name": "family",
       "kind": "internal",
       "writable": true,
-      "image_count": 2,
+      "image_count": 4,
       "cover_thumbnail_url": "/api/app/v1/gallery/images/image_family_01/thumbnail"
     },
     {
       "id": "folder_nas_archive",
-      "name": "NAS archive",
+      "name": "nas-archive",
       "kind": "external",
       "writable": false,
       "image_count": 1,

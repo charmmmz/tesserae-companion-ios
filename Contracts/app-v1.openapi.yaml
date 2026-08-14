@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Tesserae Companion API
-  version: 0.11.0
+  version: 0.12.0
   description: >-
     Companion API contract for community-built clients. Previews, History,
     resend, remote-image push, webpage push, and server-advertised image fit
@@ -445,8 +445,9 @@ paths:
         upload queue, concurrency, progress, and retry policy. The server
         decodes and validates the image, removes all location metadata, bakes
         orientation into the stored pixels, preserves the ICC colour profile,
-        chooses the stored filename and identifiers, and atomically publishes
-        the image to the folder. External folders return a resource conflict.
+        transcodes HEIC and HEIF sources to JPEG, chooses the stored filename
+        and identifiers, and atomically publishes the image to the folder.
+        External folders return a resource conflict.
         This synchronous storage write creates neither a Job nor History.
       parameters:
         - $ref: "#/components/parameters/IdempotencyKey"
@@ -1183,11 +1184,13 @@ components:
           description: >-
             Still-image media types accepted by Gallery upload. Required when
             gallery is advertised and independent from POST /images limits.
+            These are source types, not a promise that the same media type is
+            stored or returned after server normalization.
           type: array
           minItems: 1
           uniqueItems: true
           items:
-            $ref: "#/components/schemas/GalleryImageContentType"
+            $ref: "#/components/schemas/GalleryUploadContentType"
         gallery_upload_batch_size:
           description: >-
             Advisory maximum number of Photos selections the client should add
@@ -2114,7 +2117,10 @@ components:
           description: >-
             Optional stable machine-readable explanation. Clients localize
             known values and use a generic explanation for unknown future
-            values.
+            values. Initial values are not_advertised, no_usable_heartbeat,
+            and stale_heartbeat. A stale heartbeat produces unknown with a
+            non-null observed_at; its age threshold follows the device's poll
+            cadence rather than a client-defined fixed interval.
           type: string
           minLength: 1
           maxLength: 80
@@ -2219,8 +2225,10 @@ components:
       properties:
         name:
           description: >-
-            User-visible name. The server validates and normalizes its storage
-            representation; the client never constructs an id or path from it.
+            User-entered folder name. The server validates and normalizes it
+            into the Gallery's storage name; the returned GalleryFolder.name
+            is authoritative and can differ from this request. The client
+            never constructs an id or path from either value.
           type: string
           minLength: 1
           maxLength: 80
@@ -2235,6 +2243,12 @@ components:
           minLength: 1
           maxLength: 256
         name:
+          description: >-
+            Authoritative server name also shown by Tesserae Web. For a newly
+            created internal folder this is its normalized storage name; for
+            example, Summer 2026! can return summer-2026. Special server-owned
+            folders may use their canonical label. The value is not a host
+            path.
           type: string
           minLength: 1
           maxLength: 80
@@ -2244,7 +2258,7 @@ components:
         writable:
           description: >-
             Server-computed write eligibility. External folders are false in
-            contract 0.11.0; future policy must not be inferred from kind alone.
+            contract 0.12.0; future policy must not be inferred from kind alone.
           type: boolean
         image_count:
           type: integer
@@ -2290,7 +2304,12 @@ components:
           minLength: 1
           maxLength: 255
         content_type:
-          $ref: "#/components/schemas/GalleryImageContentType"
+          description: >-
+            Media type of the server-owned stored image. It can differ from
+            the accepted upload type; HEIC and HEIF uploads are normalized to
+            JPEG before they enter the Gallery.
+          allOf:
+            - $ref: "#/components/schemas/GalleryStoredContentType"
         bytes:
           type: integer
           minimum: 1
@@ -2315,7 +2334,8 @@ components:
           type: string
           format: date-time
           nullable: true
-    GalleryImageContentType:
+    GalleryUploadContentType:
+      description: Source media type accepted by Gallery upload
       type: string
       enum:
         - image/jpeg
@@ -2323,6 +2343,28 @@ components:
         - image/heic
         - image/heif
         - image/webp
+    GalleryImageContentType:
+      description: >-
+        Deprecated 0.11 combined name retained for generated-client source
+        compatibility. New clients use GalleryUploadContentType for accepted
+        sources and GalleryStoredContentType for returned resources.
+      deprecated: true
+      type: string
+      enum:
+        - image/jpeg
+        - image/png
+        - image/heic
+        - image/heif
+        - image/webp
+    GalleryStoredContentType:
+      description: Media type that an existing normalized Gallery file can expose
+      type: string
+      enum:
+        - image/jpeg
+        - image/png
+        - image/webp
+        - image/gif
+        - image/bmp
     ImagePushRequest:
       type: object
       additionalProperties: false

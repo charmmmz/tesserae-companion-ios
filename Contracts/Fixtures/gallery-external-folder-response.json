@@ -1,7 +1,7 @@
 {
   "folder": {
     "id": "folder_nas_archive",
-    "name": "NAS archive",
+    "name": "nas-archive",
     "kind": "external",
     "writable": false,
     "image_count": 1,

@@ -191,6 +191,11 @@ def test_fixture_server_exercises_companion_vertical_slice():
         assert devices["devices"][2]["capability_support"]["frame_cache"][
             "state"
         ] == "unknown"
+        assert devices["devices"][3]["capability_support"]["frame_cache"] == {
+            "state": "unknown",
+            "reason_code": "stale_heartbeat",
+            "observed_at": "2026-08-13T20:00:00Z",
+        }
 
         status, gallery_folders = request(
             base_url,
@@ -224,20 +229,28 @@ def test_fixture_server_exercises_companion_vertical_slice():
         assert [image["id"] for image in gallery_folder["images"]] == [
             "image_family_01",
             "image_family_02",
+            "image_family_03",
+            "image_family_04",
+        ]
+        assert [image["content_type"] for image in gallery_folder["images"]] == [
+            "image/png",
+            "image/jpeg",
+            "image/gif",
+            "image/bmp",
         ]
 
         status, created_folder = request(
             base_url,
             "/api/app/v1/gallery/folders",
             method="POST",
-            payload={"name": "summer 2026"},
+            payload={"name": "Summer 2026!"},
             token=FIXTURE_TOKEN,
         )
         assert status == 201
         assert created_folder == {
             "folder": {
                 "id": "folder_created_0001",
-                "name": "summer 2026",
+                "name": "summer-2026",
                 "kind": "internal",
                 "writable": True,
                 "image_count": 0,
@@ -266,6 +279,31 @@ def test_fixture_server_exercises_companion_vertical_slice():
         assert status == 201
         assert uploaded["image"]["folder_id"] == "folder_family"
         assert uploaded["image"]["name"] == "beach.jpg"
+
+        status, normalized_upload = gallery_image_request(
+            base_url,
+            "folder_family",
+            token=FIXTURE_TOKEN,
+            idempotency_key="fixture-gallery-heic-0001",
+            image=b"fixture-heic-image",
+            filename="portrait.heic",
+            content_type="image/heic",
+        )
+        assert status == 201
+        assert normalized_upload["image"]["name"] == "portrait.jpg"
+        assert normalized_upload["image"]["content_type"] == "image/jpeg"
+
+        status, unsupported_upload = gallery_image_request(
+            base_url,
+            "folder_family",
+            token=FIXTURE_TOKEN,
+            idempotency_key="fixture-gallery-gif-0001",
+            image=b"GIF89a",
+            filename="new.gif",
+            content_type="image/gif",
+        )
+        assert status == 415
+        assert unsupported_upload["error"]["code"] == "unsupported_image"
 
         status, upload_retry = gallery_image_request(
             base_url,

@@ -73,6 +73,31 @@
         }
       },
       "has_pending_render": false
+    },
+    {
+      "id": "e1004-hallway",
+      "name": "Hallway",
+      "kind": "seeed_reterminal_e1004",
+      "icon": "device-tablet",
+      "panel": {
+        "width": 1200,
+        "height": 1600,
+        "gamut": "spectra_6",
+        "orientation": "portrait"
+      },
+      "freshness": "stale",
+      "last_seen_at": "2026-08-13T20:00:00Z",
+      "battery_percent": 61,
+      "rssi_dbm": -67,
+      "firmware_version": "0.0.82",
+      "capability_support": {
+        "frame_cache": {
+          "state": "unknown",
+          "reason_code": "stale_heartbeat",
+          "observed_at": "2026-08-13T20:00:00Z"
+        }
+      },
+      "has_pending_render": false
     }
   ]
 }

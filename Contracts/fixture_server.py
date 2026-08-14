@@ -8,6 +8,7 @@ import base64
 import hashlib
 import ipaddress
 import json
+import re
 import threading
 from dataclasses import dataclass
 from email.parser import BytesParser
@@ -34,6 +35,13 @@ def load_fixture(name: str) -> dict[str, Any]:
 def advertised_image_framing_max_zoom() -> float:
     capabilities = load_fixture("capabilities-framing.json")
     return float(capabilities["limits"]["image_framing_max_zoom"])
+
+
+def normalize_gallery_folder_name(raw: str) -> str | None:
+    """Mirror the Gallery adapter's storage-name ownership for fixtures."""
+    folded = re.sub(r"[^a-z0-9_-]+", "-", raw.strip().lower()).strip("-_")
+    folded = re.sub(r"-{2,}", "-", folded)[:64].strip("-_")
+    return folded or None
 
 
 @dataclass
@@ -303,17 +311,25 @@ class FixtureRequestHandler(BaseHTTPRequestHandler):
                     "A Gallery folder name is required.",
                 )
                 return
-            name = " ".join(payload["name"].split()).strip()
-            if not name or len(name) > 80:
+            requested_name = payload["name"].strip()
+            if not requested_name or len(requested_name) > 80:
                 self.send_error_response(
                     HTTPStatus.BAD_REQUEST,
                     "invalid_request",
                     "Gallery folder names must contain 1 to 80 characters.",
                 )
                 return
+            name = normalize_gallery_folder_name(requested_name)
+            if name is None:
+                self.send_error_response(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid_request",
+                    "The Gallery folder name has no usable letters or digits.",
+                )
+                return
             with self.server.state.lock:
                 conflict = any(
-                    folder["name"].casefold() == name.casefold()
+                    folder["name"] == name
                     for folder in self.server.state.gallery_folders.values()
                 )
                 if not conflict:
@@ -688,12 +704,24 @@ class FixtureRequestHandler(BaseHTTPRequestHandler):
                 conflict = False
                 self.server.state.gallery_sequence += 1
                 image_id = f"image_upload_{self.server.state.gallery_sequence:04d}"
-                safe_name = Path(str(upload["filename"])).name or "upload.jpg"
+                source_name = Path(str(upload["filename"])).name
+                source_stem = Path(source_name).stem or "upload"
+                stored_content_type = (
+                    "image/jpeg"
+                    if upload["content_type"] in {"image/heic", "image/heif"}
+                    else upload["content_type"]
+                )
+                stored_suffix = {
+                    "image/jpeg": ".jpg",
+                    "image/png": ".png",
+                    "image/webp": ".webp",
+                }[stored_content_type]
+                safe_name = f"{source_stem}{stored_suffix}"
                 image = {
                     "id": image_id,
                     "folder_id": folder_id,
                     "name": safe_name,
-                    "content_type": upload["content_type"],
+                    "content_type": stored_content_type,
                     "bytes": len(upload["data"]),
                     "width": 1600,
                     "height": 1200,

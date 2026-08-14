@@ -4,7 +4,7 @@
     "name": "family",
     "kind": "internal",
     "writable": true,
-    "image_count": 2,
+    "image_count": 4,
     "cover_thumbnail_url": "/api/app/v1/gallery/images/image_family_01/thumbnail"
   },
   "images": [
@@ -33,6 +33,32 @@
       "thumbnail_url": "/api/app/v1/gallery/images/image_family_02/thumbnail",
       "content_url": "/api/app/v1/gallery/images/image_family_02/content",
       "created_at": "2026-08-14T08:16:00Z"
+    },
+    {
+      "id": "image_family_03",
+      "folder_id": "folder_family",
+      "name": "birthday.gif",
+      "content_type": "image/gif",
+      "bytes": 98304,
+      "width": 640,
+      "height": 480,
+      "etag": "\"gallery-image-family-03\"",
+      "thumbnail_url": "/api/app/v1/gallery/images/image_family_03/thumbnail",
+      "content_url": "/api/app/v1/gallery/images/image_family_03/content",
+      "created_at": "2026-08-14T08:17:00Z"
+    },
+    {
+      "id": "image_family_04",
+      "folder_id": "folder_family",
+      "name": "scan.bmp",
+      "content_type": "image/bmp",
+      "bytes": 921600,
+      "width": 640,
+      "height": 480,
+      "etag": "\"gallery-image-family-04\"",
+      "thumbnail_url": "/api/app/v1/gallery/images/image_family_04/thumbnail",
+      "content_url": "/api/app/v1/gallery/images/image_family_04/content",
+      "created_at": null
     }
   ]
 }
