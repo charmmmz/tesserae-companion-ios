@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Status | Implemented base contract plus reviewed and proposed gated extensions |
-| Contract version | 0.10.0 |
+| Contract version | 0.11.0 |
 | Namespace | `/api/app/v1` |
 | Authentication | Revocable per-client Companion bearer token |
 | Machine-readable source | [`Contracts/app-v1.openapi.yaml`](Contracts/app-v1.openapi.yaml) |
@@ -20,14 +20,17 @@ new personal-data schemas are advertised directly through
 Reminders support. `lineups`, `lineup_control`, and `lineup_authoring`
 independently gate Lineups read, playback, and native definition editing.
 `session_read` advertises the live per-client permission reader used by
-authoring guidance.
+authoring guidance. `gallery` independently gates native Gallery folder
+browsing, internal-folder creation, and one-image-at-a-time uploads; it does
+not imply destructive Gallery management or Offline Album authoring.
 
 The proposal reflects the maintainer reviews in
 [Discussion #147](https://github.com/dmellok/tesserae/discussions/147),
 [Discussion #159](https://github.com/dmellok/tesserae/discussions/159),
 [Discussion #160](https://github.com/dmellok/tesserae/discussions/160),
-[Discussion #176](https://github.com/dmellok/tesserae/discussions/176), and
-[Discussion #203](https://github.com/dmellok/tesserae/discussions/203).
+[Discussion #176](https://github.com/dmellok/tesserae/discussions/176),
+[Discussion #203](https://github.com/dmellok/tesserae/discussions/203), and
+[Discussion #225](https://github.com/dmellok/tesserae/discussions/225).
 Dashboard editing, plugin administration, firmware controls,
 History deletion/administration, and general server administration remain
 outside this contract.
@@ -45,6 +48,9 @@ outside this contract.
 - Personal-data PUT is a synchronous, naturally idempotent latest-snapshot
   replacement. It creates no Job and completes storage before any optional,
   fire-and-forget data-change refresh enters the existing page machinery.
+- Gallery folder creation and image upload are synchronous resource writes.
+  Each upload carries exactly one image and its own `Idempotency-Key`; it
+  creates neither a Job nor History.
 - Lineup `next`, `previous`, and `play` actions are asynchronous Jobs and never
   save definitions. `enable` and `disable` use the same action endpoint but
   synchronously return the updated Lineup without touching a display.
@@ -68,6 +74,12 @@ outside this contract.
 | `GET` | `/api/app/v1/dashboards/{dashboard_id}/preview` | Read or prepare an on-demand cached preview |
 | `POST` | `/api/app/v1/dashboards/{dashboard_id}/push` | Push to bindings or explicit targets |
 | `POST` | `/api/app/v1/images` | Upload one still image to explicit targets |
+| `GET` | `/api/app/v1/gallery/folders` | List Gallery folders without exposing host paths |
+| `POST` | `/api/app/v1/gallery/folders` | Create one writable internal Gallery folder |
+| `GET` | `/api/app/v1/gallery/folders/{folder_id}` | Read one folder and its canonical image order |
+| `POST` | `/api/app/v1/gallery/folders/{folder_id}/images` | Idempotently upload one normalized still image |
+| `GET` | `/api/app/v1/gallery/images/{image_id}/thumbnail` | Read an authenticated conditional thumbnail |
+| `GET` | `/api/app/v1/gallery/images/{image_id}/content` | Read authenticated normalized image content |
 | `POST` | `/api/app/v1/image-urls` | Fetch and send one public image URL |
 | `POST` | `/api/app/v1/webpages` | Render and send one public webpage |
 | `GET` | `/api/app/v1/lineups` | Read complete Lineup definitions and runtime summaries |
@@ -117,6 +129,8 @@ devices:read
 dashboards:read
 push:write
 media:write
+gallery:read
+gallery:write
 personal_data:write
 lineups:read
 lineups:control
@@ -285,6 +299,39 @@ Contract 0.10.0 adds the separately approved Apple Health source:
   `personal_data.health.summary` after the PUT returns. Timestamp- or
   expiry-only renewal emits no data-change event, and the upload response never
   waits for render or delivery.
+
+Contract 0.11.0 adds the first native Gallery management slice accepted in
+[Discussion #225](https://github.com/dmellok/tesserae/discussions/225):
+
+- `gallery` gates the entire resource family independently from image push;
+- new pairings receive `gallery:read` and `gallery:write` when the resource is
+  supported. The write scope covers internal-folder creation and uploads only;
+  delete, rename, move, and external-path administration remain outside this
+  contract and will require a separate optional destructive scope;
+- folder and image identifiers are opaque stable values. Responses expose a
+  safe display name, relative authenticated URLs, and a server-computed
+  `writable` flag, never a host filesystem path;
+- external folders participate in browsing but remain read-only;
+- sending an existing Gallery image reuses the current `POST /api/app/v1/images`
+  media flow after reading its authenticated content URL. Gallery adds no
+  second delivery action, and ordinary Send does not require `frame_cache`;
+- each multipart upload contains exactly one image and one independent
+  `Idempotency-Key`. The app owns queueing, concurrency, progress, and retry;
+- the server decodes and validates every upload, removes location metadata,
+  bakes orientation into stored pixels, preserves the ICC profile, and owns
+  filenames, thumbnail generation, duplicate policy, and storage;
+- `limits.gallery_upload_bytes`, `gallery_image_content_types`, and the
+  advisory `gallery_upload_batch_size` keep clients from hard-coding the
+  storage adapter's policy;
+- `Device.capability_support` is a general server-computed tri-state map. A
+  Gallery-capable server carries `frame_cache` as `supported`, `unsupported`,
+  or `unknown` from the latest usable heartbeat, never from a model or SD-card
+  allow-list. Offline Album authoring remains a later API slice that reuses
+  this field.
+
+The Gallery contract is forward-looking until the Tesserae adapter lands.
+Contract fixtures and the local stateful fixture server prove the client/server
+boundary without claiming that a current stable Tesserae release serves it.
 
 Upstream PR [#175](https://github.com/dmellok/tesserae/pull/175) merged the
 underlying normalized `SourceCrop` renderer primitive. It does not by itself

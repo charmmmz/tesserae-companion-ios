@@ -113,6 +113,29 @@ expanded into action authorization by the app.
 Deleting Lineups and editing advanced conditions, navigation, home, priority,
 or window behavior continue to open Tesserae Web.
 
+### Post-1.0 Gallery roadmap
+
+Gallery is a native high-frequency photo workflow rather than general plugin
+administration. The first capability-gated slice browses internal and external
+folders, creates internal folders, uploads Photos selections one image per
+idempotent request, and hands an existing image into the current Send flow.
+External host paths are never exposed and external folders remain read-only.
+Delete, rename, move, and external-path management stay out until a separate
+operator-granted destructive scope is designed.
+
+Tesserae owns storage identity, validation, normalization, thumbnails, and
+device eligibility. Companion owns Photos selection, upload queueing,
+concurrency, progress, retry, previews, and navigation. Upload removes location
+metadata server-side, bakes orientation into pixels, and preserves ICC colour
+profiles.
+
+Offline Album remains a later action inside a Gallery folder. It uses the
+server-computed `frame_cache` support state from the latest usable heartbeat,
+not model names or an SD-card allow-list. Ordinary Gallery and online Send stay
+available for devices such as PicPak even when Offline Album is unsupported.
+Any later Lineups integration is one Album-owned playback step rather than one
+generated Dashboard per photo.
+
 ### Native integrations included in release 1.0
 
 | ID | Capability | Acceptance summary |
