@@ -109,6 +109,10 @@ public protocol TesseraeServing: Sendable {
         _ snapshot: RemindersSnapshot,
         instance: TesseraeInstance
     ) async throws -> PersonalDataSourceStatus
+    func putHealthSummarySnapshot(
+        _ snapshot: HealthSummarySnapshot,
+        instance: TesseraeInstance
+    ) async throws -> PersonalDataSourceStatus
     func deletePersonalData(
         sourceID: PersonalDataSourceID,
         instance: TesseraeInstance

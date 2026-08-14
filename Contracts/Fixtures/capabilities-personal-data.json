@@ -21,10 +21,11 @@
     "image_url_push",
     "webpage_push",
     "image_framing",
-    "personal_data_reminders"
+    "personal_data_reminders",
+    "personal_data_health"
   ],
   "personal_data": {
-    "sources": ["reminders", "reminders.fridge"]
+    "sources": ["reminders", "reminders.fridge", "health.summary"]
   },
   "limits": {
     "image_upload_bytes": 26214400,

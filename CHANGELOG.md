@@ -11,6 +11,17 @@ capabilities.
 
 ## [Unreleased]
 
+### Added
+
+- Added the contract-only Apple Health seven-day summary proposal. The strict
+  `health.summary` source independently gates Activity, Sleep, and Workouts,
+  preserves sleep and workout timing, uses stable per-instance opaque workout
+  IDs, bounds every list and metric, and explicitly excludes routes, heart rate,
+  raw samples, HealthKit identifiers, source/device identity, and free-form
+  metadata. Synthetic fixtures, Swift transport models, privacy disclosure, and
+  contract tests are included; HealthKit authorization, queries, settings UI,
+  server storage, and widgets remain separate follow-up implementations.
+
 ## [0.6.2] - 2026-08-14
 
 ### Added

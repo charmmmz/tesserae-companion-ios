@@ -3,6 +3,7 @@ import Foundation
 public enum PersonalDataSourceID: String, Codable, CaseIterable, Hashable, Sendable {
     case reminders
     case remindersFridge = "reminders.fridge"
+    case healthSummary = "health.summary"
 }
 
 public struct PersonalDataCapabilities: Codable, Hashable, Sendable {
@@ -166,5 +167,12 @@ public struct PersonalDataStatusResponse: Codable, Hashable, Sendable {
 public extension ServerCapabilities {
     func supports(personalDataSource sourceID: PersonalDataSourceID) -> Bool {
         personalData?.sources.contains(sourceID.rawValue) == true
+    }
+
+    /// Apple Health is a separate consent boundary and requires both the
+    /// dedicated feature and strict source advertisement.
+    var supportsHealthSummary: Bool {
+        features.contains("personal_data_health")
+            && supports(personalDataSource: .healthSummary)
     }
 }
