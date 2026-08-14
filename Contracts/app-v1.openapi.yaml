@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Tesserae Companion API
-  version: 0.10.0
+  version: 0.11.0
   description: >-
     Companion API contract for community-built clients. Previews, History,
     resend, remote-image push, webpage push, and server-advertised image fit
@@ -12,6 +12,9 @@ info:
     not infer generic support from the legacy feature flag or fall back to
     `reminders.fridge`. Apple Health clients require both the separate
     `personal_data_health` feature and `health.summary` source advertisement.
+    Native Gallery browsing, internal-folder creation, and one-image-at-a-time
+    upload are gated independently from image push and from future destructive
+    Gallery management or Offline Album authoring.
 servers:
   - url: /
 tags:
@@ -20,6 +23,7 @@ tags:
   - name: Displays
   - name: Dashboards
   - name: Images
+  - name: Gallery
   - name: Webpages
   - name: Jobs
   - name: Lineups
@@ -356,6 +360,219 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /api/app/v1/gallery/folders:
+    get:
+      tags: [Gallery]
+      operationId: listCompanionGalleryFolders
+      summary: List Gallery folders without exposing host filesystem paths
+      description: >-
+        Requires gallery:read and the gallery feature. Internal and external
+        folders share the same read model; writable is computed by the server.
+      responses:
+        "200":
+          description: Gallery folder summaries in server-defined display order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GalleryFoldersResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Gallery]
+      operationId: createCompanionGalleryFolder
+      summary: Create one writable internal Gallery folder
+      description: >-
+        Requires gallery:write and the gallery feature. The server validates
+        and normalizes the requested display name, creates only an internal
+        folder, and returns its opaque stable identifier. Companion cannot link
+        an external host path through this surface.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GalleryFolderCreateRequest"
+      responses:
+        "201":
+          description: Internal folder created with an empty image list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GalleryFolderResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/app/v1/gallery/folders/{folder_id}:
+    parameters:
+      - $ref: "#/components/parameters/GalleryFolderID"
+    get:
+      tags: [Gallery]
+      operationId: getCompanionGalleryFolder
+      summary: Read one Gallery folder and its images
+      description: >-
+        Requires gallery:read and the gallery feature. Image order is the
+        server's canonical folder order; no host filesystem path is returned.
+      responses:
+        "200":
+          description: Folder metadata and image resources
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GalleryFolderResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/app/v1/gallery/folders/{folder_id}/images:
+    parameters:
+      - $ref: "#/components/parameters/GalleryFolderID"
+    post:
+      tags: [Gallery]
+      operationId: uploadCompanionGalleryImage
+      summary: Upload one still image into a writable Gallery folder
+      description: >-
+        Requires gallery:write and the gallery feature. Each request contains
+        exactly one image and has its own Idempotency-Key; the client owns its
+        upload queue, concurrency, progress, and retry policy. The server
+        decodes and validates the image, removes all location metadata, bakes
+        orientation into the stored pixels, preserves the ICC colour profile,
+        chooses the stored filename and identifiers, and atomically publishes
+        the image to the folder. External folders return a resource conflict.
+        This synchronous storage write creates neither a Job nor History.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [image]
+              properties:
+                image:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: >-
+            Image stored. Repeating the same request with the same key returns
+            this original response rather than creating a duplicate.
+          headers:
+            Location:
+              description: Relative authenticated content URL for the image
+              schema:
+                type: string
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GalleryImageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          description: Encoded or decoded image exceeds Gallery limits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "415":
+          description: Unsupported or undecodable still-image media type
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/app/v1/gallery/images/{image_id}/thumbnail:
+    parameters:
+      - $ref: "#/components/parameters/GalleryImageID"
+    get:
+      tags: [Gallery]
+      operationId: getCompanionGalleryImageThumbnail
+      summary: Read a cached Gallery thumbnail
+      description: Requires gallery:read and the gallery feature.
+      parameters:
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: Server-generated thumbnail
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        "304":
+          description: The cached thumbnail is still current
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/app/v1/gallery/images/{image_id}/content:
+    parameters:
+      - $ref: "#/components/parameters/GalleryImageID"
+    get:
+      tags: [Gallery]
+      operationId: getCompanionGalleryImageContent
+      summary: Read one normalized Gallery image
+      description: >-
+        Requires gallery:read and the gallery feature. The response is the
+        server-owned stored image, not an arbitrary host filesystem path. A
+        client may pass these bytes into the existing POST /api/app/v1/images
+        Send flow; Gallery does not introduce a second delivery action or make
+        Send depend on frame_cache support.
+      parameters:
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: Stored image content
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Content-Disposition:
+              description: Safe display filename selected by the server
+              schema:
+                type: string
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        "304":
+          description: The stored image is still current
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/app/v1/image-urls:
     post:
       tags: [Images]
@@ -714,6 +931,24 @@ components:
       required: true
       schema:
         type: string
+    GalleryFolderID:
+      in: path
+      name: folder_id
+      required: true
+      description: Opaque Gallery folder identifier, never a host path
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 256
+    GalleryImageID:
+      in: path
+      name: image_id
+      required: true
+      description: Opaque Gallery image identifier, never a filename or host path
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 512
     JobID:
       in: path
       name: job_id
@@ -745,8 +980,8 @@ components:
       required: true
       description: >-
         Opaque client-generated key. Reusing a key with the same credential,
-        method, path, and payload returns the original job; changing the payload
-        returns idempotency_conflict.
+        method, path, and payload returns the original response; changing the
+        payload returns idempotency_conflict.
       schema:
         type: string
         minLength: 16
@@ -824,7 +1059,7 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
     Conflict:
-      description: Pairing code or idempotency-key conflict
+      description: Pairing code, idempotency-key, or resource-state conflict
       content:
         application/json:
           schema:
@@ -881,6 +1116,7 @@ components:
               - image_url_push
               - webpage_push
               - image_framing
+              - gallery
               - personal_data_reminders
               - personal_data_health
               - lineups
@@ -936,6 +1172,29 @@ components:
             image_framing must publish this limit so clients do not hard-code
             an editor range.
           type: number
+          minimum: 1
+        gallery_upload_bytes:
+          description: >-
+            Maximum encoded bytes in one Gallery image request. Required when
+            gallery is advertised; each request contains exactly one image.
+          type: integer
+          minimum: 1
+        gallery_image_content_types:
+          description: >-
+            Still-image media types accepted by Gallery upload. Required when
+            gallery is advertised and independent from POST /images limits.
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/GalleryImageContentType"
+        gallery_upload_batch_size:
+          description: >-
+            Advisory maximum number of Photos selections the client should add
+            to one managed upload batch. It is not an HTTP request cardinality;
+            every request still contains exactly one image. Required when
+            gallery is advertised.
+          type: integer
           minimum: 1
         personal_data_stale_after_seconds:
           description: >-
@@ -1017,6 +1276,8 @@ components:
               - dashboards:read
               - push:write
               - media:write
+              - gallery:read
+              - gallery:write
               - personal_data:write
               - lineups:read
               - lineups:control
@@ -1042,6 +1303,8 @@ components:
               - dashboards:read
               - push:write
               - media:write
+              - gallery:read
+              - gallery:write
               - personal_data:write
               - lineups:read
               - lineups:control
@@ -1794,6 +2057,15 @@ components:
         firmware_version:
           type: string
           nullable: true
+        capability_support:
+          description: >-
+            Server-computed support states keyed by protocol capability rather
+            than device model. A server advertising gallery includes a
+            frame_cache entry so Gallery and future Album surfaces can present
+            supported, unsupported, and unknown targets consistently. Clients
+            must not infer support from an SD-card model list.
+          allOf:
+            - $ref: "#/components/schemas/DeviceCapabilitySupportMap"
         has_pending_render:
           type: boolean
           description: >-
@@ -1821,6 +2093,36 @@ components:
         preview_url:
           type: string
           description: Authenticated Companion path for this exact revision.
+    DeviceCapabilitySupportMap:
+      type: object
+      minProperties: 1
+      additionalProperties:
+        $ref: "#/components/schemas/DeviceCapabilitySupport"
+    DeviceCapabilitySupport:
+      type: object
+      additionalProperties: false
+      required: [state]
+      properties:
+        state:
+          description: >-
+            supported only when the latest usable device report advertises the
+            capability; unsupported when a usable report explicitly lacks it;
+            unknown when the server has no usable current report.
+          type: string
+          enum: [supported, unsupported, unknown]
+        reason_code:
+          description: >-
+            Optional stable machine-readable explanation. Clients localize
+            known values and use a generic explanation for unknown future
+            values.
+          type: string
+          minLength: 1
+          maxLength: 80
+        observed_at:
+          description: Time of the device report used for this computed state
+          type: string
+          format: date-time
+          nullable: true
     Panel:
       type: object
       additionalProperties: false
@@ -1889,6 +2191,138 @@ components:
         override_quiet_hours:
           type: boolean
           default: false
+    GalleryFoldersResponse:
+      type: object
+      additionalProperties: false
+      required: [folders]
+      properties:
+        folders:
+          type: array
+          items:
+            $ref: "#/components/schemas/GalleryFolder"
+    GalleryFolderResponse:
+      type: object
+      additionalProperties: false
+      required: [folder, images]
+      properties:
+        folder:
+          $ref: "#/components/schemas/GalleryFolder"
+        images:
+          description: Images in the server's canonical folder order
+          type: array
+          items:
+            $ref: "#/components/schemas/GalleryImage"
+    GalleryFolderCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          description: >-
+            User-visible name. The server validates and normalizes its storage
+            representation; the client never constructs an id or path from it.
+          type: string
+          minLength: 1
+          maxLength: 80
+    GalleryFolder:
+      type: object
+      additionalProperties: false
+      required: [id, name, kind, writable, image_count, cover_thumbnail_url]
+      properties:
+        id:
+          description: Opaque stable folder identifier, never a host path
+          type: string
+          minLength: 1
+          maxLength: 256
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        kind:
+          type: string
+          enum: [internal, external]
+        writable:
+          description: >-
+            Server-computed write eligibility. External folders are false in
+            contract 0.11.0; future policy must not be inferred from kind alone.
+          type: boolean
+        image_count:
+          type: integer
+          minimum: 0
+        cover_thumbnail_url:
+          description: Relative authenticated thumbnail URL, or null when empty
+          type: string
+          nullable: true
+    GalleryImageResponse:
+      type: object
+      additionalProperties: false
+      required: [image]
+      properties:
+        image:
+          $ref: "#/components/schemas/GalleryImage"
+    GalleryImage:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - folder_id
+        - name
+        - content_type
+        - bytes
+        - width
+        - height
+        - etag
+        - thumbnail_url
+        - content_url
+      properties:
+        id:
+          description: Opaque stable image identifier, never a filename or path
+          type: string
+          minLength: 1
+          maxLength: 512
+        folder_id:
+          type: string
+          minLength: 1
+          maxLength: 256
+        name:
+          description: Safe server-selected display filename; not resource identity
+          type: string
+          minLength: 1
+          maxLength: 255
+        content_type:
+          $ref: "#/components/schemas/GalleryImageContentType"
+        bytes:
+          type: integer
+          minimum: 1
+        width:
+          description: Pixel width after the server bakes source orientation
+          type: integer
+          minimum: 1
+        height:
+          description: Pixel height after the server bakes source orientation
+          type: integer
+          minimum: 1
+        etag:
+          description: Validator for both content and derived thumbnail caching
+          type: string
+          minLength: 1
+        thumbnail_url:
+          type: string
+        content_url:
+          type: string
+        created_at:
+          description: Server import time when available
+          type: string
+          format: date-time
+          nullable: true
+    GalleryImageContentType:
+      type: string
+      enum:
+        - image/jpeg
+        - image/png
+        - image/heic
+        - image/heif
+        - image/webp
     ImagePushRequest:
       type: object
       additionalProperties: false
@@ -2608,6 +3042,7 @@ components:
                 - image_too_large
                 - url_blocked
                 - idempotency_conflict
+                - resource_conflict
                 - not_resendable
                 - temporarily_unavailable
                 - precondition_failed

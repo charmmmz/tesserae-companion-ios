@@ -53,6 +53,27 @@ class FixtureState:
             lineup["id"]: lineup
             for lineup in load_fixture("lineups-response.json")["lineups"]
         }
+        self.gallery_folders = {
+            folder["id"]: folder
+            for folder in load_fixture("gallery-folders-response.json")["folders"]
+        }
+        family = load_fixture("gallery-folder-response.json")
+        archive = load_fixture("gallery-external-folder-response.json")
+        self.gallery_images_by_folder = {
+            folder_id: [] for folder_id in self.gallery_folders
+        }
+        self.gallery_images_by_folder[family["folder"]["id"]] = family["images"]
+        self.gallery_images_by_folder[archive["folder"]["id"]] = archive["images"]
+        self.gallery_images = {
+            image["id"]: image
+            for image in [*family["images"], *archive["images"]]
+        }
+        self.gallery_image_blobs = {
+            image_id: FIXTURE_PREVIEW_PNG for image_id in self.gallery_images
+        }
+        self.gallery_uploads_by_key: dict[str, tuple[str, dict[str, Any]]] = {}
+        self.gallery_folder_sequence = 0
+        self.gallery_sequence = 0
 
     def accept_job(
         self,
@@ -122,12 +143,66 @@ class FixtureRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         path = urlparse(self.path).path.rstrip("/")
         if path == "/api/app/v1":
-            self.send_fixture("capabilities-lineups.json")
+            self.send_fixture("capabilities-gallery.json")
             return
         if not self.authorized():
             return
         if path == "/api/app/v1/devices":
-            self.send_fixture("devices-response.json")
+            self.send_fixture("devices-gallery-response.json")
+            return
+        if path == "/api/app/v1/gallery/folders":
+            with self.server.state.lock:
+                folders = list(self.server.state.gallery_folders.values())
+            self.send_json(HTTPStatus.OK, {"folders": folders})
+            return
+        if path.startswith("/api/app/v1/gallery/folders/"):
+            folder_id = path.rsplit("/", 1)[-1]
+            with self.server.state.lock:
+                folder = self.server.state.gallery_folders.get(folder_id)
+                images = list(
+                    self.server.state.gallery_images_by_folder.get(folder_id, [])
+                )
+            if folder is None:
+                self.send_error_response(
+                    HTTPStatus.NOT_FOUND,
+                    "not_found",
+                    "The requested Gallery folder does not exist.",
+                )
+                return
+            self.send_json(HTTPStatus.OK, {"folder": folder, "images": images})
+            return
+        if path.startswith("/api/app/v1/gallery/images/") and path.endswith(
+            ("/thumbnail", "/content")
+        ):
+            image_id = path.split("/")[-2]
+            with self.server.state.lock:
+                image = self.server.state.gallery_images.get(image_id)
+                blob = self.server.state.gallery_image_blobs.get(image_id)
+            if image is None or blob is None:
+                self.send_error_response(
+                    HTTPStatus.NOT_FOUND,
+                    "not_found",
+                    "The requested Gallery image does not exist.",
+                )
+                return
+            thumbnail = path.endswith("/thumbnail")
+            etag = (
+                f'"{image_id}-thumbnail"' if thumbnail else str(image["etag"])
+            )
+            if self.headers.get("If-None-Match") == etag:
+                self.send_response(HTTPStatus.NOT_MODIFIED)
+                self.send_header("ETag", etag)
+                self.end_headers()
+                return
+            headers = {"ETag": etag, "Cache-Control": "private, no-cache"}
+            if not thumbnail:
+                headers["Content-Disposition"] = f'inline; filename="{image["name"]}"'
+            self.send_bytes(
+                HTTPStatus.OK,
+                FIXTURE_PREVIEW_PNG if thumbnail else blob,
+                content_type="image/png" if thumbnail else str(image["content_type"]),
+                headers=headers,
+            )
             return
         if path == "/api/app/v1/dashboards":
             self.send_fixture("dashboards-response.json")
@@ -212,10 +287,80 @@ class FixtureRequestHandler(BaseHTTPRequestHandler):
                     "Enter a valid six-digit fixture pairing code.",
                 )
                 return
-            self.send_fixture("pair-response-lineups.json", status=HTTPStatus.CREATED)
+            self.send_fixture("pair-response-gallery.json", status=HTTPStatus.CREATED)
             return
 
         if not self.authorized():
+            return
+        if path == "/api/app/v1/gallery/folders":
+            payload = self.read_json()
+            if payload is None:
+                return
+            if set(payload) != {"name"} or not isinstance(payload.get("name"), str):
+                self.send_error_response(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid_request",
+                    "A Gallery folder name is required.",
+                )
+                return
+            name = " ".join(payload["name"].split()).strip()
+            if not name or len(name) > 80:
+                self.send_error_response(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid_request",
+                    "Gallery folder names must contain 1 to 80 characters.",
+                )
+                return
+            with self.server.state.lock:
+                conflict = any(
+                    folder["name"].casefold() == name.casefold()
+                    for folder in self.server.state.gallery_folders.values()
+                )
+                if not conflict:
+                    self.server.state.gallery_folder_sequence += 1
+                    folder_id = (
+                        "folder_created_"
+                        f"{self.server.state.gallery_folder_sequence:04d}"
+                    )
+                    folder = {
+                        "id": folder_id,
+                        "name": name,
+                        "kind": "internal",
+                        "writable": True,
+                        "image_count": 0,
+                        "cover_thumbnail_url": None,
+                    }
+                    self.server.state.gallery_folders[folder_id] = folder
+                    self.server.state.gallery_images_by_folder[folder_id] = []
+            if conflict:
+                self.send_error_response(
+                    HTTPStatus.CONFLICT,
+                    "resource_conflict",
+                    "A Gallery folder with that normalized name already exists.",
+                )
+                return
+            self.send_json(
+                HTTPStatus.CREATED,
+                {"folder": folder, "images": []},
+            )
+            return
+        if path.startswith("/api/app/v1/gallery/folders/") and path.endswith(
+            "/images"
+        ):
+            folder_id = path.split("/")[-2]
+            content_type = self.headers.get("Content-Type", "")
+            body = self.read_body()
+            if "multipart/form-data" not in content_type:
+                self.send_error_response(
+                    HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+                    "unsupported_image",
+                    "Expected one multipart Gallery image.",
+                )
+                return
+            upload = self.parse_gallery_image_multipart(content_type, body)
+            if upload is None:
+                return
+            self.accept_gallery_upload(folder_id=folder_id, upload=upload)
             return
         if path.startswith("/api/app/v1/dashboards/") and path.endswith("/push"):
             payload = self.read_json()
@@ -474,6 +619,154 @@ class FixtureRequestHandler(BaseHTTPRequestHandler):
                 "Retry-After": "1",
             },
         )
+
+    def accept_gallery_upload(
+        self,
+        *,
+        folder_id: str,
+        upload: dict[str, Any],
+    ) -> None:
+        with self.server.state.lock:
+            folder = self.server.state.gallery_folders.get(folder_id)
+        if folder is None:
+            self.send_error_response(
+                HTTPStatus.NOT_FOUND,
+                "not_found",
+                "The requested Gallery folder does not exist.",
+            )
+            return
+        if not folder["writable"]:
+            self.send_error_response(
+                HTTPStatus.CONFLICT,
+                "resource_conflict",
+                "This Gallery folder is read-only.",
+            )
+            return
+
+        capabilities = load_fixture("capabilities-gallery.json")
+        limits = capabilities["limits"]
+        if upload["content_type"] not in limits["gallery_image_content_types"]:
+            self.send_error_response(
+                HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+                "unsupported_image",
+                "The Gallery image type is not advertised by this server.",
+            )
+            return
+        if len(upload["data"]) > limits["gallery_upload_bytes"]:
+            self.send_error_response(
+                HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                "image_too_large",
+                "The Gallery image exceeds the advertised byte limit.",
+            )
+            return
+
+        key = self.headers.get("Idempotency-Key", "")
+        if len(key) < 16:
+            self.send_error_response(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_request",
+                "Idempotency-Key must contain at least 16 characters.",
+            )
+            return
+        fingerprint = hashlib.sha256(
+            b"\0".join(
+                [
+                    folder_id.encode(),
+                    str(upload["content_type"]).encode(),
+                    str(upload["filename"]).encode(),
+                    upload["data"],
+                ]
+            )
+        ).hexdigest()
+
+        with self.server.state.lock:
+            existing = self.server.state.gallery_uploads_by_key.get(key)
+            if existing is not None:
+                existing_fingerprint, image = existing
+                conflict = existing_fingerprint != fingerprint
+            else:
+                conflict = False
+                self.server.state.gallery_sequence += 1
+                image_id = f"image_upload_{self.server.state.gallery_sequence:04d}"
+                safe_name = Path(str(upload["filename"])).name or "upload.jpg"
+                image = {
+                    "id": image_id,
+                    "folder_id": folder_id,
+                    "name": safe_name,
+                    "content_type": upload["content_type"],
+                    "bytes": len(upload["data"]),
+                    "width": 1600,
+                    "height": 1200,
+                    "etag": f'"{fingerprint[:16]}"',
+                    "thumbnail_url": (
+                        f"/api/app/v1/gallery/images/{image_id}/thumbnail"
+                    ),
+                    "content_url": f"/api/app/v1/gallery/images/{image_id}/content",
+                    "created_at": "2026-08-14T08:30:00Z",
+                }
+                self.server.state.gallery_uploads_by_key[key] = (fingerprint, image)
+                self.server.state.gallery_images[image_id] = image
+                self.server.state.gallery_image_blobs[image_id] = upload["data"]
+                self.server.state.gallery_images_by_folder[folder_id].append(image)
+                folder["image_count"] = len(
+                    self.server.state.gallery_images_by_folder[folder_id]
+                )
+                if folder["cover_thumbnail_url"] is None:
+                    folder["cover_thumbnail_url"] = image["thumbnail_url"]
+        if conflict:
+            self.send_error_response(
+                HTTPStatus.CONFLICT,
+                "idempotency_conflict",
+                "The Idempotency-Key was already used with another image.",
+            )
+            return
+        self.send_json(
+            HTTPStatus.CREATED,
+            {"image": image},
+            headers={"Location": image["content_url"], "ETag": image["etag"]},
+        )
+
+    def parse_gallery_image_multipart(
+        self,
+        content_type: str,
+        body: bytes,
+    ) -> dict[str, Any] | None:
+        envelope = (
+            f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n".encode()
+            + body
+        )
+        message = BytesParser(policy=email_policy).parsebytes(envelope)
+        if not message.is_multipart():
+            self.send_error_response(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_request",
+                "The multipart Gallery request is invalid.",
+            )
+            return None
+
+        images: list[dict[str, Any]] = []
+        unexpected = False
+        for part in message.iter_parts():
+            name = part.get_param("name", header="content-disposition")
+            if name != "image":
+                unexpected = True
+                continue
+            data = part.get_payload(decode=True) or b""
+            images.append(
+                {
+                    "filename": part.get_filename() or "upload.jpg",
+                    "content_type": part.get_content_type(),
+                    "data": data,
+                }
+            )
+        if unexpected or len(images) != 1 or not images[0]["data"]:
+            self.send_error_response(
+                HTTPStatus.BAD_REQUEST,
+                "invalid_request",
+                "Exactly one non-empty Gallery image part is required.",
+            )
+            return None
+        return images[0]
 
     def validate_link_push_payload(
         self,

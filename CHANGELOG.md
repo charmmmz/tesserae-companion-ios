@@ -13,6 +13,12 @@ capabilities.
 
 ### Added
 
+- Defined the accepted native Gallery contract for browsing internal and
+  external folders, creating internal folders, and uploading Photos one image
+  per idempotent request. Gallery-specific limits, default read/write scopes,
+  server-owned privacy normalization, opaque resource identifiers, and a
+  reusable device-capability support state prepare the server adapter and iOS
+  surface without exposing host paths or enabling destructive management.
 - Added the contract-only Apple Health seven-day summary proposal. The strict
   `health.summary` source independently gates Activity, Sleep, and Workouts,
   preserves sleep and workout timing, uses stable per-instance opaque workout

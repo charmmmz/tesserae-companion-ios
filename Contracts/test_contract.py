@@ -21,15 +21,23 @@ CASES = {
     "capabilities-framing.json": "Capabilities",
     "capabilities-lineups.json": "Capabilities",
     "capabilities-lineup-authoring.json": "Capabilities",
+    "capabilities-gallery.json": "Capabilities",
     "pair-request.json": "PairingRequest",
     "pair-response.json": "PairingResponse",
     "pair-response-lineups.json": "PairingResponse",
+    "pair-response-gallery.json": "PairingResponse",
     "session-authorization.json": "CompanionSessionAuthorization",
     "devices-response.json": "DevicesResponse",
+    "devices-gallery-response.json": "DevicesResponse",
     "dashboards-response.json": "DashboardsResponse",
     "dashboard-push-request.json": "DashboardPushRequest",
     "image-push-request.json": "ImagePushRequest",
     "image-push-request-basic.json": "ImagePushRequest",
+    "gallery-folders-response.json": "GalleryFoldersResponse",
+    "gallery-folder-response.json": "GalleryFolderResponse",
+    "gallery-external-folder-response.json": "GalleryFolderResponse",
+    "gallery-folder-create-request.json": "GalleryFolderCreateRequest",
+    "gallery-image-upload-response.json": "GalleryImageResponse",
     "image-url-push-request.json": "ImageURLPushRequest",
     "webpage-push-request.json": "WebpagePushRequest",
     "history-response.json": "HistoryResponse",
@@ -88,7 +96,7 @@ def _json_schema(value: Any) -> Any:
 
 def test_openapi_shape_and_operation_ids_are_stable() -> None:
     assert SPEC["openapi"] == "3.0.3"
-    assert SPEC["info"]["version"] == "0.10.0"
+    assert SPEC["info"]["version"] == "0.11.0"
     assert set(SPEC["paths"]) == {
         "/api/app/v1",
         "/api/app/v1/pair",
@@ -101,6 +109,11 @@ def test_openapi_shape_and_operation_ids_are_stable() -> None:
         "/api/app/v1/dashboards/{dashboard_id}/preview",
         "/api/app/v1/dashboards/{dashboard_id}/push",
         "/api/app/v1/images",
+        "/api/app/v1/gallery/folders",
+        "/api/app/v1/gallery/folders/{folder_id}",
+        "/api/app/v1/gallery/folders/{folder_id}/images",
+        "/api/app/v1/gallery/images/{image_id}/thumbnail",
+        "/api/app/v1/gallery/images/{image_id}/content",
         "/api/app/v1/image-urls",
         "/api/app/v1/webpages",
         "/api/app/v1/lineups",
@@ -523,3 +536,106 @@ def test_history_contract_keeps_composition_preview_and_resend_correlatable() ->
         "/api/app/v1/history/{history_id}/preview"
     ]["get"]["responses"]["200"]["description"]
     assert "not a device-final preview" in preview_description
+
+
+def test_gallery_contract_is_capability_gated_and_non_destructive() -> None:
+    base = json.loads((FIXTURES / "capabilities.json").read_text())
+    gallery = json.loads((FIXTURES / "capabilities-gallery.json").read_text())
+
+    assert "gallery" not in base["features"]
+    assert "gallery" in gallery["features"]
+    assert gallery["limits"]["gallery_upload_bytes"] == 20 * 1024 * 1024
+    assert gallery["limits"]["gallery_upload_batch_size"] == 20
+    assert gallery["limits"]["gallery_image_content_types"] == [
+        "image/jpeg",
+        "image/png",
+        "image/heic",
+        "image/heif",
+        "image/webp",
+    ]
+
+    pairing_scopes = SPEC["components"]["schemas"]["PairingResponse"][
+        "properties"
+    ]["scopes"]["items"]["enum"]
+    session_scopes = SPEC["components"]["schemas"][
+        "CompanionSessionAuthorization"
+    ]["properties"]["scopes"]["items"]["enum"]
+    assert "gallery:read" in pairing_scopes
+    assert "gallery:write" in pairing_scopes
+    assert "gallery:read" in session_scopes
+    assert "gallery:write" in session_scopes
+    assert "gallery:manage" not in pairing_scopes
+    assert "gallery:manage" not in session_scopes
+
+    folder_resource = SPEC["paths"][
+        "/api/app/v1/gallery/folders/{folder_id}"
+    ]
+    assert set(folder_resource).isdisjoint({"delete", "patch", "put"})
+    assert not any(
+        "delete" in path or "move" in path or "rename" in path
+        for path in SPEC["paths"]
+        if path.startswith("/api/app/v1/gallery/")
+    )
+
+    folders = json.loads((FIXTURES / "gallery-folders-response.json").read_text())
+    external = next(folder for folder in folders["folders"] if folder["kind"] == "external")
+    assert external["writable"] is False
+    assert "external_path" not in external
+
+
+def test_gallery_upload_is_one_synchronous_idempotent_image() -> None:
+    operation = SPEC["paths"][
+        "/api/app/v1/gallery/folders/{folder_id}/images"
+    ]["post"]
+    parameter_refs = [item.get("$ref") for item in operation["parameters"]]
+    assert "#/components/parameters/IdempotencyKey" in parameter_refs
+
+    form = operation["requestBody"]["content"]["multipart/form-data"]["schema"]
+    assert form["required"] == ["image"]
+    assert set(form["properties"]) == {"image"}
+    assert form["properties"]["image"]["format"] == "binary"
+    assert operation["responses"]["201"]["content"]["application/json"][
+        "schema"
+    ] == {"$ref": "#/components/schemas/GalleryImageResponse"}
+    assert operation["responses"]["201"] != {
+        "$ref": "#/components/responses/JobAccepted"
+    }
+
+    description = operation["description"]
+    assert "exactly one image" in description
+    assert "removes all location metadata" in description
+    assert "bakes orientation" in description
+    assert "preserves the ICC colour profile" in description
+    assert "neither a Job nor History" in description
+
+    error_codes = SPEC["components"]["schemas"]["ErrorResponse"]["properties"][
+        "error"
+    ]["properties"]["code"]["enum"]
+    assert "resource_conflict" in error_codes
+
+
+def test_device_capability_support_is_runtime_computed_and_tri_state() -> None:
+    response = json.loads(
+        (FIXTURES / "devices-gallery-response.json").read_text()
+    )
+    by_id = {device["id"]: device for device in response["devices"]}
+
+    assert by_id["picpak-kitchen"]["capability_support"]["frame_cache"] == {
+        "state": "unsupported",
+        "reason_code": "not_advertised",
+        "observed_at": "2026-08-14T07:58:30Z",
+    }
+    assert by_id["e1004-desk"]["capability_support"]["frame_cache"][
+        "state"
+    ] == "supported"
+    assert by_id["e1003-bedroom"]["capability_support"]["frame_cache"] == {
+        "state": "unknown",
+        "reason_code": "no_usable_heartbeat",
+        "observed_at": None,
+    }
+
+    field_description = SPEC["components"]["schemas"]["Device"]["properties"][
+        "capability_support"
+    ]["description"]
+    assert "rather than device model" in field_description
+    assert "must not infer support from an SD-card model list" in field_description

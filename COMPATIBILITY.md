@@ -171,6 +171,42 @@ Semantic changes may emit source-wide `personal_data.health.summary` into the
 existing opt-in page-refresh path after PUT returns; an envelope-only renewal
 does not. Section selectors remain a future additive extension.
 
+## Accepted contract 0.11 Gallery management
+
+Gallery remains optional and is enabled only when `GET /api/app/v1` advertises
+`gallery`. It is not part of `CompanionCompatibility.requiredFeatures`, so
+older servers remain compatible and the app must hide the native Gallery
+surface when the capability is absent.
+
+Gallery-capable pairings receive `gallery:read` and `gallery:write`. The first
+write slice is intentionally non-destructive: it creates internal folders and
+uploads one image per idempotent multipart request. Delete, rename, move, and
+external-path administration are not implied by `gallery:write`. External
+folders remain browseable and carry `writable: false` without exposing their
+host path.
+
+Choosing Send for a Gallery image reuses the existing media push contract: the
+client reads the authenticated Gallery content resource and submits those bytes
+through `POST /api/app/v1/images`. It does not require Offline Album support and
+does not add another delivery endpoint.
+
+The server advertises Gallery-specific upload bytes, accepted media types, and
+an advisory client batch size. Uploads are normalized server-side: location
+metadata is removed, orientation is baked into pixels, and the ICC profile is
+preserved. A client queues separate requests and does not infer a batch API.
+
+Optional `Device.capability_support` entries are computed from current device
+reports rather than model names. Under the Gallery contract, `frame_cache`
+distinguishes supported, unsupported, and unknown targets for a future Offline
+Album surface; ordinary Gallery browsing and online Send do not require that
+device capability.
+
+The contract was accepted in
+[Discussion #225](https://github.com/dmellok/tesserae/discussions/225), but the
+production server adapter and native app surface are separate follow-ups. The
+fixtures must not be interpreted as evidence that a current stable Tesserae
+release advertises Gallery.
+
 ## Physical validation
 
 On 2026-07-28, a physical iPhone paired with a Tesserae `0.207.0` deployment

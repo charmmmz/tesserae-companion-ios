@@ -82,6 +82,49 @@ def image_request(
     return response.status, json.loads(response_body) if response_body else None
 
 
+def gallery_image_request(
+    base_url: str,
+    folder_id: str,
+    *,
+    token: str,
+    idempotency_key: str,
+    image: bytes = b"fixture-gallery-image",
+    filename: str = "beach.jpg",
+    content_type: str = "image/jpeg",
+) -> tuple[int, dict | None]:
+    boundary = "TesseraeGalleryFixtureBoundary"
+    body = b"".join(
+        [
+            f"--{boundary}\r\n".encode(),
+            (
+                'Content-Disposition: form-data; name="image"; '
+                f'filename="{filename}"\r\n'
+            ).encode(),
+            f"Content-Type: {content_type}\r\n\r\n".encode(),
+            image,
+            b"\r\n",
+            f"--{boundary}--\r\n".encode(),
+        ]
+    )
+    prepared = urllib.request.Request(
+        f"{base_url}/api/app/v1/gallery/folders/{folder_id}/images",
+        data=body,
+        headers={
+            "Accept": "application/json",
+            "Authorization": f"Bearer {token}",
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "Idempotency-Key": idempotency_key,
+        },
+        method="POST",
+    )
+    try:
+        response = urllib.request.urlopen(prepared, timeout=2)
+    except urllib.error.HTTPError as error:
+        return error.code, json.loads(error.read())
+    response_body = response.read()
+    return response.status, json.loads(response_body) if response_body else None
+
+
 def test_fixture_server_exercises_companion_vertical_slice():
     server = FixtureHTTPServer(("127.0.0.1", 0))
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -107,6 +150,9 @@ def test_fixture_server_exercises_companion_vertical_slice():
         assert "webpage_push" in capabilities["features"]
         assert "lineups" in capabilities["features"]
         assert "lineup_control" in capabilities["features"]
+        assert "gallery" in capabilities["features"]
+        assert capabilities["limits"]["gallery_upload_bytes"] == 20 * 1024 * 1024
+        assert capabilities["limits"]["gallery_upload_batch_size"] == 20
 
         status, pair = request(
             base_url,
@@ -126,6 +172,8 @@ def test_fixture_server_exercises_companion_vertical_slice():
         assert pair["token"] == FIXTURE_TOKEN
         assert "lineups:read" in pair["scopes"]
         assert "lineups:control" in pair["scopes"]
+        assert "gallery:read" in pair["scopes"]
+        assert "gallery:write" in pair["scopes"]
 
         status, devices = request(
             base_url,
@@ -134,6 +182,132 @@ def test_fixture_server_exercises_companion_vertical_slice():
         )
         assert status == 200
         assert devices["devices"][0]["id"] == "picpak-kitchen"
+        assert devices["devices"][0]["capability_support"]["frame_cache"][
+            "state"
+        ] == "unsupported"
+        assert devices["devices"][1]["capability_support"]["frame_cache"][
+            "state"
+        ] == "supported"
+        assert devices["devices"][2]["capability_support"]["frame_cache"][
+            "state"
+        ] == "unknown"
+
+        status, gallery_folders = request(
+            base_url,
+            "/api/app/v1/gallery/folders",
+            token=FIXTURE_TOKEN,
+        )
+        assert status == 200
+        assert gallery_folders["folders"][0]["name"] == "family"
+        external = next(
+            folder
+            for folder in gallery_folders["folders"]
+            if folder["kind"] == "external"
+        )
+        assert external["writable"] is False
+        assert "external_path" not in external
+
+        status, external_folder = request(
+            base_url,
+            "/api/app/v1/gallery/folders/folder_nas_archive",
+            token=FIXTURE_TOKEN,
+        )
+        assert status == 200
+        assert external_folder["images"][0]["id"] == "image_archive_01"
+
+        status, gallery_folder = request(
+            base_url,
+            "/api/app/v1/gallery/folders/folder_family",
+            token=FIXTURE_TOKEN,
+        )
+        assert status == 200
+        assert [image["id"] for image in gallery_folder["images"]] == [
+            "image_family_01",
+            "image_family_02",
+        ]
+
+        status, created_folder = request(
+            base_url,
+            "/api/app/v1/gallery/folders",
+            method="POST",
+            payload={"name": "summer 2026"},
+            token=FIXTURE_TOKEN,
+        )
+        assert status == 201
+        assert created_folder == {
+            "folder": {
+                "id": "folder_created_0001",
+                "name": "summer 2026",
+                "kind": "internal",
+                "writable": True,
+                "image_count": 0,
+                "cover_thumbnail_url": None,
+            },
+            "images": [],
+        }
+
+        status, folder_conflict = request(
+            base_url,
+            "/api/app/v1/gallery/folders",
+            method="POST",
+            payload={"name": "  SUMMER   2026  "},
+            token=FIXTURE_TOKEN,
+        )
+        assert status == 409
+        assert folder_conflict["error"]["code"] == "resource_conflict"
+
+        gallery_key = "fixture-gallery-upload-0001"
+        status, uploaded = gallery_image_request(
+            base_url,
+            "folder_family",
+            token=FIXTURE_TOKEN,
+            idempotency_key=gallery_key,
+        )
+        assert status == 201
+        assert uploaded["image"]["folder_id"] == "folder_family"
+        assert uploaded["image"]["name"] == "beach.jpg"
+
+        status, upload_retry = gallery_image_request(
+            base_url,
+            "folder_family",
+            token=FIXTURE_TOKEN,
+            idempotency_key=gallery_key,
+        )
+        assert status == 201
+        assert upload_retry["image"]["id"] == uploaded["image"]["id"]
+
+        status, upload_conflict = gallery_image_request(
+            base_url,
+            "folder_family",
+            token=FIXTURE_TOKEN,
+            idempotency_key=gallery_key,
+            image=b"different-gallery-image",
+        )
+        assert status == 409
+        assert upload_conflict["error"]["code"] == "idempotency_conflict"
+
+        status, external_upload = gallery_image_request(
+            base_url,
+            "folder_nas_archive",
+            token=FIXTURE_TOKEN,
+            idempotency_key="fixture-gallery-external-01",
+        )
+        assert status == 409
+        assert external_upload["error"]["code"] == "resource_conflict"
+
+        image_content = urllib.request.Request(
+            f"{base_url}{uploaded['image']['content_url']}",
+            headers={
+                "Authorization": f"Bearer {FIXTURE_TOKEN}",
+                "If-None-Match": uploaded["image"]["etag"],
+            },
+        )
+        try:
+            urllib.request.urlopen(image_content, timeout=2)
+            raise AssertionError("Expected a 304 response for Gallery content")
+        except urllib.error.HTTPError as error:
+            assert error.code == 304
+            assert error.headers["ETag"] == uploaded["image"]["etag"]
 
         key = "fixture-test-key-0001"
         status, accepted = request(
