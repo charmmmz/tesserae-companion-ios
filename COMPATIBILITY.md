@@ -214,6 +214,38 @@ The contract was accepted in
 first server adapter is available on Tesserae edge from v0.300.0. The native app
 surface remains a separate capability-gated follow-up.
 
+## Accepted contract 0.13 Offline Album authoring
+
+Offline Album is independently enabled by `offline_albums`; `gallery` alone
+never exposes the authoring action. The feature and its optional
+`offline_albums:write` scope are not part of the compatibility floor, so older
+servers and clients continue to browse Gallery and use online Send unchanged.
+The app reads the current session grant and hides or explains writes without
+invalidating a valid pairing.
+
+The contract uses one nested Album resource per opaque Gallery folder. A
+non-mutating preflight returns one server-computed target result per requested
+display. `supported`, `unsupported`, and `unknown` come from runtime reports;
+unknown remains selectable with its warning, while unsupported is refused.
+Optional `frame_cache.detail.capacity_bytes` and `max_frames` values are usable
+only when present. Missing capacity is unknown rather than zero and must not be
+filled from a model or storage-card allow-list.
+
+Preflight distinguishes fully offline frame count from partial capacity and
+marks projected bytes as `exact` or `estimated`. PUT claims at most one enabled
+producer per display and never silently replaces another Album. A 409 contains
+the contested display-to-Album map; only an explicit `replace_conflicts: true`
+request performs takeover, and it preserves every displaced Album and its
+uncontested bindings. DELETE removes only the Album producer and bindings, not
+the Gallery folder or source photos.
+
+Tesserae edge v0.303.0 contains the prerequisite single-producer enforcement
+and optional frame-cache detail advertisement. It deliberately does not yet
+implement the Companion preflight or nested routes; clients must continue to
+gate this surface on `offline_albums` rather than product version. Contract
+fixtures, Swift models, and transport methods can land before that adapter and
+native Library UI without claiming an end-to-end feature.
+
 ## Physical validation
 
 On 2026-07-28, a physical iPhone paired with a Tesserae `0.207.0` deployment

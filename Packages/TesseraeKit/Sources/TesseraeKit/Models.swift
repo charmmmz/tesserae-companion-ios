@@ -179,6 +179,10 @@ public struct ServerCapabilities: Codable, Hashable, Sendable {
     public var supportsGallery: Bool {
         features.contains("gallery")
     }
+
+    public var supportsOfflineAlbums: Bool {
+        features.contains("offline_albums")
+    }
 }
 
 public struct TesseraeInstance: Codable, Identifiable, Hashable, Sendable {
@@ -374,6 +378,39 @@ public enum DisplayFreshness: String, Codable, Hashable, Sendable {
     case unknown
 }
 
+public enum DeviceCapabilitySupportState: String, Codable, Hashable, Sendable {
+    case supported
+    case unsupported
+    case unknown
+}
+
+public struct DeviceCapabilitySupport: Codable, Hashable, Sendable {
+    public let state: DeviceCapabilitySupportState
+    public let reasonCode: String?
+    public let observedAt: Date?
+    public let detail: [String: Int]?
+
+    public init(
+        state: DeviceCapabilitySupportState,
+        reasonCode: String? = nil,
+        observedAt: Date? = nil,
+        detail: [String: Int]? = nil
+    ) {
+        self.state = state
+        self.reasonCode = reasonCode
+        self.observedAt = observedAt
+        self.detail = detail
+    }
+
+    public var frameCacheCapacityBytes: Int? {
+        detail?["capacity_bytes"]
+    }
+
+    public var frameCacheMaxFrames: Int? {
+        detail?["max_frames"]
+    }
+}
+
 public struct PendingRender: Codable, Hashable, Sendable {
     public let revision: String
     public let renderedAt: Date?
@@ -407,6 +444,7 @@ public struct DisplaySummary: Codable, Identifiable, Hashable, Sendable {
     public let batteryPercent: Int?
     public let rssiDBM: Int?
     public let firmwareVersion: String?
+    public let capabilitySupport: [String: DeviceCapabilitySupport]?
     public let hasPendingRender: Bool?
     public let pendingRender: PendingRender?
 
@@ -421,6 +459,7 @@ public struct DisplaySummary: Codable, Identifiable, Hashable, Sendable {
         batteryPercent: Int? = nil,
         rssiDBM: Int? = nil,
         firmwareVersion: String? = nil,
+        capabilitySupport: [String: DeviceCapabilitySupport]? = nil,
         hasPendingRender: Bool? = nil,
         pendingRender: PendingRender? = nil
     ) {
@@ -434,6 +473,7 @@ public struct DisplaySummary: Codable, Identifiable, Hashable, Sendable {
         self.batteryPercent = batteryPercent
         self.rssiDBM = rssiDBM
         self.firmwareVersion = firmwareVersion
+        self.capabilitySupport = capabilitySupport
         self.hasPendingRender = hasPendingRender
         self.pendingRender = pendingRender
     }
@@ -449,8 +489,13 @@ public struct DisplaySummary: Codable, Identifiable, Hashable, Sendable {
         case batteryPercent
         case rssiDBM = "rssiDbm"
         case firmwareVersion
+        case capabilitySupport
         case hasPendingRender
         case pendingRender
+    }
+
+    public var frameCacheSupport: DeviceCapabilitySupport? {
+        capabilitySupport?["frame_cache"]
     }
 }
 
@@ -936,17 +981,25 @@ public struct APIErrorBody: Codable, Hashable, Sendable {
     public let code: String
     public let message: String
     public let requestID: String?
+    public let claims: [String: String]?
 
-    public init(code: String, message: String, requestID: String? = nil) {
+    public init(
+        code: String,
+        message: String,
+        requestID: String? = nil,
+        claims: [String: String]? = nil
+    ) {
         self.code = code
         self.message = message
         self.requestID = requestID
+        self.claims = claims
     }
 
     private enum CodingKeys: String, CodingKey {
         case code
         case message
         case requestID = "requestId"
+        case claims
     }
 }
 

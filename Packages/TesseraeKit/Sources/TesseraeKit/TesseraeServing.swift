@@ -31,6 +31,24 @@ public protocol TesseraeServing: Sendable {
         ifNoneMatch: String?,
         instance: TesseraeInstance
     ) async throws -> PreviewFetchResult
+    func fetchOfflineAlbum(
+        folderID: String,
+        instance: TesseraeInstance
+    ) async throws -> OfflineAlbumResponse
+    func preflightOfflineAlbum(
+        folderID: String,
+        draft: OfflineAlbumDraft,
+        instance: TesseraeInstance
+    ) async throws -> OfflineAlbumPreflightResponse
+    func putOfflineAlbum(
+        folderID: String,
+        request: OfflineAlbumWriteRequest,
+        instance: TesseraeInstance
+    ) async throws -> OfflineAlbumResponse
+    func deleteOfflineAlbum(
+        folderID: String,
+        instance: TesseraeInstance
+    ) async throws
     func fetchLineups(instance: TesseraeInstance) async throws -> [Lineup]
     func fetchLineup(id: String, instance: TesseraeInstance) async throws -> Lineup
     func fetchVersionedLineup(
@@ -180,6 +198,11 @@ public enum TesseraeClientError: Error, Equatable, LocalizedError, Sendable {
     case unavailable
     case unauthorized
     case forbidden(message: String, requestID: String?)
+    case offlineAlbumConflict(
+        claims: [String: String],
+        message: String,
+        requestID: String?
+    )
     case invalidResponse
     case httpStatus(Int)
     case transport(String)
@@ -207,6 +230,12 @@ public enum TesseraeClientError: Error, Equatable, LocalizedError, Sendable {
         case .unauthorized:
             "The Tesserae credential is invalid or has been revoked."
         case let .forbidden(message, requestID):
+            if let requestID {
+                "\(message) (request \(requestID))"
+            } else {
+                message
+            }
+        case let .offlineAlbumConflict(_, message, requestID):
             if let requestID {
                 "\(message) (request \(requestID))"
             } else {

@@ -498,6 +498,7 @@ private final class ShareComposerModel: ObservableObject {
              .incompatibleServer,
              .invalidResponse,
              .missingCredential,
+             .offlineAlbumConflict,
              .transport,
              .unauthorized,
              .unavailable:

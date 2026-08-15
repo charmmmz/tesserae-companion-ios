@@ -14,20 +14,24 @@ public actor MockTesseraeClient: TesseraeServing {
     private var galleryFoldersByID: [String: GalleryFolder]
     private var galleryImagesByFolderID: [String: [GalleryImage]]
     private var galleryImagesByIdempotencyKey: [String: GalleryImage] = [:]
+    private var offlineAlbumsByFolderID: [String: OfflineAlbum] = [:]
     private let lineupIntent: LineupIntent
     private let lineupFetchError: TesseraeClientError?
     private let lineupAuthoringGranted: Bool
+    private let offlineAlbumAuthoringGranted: Bool
 
     public init(
         latency: Duration = .milliseconds(180),
         lineupIntent: LineupIntent = .manual,
         lineupFetchError: TesseraeClientError? = nil,
-        lineupAuthoringGranted: Bool = true
+        lineupAuthoringGranted: Bool = true,
+        offlineAlbumAuthoringGranted: Bool = true
     ) {
         self.latency = latency
         self.lineupIntent = lineupIntent
         self.lineupFetchError = lineupFetchError
         self.lineupAuthoringGranted = lineupAuthoringGranted
+        self.offlineAlbumAuthoringGranted = offlineAlbumAuthoringGranted
         let family = GalleryFolder(
             id: "folder_family",
             name: "family",
@@ -134,7 +138,7 @@ public actor MockTesseraeClient: TesseraeServing {
         try await pause()
         return ServerCapabilities(
             product: "tesserae",
-            serverVersion: "0.300.0",
+            serverVersion: "0.303.0",
             api: CompanionAPI(version: 1),
             pairing: PairingCapabilities(supported: true, codeLength: 6, ttlSeconds: 600),
             features: [
@@ -153,6 +157,7 @@ public actor MockTesseraeClient: TesseraeServing {
                 "lineup_authoring",
                 "session_read",
                 "gallery",
+                "offline_albums",
             ],
             limits: CompanionLimits(
                 imageUploadBytes: 26_214_400,
@@ -191,7 +196,7 @@ public actor MockTesseraeClient: TesseraeServing {
             id: "demo-home",
             name: "Home",
             baseURL: baseURL,
-            serverVersion: "0.300.0",
+            serverVersion: "0.303.0",
             timezone: "Asia/Shanghai",
             webURL: "/"
         )
@@ -232,6 +237,9 @@ public actor MockTesseraeClient: TesseraeServing {
         if lineupAuthoringGranted {
             scopes.insert("lineups:write")
         }
+        if offlineAlbumAuthoringGranted {
+            scopes.insert("offline_albums:write")
+        }
         return CompanionSessionAuthorization(
             tokenID: "ct_fixture",
             scopes: scopes,
@@ -262,6 +270,13 @@ public actor MockTesseraeClient: TesseraeServing {
                 batteryPercent: 86,
                 rssiDBM: -54,
                 firmwareVersion: "1.8.0",
+                capabilitySupport: [
+                    "frame_cache": DeviceCapabilitySupport(
+                        state: .unsupported,
+                        reasonCode: "not_advertised",
+                        observedAt: .now.addingTimeInterval(-90)
+                    ),
+                ],
                 hasPendingRender: true,
                 pendingRender: PendingRender(
                     revision: "pending-demo-kitchen",
@@ -285,6 +300,16 @@ public actor MockTesseraeClient: TesseraeServing {
                 batteryPercent: 61,
                 rssiDBM: -67,
                 firmwareVersion: "1.8.0",
+                capabilitySupport: [
+                    "frame_cache": DeviceCapabilitySupport(
+                        state: .supported,
+                        observedAt: .now.addingTimeInterval(-7_200),
+                        detail: [
+                            "capacity_bytes": 67_108_864,
+                            "max_frames": 32,
+                        ]
+                    ),
+                ],
                 hasPendingRender: false
             ),
         ]
@@ -451,6 +476,132 @@ public actor MockTesseraeClient: TesseraeServing {
             return .notModified
         }
         return .image(data: Self.dashboardPreviewData, eTag: eTag)
+    }
+
+    public func fetchOfflineAlbum(
+        folderID: String,
+        instance: TesseraeInstance
+    ) async throws -> OfflineAlbumResponse {
+        try await pause()
+        guard let album = offlineAlbumsByFolderID[folderID] else {
+            throw TesseraeClientError.server(
+                code: "not_found",
+                message: "This Gallery folder has no Offline Album.",
+                requestID: nil
+            )
+        }
+        let targetPlans = offlineAlbumTargets(
+            deviceIDs: album.deviceIDs,
+            folderID: folderID
+        )
+        return OfflineAlbumResponse(album: album, targets: targetPlans)
+    }
+
+    public func preflightOfflineAlbum(
+        folderID: String,
+        draft: OfflineAlbumDraft,
+        instance: TesseraeInstance
+    ) async throws -> OfflineAlbumPreflightResponse {
+        try await pause()
+        try requireOfflineAlbumWritePermission()
+        guard galleryFoldersByID[folderID] != nil else {
+            throw TesseraeClientError.server(
+                code: "not_found",
+                message: "Gallery folder not found.",
+                requestID: nil
+            )
+        }
+        return OfflineAlbumPreflightResponse(
+            folderID: folderID,
+            targets: offlineAlbumTargets(
+                deviceIDs: draft.deviceIDs,
+                folderID: folderID
+            )
+        )
+    }
+
+    public func putOfflineAlbum(
+        folderID: String,
+        request: OfflineAlbumWriteRequest,
+        instance: TesseraeInstance
+    ) async throws -> OfflineAlbumResponse {
+        try await pause()
+        try requireOfflineAlbumWritePermission()
+        guard galleryFoldersByID[folderID] != nil else {
+            throw TesseraeClientError.server(
+                code: "not_found",
+                message: "Gallery folder not found.",
+                requestID: nil
+            )
+        }
+
+        let displays = try await fetchDisplays(instance: instance)
+        let displayByID = Dictionary(uniqueKeysWithValues: displays.map { ($0.id, $0) })
+        let unsupported = request.album.deviceIDs.filter {
+            displayByID[$0]?.frameCacheSupport?.state == .unsupported
+        }
+        if !unsupported.isEmpty {
+            throw TesseraeClientError.server(
+                code: "invalid_target",
+                message: "One or more displays do not support Offline Albums.",
+                requestID: nil
+            )
+        }
+
+        let claims = offlineAlbumClaims(
+            deviceIDs: request.album.deviceIDs,
+            excludingFolderID: folderID
+        )
+        if !claims.isEmpty, !request.replaceConflicts {
+            throw TesseraeClientError.offlineAlbumConflict(
+                claims: claims,
+                message: "One or more displays are used by another Offline Album.",
+                requestID: nil
+            )
+        }
+        if request.replaceConflicts {
+            for claimedFolderID in Set(claims.values) {
+                guard let displaced = offlineAlbumsByFolderID[claimedFolderID] else {
+                    continue
+                }
+                let remainingDeviceIDs = displaced.deviceIDs.filter {
+                    claims[$0] != claimedFolderID
+                }
+                offlineAlbumsByFolderID[claimedFolderID] = OfflineAlbum(
+                    id: displaced.id,
+                    folderID: displaced.folderID,
+                    name: displaced.name,
+                    enabled: displaced.enabled,
+                    deviceIDs: remainingDeviceIDs,
+                    order: displaced.order,
+                    fit: displaced.fit,
+                    playback: displaced.playback
+                )
+            }
+        }
+
+        let album = OfflineAlbum(
+            id: offlineAlbumsByFolderID[folderID]?.id ?? folderID,
+            folderID: folderID,
+            draft: request.album
+        )
+        offlineAlbumsByFolderID[folderID] = album
+        return OfflineAlbumResponse(
+            album: album,
+            targets: offlineAlbumTargets(
+                deviceIDs: album.deviceIDs,
+                folderID: folderID
+            )
+        )
+    }
+
+    public func deleteOfflineAlbum(
+        folderID: String,
+        instance: TesseraeInstance
+    ) async throws {
+        try await pause()
+        try requireOfflineAlbumWritePermission()
+        offlineAlbumsByFolderID.removeValue(forKey: folderID)
     }
 
     public func fetchLineups(instance: TesseraeInstance) async throws -> [Lineup] {
@@ -932,6 +1083,89 @@ public actor MockTesseraeClient: TesseraeServing {
             throw TesseraeClientError.unavailable
         }
         return job
+    }
+
+    private func requireOfflineAlbumWritePermission() throws {
+        guard offlineAlbumAuthoringGranted else {
+            throw TesseraeClientError.forbidden(
+                message: "Grant Offline Album management in Tesserae Settings.",
+                requestID: nil
+            )
+        }
+    }
+
+    private func offlineAlbumClaims(
+        deviceIDs: [String],
+        excludingFolderID: String
+    ) -> [String: String] {
+        var claims: [String: String] = [:]
+        for album in offlineAlbumsByFolderID.values
+            where album.enabled && album.folderID != excludingFolderID
+        {
+            for deviceID in deviceIDs where album.deviceIDs.contains(deviceID) {
+                claims[deviceID] = album.id
+            }
+        }
+        return claims
+    }
+
+    private func offlineAlbumTargets(
+        deviceIDs: [String],
+        folderID: String
+    ) -> [OfflineAlbumTarget] {
+        let sourceCount = galleryImagesByFolderID[folderID]?.count ?? 0
+        let claims = offlineAlbumClaims(
+            deviceIDs: deviceIDs,
+            excludingFolderID: folderID
+        )
+        return deviceIDs.map { deviceID in
+            let support: DeviceCapabilitySupport
+            switch deviceID {
+            case "e1004-desk":
+                support = DeviceCapabilitySupport(
+                    state: .supported,
+                    observedAt: .now.addingTimeInterval(-7_200),
+                    detail: [
+                        "capacity_bytes": 67_108_864,
+                        "max_frames": 32,
+                    ]
+                )
+            case "picpak-kitchen":
+                support = DeviceCapabilitySupport(
+                    state: .unsupported,
+                    reasonCode: "not_advertised",
+                    observedAt: .now.addingTimeInterval(-90)
+                )
+            default:
+                support = DeviceCapabilitySupport(
+                    state: .unknown,
+                    reasonCode: "no_usable_heartbeat"
+                )
+            }
+            let cacheable = min(
+                sourceCount,
+                support.frameCacheMaxFrames ?? sourceCount
+            )
+            let plan = support.state == .supported
+                ? OfflineAlbumPlan(
+                    totalFrames: sourceCount,
+                    cacheableFrames: cacheable,
+                    fullyOffline: cacheable == sourceCount,
+                    storage: OfflineAlbumStorageProjection(
+                        bytes: cacheable * 768_000,
+                        accuracy: .exact
+                    )
+                )
+                : nil
+            return OfflineAlbumTarget(
+                deviceID: deviceID,
+                support: support,
+                conflict: claims[deviceID].map {
+                    OfflineAlbumTargetConflict(albumID: $0)
+                },
+                plan: plan
+            )
+        }
     }
 
     private func acceptJob(

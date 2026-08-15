@@ -295,6 +295,10 @@ public struct CompanionSessionAuthorization: Codable, Hashable, Sendable {
         scopes.contains("gallery:write")
     }
 
+    public var canWriteOfflineAlbums: Bool {
+        scopes.contains("offline_albums:write")
+    }
+
     private enum CodingKeys: String, CodingKey {
         case tokenID = "tokenId"
         case scopes

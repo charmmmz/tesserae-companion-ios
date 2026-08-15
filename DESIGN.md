@@ -129,12 +129,22 @@ concurrency, progress, retry, previews, and navigation. Upload removes location
 metadata server-side, bakes orientation into pixels, and preserves ICC colour
 profiles.
 
-Offline Album remains a later action inside a Gallery folder. It uses the
-server-computed `frame_cache` support state from the latest usable heartbeat,
-not model names or an SD-card allow-list. Ordinary Gallery and online Send stay
+Offline Album is the next accepted action inside a Gallery folder, independently
+gated by `offline_albums` and the operator-granted `offline_albums:write` scope.
+Its contract-first layer uses server-computed `frame_cache` support from the
+latest usable heartbeat, optional reported capacity and frame limits, and a
+non-mutating per-target preflight. It never infers eligibility from model names
+or an SD-card allow-list. Unknown targets remain selectable with a caveat;
+unsupported targets are refused. Ordinary Gallery and online Send stay
 available for devices such as PicPak even when Offline Album is unsupported.
-Any later Lineups integration is one Album-owned playback step rather than one
-generated Dashboard per photo.
+
+The native setup UI remains a follow-up to the 0.13 contract and server adapter.
+It will edit one Album per Gallery folder, show explicit takeover when another
+enabled Album claims a target, and keep desired configuration distinct from the
+last observed cached/playing state. Any later Lineups integration is one
+Album-owned playback step rather than one generated Dashboard per photo.
+Per-photo and per-target framing is a later additive slice and must enter cached
+frame identity before the app exposes that editor.
 
 ### Native integrations included in release 1.0
 
