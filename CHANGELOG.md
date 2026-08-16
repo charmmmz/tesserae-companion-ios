@@ -23,6 +23,13 @@ capabilities.
   fixtures, Swift models, client methods, mock behavior, and tests are included;
   the Tesserae route adapter and native Library setup UI remain separate
   follow-ups.
+- Added the capability-gated native Offline Album setup and management flow in
+  Library folders. Companion can select server-reported eligible displays,
+  configure album-wide layout and playback, review server-computed frame and
+  storage preflight, explicitly resolve existing Album bindings, and show
+  desired versus last-observed sync state without claiming a live current
+  photo. The flow is usable against the mock client while production remains
+  hidden until Tesserae advertises the `offline_albums` capability.
 
 ## [0.6.3] - 2026-08-15
 

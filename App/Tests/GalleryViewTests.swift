@@ -142,6 +142,131 @@ final class GalleryViewTests: XCTestCase {
         }
     }
 
+    func testOfflineAlbumDraftUsesFolderPhotosAndBuildsPlaybackRequest() {
+        var draft = OfflineAlbumEditorDraft(
+            folderName: "Family",
+            imageIDs: ["one", "two"]
+        )
+
+        XCTAssertEqual(draft.name, "Family")
+        XCTAssertEqual(draft.order, ["one", "two"])
+        XCTAssertEqual(draft.fit, .fill)
+        XCTAssertEqual(draft.validationMessage, "Choose at least one display.")
+
+        draft.deviceIDs = ["e1004-desk"]
+        draft.playbackMode = .shuffle
+        draft.intervalSeconds = 3_600
+        draft.repeatMode = .reshuffle
+
+        XCTAssertNil(draft.validationMessage)
+        XCTAssertEqual(draft.albumDraft.deviceIDs, ["e1004-desk"])
+        XCTAssertEqual(draft.albumDraft.playback.mode, .shuffle)
+        XCTAssertEqual(draft.albumDraft.playback.intervalSeconds, 3_600)
+        XCTAssertEqual(draft.albumDraft.playback.repeatMode, .reshuffle)
+    }
+
+    func testOfflineAlbumTargetSelectionOnlyRejectsUnsupportedSupport() {
+        XCTAssertTrue(offlineAlbumCanSelectTarget(nil))
+        XCTAssertTrue(
+            offlineAlbumCanSelectTarget(
+                DeviceCapabilitySupport(state: .unknown)
+            )
+        )
+        XCTAssertTrue(
+            offlineAlbumCanSelectTarget(
+                DeviceCapabilitySupport(state: .supported)
+            )
+        )
+        XCTAssertFalse(
+            offlineAlbumCanSelectTarget(
+                DeviceCapabilitySupport(state: .unsupported)
+            )
+        )
+    }
+
+    func testOfflineAlbumMockBackedPreflightSaveAndDelete() async throws {
+        let model = makeGalleryModel()
+        await model.connectDemo()
+        await model.refreshGalleryFolder(id: "folder_family")
+        let images = try XCTUnwrap(
+            model.galleryFolderDetails["folder_family"]?.images
+        )
+        var editor = OfflineAlbumEditorDraft(
+            folderName: "Family",
+            imageIDs: images.map(\.id)
+        )
+        editor.deviceIDs = ["e1004-desk"]
+
+        let preflight = try await model.preflightOfflineAlbum(
+            folderID: "folder_family",
+            draft: editor.albumDraft
+        )
+
+        XCTAssertEqual(preflight.targets.count, 1)
+        XCTAssertEqual(preflight.targets.first?.support.state, .supported)
+        XCTAssertEqual(preflight.targets.first?.plan?.totalFrames, images.count)
+
+        let saved = try await model.saveOfflineAlbum(
+            folderID: "folder_family",
+            draft: editor.albumDraft,
+            replaceConflicts: false
+        )
+        XCTAssertEqual(saved.album.name, "Family")
+        XCTAssertEqual(
+            model.offlineAlbumsByFolderID["folder_family"]?.album.id,
+            saved.album.id
+        )
+        let firstETag = try XCTUnwrap(
+            model.offlineAlbumETagsByFolderID["folder_family"]
+        )
+
+        editor.name = "Family Updated"
+        let updated = try await model.saveOfflineAlbum(
+            folderID: "folder_family",
+            draft: editor.albumDraft,
+            replaceConflicts: false
+        )
+        XCTAssertEqual(updated.album.name, "Family Updated")
+        XCTAssertNotEqual(
+            model.offlineAlbumETagsByFolderID["folder_family"],
+            firstETag
+        )
+
+        try await model.deleteOfflineAlbum(folderID: "folder_family")
+        XCTAssertNil(model.offlineAlbumsByFolderID["folder_family"])
+        XCTAssertNil(model.offlineAlbumETagsByFolderID["folder_family"])
+    }
+
+    func testOfflineAlbumStatusAllowsStateOnlyFirmwareObservation() {
+        let target = OfflineAlbumTarget(
+            deviceID: "legacy-display",
+            support: DeviceCapabilitySupport(state: .supported),
+            observed: OfflineAlbumObservation(
+                state: .syncing,
+                observedAt: Date(timeIntervalSince1970: 0)
+            )
+        )
+
+        XCTAssertEqual(offlineAlbumTargetStatus(target), "Syncing")
+    }
+
+    func testOfflineAlbumPermissionComesFromCurrentSessionAuthorization() async {
+        let grantedModel = makeGalleryModel()
+        await grantedModel.connectDemo()
+        await grantedModel.refreshGallery()
+        XCTAssertEqual(grantedModel.offlineAlbumAuthoringPermission, .granted)
+
+        let deniedClient = MockTesseraeClient(
+            latency: .milliseconds(0),
+            offlineAlbumAuthoringGranted: false
+        )
+        let deniedModel = makeGalleryModel(client: deniedClient)
+        await deniedModel.connectDemo()
+        await deniedModel.refreshGallery()
+        XCTAssertEqual(deniedModel.offlineAlbumAuthoringPermission, .denied)
+        XCTAssertNotNil(deniedModel.activeInstance)
+    }
+
     func testSendPayloadTrustsReturnedMIMETypeInsteadOfFilename() throws {
         let data = Data("server-png-rendition".utf8)
         let rendition = image(
@@ -206,8 +331,11 @@ final class GalleryViewTests: XCTestCase {
         )
     }
 
-    private func makeGalleryModel() -> AppModel {
-        let client = MockTesseraeClient(latency: .milliseconds(0))
+    private func makeGalleryModel(
+        client: MockTesseraeClient = MockTesseraeClient(
+            latency: .milliseconds(0)
+        )
+    ) -> AppModel {
         return AppModel(
             liveClient: client,
             demoClient: client,

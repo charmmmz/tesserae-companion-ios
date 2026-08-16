@@ -55,6 +55,14 @@ final class AppModel {
         case denied
     }
 
+    enum OfflineAlbumAuthoringPermission: Equatable {
+        case unavailable
+        case unknown
+        case checking
+        case granted
+        case denied
+    }
+
     enum LineupSaveOutcome {
         case saved(Lineup)
         case conflict
@@ -95,6 +103,10 @@ final class AppModel {
     var galleryFolderDetails: [String: GalleryFolderDetail] = [:]
     var galleryWritePermission: GalleryWritePermission = .unknown
     var galleryWriteSettingsURL: String?
+    var offlineAlbumsByFolderID: [String: OfflineAlbumResponse] = [:]
+    var offlineAlbumETagsByFolderID: [String: String] = [:]
+    var offlineAlbumAuthoringPermission: OfflineAlbumAuthoringPermission = .unknown
+    var offlineAlbumSettingsURL: String?
     var galleryThumbnailStates: [String: PreviewImageState] = [:]
     var jobs: [PushJob] = []
     var historyItems: [HistoryItem] = []
@@ -119,6 +131,7 @@ final class AppModel {
     var isRefreshingLineups = false
     var isRefreshingGallery = false
     var loadingGalleryFolderIDs: Set<String> = []
+    var loadingOfflineAlbumFolderIDs: Set<String> = []
     var isDiscovering = false
     var isRestoringConnection = true
     var isRetryingSharedImages = false
@@ -155,6 +168,10 @@ final class AppModel {
 
     var supportsGallery: Bool {
         capabilities?.supportsGallery == true
+    }
+
+    var supportsOfflineAlbums: Bool {
+        supportsGallery && capabilities?.supportsOfflineAlbums == true
     }
 
     var supportsRemindersPersonalData: Bool {
@@ -322,6 +339,10 @@ final class AppModel {
                 .unavailable
             }
             galleryWriteSettingsURL = nil
+            offlineAlbumAuthoringPermission = capabilities.supportsOfflineAlbums
+                ? .unknown
+                : .unavailable
+            offlineAlbumSettingsURL = nil
             activeInstance = session.instance.updatingServerVersion(
                 to: capabilities.serverVersion
             )
@@ -335,6 +356,8 @@ final class AppModel {
             lineups = []
             galleryFolders = []
             galleryFolderDetails = [:]
+            offlineAlbumsByFolderID = [:]
+            offlineAlbumETagsByFolderID = [:]
             galleryThumbnailStates = [:]
             historyPreviews = [:]
             displayPreviews = [:]
@@ -393,6 +416,10 @@ final class AppModel {
             lineupAuthoringSettingsURL = nil
             galleryWritePermission = supportsGallery ? .unknown : .unavailable
             galleryWriteSettingsURL = nil
+            offlineAlbumAuthoringPermission = supportsOfflineAlbums
+                ? .unknown
+                : .unavailable
+            offlineAlbumSettingsURL = nil
             displays = snapshot.displays
             dashboards = snapshot.dashboards
             lineups = snapshot.lineups ?? []
@@ -409,6 +436,12 @@ final class AppModel {
             if !supportsLineupAuthoring {
                 lineupAuthoringPermission = .unavailable
                 lineupAuthoringSettingsURL = nil
+            }
+            if !supportsOfflineAlbums {
+                offlineAlbumAuthoringPermission = .unavailable
+                offlineAlbumSettingsURL = nil
+                offlineAlbumsByFolderID = [:]
+                offlineAlbumETagsByFolderID = [:]
             }
             activeInstance = snapshot.activeInstance.updatingServerVersion(
                 to: currentCapabilities.serverVersion
@@ -858,6 +891,12 @@ final class AppModel {
             galleryFolderDetails = galleryFolderDetails.filter {
                 folderIDs.contains($0.key)
             }
+            offlineAlbumsByFolderID = offlineAlbumsByFolderID.filter {
+                folderIDs.contains($0.key)
+            }
+            offlineAlbumETagsByFolderID = offlineAlbumETagsByFolderID.filter {
+                folderIDs.contains($0.key)
+            }
             let liveThumbnailPaths = Set(
                 folders.compactMap(\.coverThumbnailURL)
                     + galleryFolderDetails.values.flatMap {
@@ -924,16 +963,25 @@ final class AppModel {
         guard supportsGallery, let currentInstance = activeInstance else {
             galleryWritePermission = .unavailable
             galleryWriteSettingsURL = nil
+            offlineAlbumAuthoringPermission = .unavailable
+            offlineAlbumSettingsURL = nil
             return
         }
         guard supportsSessionRead else {
             galleryWritePermission = .unknown
             galleryWriteSettingsURL = nil
+            offlineAlbumAuthoringPermission = supportsOfflineAlbums
+                ? .unknown
+                : .unavailable
+            offlineAlbumSettingsURL = nil
             return
         }
         guard galleryWritePermission != .checking else { return }
 
         galleryWritePermission = .checking
+        if supportsOfflineAlbums {
+            offlineAlbumAuthoringPermission = .checking
+        }
         do {
             let authorization = try await activeClient.fetchSessionAuthorization(
                 instance: currentInstance
@@ -944,16 +992,34 @@ final class AppModel {
                     ? .granted
                     : .denied
                 galleryWriteSettingsURL = authorization.settingsURL
+                offlineAlbumAuthoringPermission = supportsOfflineAlbums
+                    ? (authorization.canWriteOfflineAlbums ? .granted : .denied)
+                    : .unavailable
+                offlineAlbumSettingsURL = supportsOfflineAlbums
+                    ? authorization.settingsURL
+                    : nil
             } else {
                 galleryWritePermission = .unknown
                 galleryWriteSettingsURL = nil
+                offlineAlbumAuthoringPermission = supportsOfflineAlbums
+                    ? .unknown
+                    : .unavailable
+                offlineAlbumSettingsURL = nil
             }
         } catch is CancellationError {
             galleryWritePermission = .unknown
             galleryWriteSettingsURL = nil
+            offlineAlbumAuthoringPermission = supportsOfflineAlbums
+                ? .unknown
+                : .unavailable
+            offlineAlbumSettingsURL = nil
         } catch {
             galleryWritePermission = .unknown
             galleryWriteSettingsURL = nil
+            offlineAlbumAuthoringPermission = supportsOfflineAlbums
+                ? .unknown
+                : .unavailable
+            offlineAlbumSettingsURL = nil
             if showErrors {
                 await presentOperationError(error)
             }
@@ -1094,6 +1160,127 @@ final class AppModel {
                 eTag: current.eTag,
                 phase: current.data == nil ? .unavailable : .ready
             )
+        }
+    }
+
+    func refreshOfflineAlbum(
+        folderID: String,
+        showErrors: Bool = false
+    ) async {
+        guard
+            supportsOfflineAlbums,
+            let currentInstance = activeInstance,
+            !loadingOfflineAlbumFolderIDs.contains(folderID)
+        else {
+            return
+        }
+        loadingOfflineAlbumFolderIDs.insert(folderID)
+        defer { loadingOfflineAlbumFolderIDs.remove(folderID) }
+
+        do {
+            let versioned = try await activeClient.fetchOfflineAlbum(
+                folderID: folderID,
+                instance: currentInstance
+            )
+            guard activeInstance?.id == currentInstance.id else { return }
+            offlineAlbumsByFolderID[folderID] = versioned.response
+            offlineAlbumETagsByFolderID[folderID] = versioned.eTag
+        } catch is CancellationError {
+            return
+        } catch let error as TesseraeClientError {
+            if case let .server(code, _, _) = error, code == "not_found" {
+                offlineAlbumsByFolderID.removeValue(forKey: folderID)
+                offlineAlbumETagsByFolderID.removeValue(forKey: folderID)
+                return
+            }
+            if showErrors || error == .unauthorized || error == .missingCredential {
+                await presentOperationError(error)
+            }
+        } catch {
+            if showErrors {
+                lastError = error.localizedDescription
+            }
+        }
+    }
+
+    func preflightOfflineAlbum(
+        folderID: String,
+        draft: OfflineAlbumDraft
+    ) async throws -> OfflineAlbumPreflightResponse {
+        guard supportsOfflineAlbums, let currentInstance = activeInstance else {
+            throw TesseraeClientError.unavailable
+        }
+        do {
+            return try await activeClient.preflightOfflineAlbum(
+                folderID: folderID,
+                draft: draft,
+                instance: currentInstance
+            )
+        } catch let error as TesseraeClientError {
+            if case .forbidden = error {
+                offlineAlbumAuthoringPermission = .denied
+            }
+            throw error
+        }
+    }
+
+    @discardableResult
+    func saveOfflineAlbum(
+        folderID: String,
+        draft: OfflineAlbumDraft,
+        replaceConflicts: Bool
+    ) async throws -> OfflineAlbumResponse {
+        guard supportsOfflineAlbums, let currentInstance = activeInstance else {
+            throw TesseraeClientError.unavailable
+        }
+        do {
+            let versioned = try await activeClient.putOfflineAlbum(
+                folderID: folderID,
+                request: OfflineAlbumWriteRequest(
+                    album: draft,
+                    replaceConflicts: replaceConflicts
+                ),
+                eTag: offlineAlbumETagsByFolderID[folderID],
+                instance: currentInstance
+            )
+            guard activeInstance?.id == currentInstance.id else {
+                throw CancellationError()
+            }
+            offlineAlbumsByFolderID[folderID] = versioned.response
+            offlineAlbumETagsByFolderID[folderID] = versioned.eTag
+            return versioned.response
+        } catch let error as TesseraeClientError {
+            if case .forbidden = error {
+                offlineAlbumAuthoringPermission = .denied
+            }
+            if case let .server(code, _, _) = error,
+               code == "precondition_failed"
+            {
+                await refreshOfflineAlbum(folderID: folderID)
+            }
+            throw error
+        }
+    }
+
+    func deleteOfflineAlbum(folderID: String) async throws {
+        guard supportsOfflineAlbums, let currentInstance = activeInstance else {
+            throw TesseraeClientError.unavailable
+        }
+        do {
+            try await activeClient.deleteOfflineAlbum(
+                folderID: folderID,
+                instance: currentInstance
+            )
+            guard activeInstance?.id == currentInstance.id else {
+                throw CancellationError()
+            }
+            offlineAlbumsByFolderID.removeValue(forKey: folderID)
+            offlineAlbumETagsByFolderID.removeValue(forKey: folderID)
+        } catch let error as TesseraeClientError {
+            if case .forbidden = error {
+                offlineAlbumAuthoringPermission = .denied
+            }
+            throw error
         }
     }
 
@@ -2538,11 +2725,15 @@ final class AppModel {
         lineupAuthoringSettingsURL = nil
         galleryWritePermission = .unknown
         galleryWriteSettingsURL = nil
+        offlineAlbumAuthoringPermission = .unknown
+        offlineAlbumSettingsURL = nil
         displays = []
         dashboards = []
         lineups = []
         galleryFolders = []
         galleryFolderDetails = [:]
+        offlineAlbumsByFolderID = [:]
+        offlineAlbumETagsByFolderID = [:]
         galleryThumbnailStates = [:]
         jobs = []
         historyItems = []
@@ -2599,11 +2790,15 @@ final class AppModel {
             lineupAuthoringSettingsURL = nil
             galleryWritePermission = .unknown
             galleryWriteSettingsURL = nil
+            offlineAlbumAuthoringPermission = .unknown
+            offlineAlbumSettingsURL = nil
             displays = []
             dashboards = []
             lineups = []
             galleryFolders = []
             galleryFolderDetails = [:]
+            offlineAlbumsByFolderID = [:]
+            offlineAlbumETagsByFolderID = [:]
             galleryThumbnailStates = [:]
             jobs = []
             historyItems = []

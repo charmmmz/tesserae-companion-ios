@@ -261,6 +261,9 @@ private struct GalleryFolderView: View {
     @State private var suppressPhotoSelection = false
     @State private var gridGestureSequence = 0
     @State private var selectedPhotoID: String?
+    @State private var offlineAlbumEditorPresented = false
+    @State private var offlineAlbumPermissionAlertPresented = false
+    @State private var isPreparingOfflineAlbumEditor = false
     @Environment(GalleryUploadCoordinator.self) private var galleryUploads
 
     let folderID: String
@@ -289,6 +292,16 @@ private struct GalleryFolderView: View {
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .tesseraeCard()
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                }
+
+                if let response = model.offlineAlbumsByFolderID[folderID] {
+                    OfflineAlbumSummaryCard(
+                        response: response,
+                        displays: model.displays,
+                        open: beginOfflineAlbumEditing
+                    )
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
                 }
@@ -363,6 +376,26 @@ private struct GalleryFolderView: View {
                         Label("Zoom Out", systemImage: "minus.magnifyingglass")
                     }
                     .disabled(gridColumnCount >= 8)
+
+                    if model.supportsOfflineAlbums {
+                        Divider()
+
+                        Button {
+                            beginOfflineAlbumEditing()
+                        } label: {
+                            Label(
+                                model.offlineAlbumsByFolderID[folderID] == nil
+                                    ? "Set Up Offline Album"
+                                    : "Manage Offline Album",
+                                systemImage: "externaldrive.badge.wifi"
+                            )
+                        }
+                        .disabled(
+                            isPreparingOfflineAlbumEditor
+                                || (model.offlineAlbumsByFolderID[folderID] == nil
+                                    && detail?.images.isEmpty != false)
+                        )
+                    }
                 } label: {
                     Label("Grid Options", systemImage: "ellipsis.circle")
                 }
@@ -378,9 +411,11 @@ private struct GalleryFolderView: View {
         }
         .refreshable {
             await model.refreshGalleryFolder(id: folderID)
+            await model.refreshOfflineAlbum(folderID: folderID)
         }
         .task(id: folderID) {
             await model.refreshGalleryFolder(id: folderID, showErrors: false)
+            await model.refreshOfflineAlbum(folderID: folderID, showErrors: false)
         }
         .navigationDestination(item: $selectedPhotoID) { imageID in
             GalleryImageView(
@@ -406,6 +441,15 @@ private struct GalleryFolderView: View {
             )
             pickerItems = []
         }
+        .sheet(isPresented: $offlineAlbumEditorPresented) {
+            if let folder {
+                OfflineAlbumEditorView(
+                    folder: folder,
+                    images: detail?.images ?? [],
+                    current: model.offlineAlbumsByFolderID[folderID]
+                )
+            }
+        }
         .alert("Permission Required", isPresented: $permissionAlertPresented) {
             Button("Open Tesserae") {
                 if let url = gallerySettingsURL(model: model) {
@@ -418,6 +462,21 @@ private struct GalleryFolderView: View {
                 "Enable Gallery uploads for this iPhone in Tesserae Settings → Companion."
             )
         }
+        .alert(
+            "Permission Required",
+            isPresented: $offlineAlbumPermissionAlertPresented
+        ) {
+            Button("Open Tesserae") {
+                if let url = offlineAlbumSettingsURL(model: model) {
+                    openURL(url)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(
+                "Enable Offline Album management for this iPhone in Tesserae Settings → Companion. You do not need to pair again."
+            )
+        }
         .tesseraeScreenBackground()
     }
 
@@ -427,6 +486,22 @@ private struct GalleryFolderView: View {
             return
         }
         isPhotoPickerPresented = true
+    }
+
+    private func beginOfflineAlbumEditing() {
+        if model.offlineAlbumAuthoringPermission == .denied,
+           model.offlineAlbumsByFolderID[folderID] == nil
+        {
+            offlineAlbumPermissionAlertPresented = true
+            return
+        }
+        guard !isPreparingOfflineAlbumEditor else { return }
+        isPreparingOfflineAlbumEditor = true
+        Task {
+            await model.refreshOfflineAlbum(folderID: folderID, showErrors: true)
+            isPreparingOfflineAlbumEditor = false
+            offlineAlbumEditorPresented = true
+        }
     }
 
     private var gridMagnificationGesture: some Gesture {
@@ -1722,6 +1797,13 @@ private enum GalleryUploadError: LocalizedError {
 private func gallerySettingsURL(model: AppModel) -> URL? {
     guard let instance = model.activeInstance else { return nil }
     let destination = model.galleryWriteSettingsURL ?? instance.webURL
+    return URL(string: destination, relativeTo: instance.baseURL)?.absoluteURL
+}
+
+@MainActor
+private func offlineAlbumSettingsURL(model: AppModel) -> URL? {
+    guard let instance = model.activeInstance else { return nil }
+    let destination = model.offlineAlbumSettingsURL ?? instance.webURL
     return URL(string: destination, relativeTo: instance.baseURL)?.absoluteURL
 }
 
