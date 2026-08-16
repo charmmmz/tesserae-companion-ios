@@ -39,6 +39,8 @@ final class OfflineAlbumClientTests: XCTestCase {
         XCTAssertNil(unknown.detail)
 
         XCTAssertEqual(response.album.order, ["image_family_02", "image_family_01"])
+        XCTAssertNotEqual(response.album.id, response.album.folderID)
+        XCTAssertEqual(response.targets[0].plan?.accuracy, .exact)
         XCTAssertEqual(response.targets[0].plan?.storage?.accuracy, .exact)
         XCTAssertEqual(response.targets[0].observed?.state, .playing)
         XCTAssertEqual(response.targets[0].observed?.cached, 4)
@@ -78,7 +80,8 @@ final class OfflineAlbumClientTests: XCTestCase {
         )
 
         XCTAssertEqual(response.folderID, "folder_family")
-        XCTAssertEqual(response.targets[0].conflict?.albumID, "folder_holidays")
+        XCTAssertEqual(response.targets[0].conflict?.albumID, "oa_7f92a4")
+        XCTAssertEqual(response.targets[0].conflict?.name, "Holidays")
         XCTAssertEqual(response.targets[1].support.state, .unknown)
         let capturedRequest = await transport.lastRequest()
         let request = try XCTUnwrap(capturedRequest)
@@ -111,6 +114,7 @@ final class OfflineAlbumClientTests: XCTestCase {
             _ = try await client.putOfflineAlbum(
                 folderID: "folder_family",
                 request: requestBody,
+                eTag: "\"offline-album-1\"",
                 instance: instance
             )
             XCTFail("Expected an explicit Offline Album conflict")
@@ -119,7 +123,15 @@ final class OfflineAlbumClientTests: XCTestCase {
             message,
             requestID
         ) {
-            XCTAssertEqual(claims, ["e1004-desk": "folder_holidays"])
+            XCTAssertEqual(
+                claims,
+                [
+                    "e1004-desk": OfflineAlbumConflictClaim(
+                        albumID: "oa_7f92a4",
+                        name: "Holidays"
+                    ),
+                ]
+            )
             XCTAssertTrue(message.contains("another Offline Album"))
             XCTAssertEqual(requestID, "req_offline_album_conflict")
         }
@@ -127,6 +139,10 @@ final class OfflineAlbumClientTests: XCTestCase {
         let capturedRequest = await transport.lastRequest()
         let request = try XCTUnwrap(capturedRequest)
         XCTAssertEqual(request.httpMethod, "PUT")
+        XCTAssertEqual(
+            request.value(forHTTPHeaderField: "If-Match"),
+            "\"offline-album-1\""
+        )
         XCTAssertEqual(
             request.url?.path,
             "/api/app/v1/gallery/folders/folder_family/offline-album"
@@ -161,6 +177,59 @@ final class OfflineAlbumClientTests: XCTestCase {
         )
     }
 
+    func testFetchRequiresETagAndAllowsPartialDeviceObservation() async throws {
+        let responseData = try fixtureData(
+            "offline-album-response-partial-observation.json"
+        )
+        let transport = RecordingOfflineAlbumTransport(
+            response: TesseraeHTTPResponse(
+                data: responseData,
+                statusCode: 200,
+                headers: ["etag": "\"offline-album-4\""]
+            )
+        )
+        let client = try await makeClient(transport: transport)
+
+        let versioned = try await client.fetchOfflineAlbum(
+            folderID: "folder_family",
+            instance: instance
+        )
+
+        XCTAssertEqual(versioned.eTag, "\"offline-album-4\"")
+        let observed = try XCTUnwrap(
+            versioned.response.targets.first?.observed
+        )
+        XCTAssertEqual(observed.state, .playing)
+        XCTAssertNil(observed.cached)
+        XCTAssertNil(observed.total)
+        XCTAssertNil(observed.version)
+    }
+
+    func testSuccessfulPutReturnsNewETag() async throws {
+        let transport = RecordingOfflineAlbumTransport(
+            response: TesseraeHTTPResponse(
+                data: try fixtureData("offline-album-response.json"),
+                statusCode: 200,
+                headers: ["ETag": "\"offline-album-5\""]
+            )
+        )
+        let client = try await makeClient(transport: transport)
+        let requestBody = try decode(
+            OfflineAlbumWriteRequest.self,
+            fixture: "offline-album-put-request.json"
+        )
+
+        let versioned = try await client.putOfflineAlbum(
+            folderID: "folder_family",
+            request: requestBody,
+            eTag: "\"offline-album-4\"",
+            instance: instance
+        )
+
+        XCTAssertEqual(versioned.eTag, "\"offline-album-5\"")
+        XCTAssertEqual(versioned.response.album.id, "oa_4c6d9e")
+    }
+
     func testMockRefusesUnsupportedButAllowsUnknownTargets() async throws {
         let client = MockTesseraeClient(latency: .zero)
         let draft = OfflineAlbumDraft(
@@ -181,9 +250,10 @@ final class OfflineAlbumClientTests: XCTestCase {
             instance: instance
         )
         XCTAssertEqual(preflight.targets[0].support.state, .unknown)
-        _ = try await client.putOfflineAlbum(
+        let saved = try await client.putOfflineAlbum(
             folderID: "folder_family",
             request: OfflineAlbumWriteRequest(album: draft),
+            eTag: nil,
             instance: instance
         )
 
@@ -199,12 +269,60 @@ final class OfflineAlbumClientTests: XCTestCase {
             _ = try await client.putOfflineAlbum(
                 folderID: "folder_family",
                 request: OfflineAlbumWriteRequest(album: unsupported),
+                eTag: saved.eTag,
                 instance: instance
             )
             XCTFail("Expected unsupported target refusal")
-        } catch let TesseraeClientError.server(code, _, _) {
-            XCTAssertEqual(code, "invalid_target")
+        } catch let TesseraeClientError.offlineAlbumUnsupportedTargets(
+            deviceIDs,
+            _,
+            _
+        ) {
+            XCTAssertEqual(deviceIDs, ["picpak-kitchen"])
         }
+    }
+
+    func testMockRequiresETagAndNormalizesDeletedOrderEntries() async throws {
+        let client = MockTesseraeClient(latency: .zero)
+        let draft = OfflineAlbumDraft(
+            name: "Family",
+            enabled: true,
+            deviceIDs: ["e1004-desk"],
+            order: ["image_family_01", "deleted_image"],
+            fit: .fill,
+            playback: OfflineAlbumPlayback(
+                mode: .sequential,
+                intervalSeconds: 600,
+                repeatMode: .loop
+            )
+        )
+        let created = try await client.putOfflineAlbum(
+            folderID: "folder_family",
+            request: OfflineAlbumWriteRequest(album: draft),
+            eTag: nil,
+            instance: instance
+        )
+        XCTAssertEqual(created.response.album.order, ["image_family_01"])
+
+        do {
+            _ = try await client.putOfflineAlbum(
+                folderID: "folder_family",
+                request: OfflineAlbumWriteRequest(album: draft),
+                eTag: nil,
+                instance: instance
+            )
+            XCTFail("Expected missing If-Match to refuse an update")
+        } catch let TesseraeClientError.server(code, _, _) {
+            XCTAssertEqual(code, "precondition_failed")
+        }
+
+        let updated = try await client.putOfflineAlbum(
+            folderID: "folder_family",
+            request: OfflineAlbumWriteRequest(album: draft),
+            eTag: created.eTag,
+            instance: instance
+        )
+        XCTAssertNotEqual(updated.eTag, created.eTag)
     }
 
     private func makeClient(

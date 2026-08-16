@@ -377,33 +377,48 @@ from [Discussion #230](https://github.com/dmellok/tesserae/discussions/230):
   write grant;
 - each complete Album draft carries a name, enabled state, opaque display IDs,
   opaque leading photo `order`, Album-wide `fit`/`fill`, and sequential or
-  shuffle playback settings. Unlisted current photos append in the server's
-  natural folder order so future uploads remain visible;
+  shuffle playback settings. The adapter returns normalized order: unlisted
+  current photos append in natural folder order, cross-folder identifiers are
+  rejected, and identifiers deleted before the write completes are dropped;
 - preflight is server-computed and non-mutating. Every requested target reports
   runtime `frame_cache` support, any conflicting enabled Album, and a plan when
   enough information exists. `unknown` remains selectable with a caveat; only
-  `unsupported` is refused;
+  `unsupported` is refused. A write that races with a capability change fails
+  atomically with `offline_album_unsupported_targets` and its display IDs;
 - `DeviceCapabilitySupport.detail` can carry optional non-negative
   `capacity_bytes` and `max_frames` values reported by supported firmware.
   Missing keys mean not reported, never zero and never a model-derived default;
-- storage projections use `{bytes, accuracy}`. Fixed packed output can be
-  `exact`; compressed output is `estimated`; an absent projection remains
-  unknown;
+- frame counts and storage projections carry `exact` or `estimated` accuracy.
+  Byte counts are exact only for warmed artifacts or sufficient renderer
+  metadata; compressed-size projections remain estimated, and absent storage
+  remains unknown. A target plan remains authoritative when the server applies
+  a firmware or server default that was absent from capability detail;
 - one enabled producer may claim a display. PUT returns
   `409 offline_album_conflict` with a display-to-Album `claims` map unless the
-  request explicitly sets `replace_conflicts: true`. Takeover unbinds only the
-  contested displays and preserves displaced Albums and their other targets;
+  request explicitly sets `replace_conflicts: true`. Each claim contains an
+  opaque Album ID distinct from the encoded folder ID plus its display name.
+  Takeover unbinds only the contested displays and preserves displaced Albums
+  and their other targets;
+- GET and successful PUT return an ETag. Existing Albums require `If-Match`;
+  omitting it is creation-only, so Web and Companion cannot silently overwrite
+  one another. Material configuration or membership changes invalidate warmed
+  frames before a replacement manifest is served;
 - desired configuration and the last observed device state stay separate. A
-  cached/total/version report is not a live assertion about which photo is
-  currently visible;
+  report may contain only state and observation time on older firmware;
+  cached/total/version are optional and are not a live assertion about which
+  photo is currently visible. Desired manifest versions appear only once the
+  selected frame set is fully warmed;
+- DELETE is idempotent for an existing Gallery folder: no Album still returns
+  204, while 404 is reserved for a missing folder;
 - future per-photo/per-target framing remains additive, but its resolved intent
   must participate in frame identity before cached artifacts can safely reuse
   it.
 
-Tesserae edge v0.303.0 already enforces the single-enabled-producer rule and
-publishes optional `frame_cache.detail` limits. The nested Companion routes and
-preflight adapter remain a server follow-up; this repository currently ships
-the contract, fixtures, Swift transport models, and client surface only.
+Tesserae edge v0.305.0 enforces the single-enabled-producer rule, publishes
+optional `frame_cache.detail` limits, and preserves Web-authored order, disabled
+state, and non-round intervals. The nested Companion routes and preflight
+adapter remain a server follow-up; this repository currently ships the
+contract, fixtures, Swift transport models, and client surface only.
 
 Upstream PR [#175](https://github.com/dmellok/tesserae/pull/175) merged the
 underlying normalized `SourceCrop` renderer primitive. It does not by itself

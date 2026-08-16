@@ -12,16 +12,14 @@
         }
       },
       "conflict": {
-        "album_id": "folder_holidays"
+        "album_id": "oa_7f92a4",
+        "name": "Holidays"
       },
       "plan": {
         "total_frames": 4,
         "cacheable_frames": 4,
-        "fully_offline": true,
-        "storage": {
-          "bytes": 3072000,
-          "accuracy": "exact"
-        }
+        "accuracy": "exact",
+        "fully_offline": true
       }
     },
     {

@@ -15,6 +15,7 @@ public actor MockTesseraeClient: TesseraeServing {
     private var galleryImagesByFolderID: [String: [GalleryImage]]
     private var galleryImagesByIdempotencyKey: [String: GalleryImage] = [:]
     private var offlineAlbumsByFolderID: [String: OfflineAlbum] = [:]
+    private var offlineAlbumVersionsByFolderID: [String: Int] = [:]
     private let lineupIntent: LineupIntent
     private let lineupFetchError: TesseraeClientError?
     private let lineupAuthoringGranted: Bool
@@ -481,7 +482,7 @@ public actor MockTesseraeClient: TesseraeServing {
     public func fetchOfflineAlbum(
         folderID: String,
         instance: TesseraeInstance
-    ) async throws -> OfflineAlbumResponse {
+    ) async throws -> VersionedOfflineAlbum {
         try await pause()
         guard let album = offlineAlbumsByFolderID[folderID] else {
             throw TesseraeClientError.server(
@@ -494,7 +495,10 @@ public actor MockTesseraeClient: TesseraeServing {
             deviceIDs: album.deviceIDs,
             folderID: folderID
         )
-        return OfflineAlbumResponse(album: album, targets: targetPlans)
+        return VersionedOfflineAlbum(
+            response: OfflineAlbumResponse(album: album, targets: targetPlans),
+            eTag: offlineAlbumETag(folderID: folderID)
+        )
     }
 
     public func preflightOfflineAlbum(
@@ -523,8 +527,9 @@ public actor MockTesseraeClient: TesseraeServing {
     public func putOfflineAlbum(
         folderID: String,
         request: OfflineAlbumWriteRequest,
+        eTag: String?,
         instance: TesseraeInstance
-    ) async throws -> OfflineAlbumResponse {
+    ) async throws -> VersionedOfflineAlbum {
         try await pause()
         try requireOfflineAlbumWritePermission()
         guard galleryFoldersByID[folderID] != nil else {
@@ -535,21 +540,42 @@ public actor MockTesseraeClient: TesseraeServing {
             )
         }
 
+        if offlineAlbumsByFolderID[folderID] != nil {
+            guard eTag == offlineAlbumETag(folderID: folderID) else {
+                throw TesseraeClientError.server(
+                    code: "precondition_failed",
+                    message: "The Offline Album changed before it was saved.",
+                    requestID: nil
+                )
+            }
+        } else if eTag != nil {
+            throw TesseraeClientError.server(
+                code: "precondition_failed",
+                message: "The Offline Album no longer exists.",
+                requestID: nil
+            )
+        }
+
+        let normalizedDraft = try normalizedOfflineAlbumDraft(
+            request.album,
+            folderID: folderID
+        )
+
         let displays = try await fetchDisplays(instance: instance)
         let displayByID = Dictionary(uniqueKeysWithValues: displays.map { ($0.id, $0) })
-        let unsupported = request.album.deviceIDs.filter {
+        let unsupported = normalizedDraft.deviceIDs.filter {
             displayByID[$0]?.frameCacheSupport?.state == .unsupported
         }
         if !unsupported.isEmpty {
-            throw TesseraeClientError.server(
-                code: "invalid_target",
+            throw TesseraeClientError.offlineAlbumUnsupportedTargets(
+                deviceIDs: unsupported,
                 message: "One or more displays do not support Offline Albums.",
                 requestID: nil
             )
         }
 
         let claims = offlineAlbumClaims(
-            deviceIDs: request.album.deviceIDs,
+            deviceIDs: normalizedDraft.deviceIDs,
             excludingFolderID: folderID
         )
         if !claims.isEmpty, !request.replaceConflicts {
@@ -560,12 +586,17 @@ public actor MockTesseraeClient: TesseraeServing {
             )
         }
         if request.replaceConflicts {
-            for claimedFolderID in Set(claims.values) {
+            for claimedAlbumID in Set(claims.values.map(\.albumID)) {
+                guard let claimedFolderID = offlineAlbumsByFolderID.first(
+                    where: { $0.value.id == claimedAlbumID }
+                )?.key else {
+                    continue
+                }
                 guard let displaced = offlineAlbumsByFolderID[claimedFolderID] else {
                     continue
                 }
                 let remainingDeviceIDs = displaced.deviceIDs.filter {
-                    claims[$0] != claimedFolderID
+                    claims[$0]?.albumID != claimedAlbumID
                 }
                 offlineAlbumsByFolderID[claimedFolderID] = OfflineAlbum(
                     id: displaced.id,
@@ -577,21 +608,27 @@ public actor MockTesseraeClient: TesseraeServing {
                     fit: displaced.fit,
                     playback: displaced.playback
                 )
+                offlineAlbumVersionsByFolderID[claimedFolderID, default: 0] += 1
             }
         }
 
         let album = OfflineAlbum(
-            id: offlineAlbumsByFolderID[folderID]?.id ?? folderID,
+            id: offlineAlbumsByFolderID[folderID]?.id
+                ?? "oa_\(offlineAlbumsByFolderID.count + 1)",
             folderID: folderID,
-            draft: request.album
+            draft: normalizedDraft
         )
         offlineAlbumsByFolderID[folderID] = album
-        return OfflineAlbumResponse(
-            album: album,
-            targets: offlineAlbumTargets(
-                deviceIDs: album.deviceIDs,
-                folderID: folderID
-            )
+        offlineAlbumVersionsByFolderID[folderID, default: 0] += 1
+        return VersionedOfflineAlbum(
+            response: OfflineAlbumResponse(
+                album: album,
+                targets: offlineAlbumTargets(
+                    deviceIDs: album.deviceIDs,
+                    folderID: folderID
+                )
+            ),
+            eTag: offlineAlbumETag(folderID: folderID)
         )
     }
 
@@ -602,6 +639,7 @@ public actor MockTesseraeClient: TesseraeServing {
         try await pause()
         try requireOfflineAlbumWritePermission()
         offlineAlbumsByFolderID.removeValue(forKey: folderID)
+        offlineAlbumVersionsByFolderID.removeValue(forKey: folderID)
     }
 
     public func fetchLineups(instance: TesseraeInstance) async throws -> [Lineup] {
@@ -1094,16 +1132,54 @@ public actor MockTesseraeClient: TesseraeServing {
         }
     }
 
+    private func normalizedOfflineAlbumDraft(
+        _ draft: OfflineAlbumDraft,
+        folderID: String
+    ) throws -> OfflineAlbumDraft {
+        let folderImageIDs = Set(
+            (galleryImagesByFolderID[folderID] ?? []).map(\.id)
+        )
+        let otherFolderImageIDs = Set(
+            galleryImagesByFolderID
+                .filter { $0.key != folderID }
+                .values
+                .flatMap { $0.map(\.id) }
+        )
+        guard draft.order.allSatisfy({ !otherFolderImageIDs.contains($0) }) else {
+            throw TesseraeClientError.server(
+                code: "invalid_request",
+                message: "Photo order contains an image from another folder.",
+                requestID: nil
+            )
+        }
+        let normalizedOrder = draft.order.filter(folderImageIDs.contains)
+        return OfflineAlbumDraft(
+            name: draft.name,
+            enabled: draft.enabled,
+            deviceIDs: draft.deviceIDs,
+            order: normalizedOrder,
+            fit: draft.fit,
+            playback: draft.playback
+        )
+    }
+
+    private func offlineAlbumETag(folderID: String) -> String {
+        "\"offline-album-\(offlineAlbumVersionsByFolderID[folderID, default: 0])\""
+    }
+
     private func offlineAlbumClaims(
         deviceIDs: [String],
         excludingFolderID: String
-    ) -> [String: String] {
-        var claims: [String: String] = [:]
+    ) -> [String: OfflineAlbumConflictClaim] {
+        var claims: [String: OfflineAlbumConflictClaim] = [:]
         for album in offlineAlbumsByFolderID.values
             where album.enabled && album.folderID != excludingFolderID
         {
             for deviceID in deviceIDs where album.deviceIDs.contains(deviceID) {
-                claims[deviceID] = album.id
+                claims[deviceID] = OfflineAlbumConflictClaim(
+                    albumID: album.id,
+                    name: album.name
+                )
             }
         }
         return claims
@@ -1150,6 +1226,7 @@ public actor MockTesseraeClient: TesseraeServing {
                 ? OfflineAlbumPlan(
                     totalFrames: sourceCount,
                     cacheableFrames: cacheable,
+                    accuracy: .exact,
                     fullyOffline: cacheable == sourceCount,
                     storage: OfflineAlbumStorageProjection(
                         bytes: cacheable * 768_000,
@@ -1161,7 +1238,7 @@ public actor MockTesseraeClient: TesseraeServing {
                 deviceID: deviceID,
                 support: support,
                 conflict: claims[deviceID].map {
-                    OfflineAlbumTargetConflict(albumID: $0)
+                    $0
                 },
                 plan: plan
             )

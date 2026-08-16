@@ -450,6 +450,9 @@ paths:
       responses:
         "200":
           description: Desired Album configuration and per-target state
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -472,7 +475,13 @@ paths:
         A different enabled Album claiming a requested display returns an
         offline_album_conflict unless replace_conflicts is true. Explicit
         replacement unbinds only the contested displays from displaced Albums;
-        it does not delete those Albums or disturb their remaining targets.
+        it does not delete those Albums or disturb their remaining targets. To
+        replace an existing Album, If-Match must contain the ETag returned by
+        GET; omitting If-Match is creation-only and returns 412 if an Album now
+        exists. Changes to order, fit, folder membership, or bindings invalidate
+        warmed frames before the next manifest is served.
+      parameters:
+        - $ref: "#/components/parameters/OptionalIfMatch"
       requestBody:
         required: true
         content:
@@ -482,18 +491,31 @@ paths:
       responses:
         "200":
           description: Existing Album replaced
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/OfflineAlbumResponse"
         "201":
           description: Album created
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/OfflineAlbumResponse"
         "400":
-          $ref: "#/components/responses/BadRequest"
+          description: >-
+            Invalid Album configuration. A target that became unsupported
+            returns offline_album_unsupported_targets with device_ids; the
+            server never silently drops it.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -506,6 +528,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "412":
+          description: >-
+            If-Match is missing for an existing Album, identifies an older
+            Album version, or was supplied after the Album was removed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     delete:
       tags: [Offline Albums]
       operationId: deleteCompanionOfflineAlbum
@@ -513,7 +543,8 @@ paths:
       description: >-
         Requires the optional offline_albums:write scope. Idempotently removes
         the Album producer and its display bindings. The Gallery folder and
-        every source image remain unchanged.
+        every source image remain unchanged. A folder that exists without an
+        Album returns 204; only a missing Gallery folder returns 404.
       responses:
         "204":
           description: The folder has no Offline Album after the request
@@ -535,9 +566,9 @@ paths:
         support, existing enabled-Album conflicts, cacheable frame counts, and
         storage projections for each requested display without mutating the
         Album store or paying the full per-photo render cost. Exact byte counts
-        are used when panel geometry and packed output determine artifact size;
-        compressed output is explicitly marked estimated. A missing storage
-        projection is unknown, never zero.
+        require a warmed artifact or renderer metadata sufficient to compute
+        packed output size; compressed output may use an explicitly estimated
+        projection. A missing storage projection is unknown, never zero.
       requestBody:
         required: true
         content:
@@ -1138,6 +1169,15 @@ components:
       name: If-Match
       required: true
       description: ETag returned when the Lineup was read
+      schema:
+        type: string
+    OptionalIfMatch:
+      in: header
+      name: If-Match
+      required: false
+      description: >-
+        ETag returned when the Offline Album was read. Required when replacing
+        an existing Album and omitted only when creating one.
       schema:
         type: string
   headers:
@@ -2543,7 +2583,8 @@ components:
         Desired server-owned Album producer. One resource exists at most per
         Gallery folder. order contains opaque image identifiers; listed images
         lead playback, while current folder images omitted from order are
-        appended in the server's canonical natural order.
+        appended in the server's canonical natural order. The response is a
+        normalized server result rather than an echo of the last PUT.
       type: object
       additionalProperties: false
       required:
@@ -2557,7 +2598,9 @@ components:
         - playback
       properties:
         id:
-          description: Opaque stable Album identifier
+          description: >-
+            Opaque stable Album identifier minted by the adapter. It is not a
+            Gallery folder name and need not equal folder_id.
           type: string
           minLength: 1
           maxLength: 512
@@ -2585,7 +2628,10 @@ components:
           description: >-
             Opaque Gallery image identifiers in leading playback order. Empty
             uses the folder's natural order; unlisted current images append in
-            natural order so later uploads remain visible.
+            natural order so later uploads remain visible. The server rejects
+            identifiers belonging to another folder and drops identifiers for
+            images deleted since the request was prepared, so the returned
+            normalized order can differ from the submitted order.
           type: array
           uniqueItems: true
           items:
@@ -2619,7 +2665,8 @@ components:
         order:
           description: >-
             Opaque Gallery image identifiers. Empty uses natural folder order;
-            unlisted current images append after the listed images.
+            unlisted current images append after the listed images. Identifiers
+            known to belong to another folder are invalid.
           type: array
           uniqueItems: true
           items:
@@ -2683,15 +2730,19 @@ components:
         conflict:
           description: Another enabled Album currently claims this display
           allOf:
-            - $ref: "#/components/schemas/OfflineAlbumTargetConflict"
+            - $ref: "#/components/schemas/OfflineAlbumConflictClaim"
         plan:
           description: >-
-            Server-computed cache plan when enough target information exists.
-            Absent means unknown, never zero.
+            Authoritative server-computed cache plan when enough target
+            information exists. It may apply a server or firmware default even
+            when capability detail is absent; absent means unknown, never zero.
           allOf:
             - $ref: "#/components/schemas/OfflineAlbumPlan"
         desired_version:
-          description: Current per-device collection manifest version when known
+          description: >-
+            Stable per-device collection manifest version, emitted only after
+            every selected frame is warmed. Its absence must not be presented
+            as device drift.
           type: string
           minLength: 1
         observed:
@@ -2700,20 +2751,25 @@ components:
             not reported this Album; it is not a live current-photo assertion.
           allOf:
             - $ref: "#/components/schemas/OfflineAlbumObservation"
-    OfflineAlbumTargetConflict:
+    OfflineAlbumConflictClaim:
       type: object
       additionalProperties: false
-      required: [album_id]
+      required: [album_id, name]
       properties:
         album_id:
           description: Enabled Album currently claiming the display
           type: string
           minLength: 1
           maxLength: 512
+        name:
+          description: Human-readable name of the enabled Album holding the display
+          type: string
+          minLength: 1
+          maxLength: 120
     OfflineAlbumPlan:
       type: object
       additionalProperties: false
-      required: [total_frames, cacheable_frames, fully_offline]
+      required: [total_frames, cacheable_frames, accuracy, fully_offline]
       properties:
         total_frames:
           type: integer
@@ -2724,6 +2780,12 @@ components:
             are applied in playback order.
           type: integer
           minimum: 0
+        accuracy:
+          description: >-
+            exact when frame-count limits are deterministic; estimated when a
+            compressed-size estimate participates in the capacity decision.
+          type: string
+          enum: [exact, estimated]
         fully_offline:
           description: True only when every source frame is cacheable locally
           type: boolean
@@ -2744,8 +2806,9 @@ components:
           minimum: 0
         accuracy:
           description: >-
-            exact when packed output size follows panel geometry and bit depth;
-            estimated for compressed output. Clients display the distinction.
+            exact only for existing warmed artifacts or when declared renderer
+            metadata determines packed output size; estimated only for a
+            defined compressed-output estimate. Clients display the distinction.
           type: string
           enum: [exact, estimated]
     OfflineAlbumObservation:
@@ -2754,18 +2817,21 @@ components:
         not authoritative for the live current photo after playback goes local.
       type: object
       additionalProperties: false
-      required: [state, cached, total, version, observed_at]
+      required: [state, observed_at]
       properties:
         state:
           type: string
           enum: [syncing, playing, paused, error]
         cached:
+          description: Optional because older firmware can omit progress counts
           type: integer
           minimum: 0
         total:
+          description: Optional because older firmware can omit progress counts
           type: integer
           minimum: 0
         version:
+          description: Optional because older firmware can omit its manifest version
           type: string
           minLength: 1
         observed_at:
@@ -3492,6 +3558,7 @@ components:
                 - idempotency_conflict
                 - resource_conflict
                 - offline_album_conflict
+                - offline_album_unsupported_targets
                 - not_resendable
                 - temporarily_unavailable
                 - precondition_failed
@@ -3509,6 +3576,16 @@ components:
               type: object
               minProperties: 1
               additionalProperties:
+                $ref: "#/components/schemas/OfflineAlbumConflictClaim"
+            device_ids:
+              description: >-
+                Present on offline_album_unsupported_targets. Lists every
+                requested display that became unsupported before the write.
+                Absent on other errors.
+              type: array
+              minItems: 1
+              uniqueItems: true
+              items:
                 type: string
                 minLength: 1
 security:

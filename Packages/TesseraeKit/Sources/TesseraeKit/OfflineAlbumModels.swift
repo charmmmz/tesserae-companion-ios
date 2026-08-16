@@ -140,28 +140,31 @@ public struct OfflineAlbum: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
-public struct OfflineAlbumTargetConflict: Codable, Hashable, Sendable {
+public struct OfflineAlbumConflictClaim: Codable, Hashable, Sendable {
     public let albumID: String
+    public let name: String
 
-    public init(albumID: String) {
+    public init(albumID: String, name: String) {
         self.albumID = albumID
+        self.name = name
     }
 
     private enum CodingKeys: String, CodingKey {
         case albumID = "albumId"
+        case name
     }
 }
 
-public enum OfflineAlbumStorageAccuracy: String, Codable, Hashable, Sendable {
+public enum OfflineAlbumProjectionAccuracy: String, Codable, Hashable, Sendable {
     case exact
     case estimated
 }
 
 public struct OfflineAlbumStorageProjection: Codable, Hashable, Sendable {
     public let bytes: Int
-    public let accuracy: OfflineAlbumStorageAccuracy
+    public let accuracy: OfflineAlbumProjectionAccuracy
 
-    public init(bytes: Int, accuracy: OfflineAlbumStorageAccuracy) {
+    public init(bytes: Int, accuracy: OfflineAlbumProjectionAccuracy) {
         self.bytes = bytes
         self.accuracy = accuracy
     }
@@ -170,17 +173,20 @@ public struct OfflineAlbumStorageProjection: Codable, Hashable, Sendable {
 public struct OfflineAlbumPlan: Codable, Hashable, Sendable {
     public let totalFrames: Int
     public let cacheableFrames: Int
+    public let accuracy: OfflineAlbumProjectionAccuracy
     public let fullyOffline: Bool
     public let storage: OfflineAlbumStorageProjection?
 
     public init(
         totalFrames: Int,
         cacheableFrames: Int,
+        accuracy: OfflineAlbumProjectionAccuracy,
         fullyOffline: Bool,
         storage: OfflineAlbumStorageProjection? = nil
     ) {
         self.totalFrames = totalFrames
         self.cacheableFrames = cacheableFrames
+        self.accuracy = accuracy
         self.fullyOffline = fullyOffline
         self.storage = storage
     }
@@ -195,16 +201,16 @@ public enum OfflineAlbumObservationState: String, Codable, Hashable, Sendable {
 
 public struct OfflineAlbumObservation: Codable, Hashable, Sendable {
     public let state: OfflineAlbumObservationState
-    public let cached: Int
-    public let total: Int
-    public let version: String
+    public let cached: Int?
+    public let total: Int?
+    public let version: String?
     public let observedAt: Date
 
     public init(
         state: OfflineAlbumObservationState,
-        cached: Int,
-        total: Int,
-        version: String,
+        cached: Int? = nil,
+        total: Int? = nil,
+        version: String? = nil,
         observedAt: Date
     ) {
         self.state = state
@@ -218,7 +224,7 @@ public struct OfflineAlbumObservation: Codable, Hashable, Sendable {
 public struct OfflineAlbumTarget: Codable, Hashable, Sendable {
     public let deviceID: String
     public let support: DeviceCapabilitySupport
-    public let conflict: OfflineAlbumTargetConflict?
+    public let conflict: OfflineAlbumConflictClaim?
     public let plan: OfflineAlbumPlan?
     public let desiredVersion: String?
     public let observed: OfflineAlbumObservation?
@@ -226,7 +232,7 @@ public struct OfflineAlbumTarget: Codable, Hashable, Sendable {
     public init(
         deviceID: String,
         support: DeviceCapabilitySupport,
-        conflict: OfflineAlbumTargetConflict? = nil,
+        conflict: OfflineAlbumConflictClaim? = nil,
         plan: OfflineAlbumPlan? = nil,
         desiredVersion: String? = nil,
         observed: OfflineAlbumObservation? = nil
@@ -256,6 +262,16 @@ public struct OfflineAlbumResponse: Codable, Hashable, Sendable {
     public init(album: OfflineAlbum, targets: [OfflineAlbumTarget]) {
         self.album = album
         self.targets = targets
+    }
+}
+
+public struct VersionedOfflineAlbum: Hashable, Sendable {
+    public let response: OfflineAlbumResponse
+    public let eTag: String
+
+    public init(response: OfflineAlbumResponse, eTag: String) {
+        self.response = response
+        self.eTag = eTag
     }
 }
 

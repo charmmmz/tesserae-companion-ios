@@ -138,6 +138,13 @@ or an SD-card allow-list. Unknown targets remain selectable with a caveat;
 unsupported targets are refused. Ordinary Gallery and online Send stay
 available for devices such as PicPak even when Offline Album is unsupported.
 
+The resource uses ETag/`If-Match` for Web/App concurrency. Server responses own
+normalized image order and authoritative per-target plans; the app never fills
+missing capability limits itself. Older firmware may report only playback state
+and observation time, so progress counts and manifest versions stay optional.
+Conflict prompts use both the opaque Album ID and server-provided Album name,
+while capability races fail the whole write with the affected device IDs.
+
 The native setup UI remains a follow-up to the 0.13 contract and server adapter.
 It will edit one Album per Gallery folder, show explicit takeover when another
 enabled Album claims a target, and keep desired configuration distinct from the

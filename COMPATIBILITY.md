@@ -232,15 +232,27 @@ only when present. Missing capacity is unknown rather than zero and must not be
 filled from a model or storage-card allow-list.
 
 Preflight distinguishes fully offline frame count from partial capacity and
-marks projected bytes as `exact` or `estimated`. PUT claims at most one enabled
-producer per display and never silently replaces another Album. A 409 contains
-the contested display-to-Album map; only an explicit `replace_conflicts: true`
-request performs takeover, and it preserves every displaced Album and its
-uncontested bindings. DELETE removes only the Album producer and bindings, not
-the Gallery folder or source photos.
+marks frame counts and projected bytes as `exact` or `estimated`; byte accuracy
+requires a warmed artifact or sufficient renderer metadata. A returned plan is
+still authoritative when the server applies an unadvertised firmware default.
+PUT claims at most one enabled producer per display and never silently replaces
+another Album. GET and successful PUT return an ETag, and updates require
+`If-Match`; an omitted validator is creation-only. A 409 contains each contested
+display's opaque Album ID and human-readable Album name; only an explicit
+`replace_conflicts: true` request performs takeover, and it preserves every
+displaced Album and its uncontested bindings. A target that becomes unsupported
+causes one typed, atomic refusal rather than a partial write.
 
-Tesserae edge v0.303.0 contains the prerequisite single-producer enforcement
-and optional frame-cache detail advertisement. It deliberately does not yet
+Responses normalize photo order instead of echoing requests: cross-folder IDs
+are invalid and deleted IDs disappear. Older firmware observations may omit
+cached count, total count, and manifest version, while `desired_version` is
+emitted only for fully warmed frames. DELETE removes only the Album producer and
+bindings, not the Gallery folder or source photos; it returns 204 when the folder
+exists without an Album and 404 only when the folder itself is missing.
+
+Tesserae edge v0.305.0 contains the prerequisite single-producer enforcement,
+optional frame-cache detail advertisement, and corrected Web round-tripping for
+order, disabled state, and non-round intervals. It deliberately does not yet
 implement the Companion preflight or nested routes; clients must continue to
 gate this surface on `offline_albums` rather than product version. Contract
 fixtures, Swift models, and transport methods can land before that adapter and

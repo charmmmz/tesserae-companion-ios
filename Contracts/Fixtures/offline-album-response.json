@@ -1,6 +1,6 @@
 {
   "album": {
-    "id": "folder_family",
+    "id": "oa_4c6d9e",
     "folder_id": "folder_family",
     "name": "Family",
     "enabled": true,
@@ -27,6 +27,7 @@
       "plan": {
         "total_frames": 4,
         "cacheable_frames": 4,
+        "accuracy": "exact",
         "fully_offline": true,
         "storage": {
           "bytes": 3072000,

@@ -45,6 +45,7 @@ CASES = {
     "offline-album-put-request.json": "OfflineAlbumWriteRequest",
     "offline-album-preflight-response.json": "OfflineAlbumPreflightResponse",
     "offline-album-response.json": "OfflineAlbumResponse",
+    "offline-album-response-partial-observation.json": "OfflineAlbumResponse",
     "image-url-push-request.json": "ImageURLPushRequest",
     "webpage-push-request.json": "WebpagePushRequest",
     "history-response.json": "HistoryResponse",
@@ -69,6 +70,7 @@ CASES = {
     "error-response.json": "ErrorResponse",
     "error-forbidden.json": "ErrorResponse",
     "error-offline-album-conflict.json": "ErrorResponse",
+    "error-offline-album-unsupported-targets.json": "ErrorResponse",
 }
 
 
@@ -729,13 +731,24 @@ def test_offline_album_resource_is_nested_idempotent_and_non_destructive() -> No
         "403",
         "404",
         "409",
+        "412",
     }
     assert "idempotent" in resource["put"]["description"]
     assert "replace_conflicts" in resource["put"]["description"]
+    assert resource["put"]["parameters"] == [
+        {"$ref": "#/components/parameters/OptionalIfMatch"}
+    ]
+    assert "If-Match" in resource["put"]["description"]
+    assert "invalidate warmed frames" in resource["put"]["description"]
+    assert "ETag" in resource["get"]["responses"]["200"]["headers"]
+    assert "ETag" in resource["put"]["responses"]["200"]["headers"]
+    assert "ETag" in resource["put"]["responses"]["201"]["headers"]
     assert "never modifies or deletes Gallery source photos" in resource["put"][
         "description"
     ]
     assert "source image remain unchanged" in resource["delete"]["description"]
+    assert "without an Album returns 204" in resource["delete"]["description"]
+    assert "missing Gallery folder returns 404" in resource["delete"]["description"]
 
     assert preflight["requestBody"]["content"]["application/json"]["schema"] == {
         "$ref": "#/components/schemas/OfflineAlbumDraft"
@@ -752,6 +765,9 @@ def test_offline_album_order_support_and_storage_are_truthful() -> None:
     draft = schemas["OfflineAlbumDraft"]
     assert "order" in draft["required"]
     assert "Opaque Gallery image identifiers" in draft["properties"]["order"][
+        "description"
+    ]
+    assert "another folder are invalid" in draft["properties"]["order"][
         "description"
     ]
 
@@ -785,7 +801,34 @@ def test_offline_album_order_support_and_storage_are_truthful() -> None:
     storage = schemas["OfflineAlbumStorageProjection"]
     assert storage["required"] == ["bytes", "accuracy"]
     assert storage["properties"]["accuracy"]["enum"] == ["exact", "estimated"]
-    assert "estimated_bytes" not in schemas["OfflineAlbumPlan"]["properties"]
+    plan = schemas["OfflineAlbumPlan"]
+    assert "accuracy" in plan["required"]
+    assert plan["properties"]["accuracy"]["enum"] == ["exact", "estimated"]
+    assert "authoritative" in schemas["OfflineAlbumTarget"]["properties"][
+        "plan"
+    ]["description"].lower()
+    assert "server or firmware default" in schemas["OfflineAlbumTarget"][
+        "properties"
+    ]["plan"]["description"]
+    assert "estimated_bytes" not in plan["properties"]
+
+    response = json.loads((FIXTURES / "offline-album-response.json").read_text())
+    assert response["album"]["id"] != response["album"]["folder_id"]
+    assert response["targets"][0]["plan"]["accuracy"] == "exact"
+    preflight = json.loads(
+        (FIXTURES / "offline-album-preflight-response.json").read_text()
+    )
+    assert "storage" not in preflight["targets"][0]["plan"]
+
+    observation = schemas["OfflineAlbumObservation"]
+    assert observation["required"] == ["state", "observed_at"]
+    partial = json.loads(
+        (FIXTURES / "offline-album-response-partial-observation.json").read_text()
+    )["targets"][0]["observed"]
+    assert partial == {
+        "state": "playing",
+        "observed_at": "2026-08-15T10:00:00Z",
+    }
 
 
 def test_offline_album_conflicts_are_explicit_and_takeover_is_opt_in() -> None:
@@ -801,10 +844,16 @@ def test_offline_album_conflicts_are_explicit_and_takeover_is_opt_in() -> None:
 
     assert request["replace_conflicts"] is True
     assert preflight["targets"][0]["conflict"] == {
-        "album_id": "folder_holidays"
+        "album_id": "oa_7f92a4",
+        "name": "Holidays",
     }
     assert error["error"]["code"] == "offline_album_conflict"
-    assert error["error"]["claims"] == {"e1004-desk": "folder_holidays"}
+    assert error["error"]["claims"] == {
+        "e1004-desk": {
+            "album_id": "oa_7f92a4",
+            "name": "Holidays",
+        }
+    }
 
     replace = SPEC["components"]["schemas"]["OfflineAlbumWriteRequest"][
         "properties"
@@ -813,3 +862,20 @@ def test_offline_album_conflicts_are_explicit_and_takeover_is_opt_in() -> None:
     assert "Displaced Albums and their remaining target bindings survive" in replace[
         "description"
     ]
+
+
+def test_offline_album_unsupported_targets_have_a_typed_atomic_failure() -> None:
+    error = json.loads(
+        (FIXTURES / "error-offline-album-unsupported-targets.json").read_text()
+    )["error"]
+    assert error["code"] == "offline_album_unsupported_targets"
+    assert error["device_ids"] == ["picpak-kitchen"]
+
+    put = SPEC["paths"][
+        "/api/app/v1/gallery/folders/{folder_id}/offline-album"
+    ]["put"]
+    assert "never silently drops" in put["responses"]["400"]["description"]
+    codes = SPEC["components"]["schemas"]["ErrorResponse"]["properties"][
+        "error"
+    ]["properties"]["code"]["enum"]
+    assert "offline_album_unsupported_targets" in codes

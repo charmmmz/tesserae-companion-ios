@@ -981,18 +981,21 @@ public struct APIErrorBody: Codable, Hashable, Sendable {
     public let code: String
     public let message: String
     public let requestID: String?
-    public let claims: [String: String]?
+    public let claims: [String: OfflineAlbumConflictClaim]?
+    public let deviceIDs: [String]?
 
     public init(
         code: String,
         message: String,
         requestID: String? = nil,
-        claims: [String: String]? = nil
+        claims: [String: OfflineAlbumConflictClaim]? = nil,
+        deviceIDs: [String]? = nil
     ) {
         self.code = code
         self.message = message
         self.requestID = requestID
         self.claims = claims
+        self.deviceIDs = deviceIDs
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -1000,6 +1003,7 @@ public struct APIErrorBody: Codable, Hashable, Sendable {
         case message
         case requestID = "requestId"
         case claims
+        case deviceIDs = "deviceIds"
     }
 }
 

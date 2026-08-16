@@ -34,7 +34,7 @@ public protocol TesseraeServing: Sendable {
     func fetchOfflineAlbum(
         folderID: String,
         instance: TesseraeInstance
-    ) async throws -> OfflineAlbumResponse
+    ) async throws -> VersionedOfflineAlbum
     func preflightOfflineAlbum(
         folderID: String,
         draft: OfflineAlbumDraft,
@@ -43,8 +43,9 @@ public protocol TesseraeServing: Sendable {
     func putOfflineAlbum(
         folderID: String,
         request: OfflineAlbumWriteRequest,
+        eTag: String?,
         instance: TesseraeInstance
-    ) async throws -> OfflineAlbumResponse
+    ) async throws -> VersionedOfflineAlbum
     func deleteOfflineAlbum(
         folderID: String,
         instance: TesseraeInstance
@@ -199,7 +200,12 @@ public enum TesseraeClientError: Error, Equatable, LocalizedError, Sendable {
     case unauthorized
     case forbidden(message: String, requestID: String?)
     case offlineAlbumConflict(
-        claims: [String: String],
+        claims: [String: OfflineAlbumConflictClaim],
+        message: String,
+        requestID: String?
+    )
+    case offlineAlbumUnsupportedTargets(
+        deviceIDs: [String],
         message: String,
         requestID: String?
     )
@@ -236,6 +242,12 @@ public enum TesseraeClientError: Error, Equatable, LocalizedError, Sendable {
                 message
             }
         case let .offlineAlbumConflict(_, message, requestID):
+            if let requestID {
+                "\(message) (request \(requestID))"
+            } else {
+                message
+            }
+        case let .offlineAlbumUnsupportedTargets(_, message, requestID):
             if let requestID {
                 "\(message) (request \(requestID))"
             } else {
