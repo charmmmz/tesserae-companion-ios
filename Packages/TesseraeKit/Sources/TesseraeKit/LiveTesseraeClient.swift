@@ -268,6 +268,74 @@ public actor LiveTesseraeClient: TesseraeServing {
         )
     }
 
+    public func fetchOfflineAlbum(
+        folderID: String,
+        instance: TesseraeInstance
+    ) async throws -> VersionedOfflineAlbum {
+        let request = try await authenticatedRequest(
+            instance: instance,
+            path: ["gallery", "folders", folderID, "offline-album"],
+            method: "GET"
+        )
+        return try await performVersionedOfflineAlbum(
+            request,
+            expectedStatusCodes: [200]
+        )
+    }
+
+    public func preflightOfflineAlbum(
+        folderID: String,
+        draft: OfflineAlbumDraft,
+        instance: TesseraeInstance
+    ) async throws -> OfflineAlbumPreflightResponse {
+        let request = try await authenticatedRequest(
+            instance: instance,
+            path: [
+                "gallery",
+                "folders",
+                folderID,
+                "offline-album",
+                "preflight",
+            ],
+            method: "POST",
+            body: TesseraeJSON.encoder().encode(draft)
+        )
+        return try await perform(request, expectedStatusCodes: [200])
+    }
+
+    public func putOfflineAlbum(
+        folderID: String,
+        request requestBody: OfflineAlbumWriteRequest,
+        eTag: String?,
+        instance: TesseraeInstance
+    ) async throws -> VersionedOfflineAlbum {
+        var request = try await authenticatedRequest(
+            instance: instance,
+            path: ["gallery", "folders", folderID, "offline-album"],
+            method: "PUT",
+            body: TesseraeJSON.encoder().encode(requestBody)
+        )
+        if let eTag {
+            request.setValue(eTag, forHTTPHeaderField: "If-Match")
+        }
+        return try await performVersionedOfflineAlbum(
+            request,
+            expectedStatusCodes: [200, 201]
+        )
+    }
+
+    public func deleteOfflineAlbum(
+        folderID: String,
+        instance: TesseraeInstance
+    ) async throws {
+        let request = try await authenticatedRequest(
+            instance: instance,
+            path: ["gallery", "folders", folderID, "offline-album"],
+            method: "DELETE"
+        )
+        _ = try await performWithoutBody(request, expectedStatusCodes: [204])
+    }
+
     public func fetchLineups(instance: TesseraeInstance) async throws -> [Lineup] {
         let request = try await authenticatedRequest(
             instance: instance,
@@ -906,6 +974,33 @@ public actor LiveTesseraeClient: TesseraeServing {
         }
     }
 
+    private func performVersionedOfflineAlbum(
+        _ request: URLRequest,
+        expectedStatusCodes: Set<Int>
+    ) async throws -> VersionedOfflineAlbum {
+        let response = try await response(for: request)
+        guard expectedStatusCodes.contains(response.statusCode) else {
+            throw try serverError(from: response)
+        }
+        let eTag = response.headers.first {
+            $0.key.caseInsensitiveCompare("etag") == .orderedSame
+        }?.value
+        guard let eTag, !eTag.isEmpty else {
+            throw TesseraeClientError.invalidResponse
+        }
+        do {
+            let decoded = try TesseraeJSON.decoder().decode(
+                OfflineAlbumResponse.self,
+                from: response.data
+            )
+            return VersionedOfflineAlbum(response: decoded, eTag: eTag)
+        } catch let error as TesseraeClientError {
+            throw error
+        } catch {
+            throw TesseraeClientError.decoding(String(describing: error))
+        }
+    }
+
     private func previewResponse(
         for request: URLRequest,
         allowsPreparing: Bool
@@ -985,6 +1080,20 @@ public actor LiveTesseraeClient: TesseraeServing {
                 || decoded.error.code == "pairing_code_used"
             {
                 return .invalidPairingCode
+            }
+            if decoded.error.code == "offline_album_conflict" {
+                return .offlineAlbumConflict(
+                    claims: decoded.error.claims ?? [:],
+                    message: decoded.error.message,
+                    requestID: decoded.error.requestID
+                )
+            }
+            if decoded.error.code == "offline_album_unsupported_targets" {
+                return .offlineAlbumUnsupportedTargets(
+                    deviceIDs: decoded.error.deviceIDs ?? [],
+                    message: decoded.error.message,
+                    requestID: decoded.error.requestID
+                )
             }
             return .server(
                 code: decoded.error.code,

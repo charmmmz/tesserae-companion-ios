@@ -11,6 +11,19 @@ capabilities.
 
 ## [Unreleased]
 
+### Added
+
+- Added the accepted contract-only Offline Album 0.13 foundation: one nested
+  Album per Gallery folder, optional operator-granted authoring permission,
+  explicit photo order and playback settings, server-computed target preflight,
+  runtime frame-cache limits, exact-versus-estimated storage projections,
+  desired-versus-observed status, named conflict takeover, ETag-protected Web/App
+  updates, typed capability-race failures, and server-normalized photo order.
+  Older firmware may omit progress counters and manifest versions. OpenAPI,
+  fixtures, Swift models, client methods, mock behavior, and tests are included;
+  the Tesserae route adapter and native Library setup UI remain separate
+  follow-ups.
+
 ## [0.6.3] - 2026-08-15
 
 ### Added

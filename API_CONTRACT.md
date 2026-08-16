@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Status | Implemented base contract plus reviewed and proposed gated extensions |
-| Contract version | 0.12.0 |
+| Contract version | 0.13.0 |
 | Namespace | `/api/app/v1` |
 | Authentication | Revocable per-client Companion bearer token |
 | Machine-readable source | [`Contracts/app-v1.openapi.yaml`](Contracts/app-v1.openapi.yaml) |
@@ -23,6 +23,8 @@ independently gate Lineups read, playback, and native definition editing.
 authoring guidance. `gallery` independently gates native Gallery folder
 browsing, internal-folder creation, and one-image-at-a-time uploads; it does
 not imply destructive Gallery management or Offline Album authoring.
+`offline_albums` separately gates the accepted nested Album resource, and the
+operator-granted `offline_albums:write` scope controls preflight and writes.
 
 The proposal reflects the maintainer reviews in
 [Discussion #147](https://github.com/dmellok/tesserae/discussions/147),
@@ -30,7 +32,8 @@ The proposal reflects the maintainer reviews in
 [Discussion #160](https://github.com/dmellok/tesserae/discussions/160),
 [Discussion #176](https://github.com/dmellok/tesserae/discussions/176),
 [Discussion #203](https://github.com/dmellok/tesserae/discussions/203), and
-[Discussion #225](https://github.com/dmellok/tesserae/discussions/225).
+[Discussion #225](https://github.com/dmellok/tesserae/discussions/225), and
+[Discussion #230](https://github.com/dmellok/tesserae/discussions/230).
 Dashboard editing, plugin administration, firmware controls,
 History deletion/administration, and general server administration remain
 outside this contract.
@@ -51,6 +54,9 @@ outside this contract.
 - Gallery folder creation and image upload are synchronous resource writes.
   Each upload carries exactly one image and its own `Idempotency-Key`; it
   creates neither a Job nor History.
+- Offline Album preflight is a synchronous, non-mutating plan. Album PUT and
+  DELETE are idempotent resource writes; none of them creates a Job, deletes a
+  Gallery photo, or sends rendered frames directly from Companion.
 - Lineup `next`, `previous`, and `play` actions are asynchronous Jobs and never
   save definitions. `enable` and `disable` use the same action endpoint but
   synchronously return the updated Lineup without touching a display.
@@ -77,6 +83,10 @@ outside this contract.
 | `GET` | `/api/app/v1/gallery/folders` | List Gallery folders without exposing host paths |
 | `POST` | `/api/app/v1/gallery/folders` | Create one writable internal Gallery folder |
 | `GET` | `/api/app/v1/gallery/folders/{folder_id}` | Read one folder and its canonical image order |
+| `GET` | `/api/app/v1/gallery/folders/{folder_id}/offline-album` | Read desired Album configuration and observed target state |
+| `PUT` | `/api/app/v1/gallery/folders/{folder_id}/offline-album` | Idempotently create or replace one folder's Album |
+| `DELETE` | `/api/app/v1/gallery/folders/{folder_id}/offline-album` | Remove the Album producer without deleting Gallery photos |
+| `POST` | `/api/app/v1/gallery/folders/{folder_id}/offline-album/preflight` | Compute target support, conflicts, frame counts, and storage without saving |
 | `POST` | `/api/app/v1/gallery/folders/{folder_id}/images` | Idempotently upload one normalized still image |
 | `GET` | `/api/app/v1/gallery/images/{image_id}/thumbnail` | Read an authenticated conditional thumbnail |
 | `GET` | `/api/app/v1/gallery/images/{image_id}/content` | Read authenticated normalized image content |
@@ -147,6 +157,12 @@ correct settings surface without receiving or replacing its credential. An
 older server that advertises authoring without `session_read` can still enforce
 the permission on `POST`/`PATCH`; the client falls back to its save-time `403`
 remedy.
+
+`offline_albums:write` follows the same optional, operator-granted pattern and
+is intentionally absent from default pairing scopes. Existing Gallery and
+device read scopes cover inspection; preflight, create/replace, and removal
+require the current session grant. A missing grant is `403 forbidden`, not an
+invalid pairing.
 
 A missing, invalid, or revoked credential returns `401 unauthorized`. A valid
 credential that lacks a route's required scope returns `403 forbidden`; the
@@ -349,6 +365,60 @@ Contract 0.12.0 records four additive clarifications from that implementation:
   reported. It remains `unknown`, preserves its non-null `observed_at`, and is
   judged against the device's own poll cadence rather than a fixed client
   threshold.
+
+Contract 0.13.0 defines the accepted Offline Album authoring and status slice
+from [Discussion #230](https://github.com/dmellok/tesserae/discussions/230):
+
+- `offline_albums` is independent from ordinary Gallery browsing and online
+  Send. The resource is a nested singleton under one opaque Gallery folder ID;
+  a client never creates a Dashboard or Lineup member per photo;
+- `offline_albums:write` is optional and operator-granted. Reads reuse Gallery
+  and device read access, while preflight and mutations require the explicit
+  write grant;
+- each complete Album draft carries a name, enabled state, opaque display IDs,
+  opaque leading photo `order`, Album-wide `fit`/`fill`, and sequential or
+  shuffle playback settings. The adapter returns normalized order: unlisted
+  current photos append in natural folder order, cross-folder identifiers are
+  rejected, and identifiers deleted before the write completes are dropped;
+- preflight is server-computed and non-mutating. Every requested target reports
+  runtime `frame_cache` support, any conflicting enabled Album, and a plan when
+  enough information exists. `unknown` remains selectable with a caveat; only
+  `unsupported` is refused. A write that races with a capability change fails
+  atomically with `offline_album_unsupported_targets` and its display IDs;
+- `DeviceCapabilitySupport.detail` can carry optional non-negative
+  `capacity_bytes` and `max_frames` values reported by supported firmware.
+  Missing keys mean not reported, never zero and never a model-derived default;
+- frame counts and storage projections carry `exact` or `estimated` accuracy.
+  Byte counts are exact only for warmed artifacts or sufficient renderer
+  metadata; compressed-size projections remain estimated, and absent storage
+  remains unknown. A target plan remains authoritative when the server applies
+  a firmware or server default that was absent from capability detail;
+- one enabled producer may claim a display. PUT returns
+  `409 offline_album_conflict` with a display-to-Album `claims` map unless the
+  request explicitly sets `replace_conflicts: true`. Each claim contains an
+  opaque Album ID distinct from the encoded folder ID plus its display name.
+  Takeover unbinds only the contested displays and preserves displaced Albums
+  and their other targets;
+- GET and successful PUT return an ETag. Existing Albums require `If-Match`;
+  omitting it is creation-only, so Web and Companion cannot silently overwrite
+  one another. Material configuration or membership changes invalidate warmed
+  frames before a replacement manifest is served;
+- desired configuration and the last observed device state stay separate. A
+  report may contain only state and observation time on older firmware;
+  cached/total/version are optional and are not a live assertion about which
+  photo is currently visible. Desired manifest versions appear only once the
+  selected frame set is fully warmed;
+- DELETE is idempotent for an existing Gallery folder: no Album still returns
+  204, while 404 is reserved for a missing folder;
+- future per-photo/per-target framing remains additive, but its resolved intent
+  must participate in frame identity before cached artifacts can safely reuse
+  it.
+
+Tesserae edge v0.305.0 enforces the single-enabled-producer rule, publishes
+optional `frame_cache.detail` limits, and preserves Web-authored order, disabled
+state, and non-round intervals. The nested Companion routes and preflight
+adapter remain a server follow-up; this repository currently ships the
+contract, fixtures, Swift transport models, and client surface only.
 
 Upstream PR [#175](https://github.com/dmellok/tesserae/pull/175) merged the
 underlying normalized `SourceCrop` renderer primitive. It does not by itself

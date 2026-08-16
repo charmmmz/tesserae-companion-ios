@@ -22,13 +22,16 @@ CASES = {
     "capabilities-lineups.json": "Capabilities",
     "capabilities-lineup-authoring.json": "Capabilities",
     "capabilities-gallery.json": "Capabilities",
+    "capabilities-offline-albums.json": "Capabilities",
     "pair-request.json": "PairingRequest",
     "pair-response.json": "PairingResponse",
     "pair-response-lineups.json": "PairingResponse",
     "pair-response-gallery.json": "PairingResponse",
     "session-authorization.json": "CompanionSessionAuthorization",
+    "session-authorization-offline-albums.json": "CompanionSessionAuthorization",
     "devices-response.json": "DevicesResponse",
     "devices-gallery-response.json": "DevicesResponse",
+    "devices-offline-albums-response.json": "DevicesResponse",
     "dashboards-response.json": "DashboardsResponse",
     "dashboard-push-request.json": "DashboardPushRequest",
     "image-push-request.json": "ImagePushRequest",
@@ -38,6 +41,11 @@ CASES = {
     "gallery-external-folder-response.json": "GalleryFolderResponse",
     "gallery-folder-create-request.json": "GalleryFolderCreateRequest",
     "gallery-image-upload-response.json": "GalleryImageResponse",
+    "offline-album-draft.json": "OfflineAlbumDraft",
+    "offline-album-put-request.json": "OfflineAlbumWriteRequest",
+    "offline-album-preflight-response.json": "OfflineAlbumPreflightResponse",
+    "offline-album-response.json": "OfflineAlbumResponse",
+    "offline-album-response-partial-observation.json": "OfflineAlbumResponse",
     "image-url-push-request.json": "ImageURLPushRequest",
     "webpage-push-request.json": "WebpagePushRequest",
     "history-response.json": "HistoryResponse",
@@ -61,6 +69,8 @@ CASES = {
     "job-lineup-action.json": "JobResponse",
     "error-response.json": "ErrorResponse",
     "error-forbidden.json": "ErrorResponse",
+    "error-offline-album-conflict.json": "ErrorResponse",
+    "error-offline-album-unsupported-targets.json": "ErrorResponse",
 }
 
 
@@ -96,7 +106,7 @@ def _json_schema(value: Any) -> Any:
 
 def test_openapi_shape_and_operation_ids_are_stable() -> None:
     assert SPEC["openapi"] == "3.0.3"
-    assert SPEC["info"]["version"] == "0.12.0"
+    assert SPEC["info"]["version"] == "0.13.0"
     assert set(SPEC["paths"]) == {
         "/api/app/v1",
         "/api/app/v1/pair",
@@ -111,6 +121,8 @@ def test_openapi_shape_and_operation_ids_are_stable() -> None:
         "/api/app/v1/images",
         "/api/app/v1/gallery/folders",
         "/api/app/v1/gallery/folders/{folder_id}",
+        "/api/app/v1/gallery/folders/{folder_id}/offline-album",
+        "/api/app/v1/gallery/folders/{folder_id}/offline-album/preflight",
         "/api/app/v1/gallery/folders/{folder_id}/images",
         "/api/app/v1/gallery/images/{image_id}/thumbnail",
         "/api/app/v1/gallery/images/{image_id}/content",
@@ -670,3 +682,200 @@ def test_device_capability_support_is_runtime_computed_and_tri_state() -> None:
     ]["properties"]["reason_code"]["description"]
     assert "stale_heartbeat" in reason_description
     assert "device's poll cadence" in reason_description
+
+
+def test_offline_album_contract_is_independently_gated_and_optional() -> None:
+    gallery = json.loads((FIXTURES / "capabilities-gallery.json").read_text())
+    offline = json.loads(
+        (FIXTURES / "capabilities-offline-albums.json").read_text()
+    )
+    session = json.loads(
+        (FIXTURES / "session-authorization-offline-albums.json").read_text()
+    )
+
+    assert "gallery" in gallery["features"]
+    assert "offline_albums" not in gallery["features"]
+    assert "gallery" in offline["features"]
+    assert "offline_albums" in offline["features"]
+    assert "offline_albums:write" in session["scopes"]
+
+    schemas = SPEC["components"]["schemas"]
+    pairing_scopes = schemas["PairingResponse"]["properties"]["scopes"]["items"][
+        "enum"
+    ]
+    session_scopes = schemas["CompanionSessionAuthorization"]["properties"][
+        "scopes"
+    ]["items"]["enum"]
+    assert "offline_albums:write" not in pairing_scopes
+    assert "offline_albums:write" in session_scopes
+
+
+def test_offline_album_resource_is_nested_idempotent_and_non_destructive() -> None:
+    paths = SPEC["paths"]
+    resource = paths[
+        "/api/app/v1/gallery/folders/{folder_id}/offline-album"
+    ]
+    preflight = paths[
+        "/api/app/v1/gallery/folders/{folder_id}/offline-album/preflight"
+    ]["post"]
+
+    assert set(resource) == {"parameters", "get", "put", "delete"}
+    assert resource["put"]["requestBody"]["content"]["application/json"][
+        "schema"
+    ] == {"$ref": "#/components/schemas/OfflineAlbumWriteRequest"}
+    assert set(resource["put"]["responses"]) == {
+        "200",
+        "201",
+        "400",
+        "401",
+        "403",
+        "404",
+        "409",
+        "412",
+    }
+    assert "idempotent" in resource["put"]["description"]
+    assert "replace_conflicts" in resource["put"]["description"]
+    assert resource["put"]["parameters"] == [
+        {"$ref": "#/components/parameters/OptionalIfMatch"}
+    ]
+    assert "If-Match" in resource["put"]["description"]
+    assert "invalidate warmed frames" in resource["put"]["description"]
+    assert "ETag" in resource["get"]["responses"]["200"]["headers"]
+    assert "ETag" in resource["put"]["responses"]["200"]["headers"]
+    assert "ETag" in resource["put"]["responses"]["201"]["headers"]
+    assert "never modifies or deletes Gallery source photos" in resource["put"][
+        "description"
+    ]
+    assert "source image remain unchanged" in resource["delete"]["description"]
+    assert "without an Album returns 204" in resource["delete"]["description"]
+    assert "missing Gallery folder returns 404" in resource["delete"]["description"]
+
+    assert preflight["requestBody"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/OfflineAlbumDraft"
+    }
+    assert preflight["responses"]["200"]["content"]["application/json"][
+        "schema"
+    ] == {"$ref": "#/components/schemas/OfflineAlbumPreflightResponse"}
+    assert "without mutating" in preflight["description"]
+    assert "without saving or warming" in preflight["summary"]
+
+
+def test_offline_album_order_support_and_storage_are_truthful() -> None:
+    schemas = SPEC["components"]["schemas"]
+    draft = schemas["OfflineAlbumDraft"]
+    assert "order" in draft["required"]
+    assert "Opaque Gallery image identifiers" in draft["properties"]["order"][
+        "description"
+    ]
+    assert "another folder are invalid" in draft["properties"]["order"][
+        "description"
+    ]
+
+    support = schemas["DeviceCapabilitySupport"]
+    assert support["required"] == ["state"]
+    assert support["properties"]["detail"]["additionalProperties"] == {
+        "type": "integer",
+        "minimum": 0,
+    }
+    assert "never as zero" in support["properties"]["detail"]["description"]
+
+    devices = json.loads(
+        (FIXTURES / "devices-offline-albums-response.json").read_text()
+    )["devices"]
+    by_id = {device["id"]: device for device in devices}
+    detail = by_id["e1004-desk"]["capability_support"]["frame_cache"]["detail"]
+    assert detail == {"capacity_bytes": 67108864, "max_frames": 32}
+    assert "detail" not in by_id["e1004-hallway"]["capability_support"][
+        "frame_cache"
+    ]
+    assert "detail" not in by_id["picpak-kitchen"]["capability_support"][
+        "frame_cache"
+    ]
+
+    target_description = schemas["OfflineAlbumTarget"]["properties"]["support"][
+        "description"
+    ]
+    assert "unknown remains operator-selectable" in target_description
+    assert "only unsupported is refused" in target_description
+
+    storage = schemas["OfflineAlbumStorageProjection"]
+    assert storage["required"] == ["bytes", "accuracy"]
+    assert storage["properties"]["accuracy"]["enum"] == ["exact", "estimated"]
+    plan = schemas["OfflineAlbumPlan"]
+    assert "accuracy" in plan["required"]
+    assert plan["properties"]["accuracy"]["enum"] == ["exact", "estimated"]
+    assert "authoritative" in schemas["OfflineAlbumTarget"]["properties"][
+        "plan"
+    ]["description"].lower()
+    assert "server or firmware default" in schemas["OfflineAlbumTarget"][
+        "properties"
+    ]["plan"]["description"]
+    assert "estimated_bytes" not in plan["properties"]
+
+    response = json.loads((FIXTURES / "offline-album-response.json").read_text())
+    assert response["album"]["id"] != response["album"]["folder_id"]
+    assert response["targets"][0]["plan"]["accuracy"] == "exact"
+    preflight = json.loads(
+        (FIXTURES / "offline-album-preflight-response.json").read_text()
+    )
+    assert "storage" not in preflight["targets"][0]["plan"]
+
+    observation = schemas["OfflineAlbumObservation"]
+    assert observation["required"] == ["state", "observed_at"]
+    partial = json.loads(
+        (FIXTURES / "offline-album-response-partial-observation.json").read_text()
+    )["targets"][0]["observed"]
+    assert partial == {
+        "state": "playing",
+        "observed_at": "2026-08-15T10:00:00Z",
+    }
+
+
+def test_offline_album_conflicts_are_explicit_and_takeover_is_opt_in() -> None:
+    request = json.loads(
+        (FIXTURES / "offline-album-put-request.json").read_text()
+    )
+    preflight = json.loads(
+        (FIXTURES / "offline-album-preflight-response.json").read_text()
+    )
+    error = json.loads(
+        (FIXTURES / "error-offline-album-conflict.json").read_text()
+    )
+
+    assert request["replace_conflicts"] is True
+    assert preflight["targets"][0]["conflict"] == {
+        "album_id": "oa_7f92a4",
+        "name": "Holidays",
+    }
+    assert error["error"]["code"] == "offline_album_conflict"
+    assert error["error"]["claims"] == {
+        "e1004-desk": {
+            "album_id": "oa_7f92a4",
+            "name": "Holidays",
+        }
+    }
+
+    replace = SPEC["components"]["schemas"]["OfflineAlbumWriteRequest"][
+        "properties"
+    ]["replace_conflicts"]
+    assert replace["default"] is False
+    assert "Displaced Albums and their remaining target bindings survive" in replace[
+        "description"
+    ]
+
+
+def test_offline_album_unsupported_targets_have_a_typed_atomic_failure() -> None:
+    error = json.loads(
+        (FIXTURES / "error-offline-album-unsupported-targets.json").read_text()
+    )["error"]
+    assert error["code"] == "offline_album_unsupported_targets"
+    assert error["device_ids"] == ["picpak-kitchen"]
+
+    put = SPEC["paths"][
+        "/api/app/v1/gallery/folders/{folder_id}/offline-album"
+    ]["put"]
+    assert "never silently drops" in put["responses"]["400"]["description"]
+    codes = SPEC["components"]["schemas"]["ErrorResponse"]["properties"][
+        "error"
+    ]["properties"]["code"]["enum"]
+    assert "offline_album_unsupported_targets" in codes
