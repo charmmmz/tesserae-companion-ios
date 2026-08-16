@@ -1545,6 +1545,7 @@ private struct LineupCurrentPresentation {
 
 private struct LineupTargetSelectionSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var hapticEvent = TesseraeHapticEvent()
 
     let deviceIDs: [String]
     let displays: [DisplaySummary]
@@ -1560,6 +1561,7 @@ private struct LineupTargetSelectionSheet: View {
                         } else {
                             selection.insert(deviceID)
                         }
+                        hapticEvent.trigger(.selection)
                     } label: {
                         TesseraeDisplaySelectionRow(
                             name: displayName(deviceID),
@@ -1576,7 +1578,9 @@ private struct LineupTargetSelectionSheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Select All") {
+                        guard selection.count != deviceIDs.count else { return }
                         selection = Set(deviceIDs)
+                        hapticEvent.trigger(.selection)
                     }
                     .disabled(selection.count == deviceIDs.count)
                 }
@@ -1588,6 +1592,7 @@ private struct LineupTargetSelectionSheet: View {
                 }
             }
         }
+        .tesseraeHapticFeedback(trigger: hapticEvent)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }

@@ -3,6 +3,32 @@ import XCTest
 
 @MainActor
 final class MessageCenterTests: XCTestCase {
+    func testHapticEventAdvancesForRepeatedSemanticFeedback() {
+        var event = TesseraeHapticEvent()
+
+        event.trigger(.selection)
+        let firstRevision = event.revision
+        event.trigger(.selection)
+
+        XCTAssertEqual(event.feedback, .selection)
+        XCTAssertEqual(event.revision, firstRevision + 1)
+    }
+
+    func testMessageRetainsExplicitHapticIntent() {
+        let center = TesseraeMessageCenter()
+
+        center.post(
+            TesseraeMessage(
+                id: "send.submission",
+                text: "Sent",
+                kind: .success,
+                haptic: .success
+            )
+        )
+
+        XCTAssertEqual(center.currentMessage?.haptic, .success)
+    }
+
     func testPostingTheSameIdentifierReplacesInsteadOfStacking() {
         let center = TesseraeMessageCenter()
 

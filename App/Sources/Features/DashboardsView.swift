@@ -100,6 +100,8 @@ struct DashboardsView: View {
     @State private var expandedOccurrenceID: DashboardOccurrenceID?
     @State private var dashboardToPush: DashboardPushContext?
     @State private var sectionContentHeights: [String: CGFloat] = [:]
+    @State private var didReorderDuringDrag = false
+    @State private var hapticEvent = TesseraeHapticEvent()
     @AppStorage("dashboardLayoutMode")
     private var layoutMode = DashboardLayoutMode.cards
     private let previewCanvasSize = CGSize(width: 112, height: 118)
@@ -184,6 +186,8 @@ struct DashboardsView: View {
                                 )
                                 .onDrag {
                                     draggedOccurrenceID = occurrenceID
+                                    didReorderDuringDrag = false
+                                    hapticEvent.trigger(.lightImpact)
                                     return NSItemProvider(
                                         object: dashboard.id as NSString
                                     )
@@ -332,6 +336,7 @@ struct DashboardsView: View {
             }
         }
         .tesseraeScreenBackground()
+        .tesseraeHapticFeedback(trigger: hapticEvent)
     }
 
     private func dashboardSectionHeader(
@@ -900,18 +905,27 @@ struct DashboardsView: View {
                 dampingFraction: 0.82
             )
         ) {
+            let previousOrder = model.sortedDashboards.map(\.id)
             model.moveDashboard(
                 sourceOccurrenceID.dashboardID,
                 to: targetIndex
             )
+            if model.sortedDashboards.map(\.id) != previousOrder {
+                didReorderDuringDrag = true
+                hapticEvent.trigger(.selection)
+            }
         }
     }
 
     private func endDashboardDrag() {
+        if draggedOccurrenceID != nil, didReorderDuringDrag {
+            hapticEvent.trigger(.mediumImpact)
+        }
         withAnimation(.easeOut(duration: 0.12)) {
             draggedOccurrenceID = nil
             dropTargetOccurrenceID = nil
         }
+        didReorderDuringDrag = false
     }
 }
 
@@ -952,6 +966,7 @@ struct DashboardPreviewActionSheet: View {
     @State private var didLoadInitialSelection = false
     @State private var contentHeight: CGFloat = 1
     @State private var sheetHeight: CGFloat = 400
+    @State private var hapticEvent = TesseraeHapticEvent()
 
     private let maximumContentHeight: CGFloat = 460
 
@@ -1015,6 +1030,7 @@ struct DashboardPreviewActionSheet: View {
             )
         }
         .tesseraeScreenBackground()
+        .tesseraeHapticFeedback(trigger: hapticEvent)
         .fixedSize(horizontal: false, vertical: true)
         .onGeometryChange(for: CGFloat.self) { geometry in
             geometry.size.height
@@ -1315,7 +1331,9 @@ struct DashboardPreviewActionSheet: View {
                 Spacer()
                 if !boundDeviceIDs.isEmpty {
                     Button("Select All") {
+                        guard selectedDeviceIDs != boundDeviceIDs else { return }
                         selectedDeviceIDs = boundDeviceIDs
+                        hapticEvent.trigger(.selection)
                     }
                     .font(.caption.weight(.semibold))
                 }
@@ -1340,6 +1358,7 @@ struct DashboardPreviewActionSheet: View {
                         } else {
                             selectedDeviceIDs.insert(display.id)
                         }
+                        hapticEvent.trigger(.selection)
                     } label: {
                         HStack(spacing: 10) {
                             Image(

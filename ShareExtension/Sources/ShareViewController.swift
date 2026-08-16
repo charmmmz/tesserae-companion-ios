@@ -29,10 +29,11 @@ final class ShareViewController: UIViewController {
 
 @MainActor
 private final class ShareComposerModel: ObservableObject {
-    enum Phase {
+    enum Phase: Equatable {
         case loading
         case ready
         case submitting
+        case succeeded
         case failed
     }
 
@@ -318,6 +319,9 @@ private final class ShareComposerModel: ObservableObject {
                 phase = .failed
                 return
             }
+            phase = .succeeded
+            try? await Task.sleep(for: .milliseconds(220))
+            guard phase == .succeeded else { return }
             complete()
         } catch {
             errorMessage = failedRequestRetained
@@ -678,6 +682,7 @@ private struct ShareComposerView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var imageFramingsByAspect: [PanelAspectRatio: ImageFraming] = [:]
+    @State private var hapticEvent = TesseraeHapticEvent()
 
     var body: some View {
         NavigationStack {
@@ -712,6 +717,12 @@ private struct ShareComposerView: View {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Done") { model.complete() }
                     }
+                } else if model.phase == .succeeded {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Image(systemName: "checkmark")
+                            .foregroundStyle(TesseraeTheme.accent)
+                            .accessibilityLabel("Sent")
+                    }
                 } else {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Cancel") { model.cancel() }
@@ -723,6 +734,18 @@ private struct ShareComposerView: View {
             }
         }
         .tint(TesseraeTheme.accent)
+        .tesseraeHapticFeedback(trigger: hapticEvent)
+        .onChange(of: model.phase) { oldValue, newValue in
+            guard oldValue == .submitting else { return }
+            switch newValue {
+            case .succeeded:
+                hapticEvent.trigger(.success)
+            case .failed:
+                hapticEvent.trigger(.error)
+            default:
+                break
+            }
+        }
         .onChange(of: model.selectedDeviceIDs) {
             guard model.phase == .ready else { return }
             Task { await model.savePreferences() }
@@ -920,6 +943,7 @@ private struct ShareComposerView: View {
                         model.selectedDeviceIDs.insert(display.id)
                         model.previewDeviceID = display.id
                     }
+                    hapticEvent.trigger(.selection)
                 } label: {
                     TesseraeDisplaySelectionRow(
                         name: display.name,

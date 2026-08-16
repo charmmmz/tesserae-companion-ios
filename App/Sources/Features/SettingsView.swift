@@ -6,6 +6,7 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @Environment(RemindersBridgeModel.self) private var remindersBridgeModel
     @State private var clearActivityConfirmationPresented = false
+    @State private var hapticFeedbackEnabled = TesseraeHapticSettings.isEnabled
 
     var body: some View {
         NavigationStack {
@@ -32,6 +33,12 @@ struct SettingsView: View {
                                 Label("Open Tesserae Web", systemImage: "safari")
                             }
                         }
+                    }
+                }
+
+                Section("Interaction") {
+                    Toggle(isOn: $hapticFeedbackEnabled) {
+                        Label("Haptic Feedback", systemImage: "hand.tap")
                     }
                 }
 
@@ -82,6 +89,9 @@ struct SettingsView: View {
             }
             .scrollContentBackground(.hidden)
             .tesseraeScreenBackground()
+            .onChange(of: hapticFeedbackEnabled) { _, isEnabled in
+                TesseraeHapticSettings.isEnabled = isEnabled
+            }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -30,6 +30,7 @@ struct SendView: View {
     @State private var selectedDeviceIDs: Set<String> = []
     @State private var previewDeviceID: String?
     @State private var didLoadSendPreferences = false
+    @State private var hapticEvent = TesseraeHapticEvent()
     @FocusState private var linkFieldIsFocused: Bool
     private let prioritizesFramingGesture: Bool
 
@@ -103,6 +104,7 @@ struct SendView: View {
                             clearSubmittedSource()
                         } else {
                             messageCenter.dismiss(id: "send.submission")
+                            hapticEvent.trigger(.error)
                         }
                     }
                 } label: {
@@ -150,6 +152,7 @@ struct SendView: View {
             }
         }
         .tesseraeScreenBackground()
+        .tesseraeHapticFeedback(trigger: hapticEvent)
     }
 
     private var sourceCard: some View {
@@ -496,6 +499,7 @@ struct SendView: View {
                             selectedDeviceIDs.insert(display.id)
                             previewDeviceID = display.id
                         }
+                        hapticEvent.trigger(.selection)
                     } label: {
                         TesseraeDisplaySelectionRow(
                             name: display.name,
@@ -580,7 +584,8 @@ struct SendView: View {
                 kind: .success,
                 lifetime: .automatic(seconds: 3),
                 priority: .normal,
-                accessibilityIdentifier: "send-success-banner"
+                accessibilityIdentifier: "send-success-banner",
+                haptic: .success
             )
         )
     }

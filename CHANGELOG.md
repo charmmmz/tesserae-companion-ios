@@ -13,6 +13,10 @@ capabilities.
 
 ### Added
 
+- Added optional haptic feedback for sends and Gallery outcomes, custom display
+  selections, display and Dashboard reordering, Lineup ordering, screen preview
+  paging, and image-framing alignment or zoom limits. A shared Settings toggle
+  controls feedback in both Companion and its Share extension.
 - Added the accepted contract-only Offline Album 0.13 foundation: one nested
   Album per Gallery folder, optional operator-granted authoring permission,
   explicit photo order and playback settings, server-computed target preflight,

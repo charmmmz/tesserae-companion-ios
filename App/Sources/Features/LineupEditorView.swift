@@ -628,7 +628,12 @@ private struct LineupEditorForm: View {
                     .labelsHidden()
                     .datePickerStyle(.wheel)
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .sensoryFeedback(.selection, trigger: draft.firesAtMinutes)
+                    .sensoryFeedback(
+                        .selection,
+                        trigger: draft.firesAtMinutes
+                    ) { _, _ in
+                        TesseraeHapticSettings.isEnabled
+                    }
                 }
             case .interval:
                 Section {
@@ -845,6 +850,7 @@ private struct LineupDashboardPicker: View {
     @Binding var selection: [String]
 
     @State private var query = ""
+    @State private var hapticEvent = TesseraeHapticEvent()
 
     private var isSingleSelection: Bool {
         intent == .daily || intent == .interval
@@ -969,7 +975,11 @@ private struct LineupDashboardPicker: View {
                         }
                     }
                     .onMove { source, destination in
+                        let previousSelection = selection
                         selection.move(fromOffsets: source, toOffset: destination)
+                        if selection != previousSelection {
+                            hapticEvent.trigger(.selection)
+                        }
                     }
                 } header: {
                     Text("Selected · \(selection.count)")
@@ -986,6 +996,7 @@ private struct LineupDashboardPicker: View {
                             } else {
                                 selection.append(dashboard.id)
                             }
+                            hapticEvent.trigger(.selection)
                         } label: {
                             dashboardRow(
                                 dashboard,
@@ -1048,6 +1059,7 @@ private struct LineupDashboardPicker: View {
         .navigationTitle("Dashboards")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, prompt: "Search Dashboards")
+        .tesseraeHapticFeedback(trigger: hapticEvent)
     }
 
     private func isCompatible(_ dashboard: DashboardSummary) -> Bool {
@@ -1192,7 +1204,9 @@ private struct LineupDurationWheel: View {
             .pickerStyle(.wheel)
         }
         .frame(height: 150)
-        .sensoryFeedback(.selection, trigger: minutes)
+        .sensoryFeedback(.selection, trigger: minutes) { _, _ in
+            TesseraeHapticSettings.isEnabled
+        }
     }
 }
 

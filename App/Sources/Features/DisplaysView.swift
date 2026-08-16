@@ -15,6 +15,8 @@ struct DisplaysView: View {
     @State private var dropTargetDisplayID: String?
     @State private var selectedDisplay: DisplaySummary?
     @State private var lineupsPresented = false
+    @State private var didReorderDuringDrag = false
+    @State private var hapticEvent = TesseraeHapticEvent()
 
     let isActive: Bool
 
@@ -85,6 +87,8 @@ struct DisplaysView: View {
                     .accessibilityAddTraits(.isButton)
                     .onDrag {
                         draggedDisplayID = display.id
+                        didReorderDuringDrag = false
+                        hapticEvent.trigger(.lightImpact)
                         return NSItemProvider(object: display.id as NSString)
                     } preview: {
                         displayDragPreview(display)
@@ -186,6 +190,7 @@ struct DisplaysView: View {
             }
         }
         .tesseraeScreenBackground()
+        .tesseraeHapticFeedback(trigger: hapticEvent)
     }
 
     private func displayDragPreview(
@@ -236,15 +241,24 @@ struct DisplaysView: View {
                 dampingFraction: 0.82
             )
         ) {
+            let previousOrder = model.sortedDisplays.map(\.id)
             model.moveDisplay(sourceID, to: targetIndex)
+            if model.sortedDisplays.map(\.id) != previousOrder {
+                didReorderDuringDrag = true
+                hapticEvent.trigger(.selection)
+            }
         }
     }
 
     private func endDisplayDrag() {
+        if draggedDisplayID != nil, didReorderDuringDrag {
+            hapticEvent.trigger(.mediumImpact)
+        }
         withAnimation(.easeOut(duration: 0.12)) {
             draggedDisplayID = nil
             dropTargetDisplayID = nil
         }
+        didReorderDuringDrag = false
     }
 }
 
@@ -402,6 +416,7 @@ private struct DisplayDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
     @State private var selectedScreenPage: ScreenPage = .current
+    @State private var hapticEvent = TesseraeHapticEvent()
     let display: DisplaySummary
 
     private var currentDisplay: DisplaySummary {
@@ -543,7 +558,17 @@ private struct DisplayDetailView: View {
                 selectedScreenPage = .current
             }
         }
+        .onChange(of: selectedScreenPage) { oldValue, newValue in
+            guard
+                oldValue != newValue,
+                currentDisplay.pendingRender != nil
+            else {
+                return
+            }
+            hapticEvent.trigger(.selection)
+        }
         .tesseraeScreenBackground()
+        .tesseraeHapticFeedback(trigger: hapticEvent)
     }
 
     private var screenCarouselCard: some View {

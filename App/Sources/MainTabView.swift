@@ -204,6 +204,9 @@ struct MainTabView: View {
                 priority: priority,
                 accessibilityIdentifier: "gallery-upload-capsule",
                 accessibilityHint: String(localized: "Show Upload Details"),
+                haptic: galleryUploads.isWorking
+                    ? nil
+                    : counts.failed > 0 ? .error : .success,
                 tapAction: {
                     uploadDetailsPresented = true
                 }

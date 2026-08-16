@@ -1,3 +1,4 @@
+import Foundation
 import Observation
 import SwiftUI
 
@@ -12,6 +13,96 @@ enum TesseraeTheme {
 
     static func background(for colorScheme: ColorScheme) -> Color {
         colorScheme == .dark ? darkPaper : paper
+    }
+}
+
+enum TesseraeHaptic: Equatable {
+    case selection
+    case alignment
+    case success
+    case warning
+    case error
+    case lightImpact
+    case mediumImpact
+
+    var sensoryFeedback: SensoryFeedback {
+        switch self {
+        case .selection:
+            .selection
+        case .alignment:
+            .alignment
+        case .success:
+            .success
+        case .warning:
+            .warning
+        case .error:
+            .error
+        case .lightImpact:
+            .impact(weight: .light, intensity: 0.55)
+        case .mediumImpact:
+            .impact(weight: .medium, intensity: 0.7)
+        }
+    }
+}
+
+struct TesseraeHapticEvent: Equatable {
+    private(set) var revision = 0
+    private(set) var feedback: TesseraeHaptic?
+
+    mutating func trigger(_ feedback: TesseraeHaptic) {
+        revision &+= 1
+        self.feedback = feedback
+    }
+}
+
+enum TesseraeHapticSettings {
+    static let enabledKey = "interaction.haptics.enabled"
+
+    static var isEnabled: Bool {
+        get {
+            let defaults = sharedDefaults
+            guard defaults.object(forKey: enabledKey) != nil else { return true }
+            return defaults.bool(forKey: enabledKey)
+        }
+        set {
+            sharedDefaults.set(newValue, forKey: enabledKey)
+        }
+    }
+
+    private static var sharedDefaults: UserDefaults {
+        guard
+            let appGroup = Bundle.main.object(
+                forInfoDictionaryKey: "TesseraeAppGroupIdentifier"
+            ) as? String,
+            let defaults = UserDefaults(suiteName: appGroup)
+        else {
+            return .standard
+        }
+        return defaults
+    }
+}
+
+private struct TesseraeHapticFeedbackModifier: ViewModifier {
+    let event: TesseraeHapticEvent
+
+    func body(content: Content) -> some View {
+        content.sensoryFeedback(trigger: event) { oldValue, newValue in
+            guard
+                TesseraeHapticSettings.isEnabled,
+                oldValue.revision != newValue.revision
+            else {
+                return nil
+            }
+            return newValue.feedback?.sensoryFeedback
+        }
+    }
+}
+
+extension View {
+    func tesseraeHapticFeedback(
+        trigger event: TesseraeHapticEvent
+    ) -> some View {
+        modifier(TesseraeHapticFeedbackModifier(event: event))
     }
 }
 
@@ -254,6 +345,7 @@ struct TesseraeMessage: Identifiable {
     let systemImage: String?
     let accessibilityIdentifier: String?
     let accessibilityHint: String?
+    let haptic: TesseraeHaptic?
     let tapAction: (@MainActor () -> Void)?
     let action: TesseraeMessageAction?
 
@@ -266,6 +358,7 @@ struct TesseraeMessage: Identifiable {
         systemImage: String? = nil,
         accessibilityIdentifier: String? = nil,
         accessibilityHint: String? = nil,
+        haptic: TesseraeHaptic? = nil,
         tapAction: (@MainActor () -> Void)? = nil,
         action: TesseraeMessageAction? = nil
     ) {
@@ -277,6 +370,7 @@ struct TesseraeMessage: Identifiable {
         self.systemImage = systemImage
         self.accessibilityIdentifier = accessibilityIdentifier
         self.accessibilityHint = accessibilityHint
+        self.haptic = haptic
         self.tapAction = tapAction
         self.action = action
     }
@@ -423,6 +517,7 @@ final class TesseraeMessageCenter {
 private struct TesseraeMessageCenterHost: View {
     @Environment(TesseraeMessageCenter.self) private var center
     @State private var hostID = UUID()
+    @State private var hapticEvent = TesseraeHapticEvent()
 
     var body: some View {
         ZStack {
@@ -436,11 +531,20 @@ private struct TesseraeMessageCenterHost: View {
         }
         .frame(maxWidth: .infinity)
         .animation(.snappy, value: presentationRevision)
+        .tesseraeHapticFeedback(trigger: hapticEvent)
         .onAppear {
             center.activateHost(id: hostID)
         }
         .onDisappear {
             center.deactivateHost(id: hostID)
+        }
+        .onChange(of: presentationRevision) { _, _ in
+            guard center.isActiveHost(id: hostID),
+                  let haptic = center.currentMessage?.haptic
+            else {
+                return
+            }
+            hapticEvent.trigger(haptic)
         }
     }
 

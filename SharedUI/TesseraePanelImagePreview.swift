@@ -20,6 +20,9 @@ struct TesseraePanelImagePreview: View {
     @GestureState private var framingGestureState = FramingGestureState()
     @State private var isFramingGestureActive = false
     @State private var framingControlsRevealTask: Task<Void, Never>?
+    @State private var previousGestureFraming: ImageFraming?
+    @State private var previousZoomBoundary: FramingZoomBoundary?
+    @State private var hapticEvent = TesseraeHapticEvent()
 
     init(
         image: UIImage?,
@@ -75,6 +78,7 @@ struct TesseraePanelImagePreview: View {
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(accessibilityIdentifier)
+        .tesseraeHapticFeedback(trigger: hapticEvent)
         .onDisappear {
             framingControlsRevealTask?.cancel()
         }
@@ -266,13 +270,30 @@ struct TesseraePanelImagePreview: View {
                     magnification: value.second ?? 1
                 )
             }
-            .onChanged { _ in
-                guard image != nil, framing != nil else { return }
+            .onChanged { value in
+                guard let image, let framing else { return }
+                let previewFraming = framing.wrappedValue.applyingPreviewGesture(
+                    translationX: Double(value.first?.translation.width ?? 0),
+                    translationY: Double(value.first?.translation.height ?? 0),
+                    magnification: Double(value.second ?? 1),
+                    canvasWidth: Double(size.width),
+                    canvasHeight: Double(size.height),
+                    sourceWidth: Double(image.size.width * image.scale),
+                    sourceHeight: Double(image.size.height * image.scale),
+                    targetWidth: Double(panel.width),
+                    targetHeight: Double(panel.height),
+                    maximumZoom: maximumFramingZoom
+                )
                 if !isFramingGestureActive {
                     framingControlsRevealTask?.cancel()
                     framingControlsRevealTask = nil
                     isFramingGestureActive = true
+                    previousGestureFraming = framing.wrappedValue
+                    previousZoomBoundary = zoomBoundary(
+                        for: framing.wrappedValue.zoom
+                    )
                 }
+                updateFramingHaptics(with: previewFraming)
             }
             .onEnded { value in
                 guard let image, let framing else { return }
@@ -295,6 +316,8 @@ struct TesseraePanelImagePreview: View {
                         targetHeight: Double(panel.height),
                         maximumZoom: maximumFramingZoom
                     )
+                previousGestureFraming = nil
+                previousZoomBoundary = nil
                 endFramingInteraction()
             }
     }
@@ -321,11 +344,55 @@ struct TesseraePanelImagePreview: View {
             framingControlsRevealTask = nil
         }
     }
+
+    private func updateFramingHaptics(with framing: ImageFraming) {
+        guard let previousGestureFraming else { return }
+
+        let crossedAlignment = crossedCenter(
+            from: previousGestureFraming.focusX,
+            to: framing.focusX
+        ) || crossedCenter(
+            from: previousGestureFraming.focusY,
+            to: framing.focusY
+        )
+        let boundary = zoomBoundary(for: framing.zoom)
+
+        if crossedAlignment {
+            hapticEvent.trigger(.alignment)
+        } else if boundary != nil, boundary != previousZoomBoundary {
+            hapticEvent.trigger(.lightImpact)
+        }
+
+        self.previousGestureFraming = framing
+        previousZoomBoundary = boundary
+    }
+
+    private func crossedCenter(from oldValue: Double, to newValue: Double) -> Bool {
+        (oldValue < 0.5 && newValue >= 0.5)
+            || (oldValue > 0.5 && newValue <= 0.5)
+    }
+
+    private func zoomBoundary(for zoom: Double) -> FramingZoomBoundary? {
+        if abs(zoom - 1) < 0.000_1 {
+            return .minimum
+        }
+        if maximumFramingZoom > 1,
+           abs(zoom - maximumFramingZoom) < 0.000_1
+        {
+            return .maximum
+        }
+        return nil
+    }
 }
 
 private struct FramingGestureState {
     var translation = CGSize.zero
     var magnification: CGFloat = 1
+}
+
+private enum FramingZoomBoundary {
+    case minimum
+    case maximum
 }
 
 private struct PanelAspectLayout: Layout {
