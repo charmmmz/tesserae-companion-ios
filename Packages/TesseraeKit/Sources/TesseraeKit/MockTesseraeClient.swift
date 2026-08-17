@@ -139,7 +139,7 @@ public actor MockTesseraeClient: TesseraeServing {
         try await pause()
         return ServerCapabilities(
             product: "tesserae",
-            serverVersion: "0.303.0",
+            serverVersion: "0.311.0",
             api: CompanionAPI(version: 1),
             pairing: PairingCapabilities(supported: true, codeLength: 6, ttlSeconds: 600),
             features: [
@@ -160,6 +160,7 @@ public actor MockTesseraeClient: TesseraeServing {
                 "gallery",
                 "offline_albums",
                 "device_setup",
+                "device_timeline",
             ],
             limits: CompanionLimits(
                 imageUploadBytes: 26_214_400,
@@ -182,6 +183,8 @@ public actor MockTesseraeClient: TesseraeServing {
                     "image/webp",
                 ],
                 galleryUploadBatchSize: 20,
+                deviceTimelineMaxHours: 168,
+                deviceTimelineMaxEvents: 20,
                 jobRetentionSeconds: 86_400,
                 idempotencyRetentionSeconds: 86_400
             ),
@@ -198,7 +201,7 @@ public actor MockTesseraeClient: TesseraeServing {
             id: "demo-home",
             name: "Home",
             baseURL: baseURL,
-            serverVersion: "0.303.0",
+            serverVersion: "0.311.0",
             timezone: "Asia/Shanghai",
             webURL: "/"
         )
@@ -325,6 +328,52 @@ public actor MockTesseraeClient: TesseraeServing {
                 hasPendingRender: false
             ),
         ]
+    }
+
+    public func fetchDeviceUpcoming(
+        id: String,
+        hours: Int?,
+        limit: Int?,
+        instance: TesseraeInstance
+    ) async throws -> DeviceUpcomingResponse {
+        try await pause()
+        let generatedAt = Date.now
+        let throughAt = generatedAt.addingTimeInterval(
+            TimeInterval(min(max(hours ?? 24, 1), 168) * 3_600)
+        )
+        let candidates = [
+            DeviceUpcomingEvent(
+                id: "upcoming-\(id)-cycle",
+                scheduledAt: generatedAt.addingTimeInterval(30 * 60),
+                cause: .cycle,
+                effect: .changeScreen,
+                certainty: .scheduled,
+                lineupID: "playroom-deck",
+                lineupName: "Playroom Deck",
+                dashboardID: "morning",
+                dashboardName: "Morning"
+            ),
+            DeviceUpcomingEvent(
+                id: "upcoming-\(id)-fresh",
+                scheduledAt: generatedAt.addingTimeInterval(60 * 60),
+                cause: .interval,
+                effect: .refreshScreen,
+                certainty: .scheduled,
+                lineupID: "playroom-deck",
+                lineupName: "Playroom Deck"
+            ),
+        ]
+        let events = candidates
+            .filter { $0.scheduledAt <= throughAt }
+            .prefix(min(max(limit ?? 6, 1), 20))
+        return DeviceUpcomingResponse(
+            deviceID: id,
+            generatedAt: generatedAt,
+            timezone: "Asia/Shanghai",
+            throughAt: throughAt,
+            currentFrameAt: generatedAt.addingTimeInterval(-15 * 60),
+            events: Array(events)
+        )
     }
 
     public func fetchDashboards(instance: TesseraeInstance) async throws -> [DashboardSummary] {

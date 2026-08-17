@@ -150,6 +150,28 @@ public actor LiveTesseraeClient: TesseraeServing {
         return response.devices
     }
 
+    public func fetchDeviceUpcoming(
+        id: String,
+        hours: Int?,
+        limit: Int?,
+        instance: TesseraeInstance
+    ) async throws -> DeviceUpcomingResponse {
+        var queryItems: [URLQueryItem] = []
+        if let hours {
+            queryItems.append(URLQueryItem(name: "hours", value: String(hours)))
+        }
+        if let limit {
+            queryItems.append(URLQueryItem(name: "limit", value: String(limit)))
+        }
+        let request = try await authenticatedRequest(
+            instance: instance,
+            path: ["devices", id, "upcoming"],
+            method: "GET",
+            queryItems: queryItems
+        )
+        return try await perform(request, expectedStatusCodes: [200])
+    }
+
     public func fetchDashboards(instance: TesseraeInstance) async throws -> [DashboardSummary] {
         let request = try await authenticatedRequest(
             instance: instance,

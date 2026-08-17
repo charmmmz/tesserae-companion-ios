@@ -17,7 +17,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 
 FIXTURES = Path(__file__).with_name("Fixtures")
@@ -149,14 +149,45 @@ class FixtureRequestHandler(BaseHTTPRequestHandler):
     server: FixtureHTTPServer
 
     def do_GET(self) -> None:  # noqa: N802
-        path = urlparse(self.path).path.rstrip("/")
+        parsed = urlparse(self.path)
+        path = parsed.path.rstrip("/")
         if path == "/api/app/v1":
-            self.send_fixture("capabilities-gallery.json")
+            self.send_fixture("capabilities-timeline.json")
             return
         if not self.authorized():
             return
         if path == "/api/app/v1/devices":
             self.send_fixture("devices-gallery-response.json")
+            return
+        upcoming_match = re.fullmatch(
+            r"/api/app/v1/devices/([^/]+)/upcoming",
+            path,
+        )
+        if upcoming_match:
+            if upcoming_match.group(1) != "picpak-kitchen":
+                self.send_error_response(
+                    HTTPStatus.NOT_FOUND,
+                    "not_found",
+                    "The requested display does not exist.",
+                )
+                return
+            query = parse_qs(parsed.query)
+            try:
+                hours = int(query.get("hours", ["24"])[0])
+                limit = int(query.get("limit", ["6"])[0])
+            except ValueError:
+                hours = 0
+                limit = 0
+            if not 1 <= hours <= 168 or not 1 <= limit <= 20:
+                self.send_error_response(
+                    HTTPStatus.BAD_REQUEST,
+                    "invalid_request",
+                    "Timeline hours or limit is outside the advertised bounds.",
+                )
+                return
+            response = load_fixture("device-upcoming-response.json")
+            response["events"] = response["events"][:limit]
+            self.send_json(HTTPStatus.OK, response)
             return
         if path == "/api/app/v1/gallery/folders":
             with self.server.state.lock:

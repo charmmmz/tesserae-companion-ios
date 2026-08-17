@@ -11,6 +11,12 @@ public protocol TesseraeServing: Sendable {
         instance: TesseraeInstance
     ) async throws -> FirmwareDevicePairing
     func fetchDisplays(instance: TesseraeInstance) async throws -> [DisplaySummary]
+    func fetchDeviceUpcoming(
+        id: String,
+        hours: Int?,
+        limit: Int?,
+        instance: TesseraeInstance
+    ) async throws -> DeviceUpcomingResponse
     func fetchDashboards(instance: TesseraeInstance) async throws -> [DashboardSummary]
     func fetchGalleryFolders(instance: TesseraeInstance) async throws -> [GalleryFolder]
     func fetchGalleryFolder(

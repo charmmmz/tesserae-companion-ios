@@ -153,6 +153,9 @@ def test_fixture_server_exercises_companion_vertical_slice():
         assert "gallery" in capabilities["features"]
         assert capabilities["limits"]["gallery_upload_bytes"] == 20 * 1024 * 1024
         assert capabilities["limits"]["gallery_upload_batch_size"] == 20
+        assert "device_timeline" in capabilities["features"]
+        assert capabilities["limits"]["device_timeline_max_hours"] == 168
+        assert capabilities["limits"]["device_timeline_max_events"] == 20
 
         status, pair = request(
             base_url,
@@ -174,6 +177,24 @@ def test_fixture_server_exercises_companion_vertical_slice():
         assert "lineups:control" in pair["scopes"]
         assert "gallery:read" in pair["scopes"]
         assert "gallery:write" in pair["scopes"]
+
+        status, upcoming = request(
+            base_url,
+            "/api/app/v1/devices/picpak-kitchen/upcoming?hours=24&limit=1",
+            token=FIXTURE_TOKEN,
+        )
+        assert status == 200
+        assert upcoming["device_id"] == "picpak-kitchen"
+        assert len(upcoming["events"]) == 1
+        assert upcoming["events"][0]["cause"] == "cycle"
+
+        status, invalid_upcoming = request(
+            base_url,
+            "/api/app/v1/devices/picpak-kitchen/upcoming?hours=169",
+            token=FIXTURE_TOKEN,
+        )
+        assert status == 400
+        assert invalid_upcoming["error"]["code"] == "invalid_request"
 
         status, devices = request(
             base_url,

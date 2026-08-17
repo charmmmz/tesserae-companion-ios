@@ -77,8 +77,11 @@ final class LiveTesseraeClientTests: XCTestCase {
         XCTAssertTrue(capabilities.features.contains("lineups"))
         XCTAssertTrue(capabilities.features.contains("lineup_control"))
         XCTAssertTrue(capabilities.supportsGallery)
+        XCTAssertTrue(capabilities.supportsDeviceTimeline)
         XCTAssertEqual(capabilities.limits.imageFramingMaxZoom, 4)
         XCTAssertEqual(capabilities.limits.galleryUploadBatchSize, 20)
+        XCTAssertEqual(capabilities.limits.deviceTimelineMaxHours, 168)
+        XCTAssertEqual(capabilities.limits.deviceTimelineMaxEvents, 20)
         XCTAssertEqual(
             capabilities.limits.imageFitModes,
             ImageFitMode.allCases
@@ -98,6 +101,15 @@ final class LiveTesseraeClientTests: XCTestCase {
         let dashboards = try await client.fetchDashboards(instance: session.instance)
         XCTAssertEqual(displays.first?.id, "picpak-kitchen")
         XCTAssertEqual(dashboards.first?.id, "pantry")
+
+        let upcoming = try await client.fetchDeviceUpcoming(
+            id: "picpak-kitchen",
+            hours: 24,
+            limit: 1,
+            instance: session.instance
+        )
+        XCTAssertEqual(upcoming.deviceID, "picpak-kitchen")
+        XCTAssertEqual(upcoming.events.count, 1)
 
         let galleryFolders = try await client.fetchGalleryFolders(
             instance: session.instance

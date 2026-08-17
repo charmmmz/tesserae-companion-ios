@@ -1,0 +1,31 @@
+{
+  "device_id": "picpak-kitchen",
+  "generated_at": "2026-08-17T08:00:00Z",
+  "timezone": "Asia/Shanghai",
+  "through_at": "2026-08-18T08:00:00Z",
+  "current_frame_at": "2026-08-17T07:45:00Z",
+  "events": [
+    {
+      "id": "evt_picpak_kitchen_cycle_0830",
+      "scheduled_at": "2026-08-17T08:30:00Z",
+      "cause": "cycle",
+      "effect": "change_screen",
+      "certainty": "scheduled",
+      "lineup_id": "playroom-deck",
+      "lineup_name": "Playroom Deck",
+      "dashboard_id": "morning",
+      "dashboard_name": "Morning Overview"
+    },
+    {
+      "id": "evt_picpak_kitchen_fresh_0900",
+      "scheduled_at": "2026-08-17T09:00:00Z",
+      "cause": "interval",
+      "effect": "refresh_screen",
+      "certainty": "scheduled",
+      "lineup_id": "playroom-deck",
+      "lineup_name": "Playroom Deck",
+      "dashboard_id": null,
+      "dashboard_name": null
+    }
+  ]
+}

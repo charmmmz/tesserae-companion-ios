@@ -119,6 +119,9 @@ final class AppModel {
     var historyPreviews: [String: PreviewImageState] = [:]
     var displayPreviews: [String: PreviewImageState] = [:]
     var pendingDisplayPreviews: [String: PreviewImageState] = [:]
+    var deviceUpcomingResponses: [String: DeviceUpcomingResponse] = [:]
+    var loadingDeviceTimelineIDs: Set<String> = []
+    var deviceTimelineErrors: [String: String] = [:]
     private var dashboardPreviews: [DashboardPreviewKey: PreviewImageState] = [:]
     var previewGeneration = 0
     var displayPreviewGeneration = 0
@@ -187,6 +190,10 @@ final class AppModel {
     var supportsDeviceSetup: Bool {
         connectionMode == .live
             && capabilities?.supportsDeviceSetup == true
+    }
+
+    var supportsDeviceTimeline: Bool {
+        capabilities?.supportsDeviceTimeline == true
     }
 
     var activeHealthInstanceID: String? {
@@ -391,6 +398,9 @@ final class AppModel {
             displayPreviewRequestIDs = [:]
             pendingDisplayPreviews = [:]
             pendingDisplayPreviewRequestIDs = [:]
+            deviceUpcomingResponses = [:]
+            loadingDeviceTimelineIDs = []
+            deviceTimelineErrors = [:]
             dashboardPreviews = [:]
             dashboardPreviewRequestIDs = [:]
             loadDisplayOrder(for: session.instance.id)
@@ -579,6 +589,7 @@ final class AppModel {
                 dashboardPreviews = [:]
                 dashboardPreviewRequestIDs = [:]
             }
+            reconcileDeviceTimelines()
             displayPreviewGeneration &+= 1
             previewGeneration &+= 1
             if connectionMode == .live {
@@ -636,6 +647,7 @@ final class AppModel {
                 displayPreviews = [:]
                 pendingDisplayPreviews = [:]
             }
+            reconcileDeviceTimelines()
             displayPreviewGeneration &+= 1
 
             if connectionMode == .live, saveSnapshot {
@@ -655,6 +667,68 @@ final class AppModel {
                 connectionHealth = .offline
                 connectionNotice = error.localizedDescription
                 lastError = nil
+            }
+        }
+    }
+
+    func refreshDeviceUpcoming(
+        displayID: String,
+        showErrors: Bool = false
+    ) async {
+        guard
+            supportsDeviceTimeline,
+            let currentInstance = activeInstance,
+            !loadingDeviceTimelineIDs.contains(displayID)
+        else {
+            return
+        }
+
+        loadingDeviceTimelineIDs.insert(displayID)
+        deviceTimelineErrors[displayID] = nil
+        defer { loadingDeviceTimelineIDs.remove(displayID) }
+
+        let hours = min(
+            24,
+            max(capabilities?.limits.deviceTimelineMaxHours ?? 24, 1)
+        )
+        let limit = min(
+            6,
+            max(capabilities?.limits.deviceTimelineMaxEvents ?? 6, 1)
+        )
+
+        do {
+            let response = try await activeClient.fetchDeviceUpcoming(
+                id: displayID,
+                hours: hours,
+                limit: limit,
+                instance: currentInstance
+            )
+            guard activeInstance?.id == currentInstance.id else { return }
+            deviceUpcomingResponses[displayID] = response
+            deviceTimelineErrors[displayID] = nil
+        } catch is CancellationError {
+            return
+        } catch let error as TesseraeClientError {
+            guard activeInstance?.id == currentInstance.id else { return }
+            if case .forbidden = error {
+                deviceTimelineErrors[displayID] = String(
+                    localized: "Pair again to view scheduled updates."
+                )
+            } else {
+                deviceTimelineErrors[displayID] = String(
+                    localized: "Scheduled updates are unavailable."
+                )
+            }
+            if showErrors {
+                await presentOperationError(error)
+            }
+        } catch {
+            guard activeInstance?.id == currentInstance.id else { return }
+            deviceTimelineErrors[displayID] = String(
+                localized: "Scheduled updates are unavailable."
+            )
+            if showErrors {
+                await presentOperationError(error)
             }
         }
     }
@@ -2808,6 +2882,9 @@ final class AppModel {
         displayPreviewRequestIDs = [:]
         pendingDisplayPreviews = [:]
         pendingDisplayPreviewRequestIDs = [:]
+        deviceUpcomingResponses = [:]
+        loadingDeviceTimelineIDs = []
+        deviceTimelineErrors = [:]
         dashboardPreviews = [:]
         dashboardPreviewRequestIDs = [:]
         displayOrderIDs = []
@@ -2873,6 +2950,9 @@ final class AppModel {
             displayPreviewRequestIDs = [:]
             pendingDisplayPreviews = [:]
             pendingDisplayPreviewRequestIDs = [:]
+            deviceUpcomingResponses = [:]
+            loadingDeviceTimelineIDs = []
+            deviceTimelineErrors = [:]
             dashboardPreviews = [:]
             dashboardPreviewRequestIDs = [:]
             displayOrderIDs = []
@@ -2920,6 +3000,25 @@ final class AppModel {
         displayOrderIDs = UserDefaults.standard.stringArray(
             forKey: Self.displayOrderKeyPrefix + instanceID
         ) ?? []
+    }
+
+    private func reconcileDeviceTimelines() {
+        guard supportsDeviceTimeline else {
+            deviceUpcomingResponses = [:]
+            loadingDeviceTimelineIDs = []
+            deviceTimelineErrors = [:]
+            return
+        }
+        let displayIDs = Set(displays.map(\.id))
+        deviceUpcomingResponses = deviceUpcomingResponses.filter {
+            displayIDs.contains($0.key)
+        }
+        loadingDeviceTimelineIDs = loadingDeviceTimelineIDs.intersection(
+            displayIDs
+        )
+        deviceTimelineErrors = deviceTimelineErrors.filter {
+            displayIDs.contains($0.key)
+        }
     }
 
     private func loadDashboardOrder(for instanceID: String) {

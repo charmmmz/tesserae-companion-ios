@@ -438,6 +438,7 @@ private struct DisplayDetailView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var scenePhase
     @State private var selectedScreenPage: ScreenPage = .current
     @State private var hapticEvent = TesseraeHapticEvent()
     let display: DisplaySummary
@@ -454,6 +455,10 @@ private struct DisplayDetailView: View {
         ScrollView {
             VStack(spacing: 14) {
                 screenCarouselCard
+
+                if model.supportsDeviceTimeline {
+                    nextUpdateCard
+                }
 
                 detailCard(
                     "Connection & Power",
@@ -576,6 +581,28 @@ private struct DisplayDetailView: View {
         .task(id: currentDisplay.pendingRender?.revision) {
             await model.loadPendingDisplayPreview(currentDisplay)
         }
+        .task(id: "\(currentDisplay.id)-\(model.supportsDeviceTimeline)") {
+            await model.refreshDeviceUpcoming(displayID: currentDisplay.id)
+        }
+        .task(id: nextUpcomingEvent?.id) {
+            guard let scheduledAt = nextUpcomingEvent?.scheduledAt else { return }
+            let delay = scheduledAt.timeIntervalSinceNow
+            if delay > 0 {
+                try? await Task.sleep(for: .seconds(delay + 1))
+            }
+            guard !Task.isCancelled else { return }
+            await model.refreshDeviceUpcoming(displayID: currentDisplay.id)
+        }
+        .refreshable {
+            await model.refreshDisplays(showErrors: false)
+            await model.refreshDeviceUpcoming(displayID: currentDisplay.id)
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else { return }
+            Task {
+                await model.refreshDeviceUpcoming(displayID: currentDisplay.id)
+            }
+        }
         .onChange(of: currentDisplay.pendingRender?.revision) { _, revision in
             if revision == nil {
                 selectedScreenPage = .current
@@ -592,6 +619,192 @@ private struct DisplayDetailView: View {
         }
         .tesseraeScreenBackground()
         .tesseraeHapticFeedback(trigger: hapticEvent)
+    }
+
+    private var upcomingResponse: DeviceUpcomingResponse? {
+        model.deviceUpcomingResponses[currentDisplay.id]
+    }
+
+    private var nextUpcomingEvent: DeviceUpcomingEvent? {
+        upcomingResponse?.events.first
+    }
+
+    @ViewBuilder
+    private var nextUpdateCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Label("Next Update", systemImage: "clock.arrow.circlepath")
+                .font(.headline)
+
+            if let event = nextUpcomingEvent,
+               let response = upcomingResponse
+            {
+                TimelineView(.periodic(from: .now, by: 30)) { context in
+                    nextUpdateContent(
+                        event: event,
+                        response: response,
+                        now: context.date
+                    )
+                }
+            } else if model.loadingDeviceTimelineIDs.contains(currentDisplay.id),
+                      upcomingResponse == nil
+            {
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text("Loading scheduled updates…")
+                        .foregroundStyle(.secondary)
+                }
+                .frame(minHeight: 48)
+            } else if let error = model.deviceTimelineErrors[currentDisplay.id] {
+                HStack(alignment: .center, spacing: 12) {
+                    Text(error)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    Spacer(minLength: 8)
+
+                    Button("Retry") {
+                        Task {
+                            await model.refreshDeviceUpcoming(
+                                displayID: currentDisplay.id,
+                                showErrors: true
+                            )
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                }
+            } else if let response = upcomingResponse {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("No scheduled update")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Nothing projected through \(response.throughAt.formatted(date: .abbreviated, time: .shortened)).")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .tesseraeCard()
+        .accessibilityIdentifier("display-next-update-\(currentDisplay.id)")
+    }
+
+    private func nextUpdateContent(
+        event: DeviceUpcomingEvent,
+        response: DeviceUpcomingResponse,
+        now: Date
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(upcomingTarget(event))
+                        .font(.title3.weight(.semibold))
+                        .lineLimit(2)
+                    Text(upcomingReason(event))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 8)
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(event.scheduledAt, style: .relative)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(upcomingAccent(event.certainty))
+                    Text(
+                        event.scheduledAt,
+                        format: .dateTime.weekday(.abbreviated).hour().minute()
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                }
+                .fixedSize(horizontal: true, vertical: false)
+            }
+
+            if let start = response.currentFrameAt,
+               start < event.scheduledAt
+            {
+                ProgressView(
+                    value: min(
+                        max(now.timeIntervalSince(start), 0),
+                        event.scheduledAt.timeIntervalSince(start)
+                    ),
+                    total: event.scheduledAt.timeIntervalSince(start)
+                )
+                .tint(upcomingAccent(event.certainty))
+                .accessibilityLabel("Time until next update")
+            }
+
+            HStack(spacing: 8) {
+                Image(systemName: upcomingSymbol(event))
+                Text(upcomingEffect(event))
+                if event.certainty != .scheduled {
+                    Text("·")
+                    Text(upcomingCertainty(event.certainty))
+                }
+            }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private func upcomingTarget(_ event: DeviceUpcomingEvent) -> String {
+        event.dashboardName
+            ?? event.lineupName
+            ?? String(localized: "Lineup update")
+    }
+
+    private func upcomingReason(_ event: DeviceUpcomingEvent) -> String {
+        switch (event.cause, event.effect) {
+        case (.interval, .refreshScreen):
+            String(localized: "Keep Fresh")
+        case (.cycle, .changeScreen):
+            String(localized: "Lineup rotation")
+        case (.cycle, .refreshScreen):
+            String(localized: "Lineup refresh")
+        case (.daily, .changeScreen):
+            String(localized: "Daily schedule")
+        case (.daily, .refreshScreen):
+            String(localized: "Daily refresh")
+        case (.homeReturn, _):
+            String(localized: "Home Return")
+        case (.dashboardRefresh, _):
+            String(localized: "Dashboard refresh")
+        case (.widgetRefresh, _):
+            String(localized: "Widget refresh")
+        case (.interval, .changeScreen):
+            String(localized: "Interval schedule")
+        }
+    }
+
+    private func upcomingEffect(_ event: DeviceUpcomingEvent) -> String {
+        switch event.effect {
+        case .changeScreen:
+            String(localized: "Changes the screen")
+        case .refreshScreen:
+            String(localized: "Refreshes the current screen")
+        }
+    }
+
+    private func upcomingCertainty(_ certainty: DeviceUpcomingCertainty) -> String {
+        switch certainty {
+        case .scheduled:
+            String(localized: "Scheduled")
+        case .conditional:
+            String(localized: "Conditional")
+        case .estimated:
+            String(localized: "Estimated")
+        }
+    }
+
+    private func upcomingAccent(_ certainty: DeviceUpcomingCertainty) -> Color {
+        certainty == .scheduled ? TesseraeTheme.accent : TesseraeTheme.ochre
+    }
+
+    private func upcomingSymbol(_ event: DeviceUpcomingEvent) -> String {
+        switch event.effect {
+        case .changeScreen:
+            "arrow.left.arrow.right.square"
+        case .refreshScreen:
+            "arrow.clockwise"
+        }
     }
 
     private var screenCarouselCard: some View {

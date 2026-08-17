@@ -23,6 +23,7 @@ CASES = {
     "capabilities-lineup-authoring.json": "Capabilities",
     "capabilities-gallery.json": "Capabilities",
     "capabilities-offline-albums.json": "Capabilities",
+    "capabilities-timeline.json": "Capabilities",
     "pair-request.json": "PairingRequest",
     "pair-response.json": "PairingResponse",
     "pair-response-lineups.json": "PairingResponse",
@@ -32,6 +33,7 @@ CASES = {
     "devices-response.json": "DevicesResponse",
     "devices-gallery-response.json": "DevicesResponse",
     "devices-offline-albums-response.json": "DevicesResponse",
+    "device-upcoming-response.json": "DeviceUpcomingResponse",
     "dashboards-response.json": "DashboardsResponse",
     "dashboard-push-request.json": "DashboardPushRequest",
     "image-push-request.json": "ImagePushRequest",
@@ -106,14 +108,16 @@ def _json_schema(value: Any) -> Any:
 
 def test_openapi_shape_and_operation_ids_are_stable() -> None:
     assert SPEC["openapi"] == "3.0.3"
-    assert SPEC["info"]["version"] == "0.13.0"
+    assert SPEC["info"]["version"] == "0.15.0"
     assert set(SPEC["paths"]) == {
         "/api/app/v1",
         "/api/app/v1/pair",
+        "/api/app/v1/device-pairings",
         "/api/app/v1/session",
         "/api/app/v1/personal-data/status",
         "/api/app/v1/personal-data/{source_id}",
         "/api/app/v1/devices",
+        "/api/app/v1/devices/{device_id}/upcoming",
         "/api/app/v1/devices/{device_id}/preview",
         "/api/app/v1/dashboards",
         "/api/app/v1/dashboards/{dashboard_id}/preview",
@@ -144,6 +148,20 @@ def test_openapi_shape_and_operation_ids_are_stable() -> None:
         if method in {"get", "post", "put", "patch", "delete"}
     ]
     assert len(operation_ids) == len(set(operation_ids))
+
+
+def test_device_timeline_is_capability_and_limit_gated() -> None:
+    capability = json.loads((FIXTURES / "capabilities-timeline.json").read_text())
+    assert "device_timeline" in capability["features"]
+    assert capability["limits"]["device_timeline_max_hours"] == 168
+    assert capability["limits"]["device_timeline_max_events"] == 20
+
+    operation = SPEC["paths"]["/api/app/v1/devices/{device_id}/upcoming"]["get"]
+    assert operation["operationId"] == "getCompanionDeviceUpcoming"
+    assert {parameter["name"] for parameter in operation["parameters"]} == {
+        "hours",
+        "limit",
+    }
 
 
 def test_fixtures_match_component_schemas() -> None:

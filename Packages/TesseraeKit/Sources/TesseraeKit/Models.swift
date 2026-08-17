@@ -33,6 +33,8 @@ public struct CompanionLimits: Codable, Hashable, Sendable {
     public let galleryUploadBatchSize: Int?
     public let personalDataStaleAfterSeconds: Int?
     public let personalDataMaxTTLSeconds: Int?
+    public let deviceTimelineMaxHours: Int?
+    public let deviceTimelineMaxEvents: Int?
     public let jobRetentionSeconds: Int
     public let idempotencyRetentionSeconds: Int
 
@@ -47,6 +49,8 @@ public struct CompanionLimits: Codable, Hashable, Sendable {
         galleryUploadBatchSize: Int? = nil,
         personalDataStaleAfterSeconds: Int? = nil,
         personalDataMaxTTLSeconds: Int? = nil,
+        deviceTimelineMaxHours: Int? = nil,
+        deviceTimelineMaxEvents: Int? = nil,
         jobRetentionSeconds: Int,
         idempotencyRetentionSeconds: Int
     ) {
@@ -60,6 +64,8 @@ public struct CompanionLimits: Codable, Hashable, Sendable {
         self.galleryUploadBatchSize = galleryUploadBatchSize
         self.personalDataStaleAfterSeconds = personalDataStaleAfterSeconds
         self.personalDataMaxTTLSeconds = personalDataMaxTTLSeconds
+        self.deviceTimelineMaxHours = deviceTimelineMaxHours
+        self.deviceTimelineMaxEvents = deviceTimelineMaxEvents
         self.jobRetentionSeconds = jobRetentionSeconds
         self.idempotencyRetentionSeconds = idempotencyRetentionSeconds
     }
@@ -75,6 +81,8 @@ public struct CompanionLimits: Codable, Hashable, Sendable {
         case galleryUploadBatchSize
         case personalDataStaleAfterSeconds
         case personalDataMaxTTLSeconds = "personalDataMaxTtlSeconds"
+        case deviceTimelineMaxHours
+        case deviceTimelineMaxEvents
         case jobRetentionSeconds
         case idempotencyRetentionSeconds
     }
@@ -114,6 +122,14 @@ public struct CompanionLimits: Codable, Hashable, Sendable {
         personalDataMaxTTLSeconds = try container.decodeIfPresent(
             Int.self,
             forKey: .personalDataMaxTTLSeconds
+        )
+        deviceTimelineMaxHours = try container.decodeIfPresent(
+            Int.self,
+            forKey: .deviceTimelineMaxHours
+        )
+        deviceTimelineMaxEvents = try container.decodeIfPresent(
+            Int.self,
+            forKey: .deviceTimelineMaxEvents
         )
         jobRetentionSeconds = try container.decode(
             Int.self,
@@ -186,6 +202,12 @@ public struct ServerCapabilities: Codable, Hashable, Sendable {
 
     public var supportsDeviceSetup: Bool {
         features.contains("device_setup")
+    }
+
+    public var supportsDeviceTimeline: Bool {
+        features.contains("device_timeline")
+            && (limits.deviceTimelineMaxHours ?? 0) > 0
+            && (limits.deviceTimelineMaxEvents ?? 0) > 0
     }
 }
 
@@ -518,6 +540,106 @@ public struct DevicesResponse: Codable, Hashable, Sendable {
 
     public init(devices: [DisplaySummary]) {
         self.devices = devices
+    }
+}
+
+public enum DeviceUpcomingCause: String, Codable, CaseIterable, Hashable, Sendable {
+    case daily
+    case interval
+    case cycle
+    case homeReturn = "home_return"
+    case dashboardRefresh = "dashboard_refresh"
+    case widgetRefresh = "widget_refresh"
+}
+
+public enum DeviceUpcomingEffect: String, Codable, CaseIterable, Hashable, Sendable {
+    case changeScreen = "change_screen"
+    case refreshScreen = "refresh_screen"
+}
+
+public enum DeviceUpcomingCertainty: String, Codable, CaseIterable, Hashable, Sendable {
+    case scheduled
+    case conditional
+    case estimated
+}
+
+public struct DeviceUpcomingEvent: Codable, Identifiable, Hashable, Sendable {
+    public let id: String
+    public let scheduledAt: Date
+    public let cause: DeviceUpcomingCause
+    public let effect: DeviceUpcomingEffect
+    public let certainty: DeviceUpcomingCertainty
+    public let lineupID: String?
+    public let lineupName: String?
+    public let dashboardID: String?
+    public let dashboardName: String?
+
+    public init(
+        id: String,
+        scheduledAt: Date,
+        cause: DeviceUpcomingCause,
+        effect: DeviceUpcomingEffect,
+        certainty: DeviceUpcomingCertainty,
+        lineupID: String? = nil,
+        lineupName: String? = nil,
+        dashboardID: String? = nil,
+        dashboardName: String? = nil
+    ) {
+        self.id = id
+        self.scheduledAt = scheduledAt
+        self.cause = cause
+        self.effect = effect
+        self.certainty = certainty
+        self.lineupID = lineupID
+        self.lineupName = lineupName
+        self.dashboardID = dashboardID
+        self.dashboardName = dashboardName
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case scheduledAt
+        case cause
+        case effect
+        case certainty
+        case lineupID = "lineupId"
+        case lineupName
+        case dashboardID = "dashboardId"
+        case dashboardName
+    }
+}
+
+public struct DeviceUpcomingResponse: Codable, Hashable, Sendable {
+    public let deviceID: String
+    public let generatedAt: Date
+    public let timezone: String
+    public let throughAt: Date
+    public let currentFrameAt: Date?
+    public let events: [DeviceUpcomingEvent]
+
+    public init(
+        deviceID: String,
+        generatedAt: Date,
+        timezone: String,
+        throughAt: Date,
+        currentFrameAt: Date? = nil,
+        events: [DeviceUpcomingEvent]
+    ) {
+        self.deviceID = deviceID
+        self.generatedAt = generatedAt
+        self.timezone = timezone
+        self.throughAt = throughAt
+        self.currentFrameAt = currentFrameAt
+        self.events = events
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case deviceID = "deviceId"
+        case generatedAt
+        case timezone
+        case throughAt
+        case currentFrameAt
+        case events
     }
 }
 

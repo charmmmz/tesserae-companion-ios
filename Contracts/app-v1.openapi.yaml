@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Tesserae Companion API
-  version: 0.14.0
+  version: 0.15.0
   description: >-
     Companion API contract for community-built clients. Previews, History,
     resend, remote-image push, webpage push, and server-advertised image fit
@@ -205,6 +205,51 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+  /api/app/v1/devices/{device_id}/upcoming:
+    parameters:
+      - $ref: "#/components/parameters/DeviceID"
+    get:
+      tags: [Displays]
+      operationId: getCompanionDeviceUpcoming
+      summary: Project the next visible updates for one display
+      description: >-
+        Requires device_timeline plus devices:read, dashboards:read, and
+        lineups:read. The server owns scheduler applicability, conflict
+        resolution, quiet hours, and event coalescing; clients must not infer
+        future updates from Lineup definitions. Version 1 emits Lineup
+        advances, Keep Fresh repaints, and Home Return only.
+      parameters:
+        - in: query
+          name: hours
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 168
+            default: 24
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 6
+      responses:
+        "200":
+          description: Server-projected visible updates in chronological order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceUpcomingResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/app/v1/devices/{device_id}/preview:
     parameters:
       - $ref: "#/components/parameters/DeviceID"
@@ -1317,6 +1362,7 @@ components:
               - lineup_authoring
               - session_read
               - device_setup
+              - device_timeline
         personal_data:
           $ref: "#/components/schemas/PersonalDataCapabilities"
         limits:
@@ -1404,6 +1450,20 @@ components:
             Required whenever any personal-data capability is advertised.
           type: integer
           minimum: 60
+        device_timeline_max_hours:
+          description: >-
+            Maximum accepted upcoming projection horizon. Required when
+            device_timeline is advertised.
+          type: integer
+          minimum: 1
+          maximum: 168
+        device_timeline_max_events:
+          description: >-
+            Maximum accepted upcoming event count. Required when
+            device_timeline is advertised.
+          type: integer
+          minimum: 1
+          maximum: 20
         job_retention_seconds:
           type: integer
           minimum: 60
@@ -2233,6 +2293,86 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Device"
+    DeviceUpcomingResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - device_id
+        - generated_at
+        - timezone
+        - through_at
+        - current_frame_at
+        - events
+      properties:
+        device_id:
+          type: string
+        generated_at:
+          type: string
+          format: date-time
+        timezone:
+          type: string
+        through_at:
+          type: string
+          format: date-time
+        current_frame_at:
+          description: >-
+            When the currently visible frame was served or published. Null
+            when no reliable timestamp is available; clients must then avoid
+            presenting synthetic progress.
+          type: string
+          format: date-time
+          nullable: true
+        events:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/DeviceUpcomingEvent"
+    DeviceUpcomingEvent:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - scheduled_at
+        - cause
+        - effect
+        - certainty
+        - lineup_id
+        - lineup_name
+        - dashboard_id
+        - dashboard_name
+      properties:
+        id:
+          type: string
+        scheduled_at:
+          type: string
+          format: date-time
+        cause:
+          type: string
+          enum:
+            - daily
+            - interval
+            - cycle
+            - home_return
+            - dashboard_refresh
+            - widget_refresh
+        effect:
+          type: string
+          enum: [change_screen, refresh_screen]
+        certainty:
+          type: string
+          enum: [scheduled, conditional, estimated]
+        lineup_id:
+          type: string
+          nullable: true
+        lineup_name:
+          type: string
+          nullable: true
+        dashboard_id:
+          type: string
+          nullable: true
+        dashboard_name:
+          type: string
+          nullable: true
     Device:
       type: object
       additionalProperties: false
