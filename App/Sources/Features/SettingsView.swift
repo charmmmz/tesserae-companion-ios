@@ -2,6 +2,7 @@ import SwiftUI
 import TesseraeKit
 
 struct SettingsView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
     @Environment(RemindersBridgeModel.self) private var remindersBridgeModel
@@ -68,7 +69,7 @@ struct SettingsView: View {
                             } icon: {
                                 Image(systemName: "checklist")
                                     .symbolRenderingMode(.hierarchical)
-                                    .foregroundStyle(.blue)
+                                    .foregroundStyle(settingsAccent)
                             }
                         }
                     }
@@ -84,7 +85,7 @@ struct SettingsView: View {
                             } icon: {
                                 Image(systemName: "heart.fill")
                                     .symbolRenderingMode(.hierarchical)
-                                    .foregroundStyle(.pink)
+                                    .foregroundStyle(settingsAccent)
                             }
                         }
                     }
@@ -234,6 +235,10 @@ struct SettingsView: View {
         ) as? String ?? ""
 
         return build.isEmpty ? version : "\(version) (\(build))"
+    }
+
+    private var settingsAccent: Color {
+        colorScheme == .dark ? TesseraeTheme.darkAccent : TesseraeTheme.accent
     }
 
     private func webURL(for instance: TesseraeInstance) -> URL {
