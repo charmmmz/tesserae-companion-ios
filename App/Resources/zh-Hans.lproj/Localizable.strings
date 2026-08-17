@@ -194,6 +194,13 @@
 "Bind this dashboard to at least one display in Tesserae before pushing it from the app." = "请先在 Tesserae 中为此仪表盘绑定至少一台显示屏，再从 App 发送。";
 "Send" = "发送";
 "Sending to Displays…" = "正在发送到显示屏…";
+"Sending…" = "正在发送…";
+"Sent to Displays" = "已发送到显示屏";
+"Pair again to reconnect" = "请重新配对";
+"Unable to connect to Tesserae" = "无法连接到 Tesserae";
+"Couldn’t update Tesserae data" = "无法更新 Tesserae 数据";
+"Restoring connection…" = "正在恢复连接…";
+"Connection unavailable" = "连接不可用";
 "Opens the Send composer." = "打开发送编辑器。";
 "Activity" = "活动";
 "Restoring Tesserae connection…" = "正在恢复 Tesserae 连接…";

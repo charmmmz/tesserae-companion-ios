@@ -29,6 +29,25 @@ final class MessageCenterTests: XCTestCase {
         XCTAssertEqual(center.currentMessage?.haptic, .success)
     }
 
+    func testMessageCanKeepDetailedAccessibilityTextOffTheCapsule() {
+        let center = TesseraeMessageCenter()
+        let detail = "The server closed the connection before responding."
+
+        center.post(
+            TesseraeMessage(
+                id: "connection.status",
+                text: "Unable to connect to Tesserae",
+                accessibilityText: detail
+            )
+        )
+
+        XCTAssertEqual(
+            center.currentMessage?.text,
+            "Unable to connect to Tesserae"
+        )
+        XCTAssertEqual(center.currentMessage?.accessibilityText, detail)
+    }
+
     func testPostingTheSameIdentifierReplacesInsteadOfStacking() {
         let center = TesseraeMessageCenter()
 

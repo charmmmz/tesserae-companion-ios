@@ -564,16 +564,7 @@ struct SendView: View {
     }
 
     private var confirmationMessage: String {
-        switch source {
-        case .photo:
-            String(
-                localized: "Tesserae accepted the image. Follow its progress in Activity."
-            )
-        case .link:
-            String(
-                localized: "Tesserae accepted the link. Follow its progress in Activity."
-            )
-        }
+        String(localized: "Sent to Displays")
     }
 
     private func showSentConfirmation(_ message: String) {
@@ -594,7 +585,7 @@ struct SendView: View {
         messageCenter.post(
             TesseraeMessage(
                 id: "send.submission",
-                text: String(localized: "Sending to Displays…"),
+                text: String(localized: "Sending…"),
                 kind: .progress(fraction: nil),
                 lifetime: .persistent,
                 priority: .normal,

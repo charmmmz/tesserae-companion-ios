@@ -294,14 +294,16 @@ struct TesseraeMessageCapsule<Leading: View, Trailing: View>: View {
 
             Text(message)
                 .font(.subheadline.weight(.semibold))
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .layoutPriority(1)
 
             trailing
+                .fixedSize(horizontal: true, vertical: false)
         }
         .padding(.horizontal, 15)
-        .padding(.vertical, 10)
-        .frame(minHeight: 44)
+        .padding(.vertical, 8)
+        .frame(minHeight: 40)
         .background(.thinMaterial, in: Capsule())
         .overlay {
             Capsule()
@@ -344,6 +346,7 @@ struct TesseraeMessage: Identifiable {
     let priority: TesseraeMessagePriority
     let systemImage: String?
     let accessibilityIdentifier: String?
+    let accessibilityText: String?
     let accessibilityHint: String?
     let haptic: TesseraeHaptic?
     let tapAction: (@MainActor () -> Void)?
@@ -357,6 +360,7 @@ struct TesseraeMessage: Identifiable {
         priority: TesseraeMessagePriority = .normal,
         systemImage: String? = nil,
         accessibilityIdentifier: String? = nil,
+        accessibilityText: String? = nil,
         accessibilityHint: String? = nil,
         haptic: TesseraeHaptic? = nil,
         tapAction: (@MainActor () -> Void)? = nil,
@@ -369,6 +373,7 @@ struct TesseraeMessage: Identifiable {
         self.priority = priority
         self.systemImage = systemImage
         self.accessibilityIdentifier = accessibilityIdentifier
+        self.accessibilityText = accessibilityText
         self.accessibilityHint = accessibilityHint
         self.haptic = haptic
         self.tapAction = tapAction
@@ -516,6 +521,7 @@ final class TesseraeMessageCenter {
 
 private struct TesseraeMessageCenterHost: View {
     @Environment(TesseraeMessageCenter.self) private var center
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hostID = UUID()
     @State private var hapticEvent = TesseraeHapticEvent()
 
@@ -526,11 +532,11 @@ private struct TesseraeMessageCenterHost: View {
             {
                 presentedMessage(message)
                     .id(message.id)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .transition(messageTransition)
             }
         }
         .frame(maxWidth: .infinity)
-        .animation(.snappy, value: presentationRevision)
+        .animation(.easeOut(duration: 0.18), value: center.currentMessage?.id)
         .tesseraeHapticFeedback(trigger: hapticEvent)
         .onAppear {
             center.activateHost(id: hostID)
@@ -553,6 +559,11 @@ private struct TesseraeMessageCenterHost: View {
         return "\(message.id)|\(message.text)|\(String(describing: message.kind))"
     }
 
+    private var messageTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        return .opacity.combined(with: .scale(scale: 0.97, anchor: .top))
+    }
+
     @ViewBuilder
     private func presentedMessage(_ message: TesseraeMessage) -> some View {
         if let tapAction = message.tapAction {
@@ -560,12 +571,17 @@ private struct TesseraeMessageCenterHost: View {
                 capsule(message, showsDisclosure: true)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text(message.text))
+            .accessibilityLabel(
+                Text(message.accessibilityText ?? message.text)
+            )
             .accessibilityHint(Text(message.accessibilityHint ?? ""))
             .accessibilityIdentifier(message.accessibilityIdentifier ?? message.id)
         } else {
             capsule(message, showsDisclosure: false)
                 .accessibilityElement(children: message.action == nil ? .combine : .contain)
+                .accessibilityLabel(
+                    Text(message.accessibilityText ?? message.text)
+                )
                 .accessibilityIdentifier(message.accessibilityIdentifier ?? message.id)
         }
     }
@@ -588,7 +604,7 @@ private struct TesseraeMessageCenterHost: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .frame(maxWidth: 480)
+        .frame(maxWidth: 400)
     }
 
     @ViewBuilder

@@ -124,7 +124,7 @@ struct RootView: View {
         messageCenter.post(
             TesseraeMessage(
                 id: "connection.status",
-                text: notice,
+                text: connectionMessageText,
                 kind: model.connectionHealth == .requiresPairing
                     ? .warning
                     : .error,
@@ -134,8 +134,24 @@ struct RootView: View {
                     ? "key.slash"
                     : "wifi.exclamationmark",
                 accessibilityIdentifier: "connection-message-capsule",
+                accessibilityText: notice,
                 action: retryAction
             )
         )
+    }
+
+    private var connectionMessageText: String {
+        switch model.connectionHealth {
+        case .requiresPairing:
+            String(localized: "Pair again to reconnect")
+        case .offline:
+            String(localized: "Unable to connect to Tesserae")
+        case .connected:
+            String(localized: "Couldn’t update Tesserae data")
+        case .restoring:
+            String(localized: "Restoring connection…")
+        case .idle:
+            String(localized: "Connection unavailable")
+        }
     }
 }

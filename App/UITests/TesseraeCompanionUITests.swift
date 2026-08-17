@@ -1078,9 +1078,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         ]
         XCTAssertTrue(sentBanner.waitForExistence(timeout: 3))
         XCTAssertTrue(
-            sentBanner.label.contains(
-                "Tesserae accepted the link. Follow its progress in Activity."
-            )
+            sentBanner.label.contains("Sent to Displays")
         )
 
         app.buttons["root-send-close"].tap()

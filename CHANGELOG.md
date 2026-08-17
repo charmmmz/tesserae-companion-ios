@@ -100,6 +100,9 @@ capabilities.
 
 - Presented nearby display discovery as a compact rounded bottom sheet, then
   expanded it only after the user continues into setup or maintenance.
+- Message capsules now keep feedback to one compact line with shorter Send and
+  connection wording. Progress updates no longer reanimate the entire capsule,
+  and presentation uses a lighter fade-and-scale transition for smoother motion.
 - Fill sends to displays with different aspect ratios now keep independent
   framing for each ratio while same-ratio displays share one position and zoom.
   The existing display preview picker switches between those framings, and both
