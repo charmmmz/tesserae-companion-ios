@@ -13,6 +13,9 @@ struct DisplaysView: View {
     @Environment(\.presentTesseraeSettings) private var presentSettings
     @State private var draggedDisplayID: String?
     @State private var dropTargetDisplayID: String?
+    @State private var transientDisplayOrderIDs: [String]?
+    @State private var lastReorderedTargetID: String?
+    @State private var reorderTargetResetTask: Task<Void, Never>?
     @State private var selectedDisplay: DisplaySummary?
     @State private var lineupsPresented = false
     @State private var hapticEvent = TesseraeHapticEvent()
@@ -23,7 +26,23 @@ struct DisplaysView: View {
         isActive && !lineupsPresented && scenePhase == .active
     }
 
+    private var displayedDisplays: [DisplaySummary] {
+        guard let transientDisplayOrderIDs else {
+            return model.sortedDisplays
+        }
+
+        let displaysByID = Dictionary(
+            uniqueKeysWithValues: model.displays.map { ($0.id, $0) }
+        )
+        let ordered = transientDisplayOrderIDs.compactMap { displaysByID[$0] }
+        let orderedIDs = Set(ordered.map(\.id))
+        return ordered + model.sortedDisplays.filter { !orderedIDs.contains($0.id) }
+    }
+
     var body: some View {
+        let displays = displayedDisplays
+        let displayOrder = displays.map(\.id)
+
         ScrollView {
             LazyVStack(spacing: 14) {
                 if model.supportsLineups {
@@ -72,7 +91,7 @@ struct DisplaysView: View {
                     .accessibilityHint("Opens Lineups and controls.")
                 }
 
-                ForEach(model.sortedDisplays) { display in
+                ForEach(displays) { display in
                     DisplayCard(
                         display: display,
                         preview: model.displayPreviews[display.id]
@@ -86,6 +105,8 @@ struct DisplaysView: View {
                     .accessibilityAddTraits(.isButton)
                     .onDrag {
                         draggedDisplayID = display.id
+                        transientDisplayOrderIDs = displayOrder
+                        lastReorderedTargetID = nil
                         return NSItemProvider(object: display.id as NSString)
                     } preview: {
                         displayDragPreview(display)
@@ -109,16 +130,8 @@ struct DisplaysView: View {
                                 lineWidth: 2
                             )
                             .allowsHitTesting(false)
-                            .transition(.opacity)
                         }
                     }
-                    .animation(
-                        .spring(
-                            response: 0.28,
-                            dampingFraction: 0.82
-                        ),
-                        value: model.sortedDisplays.map(\.id)
-                    )
                     .accessibilityHint(
                         "Tap for details. Long press and drag to reorder."
                     )
@@ -132,6 +145,13 @@ struct DisplaysView: View {
                 }
             }
             .padding(16)
+            .animation(
+                .spring(
+                    response: 0.24,
+                    dampingFraction: 0.88
+                ),
+                value: displayOrder
+            )
         }
         .overlay {
             if model.isRefreshing && model.displays.isEmpty {
@@ -175,6 +195,7 @@ struct DisplaysView: View {
                 } catch {
                     return
                 }
+                guard draggedDisplayID == nil else { continue }
                 await model.refreshDisplays(
                     showErrors: false,
                     saveSnapshot: false
@@ -211,46 +232,56 @@ struct DisplaysView: View {
     ) {
         guard targeted else {
             if dropTargetDisplayID == targetID {
-                withAnimation(.easeOut(duration: 0.12)) {
-                    dropTargetDisplayID = nil
+                dropTargetDisplayID = nil
+            }
+            reorderTargetResetTask?.cancel()
+            reorderTargetResetTask = Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(120))
+                guard !Task.isCancelled, dropTargetDisplayID == nil else {
+                    return
                 }
+                lastReorderedTargetID = nil
+                reorderTargetResetTask = nil
             }
             return
         }
 
-        withAnimation(.easeInOut(duration: 0.15)) {
-            dropTargetDisplayID = targetID
-        }
+        reorderTargetResetTask?.cancel()
+        reorderTargetResetTask = nil
+        dropTargetDisplayID = targetID
 
         guard
             let sourceID = draggedDisplayID,
             sourceID != targetID,
-            let targetIndex = model.sortedDisplays.firstIndex(
-                where: { $0.id == targetID }
-            )
+            targetID != lastReorderedTargetID,
+            var order = transientDisplayOrderIDs,
+            let sourceIndex = order.firstIndex(of: sourceID),
+            let targetIndex = order.firstIndex(of: targetID)
         else {
             return
         }
 
-        withAnimation(
-            .spring(
-                response: 0.28,
-                dampingFraction: 0.82
-            )
-        ) {
-            let previousOrder = model.sortedDisplays.map(\.id)
-            model.moveDisplay(sourceID, to: targetIndex)
-            if model.sortedDisplays.map(\.id) != previousOrder {
-                hapticEvent.trigger(.rigidImpact)
-            }
-        }
+        order.remove(at: sourceIndex)
+        order.insert(sourceID, at: min(targetIndex, order.count))
+        guard order != transientDisplayOrderIDs else { return }
+
+        lastReorderedTargetID = targetID
+        transientDisplayOrderIDs = order
+        hapticEvent.trigger(.rigidImpact)
     }
 
     private func endDisplayDrag() {
-        withAnimation(.easeOut(duration: 0.12)) {
-            draggedDisplayID = nil
-            dropTargetDisplayID = nil
+        reorderTargetResetTask?.cancel()
+        if let sourceID = draggedDisplayID,
+           let finalIndex = transientDisplayOrderIDs?.firstIndex(of: sourceID)
+        {
+            model.moveDisplay(sourceID, to: finalIndex)
         }
+        draggedDisplayID = nil
+        dropTargetDisplayID = nil
+        transientDisplayOrderIDs = nil
+        lastReorderedTargetID = nil
+        reorderTargetResetTask = nil
     }
 }
 
