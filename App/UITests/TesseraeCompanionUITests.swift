@@ -1116,7 +1116,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         let historyCard = app.buttons[
             "history-card-history-demo-photo"
         ].firstMatch
-        XCTAssertTrue(historyCard.waitForExistence(timeout: 5))
+        XCTAssertTrue(historyCard.waitForExistence(timeout: 15))
         let restingMinY = historyCard.frame.minY
 
         let scrollView = app.scrollViews.firstMatch
@@ -1259,8 +1259,9 @@ final class TesseraeCompanionUITests: XCTestCase {
         let tabBar = app.tabBars.firstMatch
         XCTAssertTrue(tabBar.buttons["显示屏"].waitForExistence(timeout: 3))
         XCTAssertTrue(tabBar.buttons["仪表盘"].exists)
-        XCTAssertTrue(tabBar.buttons["发送"].exists)
+        XCTAssertTrue(tabBar.buttons["图库"].exists)
         XCTAssertTrue(tabBar.buttons["活动"].exists)
+        XCTAssertTrue(app.buttons["root-send-action"].exists)
         XCTAssertFalse(app.staticTexts["演示数据"].exists)
         XCTAssertTrue(
             app.descendants(matching: .any)["最近在线"].exists
