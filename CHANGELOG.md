@@ -11,8 +11,36 @@ capabilities.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-18
+
 ### Fixed
 
+- Matched new-display onboarding to maintenance: compact discovery prompts keep
+  the brand logo and model badge, while the connected Wi-Fi page shows separate
+  Manufacturer and Model rows. Onboarding instructions and status messages now
+  wrap instead of being compressed or clipped.
+- Declared the required Health update usage description for App Store
+  validation while keeping Tesserae's HealthKit access explicitly read-only.
+- Allowed a displayed Bluetooth setup QR code to be scanned again after
+  closing setup, using a fresh encrypted channel for every reconnect without
+  weakening replay protection.
+- Colored both the icon and label red for the destructive Clear Wi-Fi Settings
+  and Factory Reset maintenance actions.
+- Made Display card reordering smoother by keeping drag-time order changes
+  local to the page and saving the final order only when the drag ends.
+- Preserved an existing display's server URL and device token during a
+  Wi-Fi-only Bluetooth repair instead of accidentally requiring a new device
+  pairing code when the app uses a different URL for the same server.
+- Closed the active Bluetooth session when a nearby-display sheet is dismissed
+  and prevented callbacks from that old session from interfering with an
+  immediate reconnection. The maintenance screen now appears only after the
+  first authenticated diagnostics response succeeds.
+- Prevented Apple Health sync from terminating the app when it builds the
+  seven-day Activity Summary query on a physical iPhone.
+- Kept rounded Health workout durations within their uploaded start/end
+  intervals so valid snapshots are accepted by the server.
+- Filled the entire nearby-display sheet with the patterned background when it
+  is dragged from its compact height to the expanded detent.
 - Hid the Offline Album Review action until an existing Album has actual
   unsaved configuration changes.
 - Showed an explicit acknowledgement after restart, Wi-Fi clear, and factory
@@ -26,6 +54,12 @@ capabilities.
   Companion app to be restarted.
 
 ### Added
+
+- Added brand and model identification for nearby Bluetooth displays before
+  connection, with the same hardware presentation carried into Wi-Fi setup.
+- Added a capability-gated Next Update timeline to Display details, showing
+  server-projected Lineup advances, Keep Fresh repaints, and Home Return without
+  predicting event-driven refreshes.
 
 - Added Sonos-style foreground discovery for nearby Tesserae displays, with a
   guided Bluetooth onboarding and maintenance flow. Users can authenticate by
@@ -62,11 +96,30 @@ capabilities.
   follow-ups.
 - Added the capability-gated native Offline Album setup and management flow in
   Library folders. Companion can select server-reported eligible displays,
-  configure album-wide layout and playback, review server-computed frame and
-  storage preflight, explicitly resolve existing Album bindings, and show
+  configure album-wide layout and playback, arrange photos into a custom
+  drag-and-drop playback order or restore folder order, review server-computed
+  frame and storage preflight, explicitly resolve existing Album bindings, and show
   desired versus last-observed sync state without claiming a live current
   photo. The flow is usable against the mock client while production remains
   hidden until Tesserae advertises the `offline_albums` capability.
+
+### Changed
+
+- Simplified Health settings with progressive disclosure, shorter permission
+  and privacy text, and fewer repeated explanations.
+- Restyled Nearby Displays with compact known-network rows and a clearer
+  device-name, hardware, and maintenance-status hierarchy. Maintenance now
+  lists manufacturer and model as separate fields, and Data & Privacy icons
+  use the Tesserae accent instead of unrelated system colors.
+- Simplified nearby Bluetooth setup and maintenance with compact task-sized
+  sheets, one dismiss control, progressive Wi-Fi password entry, collapsed
+  recent events, and less repeated device and completion text.
+- Added an Apple-style Known Networks section to Bluetooth Wi-Fi setup using
+  networks previously configured from this iPhone, automatically loading an
+  opted-in Keychain password. Removed the read-only Tesserae System section;
+  setup continues to use the App's complete configured server URL and port.
+- Replaced the text-heavy nearby-display introduction with shorter setup and
+  maintenance wording plus a branded Tesserae e-paper display illustration.
 
 ## [0.6.3] - 2026-08-15
 
@@ -804,7 +857,8 @@ capabilities.
 - Required Keychain storage, scoped credentials, revocation, redacted
   diagnostics, direct-to-instance photo transfer, and idempotent writes.
 
-[Unreleased]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.6.3...HEAD
+[Unreleased]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.6.0...v0.6.1
