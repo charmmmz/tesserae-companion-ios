@@ -159,6 +159,7 @@ public actor MockTesseraeClient: TesseraeServing {
                 "session_read",
                 "gallery",
                 "offline_albums",
+                "device_setup",
             ],
             limits: CompanionLimits(
                 imageUploadBytes: 26_214_400,
@@ -220,6 +221,16 @@ public actor MockTesseraeClient: TesseraeServing {
             tokenID: "ct_fixture",
             scopes: scopes,
             createdAt: .now
+        )
+    }
+
+    public func createFirmwareDevicePairing(
+        instance: TesseraeInstance
+    ) async throws -> FirmwareDevicePairing {
+        try await pause()
+        return FirmwareDevicePairing(
+            code: "482917",
+            expiresAt: .now.addingTimeInterval(600)
         )
     }
 

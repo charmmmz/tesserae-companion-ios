@@ -183,6 +183,10 @@ public struct ServerCapabilities: Codable, Hashable, Sendable {
     public var supportsOfflineAlbums: Bool {
         features.contains("offline_albums")
     }
+
+    public var supportsDeviceSetup: Bool {
+        features.contains("device_setup")
+    }
 }
 
 public struct TesseraeInstance: Codable, Identifiable, Hashable, Sendable {
@@ -325,6 +329,16 @@ public struct PairingResponse: Codable, Hashable, Sendable {
         case scopes
         case createdAt
         case instance
+    }
+}
+
+public struct FirmwareDevicePairing: Codable, Hashable, Sendable {
+    public let code: String
+    public let expiresAt: Date
+
+    public init(code: String, expiresAt: Date) {
+        self.code = code
+        self.expiresAt = expiresAt
     }
 }
 

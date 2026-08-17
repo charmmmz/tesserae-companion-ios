@@ -1,2 +1,6 @@
 "CFBundleDisplayName" = "Tesserae";
 "NSLocalNetworkUsageDescription" = "在局域网中发现并连接你的 Tesserae 服务器。";
+"NSBluetoothAlwaysUsageDescription" = "发现并安全配置附近的 Tesserae 显示设备。";
+"NSCameraUsageDescription" = "扫描 Tesserae 显示设备上显示的临时设置二维码。";
+"NSHealthShareUsageDescription" = "仅读取你选择的活动、睡眠和体能训练摘要，并将精简的最近七天快照直接发送到已配对的 Tesserae 服务器。";
+"NSRemindersFullAccessUsageDescription" = "选择要发送到 Tesserae 服务器的提醒事项列表；仅发送精简且会过期的快照。";

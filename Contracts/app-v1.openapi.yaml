@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Tesserae Companion API
-  version: 0.13.0
+  version: 0.14.0
   description: >-
     Companion API contract for community-built clients. Previews, History,
     resend, remote-image push, webpage push, and server-advertised image fit
@@ -16,7 +16,9 @@ info:
     upload are gated independently from image push and destructive Gallery
     management. Offline Album authoring is a separate optional extension that
     binds one Gallery folder to runtime-capable displays without changing the
-    source photos.
+    source photos. Device setup is separately capability- and scope-gated: an
+    authenticated Companion can mint a short-lived firmware registration code,
+    but it never receives a firmware device token or Wi-Fi credential.
 servers:
   - url: /
 tags:
@@ -69,6 +71,28 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "409":
           $ref: "#/components/responses/Conflict"
+  /api/app/v1/device-pairings:
+    post:
+      tags: [Pairing]
+      operationId: createFirmwareDevicePairing
+      summary: Mint a short-lived registration code for one nearby display
+      description: >-
+        Requires the device_setup feature and device_setup:write scope. The
+        Companion passes the returned code to a physically-nearby display over
+        authenticated BLE; the display redeems it through the existing
+        firmware registration endpoint. The code is single-use and never
+        grants the Companion access to the resulting firmware credential.
+      responses:
+        "201":
+          description: Firmware registration code created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FirmwareDevicePairing"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
   /api/app/v1/session:
     get:
       tags: [Pairing]
@@ -1292,6 +1316,7 @@ components:
               - lineup_control
               - lineup_authoring
               - session_read
+              - device_setup
         personal_data:
           $ref: "#/components/schemas/PersonalDataCapabilities"
         limits:
@@ -1452,6 +1477,7 @@ components:
               - personal_data:write
               - lineups:read
               - lineups:control
+              - device_setup:write
         created_at:
           type: string
           format: date-time
@@ -1481,9 +1507,23 @@ components:
               - lineups:control
               - lineups:write
               - offline_albums:write
+              - device_setup:write
         settings_url:
           description: Relative URL for this token's Companion permission settings
           type: string
+    FirmwareDevicePairing:
+      type: object
+      additionalProperties: false
+      required: [code, expires_at]
+      properties:
+        code:
+          description: Single-use code accepted by the firmware register endpoint
+          type: string
+          pattern: "^[0-9]{6}$"
+          writeOnly: true
+        expires_at:
+          type: string
+          format: date-time
     Instance:
       type: object
       additionalProperties: false

@@ -179,6 +179,24 @@ final class AppModel {
             && capabilities?.supports(personalDataSource: .reminders) == true
     }
 
+    var supportsHealthSummaryPersonalData: Bool {
+        connectionMode == .live
+            && capabilities?.supportsHealthSummary == true
+    }
+
+    var supportsDeviceSetup: Bool {
+        connectionMode == .live
+            && capabilities?.supportsDeviceSetup == true
+    }
+
+    var activeHealthInstanceID: String? {
+        activeInstance?.id
+    }
+
+    var activeHealthTimeZone: String? {
+        activeInstance?.timezone
+    }
+
     var personalDataMaximumTTLSeconds: Int? {
         capabilities?.limits.personalDataMaxTTLSeconds
     }
@@ -186,6 +204,15 @@ final class AppModel {
     var supportedLinkPushKinds: [LinkPushKind] {
         guard let capabilities else { return [] }
         return LinkPushKind.allCases.filter(capabilities.supports)
+    }
+
+    func createFirmwareDevicePairing() async throws -> FirmwareDevicePairing {
+        guard supportsDeviceSetup, let activeInstance else {
+            throw NearbyDeviceSetupError.serverUpdateRequired
+        }
+        return try await activeClient.createFirmwareDevicePairing(
+            instance: activeInstance
+        )
     }
 
     init(
@@ -1616,6 +1643,39 @@ final class AppModel {
         }
         try await activeClient.deletePersonalData(
             sourceID: .reminders,
+            instance: activeInstance
+        )
+    }
+
+    func healthSummaryPersonalDataStatus() async throws
+        -> PersonalDataSourceStatus?
+    {
+        guard let activeInstance else {
+            throw HealthBridgeError.unavailable
+        }
+        return try await activeClient.fetchPersonalDataStatus(
+            instance: activeInstance
+        ).sources.first { $0.sourceID == .healthSummary }
+    }
+
+    func putHealthSummarySnapshot(
+        _ snapshot: HealthSummarySnapshot
+    ) async throws -> PersonalDataSourceStatus {
+        guard let activeInstance else {
+            throw HealthBridgeError.unavailable
+        }
+        return try await activeClient.putHealthSummarySnapshot(
+            snapshot,
+            instance: activeInstance
+        )
+    }
+
+    func deleteHealthSummaryPersonalData() async throws {
+        guard let activeInstance else {
+            throw HealthBridgeError.unavailable
+        }
+        try await activeClient.deletePersonalData(
+            sourceID: .healthSummary,
             instance: activeInstance
         )
     }

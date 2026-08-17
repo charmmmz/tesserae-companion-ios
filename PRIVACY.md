@@ -35,21 +35,31 @@ SDK, analytics SDK, tracking, or telemetry.
 - Bonjour browsing is limited to the local network and only discovers
   `_tesserae._tcp` candidates. Discovery does not authenticate or pair a
   client.
+- Foreground Bluetooth browsing is limited to the Tesserae setup service. A
+  nearby display advertises only a protocol version, setup state, and partial
+  hardware suffix. Its temporary QR secret remains in memory for the active
+  session; the six-digit fallback is handled by the iOS Bluetooth pairing
+  sheet. A Wi-Fi name and password entered during setup are encrypted to that
+  physically verified display and are not uploaded to the Companion server.
+  The app keeps a local, per-server list of network names it configured; a
+  password is stored in the device-only Keychain only when the user enables
+  “Save password on this iPhone,” and can be forgotten from Nearby Displays.
+  The app passes only a short-lived server-issued
+  registration code to firmware and never receives the display's device token.
 
 The Tesserae server separately controls its own storage, logs, Job retention,
 and any data sources used by Dashboards. The current Companion contract asks
 the server to retain Job and idempotency records for 24 hours; server
 operators remain responsible for their own privacy policy and configuration.
 
-## Proposed Apple Health bridge
+## Apple Health bridge
 
-The contract-only Apple Health extension has no developer-operated relay. When
-implemented, it will send one selected, expiring seven-date summary directly
-through the existing paired connection to the user's selected Tesserae Server.
-The user will independently enable Activity, Sleep, and Workouts. Before the
-Apple authorization sheet, Companion will list every HealthKit type it requests
-and every value the corresponding section may upload. The app requests no
-Health write access.
+The Apple Health extension has no developer-operated relay. It sends one
+selected, expiring seven-date summary directly through the existing paired
+connection to the user's selected Tesserae Server. The user independently
+enables Activity, Sleep, and Workouts. Before the Apple authorization sheet,
+Companion lists every HealthKit type it requests and every value the
+corresponding section may upload. The app requests no Health write access.
 
 The bounded snapshot may contain:
 
@@ -90,10 +100,12 @@ already selected for Companion.
 - Deleting the app removes its private container. iOS and the server control
   deletion of their respective Keychain and server-side records.
 - Local Network permission can be changed at any time in iOS Settings.
-- When Apple Health support is implemented, disabling the last enabled Health
-  section deletes `health.summary` from the selected server. HealthKit read
-  permissions remain separately controllable in Apple's Settings and Health
-  surfaces.
+- Bluetooth permission can be changed at any time in iOS Settings. Camera
+  permission is requested only when the user chooses to scan a display's setup
+  code; the app does not capture or retain photos during setup.
+- Stopping Apple Health sync deletes `health.summary` from the selected server.
+  HealthKit read permissions remain separately controllable in Apple's Settings
+  and Health surfaces.
 
 ## App Store privacy disclosure draft
 
@@ -102,11 +114,10 @@ Based on the current implementation, the intended App Store privacy answer is
 sent directly to the user's self-hosted Tesserae instance solely to perform
 the user's request. This draft must be reviewed again against the shipping
 binary, dependencies, monetization, support tooling, and Apple's then-current
-definitions before each submission. Adding HealthKit entitlement,
-authorization, queries, or UI requires another review of App Store privacy
-labels, the privacy manifest, the public policy, and the shipping binary; this
-contract-only change does not by itself alter the current binary's data
-collection.
+definitions before each submission. The HealthKit entitlement, authorization,
+local queries, and settings UI require a fresh review of App Store privacy
+labels, the privacy manifest, this public policy, App Review notes, and the
+shipping binary before distribution.
 
 A public privacy-policy URL must be published before external TestFlight or
 App Store review. This repository document is the source text for that page.

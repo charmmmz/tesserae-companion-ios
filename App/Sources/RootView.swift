@@ -3,8 +3,10 @@ import SwiftUI
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @Environment(RemindersBridgeModel.self) private var remindersBridgeModel
+    @Environment(HealthBridgeModel.self) private var healthBridgeModel
     @Environment(GalleryUploadCoordinator.self) private var galleryUploads
     @Environment(TesseraeMessageCenter.self) private var messageCenter
+    @Environment(NearbyDeviceManager.self) private var nearbyDevices
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -37,8 +39,13 @@ struct RootView: View {
                 using: model,
                 applicationIsActive: scenePhase == .active
             )
+            await healthBridgeModel.load(using: model)
+            if scenePhase == .active {
+                await healthBridgeModel.foregroundCatchUp(using: model)
+            }
         }
         .onChange(of: scenePhase) { _, newPhase in
+            nearbyDevices.updateApplicationActivity(newPhase == .active)
             remindersBridgeModel.updateApplicationActivity(
                 newPhase == .active,
                 using: model
@@ -47,8 +54,18 @@ struct RootView: View {
                 model.openWebIfRequested()
                 Task {
                     await model.synchronizeSharedActivity()
+                    await healthBridgeModel.foregroundCatchUp(using: model)
                 }
             }
+        }
+        .onAppear {
+            nearbyDevices.updateApplicationActivity(scenePhase == .active)
+        }
+        .sheet(item: Binding(
+            get: { nearbyDevices.suggestedDevice },
+            set: { nearbyDevices.suggestedDevice = $0 }
+        )) { device in
+            NearbyDeviceSetupView(device: device)
         }
         .onChange(of: model.activeInstance?.id) { previousID, currentID in
             if previousID != nil, previousID != currentID {

@@ -99,7 +99,7 @@ struct RemindersBridgeView: View {
         }
         .scrollContentBackground(.hidden)
         .tesseraeScreenBackground()
-        .navigationTitle("Apple Reminders")
+        .navigationTitle("Reminders")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: appModel.activeInstance?.id) {
             await bridgeModel.load(using: appModel)

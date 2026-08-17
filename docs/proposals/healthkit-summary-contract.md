@@ -1,8 +1,7 @@
 # Draft: Apple Health summary bridge
 
-Status: accepted direction in Discussion #176; contract-only implementation in
-progress. No HealthKit entitlement, authorization UI, queries, server adapter,
-or widget is included in this slice.
+Status: contract accepted in Discussion #176 and implemented in Companion.
+Server support and a widget remain separately capability-gated.
 
 This proposal adds an explicitly enabled, read-only Apple Health integration to
 Tesserae Companion. The iPhone remains authoritative. Companion converts only

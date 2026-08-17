@@ -33,7 +33,10 @@ targets:
         NSBonjourServices:
           - _tesserae._tcp
         NSLocalNetworkUsageDescription: Discover and connect to your Tesserae server on the local network.
+        NSBluetoothAlwaysUsageDescription: Find and securely configure nearby Tesserae displays.
+        NSCameraUsageDescription: Scan the temporary setup code shown on a Tesserae display.
         NSRemindersFullAccessUsageDescription: Choose Reminders lists to send a minimal, expiring snapshot to your Tesserae server.
+        NSHealthShareUsageDescription: Read only the Activity, Sleep, and Workout summaries you select and send a minimal seven-day snapshot directly to your paired Tesserae server.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         TesseraeAppGroupIdentifier: group.com.charmmmz.tesseraecompanion

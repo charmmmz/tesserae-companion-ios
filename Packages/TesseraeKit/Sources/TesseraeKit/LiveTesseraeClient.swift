@@ -126,6 +126,17 @@ public actor LiveTesseraeClient: TesseraeServing {
         )
     }
 
+    public func createFirmwareDevicePairing(
+        instance: TesseraeInstance
+    ) async throws -> FirmwareDevicePairing {
+        let request = try await authenticatedRequest(
+            instance: instance,
+            path: ["device-pairings"],
+            method: "POST"
+        )
+        return try await perform(request, expectedStatusCodes: [201])
+    }
+
     public func fetchDisplays(instance: TesseraeInstance) async throws -> [DisplaySummary] {
         let request = try await authenticatedRequest(
             instance: instance,

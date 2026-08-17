@@ -31,6 +31,12 @@
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Discover and connect to your Tesserae server on the local network.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Find and securely configure nearby Tesserae displays.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Scan the temporary setup code shown on a Tesserae display.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Read only the Activity, Sleep, and Workout summaries you select and send a minimal seven-day snapshot directly to your paired Tesserae server.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
 	<string>Choose Reminders lists to send a minimal, expiring snapshot to your Tesserae server.</string>
 	<key>TesseraeAppGroupIdentifier</key>

@@ -6,8 +6,11 @@ import TesseraeKit
 struct TesseraeCompanionApp: App {
     @State private var model: AppModel
     @State private var remindersBridgeModel: RemindersBridgeModel
+    @State private var healthBridgeModel: HealthBridgeModel
     @State private var galleryUploads: GalleryUploadCoordinator
     @State private var messageCenter: TesseraeMessageCenter
+    @State private var nearbyDevices: NearbyDeviceManager
+    @State private var setupNetworks: SetupNetworkStore
 
     init() {
         let credentials: any CredentialStoring
@@ -126,8 +129,18 @@ struct TesseraeCompanionApp: App {
             )
         )
         _remindersBridgeModel = State(initialValue: RemindersBridgeModel())
+        _healthBridgeModel = State(initialValue: HealthBridgeModel())
         _galleryUploads = State(initialValue: GalleryUploadCoordinator())
         _messageCenter = State(initialValue: TesseraeMessageCenter())
+        _nearbyDevices = State(initialValue: NearbyDeviceManager())
+        _setupNetworks = State(
+            initialValue: SetupNetworkStore(
+                credentials: KeychainCredentialStore(
+                    service: AppConfiguration.keychainService + ".wifi",
+                    accessGroup: AppConfiguration.keychainAccessGroup
+                )
+            )
+        )
     }
 
     var body: some Scene {
@@ -135,8 +148,11 @@ struct TesseraeCompanionApp: App {
             RootView()
                 .environment(model)
                 .environment(remindersBridgeModel)
+                .environment(healthBridgeModel)
                 .environment(galleryUploads)
                 .environment(messageCenter)
+                .environment(nearbyDevices)
+                .environment(setupNetworks)
                 .tint(TesseraeTheme.accent)
                 .preferredColorScheme(uiTestColorScheme)
         }
@@ -166,6 +182,7 @@ struct TesseraePreviewHost<Content: View>: View {
     @State private var model: AppModel
     @State private var galleryUploads = GalleryUploadCoordinator()
     @State private var messageCenter = TesseraeMessageCenter()
+    @State private var healthBridgeModel = HealthBridgeModel()
     private let content: Content
 
     init(@ViewBuilder content: () -> Content) {
@@ -189,6 +206,7 @@ struct TesseraePreviewHost<Content: View>: View {
     var body: some View {
         content
             .environment(model)
+            .environment(healthBridgeModel)
             .environment(galleryUploads)
             .environment(messageCenter)
             .tint(TesseraeTheme.accent)

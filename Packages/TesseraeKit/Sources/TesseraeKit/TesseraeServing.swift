@@ -7,6 +7,9 @@ public protocol TesseraeServing: Sendable {
         instance: TesseraeInstance
     ) async throws -> CompanionSessionAuthorization?
     func revokeSession(instance: TesseraeInstance) async throws
+    func createFirmwareDevicePairing(
+        instance: TesseraeInstance
+    ) async throws -> FirmwareDevicePairing
     func fetchDisplays(instance: TesseraeInstance) async throws -> [DisplaySummary]
     func fetchDashboards(instance: TesseraeInstance) async throws -> [DashboardSummary]
     func fetchGalleryFolders(instance: TesseraeInstance) async throws -> [GalleryFolder]

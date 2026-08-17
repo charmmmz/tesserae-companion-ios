@@ -11,12 +11,43 @@ capabilities.
 
 ## [Unreleased]
 
+### Fixed
+
+- Showed an explicit acknowledgement after restart, Wi-Fi clear, and factory
+  reset commands so the expected Bluetooth disconnect no longer looks like an
+  unresponsive maintenance action.
+- Recognized each temporary Bluetooth session by its advertised session ID so
+  a display can offer maintenance again without relying on a precisely observed
+  advertising gap.
+- Allowed nearby setup and maintenance prompts to appear again when a display
+  leaves Bluetooth mode and later starts a new session, without requiring the
+  Companion app to be restarted.
+
 ### Added
 
+- Added Sonos-style foreground discovery for nearby Tesserae displays, with a
+  guided Bluetooth onboarding and maintenance flow. Users can authenticate by
+  scanning the display's temporary QR code or entering its six-digit system
+  passkey, choose and test Wi-Fi, register the display with the current
+  Tesserae Server, inspect current network and diagnostics, restart it, clear
+  Wi-Fi settings, or factory reset it. Nearby Displays lists networks configured
+  for that system from this iPhone, with opt-in device-only Keychain password
+  storage and a Forget control. Bluetooth shuts down with the bounded device
+  maintenance session and normal operation continues over Wi-Fi.
 - Added optional haptic feedback for sends and Gallery outcomes, custom display
   selections, display and Dashboard reordering, Lineup ordering, screen preview
   paging, and image-framing alignment or zoom limits. A shared Settings toggle
   controls feedback in both Companion and its Share extension.
+- Added the server-gated Apple Health runtime. Users choose Activity, Sleep,
+  and Workouts independently, review every requested Health read type and
+  uploadable field before Apple's authorization sheet, and sync a bounded
+  seven-date `health.summary` snapshot directly to their paired Tesserae
+  Server. The app normalizes sleep by wake date, keeps workout start/end and
+  bounded segment summaries, derives stable per-server opaque workout IDs,
+  refreshes on foreground or manual sync, and deletes the raw server snapshot
+  when sync is stopped. Routes, location, heart rate, raw samples, HealthKit
+  identifiers, source/device identity, events, and free-form metadata remain
+  excluded.
 - Added the accepted contract-only Offline Album 0.13 foundation: one nested
   Album per Gallery folder, optional operator-granted authoring permission,
   explicit photo order and playback settings, server-computed target preflight,
@@ -65,6 +96,8 @@ capabilities.
 
 ### Changed
 
+- Presented nearby display discovery as a compact rounded bottom sheet, then
+  expanded it only after the user continues into setup or maintenance.
 - Fill sends to displays with different aspect ratios now keep independent
   framing for each ratio while same-ratio displays share one position and zoom.
   The existing display preview picker switches between those framings, and both

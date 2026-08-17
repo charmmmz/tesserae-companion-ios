@@ -3,6 +3,53 @@ import XCTest
 @testable import TesseraeKit
 
 final class LiveTesseraeClientTests: XCTestCase {
+    func testDevicePairingUsesAuthenticatedCompanionEndpoint() async throws {
+        let response = """
+        {
+          "code": "482917",
+          "expires_at": "2026-08-17T03:45:00Z"
+        }
+        """
+        let transport = RecordingDeviceSetupTransport(
+            response: TesseraeHTTPResponse(
+                data: Data(response.utf8),
+                statusCode: 201
+            )
+        )
+        let credentials = InMemoryCredentialStore()
+        await credentials.save(token: "companion-secret", for: "home")
+        let client = LiveTesseraeClient(
+            credentials: credentials,
+            identity: TesseraeClientIdentity(
+                appVersion: "0.6.3",
+                installationID: "device-setup-test"
+            ),
+            transport: transport
+        )
+        let instance = TesseraeInstance(
+            id: "home",
+            name: "Home",
+            baseURL: try XCTUnwrap(URL(string: "http://tesserae.local:5000")),
+            serverVersion: "0.310.0",
+            timezone: "Asia/Shanghai",
+            webURL: "/"
+        )
+
+        let pairing = try await client.createFirmwareDevicePairing(
+            instance: instance
+        )
+
+        XCTAssertEqual(pairing.code, "482917")
+        let capturedRequest = await transport.lastRequest()
+        let request = try XCTUnwrap(capturedRequest)
+        XCTAssertEqual(request.url?.path, "/api/app/v1/device-pairings")
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(
+            request.value(forHTTPHeaderField: "Authorization"),
+            "Bearer companion-secret"
+        )
+    }
+
     func testFixtureServerVerticalSlice() async throws {
         guard
             let value = ProcessInfo.processInfo.environment["TESSERAE_FIXTURE_BASE_URL"],
@@ -208,5 +255,23 @@ final class LiveTesseraeClientTests: XCTestCase {
         XCTAssertNotNil(resent.result?.historyEventIDs)
 
         try await client.revokeSession(instance: session.instance)
+    }
+}
+
+private actor RecordingDeviceSetupTransport: TesseraeHTTPTransporting {
+    private let response: TesseraeHTTPResponse
+    private var request: URLRequest?
+
+    init(response: TesseraeHTTPResponse) {
+        self.response = response
+    }
+
+    func send(_ request: URLRequest) -> TesseraeHTTPResponse {
+        self.request = request
+        return response
+    }
+
+    func lastRequest() -> URLRequest? {
+        request
     }
 }

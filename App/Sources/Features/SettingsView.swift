@@ -5,6 +5,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
     @Environment(RemindersBridgeModel.self) private var remindersBridgeModel
+    @Environment(HealthBridgeModel.self) private var healthBridgeModel
     @State private var clearActivityConfirmationPresented = false
     @State private var hapticFeedbackEnabled = TesseraeHapticSettings.isEnabled
 
@@ -36,6 +37,19 @@ struct SettingsView: View {
                     }
                 }
 
+                if model.connectionMode == .live {
+                    Section("Displays") {
+                        NavigationLink {
+                            NearbyDisplaysView()
+                        } label: {
+                            Label(
+                                "Nearby Setup & Maintenance",
+                                systemImage: "dot.radiowaves.left.and.right"
+                            )
+                        }
+                    }
+                }
+
                 Section("Interaction") {
                     Toggle(isOn: $hapticFeedbackEnabled) {
                         Label("Haptic Feedback", systemImage: "hand.tap")
@@ -49,7 +63,29 @@ struct SettingsView: View {
                         LabeledContent {
                             Text(remindersStatus)
                         } label: {
-                            Label("Apple Reminders", systemImage: "checklist")
+                            Label {
+                                Text("Reminders")
+                            } icon: {
+                                Image(systemName: "checklist")
+                                    .symbolRenderingMode(.hierarchical)
+                                    .foregroundStyle(.blue)
+                            }
+                        }
+                    }
+
+                    NavigationLink {
+                        HealthBridgeView()
+                    } label: {
+                        LabeledContent {
+                            Text(healthStatus)
+                        } label: {
+                            Label {
+                                Text("Health")
+                            } icon: {
+                                Image(systemName: "heart.fill")
+                                    .symbolRenderingMode(.hierarchical)
+                                    .foregroundStyle(.pink)
+                            }
                         }
                     }
 
@@ -155,6 +191,37 @@ struct SettingsView: View {
             return String(localized: "Stale")
         case .expired:
             return String(localized: "Expired")
+        }
+    }
+
+    private var healthStatus: String {
+        guard model.supportsHealthSummaryPersonalData else {
+            return String(localized: "Server update required")
+        }
+        if healthBridgeModel.isBusy {
+            return String(localized: "Syncing…")
+        }
+        if healthBridgeModel.authorizationState == .unavailable {
+            return String(localized: "Unavailable")
+        }
+        if healthBridgeModel.isEnabled
+            && healthBridgeModel.authorizationState != .reviewed
+        {
+            return String(localized: "Needs Access")
+        }
+        guard healthBridgeModel.isEnabled else {
+            return String(localized: "Off")
+        }
+        if healthBridgeModel.hasPendingSelectionChanges {
+            return String(localized: "Changes Pending")
+        }
+        guard let sourceStatus = healthBridgeModel.sourceStatus else {
+            return String(localized: "On")
+        }
+        switch sourceStatus.state {
+        case .fresh: return String(localized: "Synced")
+        case .stale: return String(localized: "Stale")
+        case .expired: return String(localized: "Expired")
         }
     }
 
