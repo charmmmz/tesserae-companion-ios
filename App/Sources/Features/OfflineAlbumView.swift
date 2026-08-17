@@ -1,5 +1,6 @@
 import SwiftUI
 import TesseraeKit
+import UIKit
 
 struct OfflineAlbumEditorDraft: Equatable {
     var name: String
@@ -62,6 +63,29 @@ func offlineAlbumShouldShowReview(
     baseline: OfflineAlbumEditorDraft
 ) -> Bool {
     !isExistingAlbum || draft != baseline
+}
+
+func offlineAlbumNormalizedExplicitOrder(
+    _ explicitOrder: [String],
+    folderOrder: [String]
+) -> [String] {
+    let availableIDs = Set(folderOrder)
+    var seenIDs = Set<String>()
+    return explicitOrder.filter { imageID in
+        availableIDs.contains(imageID) && seenIDs.insert(imageID).inserted
+    }
+}
+
+func offlineAlbumResolvedPhotoOrder(
+    explicitOrder: [String],
+    folderOrder: [String]
+) -> [String] {
+    let explicit = offlineAlbumNormalizedExplicitOrder(
+        explicitOrder,
+        folderOrder: folderOrder
+    )
+    let explicitIDs = Set(explicit)
+    return explicit + folderOrder.filter { !explicitIDs.contains($0) }
 }
 
 func offlineAlbumTargetStatus(
@@ -350,7 +374,22 @@ struct OfflineAlbumEditorView: View {
 
             Section {
                 LabeledContent("Photos", value: "\(images.count)")
-                Text("Photos use the folder’s current order. Per-photo framing will be added separately after the server includes it in frame identity.")
+                NavigationLink {
+                    OfflineAlbumPhotoOrderView(
+                        images: images,
+                        explicitOrder: draft.order
+                    ) { updatedOrder in
+                        draft.order = updatedOrder
+                    }
+                } label: {
+                    LabeledContent(
+                        "Photo Order",
+                        value: draft.order.isEmpty ? "Folder Order" : "Custom"
+                    )
+                }
+                .disabled(images.count < 2)
+
+                Text("Drag photos into playback order. Photos added to the folder later are appended automatically. Per-photo framing will be added separately after the server includes it in frame identity.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -666,5 +705,160 @@ struct OfflineAlbumEditorView: View {
             return
         }
         openURL(url)
+    }
+}
+
+private struct OfflineAlbumPhotoOrderView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let images: [GalleryImage]
+    let originalExplicitOrder: [String]
+    let apply: ([String]) -> Void
+
+    @State private var orderedIDs: [String]
+    @State private var usesFolderOrder: Bool
+    @State private var editMode: EditMode = .active
+
+    init(
+        images: [GalleryImage],
+        explicitOrder: [String],
+        apply: @escaping ([String]) -> Void
+    ) {
+        self.images = images
+        let folderOrder = images.map(\.id)
+        let normalizedExplicitOrder = offlineAlbumNormalizedExplicitOrder(
+            explicitOrder,
+            folderOrder: folderOrder
+        )
+        originalExplicitOrder = normalizedExplicitOrder
+        self.apply = apply
+        _orderedIDs = State(
+            initialValue: offlineAlbumResolvedPhotoOrder(
+                explicitOrder: normalizedExplicitOrder,
+                folderOrder: folderOrder
+            )
+        )
+        _usesFolderOrder = State(initialValue: normalizedExplicitOrder.isEmpty)
+    }
+
+    private var folderOrder: [String] {
+        images.map(\.id)
+    }
+
+    private var candidateExplicitOrder: [String] {
+        usesFolderOrder ? [] : orderedIDs
+    }
+
+    private var hasChanges: Bool {
+        candidateExplicitOrder != originalExplicitOrder
+    }
+
+    private var imageByID: [String: GalleryImage] {
+        Dictionary(uniqueKeysWithValues: images.map { ($0.id, $0) })
+    }
+
+    private var orderedImages: [GalleryImage] {
+        orderedIDs.compactMap { imageByID[$0] }
+    }
+
+    var body: some View {
+        List {
+            Section {
+                ForEach(Array(orderedImages.enumerated()), id: \.element.id) { index, image in
+                    HStack(spacing: 12) {
+                        OfflineAlbumOrderThumbnail(image: image)
+                            .frame(width: 52, height: 52)
+                            .clipShape(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            )
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(image.name)
+                                .font(.body)
+                                .lineLimit(1)
+                            Text("\(image.width) × \(image.height)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer(minLength: 8)
+
+                        Text(index + 1, format: .number)
+                            .font(.subheadline.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel("Position \(index + 1)")
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("offline-album-order-\(image.id)")
+                }
+                .onMove { source, destination in
+                    orderedIDs.move(fromOffsets: source, toOffset: destination)
+                    usesFolderOrder = false
+                }
+            } header: {
+                Text("Playback Order")
+            } footer: {
+                Text(
+                    usesFolderOrder
+                        ? "Following the folder’s natural order."
+                        : "Using a custom order. New photos are appended after these photos."
+                )
+            }
+
+            Section {
+                Button("Use Folder Order", systemImage: "arrow.uturn.backward") {
+                    withAnimation {
+                        orderedIDs = folderOrder
+                        usesFolderOrder = true
+                    }
+                }
+                .disabled(usesFolderOrder)
+            }
+        }
+        .environment(\.editMode, $editMode)
+        .navigationTitle("Photo Order")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if hasChanges {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Apply") {
+                        apply(candidateExplicitOrder)
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .accessibilityIdentifier("offline-album-photo-order")
+    }
+}
+
+private struct OfflineAlbumOrderThumbnail: View {
+    @Environment(AppModel.self) private var model
+
+    let image: GalleryImage
+
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(.secondary.opacity(0.10))
+
+            if let data = model.galleryThumbnailStates[image.thumbnailURL]?.data,
+               let thumbnail = UIImage(data: data)
+            {
+                Image(uiImage: thumbnail)
+                    .resizable()
+                    .scaledToFill()
+            } else if model.galleryThumbnailStates[image.thumbnailURL]?.showsProgress == true {
+                ProgressView()
+            } else {
+                Image(systemName: "photo")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .clipped()
+        .task(id: image.thumbnailURL) {
+            await model.loadGalleryThumbnail(path: image.thumbnailURL)
+        }
+        .accessibilityHidden(true)
     }
 }

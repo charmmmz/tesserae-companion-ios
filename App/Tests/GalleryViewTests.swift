@@ -225,6 +225,32 @@ final class GalleryViewTests: XCTestCase {
         )
     }
 
+    func testOfflineAlbumPhotoOrderNormalizesAndAppendsFolderPhotos() {
+        let folderOrder = ["one", "two", "three", "four"]
+
+        XCTAssertEqual(
+            offlineAlbumNormalizedExplicitOrder(
+                ["three", "missing", "three", "one"],
+                folderOrder: folderOrder
+            ),
+            ["three", "one"]
+        )
+        XCTAssertEqual(
+            offlineAlbumResolvedPhotoOrder(
+                explicitOrder: ["three", "one"],
+                folderOrder: folderOrder
+            ),
+            ["three", "one", "two", "four"]
+        )
+        XCTAssertEqual(
+            offlineAlbumResolvedPhotoOrder(
+                explicitOrder: [],
+                folderOrder: folderOrder
+            ),
+            folderOrder
+        )
+    }
+
     func testOfflineAlbumMockBackedPreflightSaveAndDelete() async throws {
         let model = makeGalleryModel()
         await model.connectDemo()
