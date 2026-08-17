@@ -5,6 +5,8 @@ final class DisplayHardwarePresentationTests: XCTestCase {
     func testHardwareCatalogKindsResolveToTheirBrandsAndModels() {
         let expected: [(String, DisplayHardwareBrand, String)] = [
             ("seeed_reterminal_e1004", .seeedStudio, "reTerminal E1004"),
+            ("seeed_ee04_75", .seeedStudio, "XIAO ePaper EE04 · 7.5″"),
+            ("seeed_ee04_73e6", .seeedStudio, "XIAO ePaper EE04 · 7.3″"),
             ("pimoroni_inky_4", .pimoroni, "Inky Impression 4″"),
             ("trmnl_x", .trmnl, "TRMNL X"),
             ("waveshare_photopainter_73", .waveshare, "PhotoPainter 7.3″"),

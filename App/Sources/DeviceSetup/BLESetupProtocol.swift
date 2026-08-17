@@ -8,7 +8,8 @@ enum BLESetupProtocol {
     static let passkeyControlUUID = "7A5E0004-7B6D-4F8B-9C2E-1D0A5A110001"
     static let eventsUUID = "7A5E0005-7B6D-4F8B-9C2E-1D0A5A110001"
 
-    static let protocolMajor: UInt8 = 1
+    static let protocolMajor: UInt8 = 2
+    static let connectionNonceBytes = 16
     static let nativeFrame: UInt8 = 0xA0
     static let qrFrame: UInt8 = 0xA1
     static let maximumMessageBytes = 512
@@ -60,7 +61,7 @@ struct BLESetupQRCode: Equatable, Sendable {
         else {
             throw BLESetupProtocolError.invalidQRCode
         }
-        guard version == "1" else {
+        guard version == String(BLESetupProtocol.protocolMajor) else {
             throw BLESetupProtocolError.unsupportedVersion
         }
         self.deviceID = deviceID
@@ -71,11 +72,18 @@ struct BLESetupQRCode: Equatable, Sendable {
 
 struct BLESetupAdvertisement: Equatable, Sendable {
     let mode: NearbyDeviceMode
+    let hardware: BLESetupHardware
     let hardwareSuffix: String
-    let sessionID: Data?
+    let sessionID: Data
 
-    init(mode: NearbyDeviceMode, hardwareSuffix: String, sessionID: Data? = nil) {
+    init(
+        mode: NearbyDeviceMode,
+        hardware: BLESetupHardware,
+        hardwareSuffix: String,
+        sessionID: Data
+    ) {
         self.mode = mode
+        self.hardware = hardware
         self.hardwareSuffix = hardwareSuffix
         self.sessionID = sessionID
     }
@@ -84,18 +92,48 @@ struct BLESetupAdvertisement: Equatable, Sendable {
         var payload = serviceData
         // CoreBluetooth normally removes the 128-bit service UUID. Accept the
         // raw AD payload as well so fixture captures remain useful.
-        if payload.count == 21 || payload.count == 25 {
+        if payload.count == 26 {
             payload = Data(payload.dropFirst(16))
         }
         guard
-            payload.count == 5 || payload.count == 9,
-            payload[0] == BLESetupProtocol.protocolMajor
+            payload.count == 10,
+            payload[0] == BLESetupProtocol.protocolMajor,
+            let hardware = BLESetupHardware(rawValue: payload[2])
         else { return nil }
         mode = payload[1] & 0x02 != 0 ? .maintenance : .setup
-        hardwareSuffix = payload[2..<5]
+        self.hardware = hardware
+        hardwareSuffix = payload[3..<6]
             .map { String(format: "%02X", $0) }
             .joined()
-        sessionID = payload.count == 9 ? Data(payload[5..<9]) : nil
+        sessionID = Data(payload[6..<10])
+    }
+}
+
+enum BLESetupHardware: UInt8, Equatable, Sendable {
+    case seeedReTerminalE1001 = 1
+    case seeedReTerminalE1002 = 2
+    case seeedReTerminalE1003 = 3
+    case seeedReTerminalE1004 = 4
+    case seeedEE02 = 5
+    case seeedEE0475 = 6
+    case seeedEE0473E6 = 7
+    case seeedXIAO75 = 8
+    case waveshare133E6 = 9
+    case wavesharePhotoPainter73 = 10
+
+    var catalogKind: String {
+        switch self {
+        case .seeedReTerminalE1001: "seeed_reterminal_e1001"
+        case .seeedReTerminalE1002: "seeed_reterminal_e1002"
+        case .seeedReTerminalE1003: "seeed_reterminal_e1003"
+        case .seeedReTerminalE1004: "seeed_reterminal_e1004"
+        case .seeedEE02: "seeed_ee02"
+        case .seeedEE0475: "seeed_ee04_75"
+        case .seeedEE0473E6: "seeed_ee04_73e6"
+        case .seeedXIAO75: "seeed_xiao_75"
+        case .waveshare133E6: "waveshare_133e6"
+        case .wavesharePhotoPainter73: "waveshare_photopainter_73"
+        }
     }
 }
 
@@ -103,11 +141,18 @@ struct BLESetupDeviceInfo: Decodable, Equatable, Sendable {
     let `protocol`: Int
     let id: String
     let sid: String
+    let connectionNonce: String
+    let hardware: UInt8
     let model: String
     let firmware: String
     let mode: String
 
-    func validate(qrCode: BLESetupQRCode) throws {
+    private enum CodingKeys: String, CodingKey {
+        case `protocol`, id, sid, hardware, model, firmware, mode
+        case connectionNonce = "connection_nonce"
+    }
+
+    func validate(qrCode: BLESetupQRCode) throws -> Data {
         guard `protocol` == Int(BLESetupProtocol.protocolMajor) else {
             throw BLESetupProtocolError.unsupportedVersion
         }
@@ -115,6 +160,11 @@ struct BLESetupDeviceInfo: Decodable, Equatable, Sendable {
               sid.lowercased() == qrCode.sessionID.hexString else {
             throw BLESetupProtocolError.unexpectedDevice
         }
+        guard
+            let nonce = Data(hex: connectionNonce),
+            nonce.count == BLESetupProtocol.connectionNonceBytes
+        else { throw BLESetupProtocolError.invalidFrame }
+        return nonce
     }
 }
 
@@ -129,8 +179,18 @@ struct BLESetupCrypto {
     private var transmitCounter: UInt32 = 0
     private var receiveCounter: UInt32 = 0
 
-    init(qrCode: BLESetupQRCode) {
-        key = SymmetricKey(data: qrCode.secret)
+    init(qrCode: BLESetupQRCode, connectionNonce: Data) throws {
+        guard connectionNonce.count == BLESetupProtocol.connectionNonceBytes else {
+            throw BLESetupProtocolError.invalidFrame
+        }
+        var salt = qrCode.sessionID
+        salt.append(connectionNonce)
+        key = HKDF<SHA256>.deriveKey(
+            inputKeyMaterial: SymmetricKey(data: qrCode.secret),
+            salt: salt,
+            info: Data("tesserae-ble-connection-key-v2".utf8),
+            outputByteCount: 32
+        )
         sessionID = qrCode.sessionID
     }
 

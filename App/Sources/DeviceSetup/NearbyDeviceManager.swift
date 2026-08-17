@@ -12,11 +12,12 @@ struct NearbyTesseraeDevice: Identifiable, Equatable, Sendable {
     let name: String
     let rssi: Int
     let mode: NearbyDeviceMode
+    let hardware: BLESetupHardware
     let hardwareSuffix: String
-    let sessionID: Data?
+    let sessionID: Data
 
     var suggestionSessionKey: String {
-        "\(id.uuidString):\(sessionID?.hexString ?? "legacy")"
+        "\(id.uuidString):\(sessionID.hexString)"
     }
 }
 
@@ -57,6 +58,12 @@ enum NearbyDeviceConnectionState: Equatable, Sendable {
 @MainActor
 @Observable
 final class NearbyDeviceManager: NSObject {
+    private struct PendingConnection {
+        let device: NearbyTesseraeDevice
+        let peripheral: CBPeripheral
+        let qrCode: BLESetupQRCode?
+    }
+
     private(set) var nearbyDevices: [NearbyTesseraeDevice] = []
     var suggestedDevice: NearbyTesseraeDevice?
     private(set) var activeDevice: NearbyTesseraeDevice?
@@ -89,6 +96,7 @@ final class NearbyDeviceManager: NSObject {
     private var pendingWrites: [Data] = []
     private var isWriteInFlight = false
     private var disconnectWasRequested = false
+    private var pendingConnection: PendingConnection?
     private var appIsActive = false
 
     private func trace(_ message: String) {
@@ -168,7 +176,6 @@ final class NearbyDeviceManager: NSObject {
         nearbyDevices.removeAll { $0.id == id }
         peripherals[id] = nil
         sightings[id] = nil
-        suppressedSuggestionSessions.remove("\(id.uuidString):legacy")
         lastSeenAt[id] = nil
         lastSeenScanGeneration[id] = nil
         if suggestedDevice?.id == id, activeDevice?.id != id {
@@ -196,10 +203,36 @@ final class NearbyDeviceManager: NSObject {
             fail(String(localized: "That display is no longer nearby."))
             return
         }
+        if connectedPeripheral != nil || peripheral.state != .disconnected {
+            pendingConnection = PendingConnection(
+                device: device,
+                peripheral: peripheral,
+                qrCode: qrCode
+            )
+            activeDevice = device
+            connectionState = .connecting
+            statusMessage = String(localized: "Closing the previous connection…")
+            stopScanning()
+
+            let peripheralToClose = connectedPeripheral ?? peripheral
+            if peripheralToClose.state != .disconnected && !disconnectWasRequested {
+                disconnectWasRequested = true
+                central.cancelPeripheralConnection(peripheralToClose)
+            }
+            return
+        }
+        beginConnection(to: device, peripheral: peripheral, qrCode: qrCode)
+    }
+
+    private func beginConnection(
+        to device: NearbyTesseraeDevice,
+        peripheral: CBPeripheral,
+        qrCode: BLESetupQRCode?
+    ) {
         resetConnectionState()
         disconnectWasRequested = false
+        pendingConnection = nil
         self.qrCode = qrCode
-        crypto = qrCode.map(BLESetupCrypto.init(qrCode:))
         activeDevice = device
         connectedPeripheral = peripheral
         peripheral.delegate = self
@@ -210,13 +243,34 @@ final class NearbyDeviceManager: NSObject {
         central.connect(peripheral)
     }
 
+    private func resumePendingConnection() -> Bool {
+        guard let pendingConnection else { return false }
+        self.pendingConnection = nil
+        disconnectWasRequested = false
+        beginConnection(
+            to: pendingConnection.device,
+            peripheral: pendingConnection.peripheral,
+            qrCode: pendingConnection.qrCode
+        )
+        return true
+    }
+
     func disconnect() {
+        pendingConnection = nil
         if let connectedPeripheral {
             disconnectWasRequested = true
             central.cancelPeripheralConnection(connectedPeripheral)
         }
         resetConnectionState()
         if appIsActive { startScanning() }
+    }
+
+    func endSession(for device: NearbyTesseraeDevice) {
+        dismissSuggestion(for: device)
+        guard activeDevice?.id == device.id
+                || pendingConnection?.device.id == device.id
+        else { return }
+        disconnect()
     }
 
     func scanWiFi() {
@@ -228,14 +282,14 @@ final class NearbyDeviceManager: NSObject {
     func applyConfiguration(
         ssid: String,
         password: String,
-        serverURL: URL,
+        serverURL: URL?,
         pairingCode: String
     ) {
         sendCommand([
             "op": "stage",
             "ssid": ssid,
             "password": password,
-            "server_url": serverURL.absoluteString,
+            "server_url": serverURL?.absoluteString ?? "",
             "pairing_code": pairingCode,
         ])
     }
@@ -373,6 +427,9 @@ final class NearbyDeviceManager: NSObject {
 
         switch event {
         case "scan_started":
+            if connectionState == .authenticating {
+                connectionState = .ready
+            }
             networks = []
             statusMessage = String(localized: "Looking for Wi-Fi networks…")
         case "network":
@@ -422,6 +479,9 @@ final class NearbyDeviceManager: NSObject {
                 ipAddress: object["ip"] as? String,
                 logs: object["logs"] as? [String] ?? []
             )
+            if connectionState == .authenticating {
+                connectionState = .ready
+            }
             statusMessage = nil
         case "rebooting":
             connectionState = .restarting
@@ -453,6 +513,7 @@ final class NearbyDeviceManager: NSObject {
         reassembler.reset()
         pendingWrites = []
         isWriteInFlight = false
+        pendingConnection = nil
         connectionState = .failed(message)
         statusMessage = message
         if let peripheral, peripheral.state != .disconnected {
@@ -482,6 +543,7 @@ final class NearbyDeviceManager: NSObject {
             name: displayName,
             rssi: rssi.intValue,
             mode: advertisement.mode,
+            hardware: advertisement.hardware,
             hardwareSuffix: suffix,
             sessionID: advertisement.sessionID
         )
@@ -545,6 +607,10 @@ extension NearbyDeviceManager: @preconcurrency CBCentralManagerDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+        guard connectedPeripheral?.identifier == peripheral.identifier else {
+            central.cancelPeripheralConnection(peripheral)
+            return
+        }
         trace("connected id=\(peripheral.identifier)")
         statusMessage = String(localized: "Reading display information…")
         peripheral.discoverServices([CBUUID(string: BLESetupProtocol.serviceUUID)])
@@ -555,6 +621,8 @@ extension NearbyDeviceManager: @preconcurrency CBCentralManagerDelegate {
         didFailToConnect peripheral: CBPeripheral,
         error: Error?
     ) {
+        if resumePendingConnection() { return }
+        guard connectedPeripheral?.identifier == peripheral.identifier else { return }
         trace("connect failed id=\(peripheral.identifier) error=\(describe(error))")
         fail(error?.localizedDescription ?? String(localized: "Could not connect to the display."))
     }
@@ -568,6 +636,7 @@ extension NearbyDeviceManager: @preconcurrency CBCentralManagerDelegate {
         connectedPeripheral = nil
         let requestedDisconnect = disconnectWasRequested
         disconnectWasRequested = false
+        if resumePendingConnection() { return }
         let alreadyFailed: Bool
         if case .failed = connectionState { alreadyFailed = true } else { alreadyFailed = false }
         let expectedDisconnect = requestedDisconnect
@@ -583,6 +652,7 @@ extension NearbyDeviceManager: @preconcurrency CBCentralManagerDelegate {
 
 extension NearbyDeviceManager: @preconcurrency CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
+        guard connectedPeripheral?.identifier == peripheral.identifier else { return }
         trace("services discovered count=\(peripheral.services?.count ?? 0) error=\(describe(error))")
         if let error { fail(error.localizedDescription); return }
         guard let service = peripheral.services?.first(where: {
@@ -604,6 +674,7 @@ extension NearbyDeviceManager: @preconcurrency CBPeripheralDelegate {
         didDiscoverCharacteristicsFor service: CBService,
         error: Error?
     ) {
+        guard connectedPeripheral?.identifier == peripheral.identifier else { return }
         let uuids = (service.characteristics ?? []).map(\.uuid.uuidString).joined(separator: ",")
         trace("characteristics discovered uuids=\(uuids) error=\(describe(error))")
         if let error { fail(error.localizedDescription); return }
@@ -628,6 +699,7 @@ extension NearbyDeviceManager: @preconcurrency CBPeripheralDelegate {
         didUpdateNotificationStateFor characteristic: CBCharacteristic,
         error: Error?
     ) {
+        guard connectedPeripheral?.identifier == peripheral.identifier else { return }
         if let error { fail(error.localizedDescription); return }
         guard
             characteristic.uuid == CBUUID(string: BLESetupProtocol.eventsUUID),
@@ -644,12 +716,19 @@ extension NearbyDeviceManager: @preconcurrency CBPeripheralDelegate {
         didUpdateValueFor characteristic: CBCharacteristic,
         error: Error?
     ) {
+        guard connectedPeripheral?.identifier == peripheral.identifier else { return }
         if let error { fail(error.localizedDescription); return }
         guard let value = characteristic.value else { return }
         if characteristic.uuid == CBUUID(string: BLESetupProtocol.infoUUID) {
             do {
                 let info = try JSONDecoder().decode(BLESetupDeviceInfo.self, from: value)
-                if let qrCode { try info.validate(qrCode: qrCode) }
+                if let qrCode {
+                    let connectionNonce = try info.validate(qrCode: qrCode)
+                    crypto = try BLESetupCrypto(
+                        qrCode: qrCode,
+                        connectionNonce: connectionNonce
+                    )
+                }
                 deviceInfo = info
                 controlCharacteristic = qrCode == nil
                     ? passkeyControlCharacteristic
@@ -657,8 +736,8 @@ extension NearbyDeviceManager: @preconcurrency CBPeripheralDelegate {
                 guard controlCharacteristic != nil else {
                     throw BLESetupProtocolError.invalidFrame
                 }
-                connectionState = .ready
-                statusMessage = nil
+                connectionState = .authenticating
+                statusMessage = String(localized: "Verifying secure access…")
                 if activeDevice?.mode == .maintenance {
                     requestDiagnostics()
                 } else {
@@ -677,6 +756,7 @@ extension NearbyDeviceManager: @preconcurrency CBPeripheralDelegate {
         didWriteValueFor characteristic: CBCharacteristic,
         error: Error?
     ) {
+        guard connectedPeripheral?.identifier == peripheral.identifier else { return }
         isWriteInFlight = false
         if let error { fail(error.localizedDescription); pendingWrites = []; return }
         if !pendingWrites.isEmpty { pendingWrites.removeFirst() }

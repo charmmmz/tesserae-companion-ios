@@ -1,4 +1,5 @@
 import SwiftUI
+import TesseraeKit
 
 struct NearbyDeviceSetupView: View {
     private enum Screen: Equatable {
@@ -27,12 +28,36 @@ struct NearbyDeviceSetupView: View {
     @State private var savePassword = false
     @State private var localError: String?
     @State private var pendingDestructiveAction: DestructiveAction?
-    @State private var selectedDetent: PresentationDetent = .height(420)
+    @State private var recentEventsExpanded = false
+    @State private var selectedDetent: PresentationDetent = .height(360)
 
     private enum DestructiveAction: String, Identifiable {
         case clearWiFi
         case factoryReset
         var id: String { rawValue }
+    }
+
+    private var hardwarePresentation: DisplayHardwarePresentation {
+        DisplayHardwarePresentation(
+            kind: nearby.deviceInfo?.model ?? device.hardware.catalogKind
+        )
+    }
+
+    private var manufacturerName: String {
+        hardwarePresentation.brand?.displayName ?? String(localized: "Not reported")
+    }
+
+    private var modelName: String {
+        hardwarePresentation.modelName
+            ?? nearby.deviceInfo?.model
+            ?? nearby.diagnostics?.model
+            ?? String(localized: "Not reported")
+    }
+
+    @ViewBuilder
+    private var displayIdentityRows: some View {
+        LabeledContent("Manufacturer", value: manufacturerName)
+        LabeledContent("Model", value: modelName)
     }
 
     var body: some View {
@@ -48,19 +73,28 @@ struct NearbyDeviceSetupView: View {
                 case .complete: completion
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .tesseraeScreenBackground()
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") {
-                        nearby.dismissSuggestion(for: device)
-                        nearby.disconnect()
-                        dismiss()
+                if showsToolbarCloseButton {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button {
+                            closeSheet()
+                        } label: {
+                            Label("Close", systemImage: "xmark")
+                                .labelStyle(.iconOnly)
+                        }
+                        .disabled(isSubmitting)
                     }
                 }
             }
         }
-        .presentationDetents([.height(420), .large], selection: $selectedDetent)
+        .presentationDetents(
+            [.height(360), .height(480), .large],
+            selection: $selectedDetent
+        )
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(32)
         .interactiveDismissDisabled(isSubmitting)
@@ -119,8 +153,8 @@ struct NearbyDeviceSetupView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(pendingDestructiveAction == .clearWiFi
-                 ? "The display will forget its Wi-Fi network and restart in setup mode. Its server configuration remains available."
-                 : "This erases Wi-Fi, server, and display configuration. The display will restart as a new device.")
+                 ? "Forgets Wi-Fi and restarts. Tesserae server settings stay saved."
+                 : "Erases Wi-Fi, server, and display settings, then restarts as a new display.")
         }
         .onChange(of: nearby.connectionState) { _, state in
             switch state {
@@ -145,48 +179,47 @@ struct NearbyDeviceSetupView: View {
         }
         .onChange(of: screen) { _, newScreen in
             withAnimation(.snappy) {
-                selectedDetent = newScreen == .introduction ? .height(420) : .large
+                selectedDetent = preferredDetent(for: newScreen)
+            }
+        }
+        .task(id: model.activeInstance?.id) {
+            if let instanceID = model.activeInstance?.id {
+                setupNetworks.load(instanceID: instanceID)
             }
         }
     }
 
     private var introduction: some View {
-        VStack(spacing: 24) {
-            Spacer()
-            Image(systemName: device.mode == .setup
-                  ? "display.badge.checkmark"
-                  : "wrench.and.screwdriver")
-                .font(.system(size: 58, weight: .medium))
-                .foregroundStyle(.tint)
-            VStack(spacing: 8) {
+        VStack(spacing: 14) {
+            Spacer(minLength: 0)
+            TesseraeEInkDisplayArtwork(isMaintenance: device.mode == .maintenance)
+            VStack(spacing: 5) {
                 Text(device.mode == .setup
-                     ? "New Tesserae Display Found"
-                     : "Tesserae Maintenance Mode")
+                     ? "Ready to Set Up"
+                     : "Maintenance Mode")
                     .font(.title2.bold())
-                Text(device.name)
-                    .font(.headline)
-                Text(device.mode == .setup
-                     ? "Set up Wi-Fi and connect this display to your Tesserae system."
-                     : "View diagnostics, repair Wi-Fi, or reset this nearby display.")
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.secondary)
+                DisplayHardwareBadge(presentation: hardwarePresentation)
             }
-            Spacer()
+            Spacer(minLength: 0)
             if model.activeInstance == nil {
                 Label(
                     device.mode == .setup
-                        ? "Connect this app to your Tesserae Server first, then return to set up the display."
-                        : "Diagnostics and reset actions are available now. Connect this app to your Tesserae Server before changing Wi-Fi.",
+                        ? "Connect this app to a Tesserae Server first."
+                        : "Connect to a Tesserae Server to change Wi-Fi.",
                     systemImage: "server.rack"
                 )
                 .font(.footnote)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(.secondary)
             } else if !model.supportsDeviceSetup && device.mode == .setup {
                 Label(
-                    "Your Tesserae Server needs an update before it can register displays from the app.",
+                    "Update your Tesserae Server to continue.",
                     systemImage: "arrow.down.app"
                 )
                 .font(.footnote)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(.secondary)
             }
             Button("Continue") { screen = .authentication }
@@ -196,46 +229,35 @@ struct NearbyDeviceSetupView: View {
                     device.mode == .setup
                         && (model.activeInstance == nil || !model.supportsDeviceSetup)
                 )
-            Button("Not Now") {
-                nearby.dismissSuggestion(for: device)
-                dismiss()
-            }
-            .foregroundStyle(.secondary)
         }
-        .padding(28)
-        .tesseraeScreenBackground()
+        .padding(.horizontal, 28)
+        .padding(.vertical, 18)
     }
 
     private var authentication: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 20) {
             Spacer()
             Image(systemName: "qrcode.viewfinder")
-                .font(.system(size: 64))
+                .font(.system(size: 54))
                 .foregroundStyle(.tint)
-            VStack(spacing: 8) {
-                Text("Verify This Display")
-                    .font(.title2.bold())
-                Text("Scan the code shown on the display. It is valid only for this maintenance session and is never saved.")
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
+            Text("Scan the temporary code shown on the display.")
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer()
-            Button("Scan Setup Code", systemImage: "camera") {
+            Button("Scan Code", systemImage: "camera") {
                 scannerPresented = true
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            Button("Use 6-Digit Code Instead") {
+            Button("Enter 6-Digit Code") {
                 screen = .connecting
                 nearby.connect(to: device, qrCode: nil)
             }
             .buttonStyle(.bordered)
-            Text("iOS will ask for the code displayed on the Tesserae screen.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
         .padding(28)
-        .tesseraeScreenBackground()
     }
 
     private var connecting: some View {
@@ -245,18 +267,63 @@ struct NearbyDeviceSetupView: View {
             Text(nearby.statusMessage ?? "Connecting securely…")
                 .font(.headline)
                 .multilineTextAlignment(.center)
-            Text("Keep your iPhone close to the display.")
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Keep your iPhone close.")
                 .foregroundStyle(.secondary)
         }
         .padding(28)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .tesseraeScreenBackground()
     }
 
     private var wifiSetup: some View {
-        Form {
+        let knownSSIDs = Set(setupNetworks.networks.map(\.ssid))
+        let otherNetworks = nearby.networks.filter { !knownSSIDs.contains($0.ssid) }
+
+        return Form {
+            Section("Display") {
+                displayIdentityRows
+            }
+
+            if !setupNetworks.networks.isEmpty {
+                Section {
+                    ForEach(setupNetworks.networks) { knownNetwork in
+                        Button {
+                            selectNetwork(knownNetwork.ssid)
+                        } label: {
+                            HStack {
+                                if let scanned = nearby.networks.first(where: {
+                                    $0.ssid == knownNetwork.ssid
+                                }) {
+                                    Image(systemName: wifiSymbol(for: scanned.rssi))
+                                } else {
+                                    Image(systemName: "wifi")
+                                        .foregroundStyle(.secondary)
+                                }
+                                Text(knownNetwork.ssid)
+                                Spacer()
+                                if knownNetwork.hasSavedPassword {
+                                    Image(systemName: "key.fill")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                if selectedSSID == knownNetwork.ssid {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(.tint)
+                                }
+                            }
+                        }
+                        .foregroundStyle(.primary)
+                    }
+                } header: {
+                    Text("Known Networks")
+                } footer: {
+                    Text("Saved by Tesserae on this iPhone.")
+                }
+            }
+
             Section {
-                if nearby.networks.isEmpty {
+                if otherNetworks.isEmpty {
                     HStack {
                         ProgressView()
                         Text(nearby.statusMessage ?? "Scanning…")
@@ -264,11 +331,9 @@ struct NearbyDeviceSetupView: View {
                     }
                     Button("Scan Again") { nearby.scanWiFi() }
                 } else {
-                    ForEach(nearby.networks) { network in
+                    ForEach(otherNetworks) { network in
                         Button {
-                            selectedSSID = network.ssid
-                            customSSID = ""
-                            loadSavedPassword(for: network.ssid)
+                            selectNetwork(network.ssid)
                         } label: {
                             HStack {
                                 Image(systemName: wifiSymbol(for: network.rssi))
@@ -291,22 +356,23 @@ struct NearbyDeviceSetupView: View {
                 TextField("Other network name", text: $customSSID)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                    .onChange(of: customSSID) { _, newValue in
+                        guard !newValue.trimmingCharacters(
+                            in: .whitespacesAndNewlines
+                        ).isEmpty else { return }
+                        selectedSSID = ""
+                        password = ""
+                        savePassword = false
+                    }
             } header: {
-                Text("Wi-Fi Network")
+                Text(setupNetworks.networks.isEmpty ? "Wi-Fi Networks" : "Other Networks")
             }
 
-            Section("Password") {
-                SecureField("Wi-Fi password", text: $password)
-                    .textContentType(.password)
-                Toggle("Save password on this iPhone", isOn: $savePassword)
-            }
-
-            if let instance = model.activeInstance {
-                Section("Tesserae System") {
-                    LabeledContent("Server", value: instance.name)
-                    Text(instance.baseURL.absoluteString)
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.secondary)
+            if requiresWiFiPassword {
+                Section("Password") {
+                    SecureField("Wi-Fi password", text: $password)
+                        .textContentType(.password)
+                    Toggle("Save on this iPhone", isOn: $savePassword)
                 }
             }
 
@@ -316,18 +382,17 @@ struct NearbyDeviceSetupView: View {
                 }
                 .disabled(chosenSSID.isEmpty || isSubmitting)
             } footer: {
-                Text("The display tests Wi-Fi and the server before replacing any saved settings.")
+                Text("Saved only after Wi-Fi and server checks pass.")
             }
         }
         .scrollContentBackground(.hidden)
-        .tesseraeScreenBackground()
     }
 
     private var maintenance: some View {
         Form {
             if let diagnostics = nearby.diagnostics {
                 Section("Display") {
-                    LabeledContent("Model", value: diagnostics.model)
+                    displayIdentityRows
                     LabeledContent("Firmware", value: diagnostics.firmware)
                     LabeledContent(
                         "Battery",
@@ -343,15 +408,22 @@ struct NearbyDeviceSetupView: View {
                         "Signal",
                         value: diagnostics.rssi == 0 ? "—" : "\(diagnostics.rssi) dBm"
                     )
-                    LabeledContent(
-                        "Server",
-                        value: diagnostics.isServerConfigured ? "Configured" : "Not configured"
-                    )
+                    if !diagnostics.isServerConfigured {
+                        LabeledContent("Server", value: "Not configured")
+                    }
                 }
                 if !diagnostics.logs.isEmpty {
-                    Section("Recent Maintenance Events") {
-                        ForEach(Array(diagnostics.logs.enumerated()), id: \.offset) { _, log in
-                            Text(log).font(.caption.monospaced())
+                    Section {
+                        DisclosureGroup(
+                            "Recent Events",
+                            isExpanded: $recentEventsExpanded
+                        ) {
+                            ForEach(
+                                Array(diagnostics.logs.enumerated()),
+                                id: \.offset
+                            ) { _, log in
+                                Text(log).font(.caption.monospaced())
+                            }
                         }
                     }
                 }
@@ -370,11 +442,20 @@ struct NearbyDeviceSetupView: View {
                 Button("Restart Display", systemImage: "arrow.clockwise") {
                     nearby.reboot()
                 }
-                Button("Clear Wi-Fi Settings", systemImage: "wifi.slash", role: .destructive) {
+            }
+
+            Section("Reset") {
+                Button(role: .destructive) {
                     pendingDestructiveAction = .clearWiFi
+                } label: {
+                    Label("Clear Wi-Fi Settings", systemImage: "wifi.slash")
+                        .foregroundStyle(.red)
                 }
-                Button("Factory Reset", systemImage: "trash", role: .destructive) {
+                Button(role: .destructive) {
                     pendingDestructiveAction = .factoryReset
+                } label: {
+                    Label("Factory Reset", systemImage: "trash")
+                        .foregroundStyle(.red)
                 }
             }
 
@@ -383,7 +464,6 @@ struct NearbyDeviceSetupView: View {
             }
         }
         .scrollContentBackground(.hidden)
-        .tesseraeScreenBackground()
     }
 
     private var completion: some View {
@@ -394,9 +474,11 @@ struct NearbyDeviceSetupView: View {
                 .foregroundStyle(.green)
             Text("Display Connected")
                 .font(.title2.bold())
-            Text("The display verified Wi-Fi and your Tesserae Server, saved the new settings, and is restarting.")
+            Text("Wi-Fi and Tesserae are connected. The display is restarting.")
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer()
             Button("Done") {
                 nearby.dismissSuggestion(for: device)
@@ -407,7 +489,6 @@ struct NearbyDeviceSetupView: View {
             .controlSize(.large)
         }
         .padding(28)
-        .tesseraeScreenBackground()
     }
 
     private var maintenanceAction: some View {
@@ -428,43 +509,51 @@ struct NearbyDeviceSetupView: View {
             Text(nearby.statusMessage ?? "Sending command to the display…")
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
             if nearby.connectionState == .restarting {
-                Text("The Bluetooth maintenance connection closes while the display restarts.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            Spacer()
-            if nearby.connectionState == .restarting {
-                Button("Close") {
-                    nearby.dismissSuggestion(for: device)
-                    nearby.disconnect()
-                    dismiss()
+                Spacer()
+                Button("Done") {
+                    closeSheet()
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
+            } else {
+                Spacer()
             }
         }
         .padding(28)
-        .tesseraeScreenBackground()
     }
 
     private var navigationTitle: String {
         switch screen {
         case .introduction: "Nearby Display"
-        case .authentication: "Verify"
+        case .authentication: "Verify Display"
         case .connecting: "Connecting"
-        case .wifi: "Wi-Fi Setup"
-        case .maintenance: "Display Maintenance"
-        case .maintenanceAction: "Display Maintenance"
-        case .complete: "Setup Complete"
+        case .wifi: "Choose Wi-Fi"
+        case .maintenance: "Maintenance"
+        case .maintenanceAction: "Maintenance"
+        case .complete: "Complete"
         }
+    }
+
+    private var showsToolbarCloseButton: Bool {
+        screen != .maintenanceAction && screen != .complete
     }
 
     private var chosenSSID: String {
         customSSID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? selectedSSID
             : customSSID.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var requiresWiFiPassword: Bool {
+        guard !chosenSSID.isEmpty else { return false }
+        guard customSSID.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        ).isEmpty else { return true }
+        return nearby.networks.first(where: { $0.ssid == selectedSSID })?
+            .isSecure ?? true
     }
 
     private var destructiveDialogTitle: String {
@@ -484,20 +573,23 @@ struct NearbyDeviceSetupView: View {
         Task {
             do {
                 let pairingCode: String
-                if model.supportsDeviceSetup {
+                let serverURL: URL?
+                if device.mode == .maintenance {
+                    // Maintenance changes Wi-Fi only. Keep the display's exact
+                    // saved server URL and token, including any custom port.
+                    pairingCode = ""
+                    serverURL = nil
+                } else if model.supportsDeviceSetup {
                     let pairing = try await model.createFirmwareDevicePairing()
                     pairingCode = pairing.code
-                } else if device.mode == .maintenance {
-                    // An existing display can repair Wi-Fi without replacing
-                    // its server identity when it remains on the same server.
-                    pairingCode = ""
+                    serverURL = instance.baseURL
                 } else {
                     throw NearbyDeviceSetupError.serverUpdateRequired
                 }
                 nearby.applyConfiguration(
                     ssid: chosenSSID,
                     password: password,
-                    serverURL: instance.baseURL,
+                    serverURL: serverURL,
                     pairingCode: pairingCode
                 )
             } catch {
@@ -505,6 +597,29 @@ struct NearbyDeviceSetupView: View {
                 localError = error.localizedDescription
             }
         }
+    }
+
+    private func preferredDetent(for screen: Screen) -> PresentationDetent {
+        switch screen {
+        case .authentication:
+            .height(480)
+        case .wifi, .maintenance:
+            .large
+        case .introduction, .connecting, .maintenanceAction, .complete:
+            .height(360)
+        }
+    }
+
+    private func closeSheet() {
+        nearby.dismissSuggestion(for: device)
+        nearby.disconnect()
+        dismiss()
+    }
+
+    private func selectNetwork(_ ssid: String) {
+        selectedSSID = ssid
+        customSSID = ""
+        loadSavedPassword(for: ssid)
     }
 
     private func loadSavedPassword(for ssid: String) {
@@ -551,7 +666,57 @@ struct NearbyDeviceSetupView: View {
     }
 }
 
+private struct TesseraeEInkDisplayArtwork: View {
+    let isMaintenance: Bool
+
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            ZStack(alignment: .bottom) {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(.primary.opacity(0.78))
+                    .shadow(color: .black.opacity(0.14), radius: 7, y: 4)
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(Color(red: 0.94, green: 0.93, blue: 0.88))
+                    .padding(.horizontal, 6)
+                    .padding(.top, 6)
+                    .padding(.bottom, 14)
+                VStack(spacing: 4) {
+                    Image("TesseraeLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 34, height: 34)
+                    Text("TESSERAE")
+                        .font(.system(size: 6, weight: .bold, design: .rounded))
+                        .tracking(1.1)
+                        .foregroundStyle(.black.opacity(0.68))
+                }
+                .padding(.bottom, 22)
+                HStack(spacing: 6) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        Circle()
+                            .fill(.white.opacity(0.72))
+                            .frame(width: 3.5, height: 3.5)
+                    }
+                }
+                .padding(.bottom, 5)
+            }
+            .frame(width: 72, height: 88)
+
+            Image(systemName: isMaintenance ? "wrench.fill" : "sparkles")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(7)
+                .background(Circle().fill(.tint))
+                .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: 2))
+                .offset(x: 7, y: 5)
+        }
+        .frame(width: 94, height: 94)
+        .accessibilityHidden(true)
+    }
+}
+
 struct NearbyDisplaysView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(NearbyDeviceManager.self) private var nearby
     @Environment(AppModel.self) private var model
     @Environment(SetupNetworkStore.self) private var setupNetworks
@@ -560,17 +725,30 @@ struct NearbyDisplaysView: View {
     var body: some View {
         List {
             if !setupNetworks.networks.isEmpty {
-                Section("Networks Configured from This iPhone") {
+                Section {
                     ForEach(setupNetworks.networks) { network in
-                        LabeledContent {
-                            if network.hasSavedPassword {
-                                Label("Password saved", systemImage: "key.fill")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        } label: {
-                            Label(network.ssid, systemImage: "wifi")
+                        HStack(spacing: 12) {
+                            Image(systemName: "wifi")
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(nearbyAccent)
+                                .frame(width: 34, height: 34)
+                                .background(
+                                    nearbyAccent.opacity(0.12),
+                                    in: RoundedRectangle(
+                                        cornerRadius: 9,
+                                        style: .continuous
+                                    )
+                                )
+
+                            Text(network.ssid)
+                                .font(.body.weight(.medium))
+                                .foregroundStyle(.primary)
+                                .lineLimit(2)
+
+                            Spacer(minLength: 0)
                         }
+                        .padding(.vertical, 3)
+                        .fixedSize(horizontal: false, vertical: true)
                         .swipeActions {
                             Button("Forget", role: .destructive) {
                                 guard let instanceID = model.activeInstance?.id else { return }
@@ -583,41 +761,105 @@ struct NearbyDisplaysView: View {
                             }
                         }
                     }
+                } header: {
+                    Text("Known Networks")
+                } footer: {
+                    Text("Saved by Tesserae on this iPhone.")
                 }
             }
             Section {
                 if nearby.nearbyDevices.isEmpty {
-                    ContentUnavailableView(
-                        "No Displays Nearby",
-                        systemImage: "dot.radiowaves.left.and.right",
-                        description: Text("New displays advertise automatically. For an existing display, hold Refresh for 3 seconds to enter Maintenance Mode.")
-                    )
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: "dot.radiowaves.left.and.right")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(nearbyAccent)
+                            .frame(width: 34, height: 34)
+                            .background(
+                                nearbyAccent.opacity(0.12),
+                                in: RoundedRectangle(
+                                    cornerRadius: 9,
+                                    style: .continuous
+                                )
+                            )
+                            .accessibilityHidden(true)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("No displays found")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.primary)
+
+                            Text("For maintenance, hold Refresh for 3 seconds.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.vertical, 3)
+                    .fixedSize(horizontal: false, vertical: true)
                 } else {
                     ForEach(nearby.nearbyDevices) { device in
                         Button {
                             selectedDevice = device
                         } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: device.mode == .setup
-                                      ? "display"
-                                      : "wrench.and.screwdriver")
-                                    .foregroundStyle(.tint)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(device.name).foregroundStyle(.primary)
-                                    Text(device.mode == .setup ? "Ready to set up" : "Maintenance mode")
-                                        .font(.caption)
+                            let presentation = DisplayHardwarePresentation(
+                                kind: device.hardware.catalogKind
+                            )
+
+                            HStack(spacing: 13) {
+                                Image(
+                                    systemName: device.mode == .setup
+                                        ? "display.badge.checkmark"
+                                        : "wrench.and.screwdriver"
+                                )
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(nearbyAccent)
+                                .frame(width: 44, height: 44)
+                                .background(
+                                    nearbyAccent.opacity(0.12),
+                                    in: RoundedRectangle(
+                                        cornerRadius: 12,
+                                        style: .continuous
+                                    )
+                                )
+
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(device.name)
+                                        .font(.headline)
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(1)
+
+                                    Text(hardwareSummary(presentation))
+                                        .font(.subheadline)
                                         .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+
+                                    Label(
+                                        device.mode == .setup
+                                            ? "Ready to set up"
+                                            : "Maintenance mode",
+                                        systemImage: device.mode == .setup
+                                            ? "sparkles"
+                                            : "wrench.fill"
+                                    )
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(nearbyAccent)
+                                    .lineLimit(1)
                                 }
+
                                 Spacer()
                                 Image(systemName: "chevron.right")
                                     .font(.caption.bold())
                                     .foregroundStyle(.tertiary)
                             }
+                            .padding(.vertical, 4)
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                     }
                 }
-            } footer: {
-                Text("Bluetooth is used only for local setup and maintenance. Normal Tesserae communication continues over Wi-Fi.")
+            } header: {
+                Text("Displays Nearby")
             }
         }
         .scrollContentBackground(.hidden)
@@ -630,8 +872,28 @@ struct NearbyDisplaysView: View {
                 setupNetworks.load(instanceID: instanceID)
             }
         }
-        .sheet(item: $selectedDevice) { device in
+        .sheet(item: Binding(
+            get: { selectedDevice },
+            set: { newDevice in
+                if newDevice == nil, let selectedDevice {
+                    nearby.endSession(for: selectedDevice)
+                }
+                selectedDevice = newDevice
+            }
+        )) { device in
             NearbyDeviceSetupView(device: device)
         }
+    }
+
+    private func hardwareSummary(_ presentation: DisplayHardwarePresentation) -> String {
+        let components = [presentation.brand?.displayName, presentation.modelName]
+            .compactMap { $0 }
+        return components.isEmpty
+            ? String(localized: "Tesserae Display")
+            : components.joined(separator: " · ")
+    }
+
+    private var nearbyAccent: Color {
+        colorScheme == .dark ? TesseraeTheme.darkAccent : TesseraeTheme.accent
     }
 }

@@ -63,7 +63,13 @@ struct RootView: View {
         }
         .sheet(item: Binding(
             get: { nearbyDevices.suggestedDevice },
-            set: { nearbyDevices.suggestedDevice = $0 }
+            set: { newDevice in
+                if newDevice == nil, let suggestedDevice = nearbyDevices.suggestedDevice {
+                    nearbyDevices.endSession(for: suggestedDevice)
+                } else {
+                    nearbyDevices.suggestedDevice = newDevice
+                }
+            }
         )) { device in
             NearbyDeviceSetupView(device: device)
         }

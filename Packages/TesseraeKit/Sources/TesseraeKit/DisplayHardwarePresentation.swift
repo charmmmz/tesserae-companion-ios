@@ -51,6 +51,10 @@ public struct DisplayHardwarePresentation: Equatable, Hashable, Sendable {
             self.init(brand: .seeedStudio, modelName: "reTerminal E1004")
         case "seeed_ee02", "seeed_xiao_ee02":
             self.init(brand: .seeedStudio, modelName: "XIAO ePaper EE02")
+        case "seeed_ee04_75":
+            self.init(brand: .seeedStudio, modelName: "XIAO ePaper EE04 · 7.5″")
+        case "seeed_ee04_73e6":
+            self.init(brand: .seeedStudio, modelName: "XIAO ePaper EE04 · 7.3″")
         case "seeed_xiao_75", "xiao_epaper_75", "xiao_epaper_display":
             self.init(brand: .seeedStudio, modelName: "XIAO 7.5″ ePaper")
         case "pimoroni_inky_4":
