@@ -978,7 +978,7 @@ private struct LineupDashboardPicker: View {
                         let previousSelection = selection
                         selection.move(fromOffsets: source, toOffset: destination)
                         if selection != previousSelection {
-                            hapticEvent.trigger(.selection)
+                            hapticEvent.trigger(.rigidImpact)
                         }
                     }
                 } header: {

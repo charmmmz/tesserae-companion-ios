@@ -15,7 +15,6 @@ struct DisplaysView: View {
     @State private var dropTargetDisplayID: String?
     @State private var selectedDisplay: DisplaySummary?
     @State private var lineupsPresented = false
-    @State private var didReorderDuringDrag = false
     @State private var hapticEvent = TesseraeHapticEvent()
 
     let isActive: Bool
@@ -87,8 +86,6 @@ struct DisplaysView: View {
                     .accessibilityAddTraits(.isButton)
                     .onDrag {
                         draggedDisplayID = display.id
-                        didReorderDuringDrag = false
-                        hapticEvent.trigger(.lightImpact)
                         return NSItemProvider(object: display.id as NSString)
                     } preview: {
                         displayDragPreview(display)
@@ -244,21 +241,16 @@ struct DisplaysView: View {
             let previousOrder = model.sortedDisplays.map(\.id)
             model.moveDisplay(sourceID, to: targetIndex)
             if model.sortedDisplays.map(\.id) != previousOrder {
-                didReorderDuringDrag = true
-                hapticEvent.trigger(.selection)
+                hapticEvent.trigger(.rigidImpact)
             }
         }
     }
 
     private func endDisplayDrag() {
-        if draggedDisplayID != nil, didReorderDuringDrag {
-            hapticEvent.trigger(.mediumImpact)
-        }
         withAnimation(.easeOut(duration: 0.12)) {
             draggedDisplayID = nil
             dropTargetDisplayID = nil
         }
-        didReorderDuringDrag = false
     }
 }
 

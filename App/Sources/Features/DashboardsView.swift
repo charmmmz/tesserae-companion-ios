@@ -100,7 +100,6 @@ struct DashboardsView: View {
     @State private var expandedOccurrenceID: DashboardOccurrenceID?
     @State private var dashboardToPush: DashboardPushContext?
     @State private var sectionContentHeights: [String: CGFloat] = [:]
-    @State private var didReorderDuringDrag = false
     @State private var hapticEvent = TesseraeHapticEvent()
     @AppStorage("dashboardLayoutMode")
     private var layoutMode = DashboardLayoutMode.cards
@@ -186,8 +185,6 @@ struct DashboardsView: View {
                                 )
                                 .onDrag {
                                     draggedOccurrenceID = occurrenceID
-                                    didReorderDuringDrag = false
-                                    hapticEvent.trigger(.lightImpact)
                                     return NSItemProvider(
                                         object: dashboard.id as NSString
                                     )
@@ -911,21 +908,16 @@ struct DashboardsView: View {
                 to: targetIndex
             )
             if model.sortedDashboards.map(\.id) != previousOrder {
-                didReorderDuringDrag = true
-                hapticEvent.trigger(.selection)
+                hapticEvent.trigger(.rigidImpact)
             }
         }
     }
 
     private func endDashboardDrag() {
-        if draggedOccurrenceID != nil, didReorderDuringDrag {
-            hapticEvent.trigger(.mediumImpact)
-        }
         withAnimation(.easeOut(duration: 0.12)) {
             draggedOccurrenceID = nil
             dropTargetOccurrenceID = nil
         }
-        didReorderDuringDrag = false
     }
 }
 

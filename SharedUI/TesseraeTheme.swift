@@ -23,7 +23,7 @@ enum TesseraeHaptic: Equatable {
     case warning
     case error
     case lightImpact
-    case mediumImpact
+    case rigidImpact
 
     var sensoryFeedback: SensoryFeedback {
         switch self {
@@ -39,8 +39,8 @@ enum TesseraeHaptic: Equatable {
             .error
         case .lightImpact:
             .impact(weight: .light, intensity: 0.55)
-        case .mediumImpact:
-            .impact(weight: .medium, intensity: 0.7)
+        case .rigidImpact:
+            .impact(flexibility: .rigid, intensity: 0.8)
         }
     }
 }
