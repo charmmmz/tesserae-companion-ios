@@ -14,16 +14,21 @@ struct HealthBridgeView: View {
             } else if bridgeModel.authorizationState == .unavailable {
                 unavailableSection
             } else {
-                introductionSection
                 selectionSection
-                requestedDataSection
-                excludedDataSection
-                authorizationSection
+                if !bridgeModel.selectedSections.isEmpty {
+                    requestedDataSection
+                    authorizationSection
+                }
                 if bridgeModel.isEnabled || bridgeModel.sourceStatus != nil {
                     syncStatusSection
                 }
                 retentionSection
-                syncControlsSection
+                if !bridgeModel.selectedSections.isEmpty
+                    || bridgeModel.isEnabled
+                    || bridgeModel.sourceStatus != nil
+                {
+                    syncControlsSection
+                }
                 feedbackSections
             }
         }
@@ -35,7 +40,7 @@ struct HealthBridgeView: View {
             await bridgeModel.load(using: appModel)
         }
         .confirmationDialog(
-            "Stop Apple Health Sync?",
+            "Stop Health Sync?",
             isPresented: $deleteConfirmationPresented,
             titleVisibility: .visible
         ) {
@@ -47,18 +52,8 @@ struct HealthBridgeView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(
-                "Tesserae deletes the latest raw Health snapshot now. Existing History thumbnails expire normally, and an e-ink display keeps its current image until replaced."
+                "This deletes the latest server snapshot. Rendered images remain until replaced or expired."
             )
-        }
-    }
-
-    private var introductionSection: some View {
-        Section {
-            Text(
-                "Choose which seven-day Apple Health summaries this iPhone may read and send directly to your paired Tesserae Server. Tesserae requests read access only and never writes to Apple Health."
-            )
-        } header: {
-            Text("On-device summary")
         }
     }
 
@@ -67,94 +62,63 @@ struct HealthBridgeView: View {
             sectionToggle(
                 .activity,
                 title: "Activity",
-                subtitle: "Daily steps, distance, Move, Exercise, and Stand"
+                subtitle: "Steps, distance, Move, Exercise, and Stand"
             )
             sectionToggle(
                 .sleep,
                 title: "Sleep",
-                subtitle: "One primary sleep period per wake date"
+                subtitle: "Bedtime, wake time, duration, and stages"
             )
             sectionToggle(
                 .workouts,
                 title: "Workouts",
-                subtitle: "Workout timing, type, duration, and supported totals"
+                subtitle: "Type, time, duration, and supported totals"
             )
         } header: {
-            Text("Summaries to share")
+            Text("Share")
         } footer: {
             if bridgeModel.isEnabled && bridgeModel.selectedSections.isEmpty {
-                Text(
-                    "No summaries are selected. Stop sync below to delete the server snapshot."
-                )
+                Text("Nothing selected. Stop sync to delete the server snapshot.")
             } else if bridgeModel.hasPendingSelectionChanges {
-                Text("Your selection changes take effect after Sync Now.")
-            } else {
-                Text(
-                    "Selections are stored separately for this Tesserae Server. All choices default to off."
-                )
+                Text("Sync to apply these changes.")
             }
         }
     }
 
     private var requestedDataSection: some View {
         Section {
-            if bridgeModel.selectedSections.isEmpty {
-                Text("Choose a summary above to see every Apple Health read type.")
-                    .foregroundStyle(.secondary)
-            }
             if bridgeModel.selectedSections.contains(.activity) {
                 disclosureGroup(
-                    title: "Activity read types",
+                    title: "Activity data",
                     items: [
-                        "Activity Summary — Move mode, value and goal; Exercise minutes and goal; Stand hours and goal",
-                        "Step Count — daily total",
-                        "Walking + Running Distance — daily metres"
+                        "Move, Exercise, and Stand values and goals",
+                        "Daily steps and walking + running distance"
                     ]
                 )
             }
             if bridgeModel.selectedSections.contains(.sleep) {
                 disclosureGroup(
-                    title: "Sleep read types",
+                    title: "Sleep data",
                     items: [
-                        "Sleep Analysis — primary period start and end; in-bed, asleep, awake, Core, Deep, REM, and unspecified totals"
+                        "Start, end, in-bed, asleep, awake, Core, Deep, REM, and unspecified totals"
                     ]
                 )
             }
             if bridgeModel.selectedSections.contains(.workouts) {
                 disclosureGroup(
-                    title: "Workout read types",
+                    title: "Workout data",
                     items: [
-                        "Workouts — activity type, start and end, active duration, and multi-activity segment timing",
-                        "Active Energy — workout and segment kilocalories",
-                        "Walking + Running, Cycling, Swimming, and Wheelchair Distance — separate workout and segment metres",
-                        "Flights Climbed — workout and segment totals",
-                        "Swimming Stroke Count — workout and segment totals"
+                        "Activity type, start, end, duration, and segment timing",
+                        "Energy, supported distances, flights, and swimming strokes"
                     ]
                 )
             }
         } header: {
-            Text("Requested data")
+            Text("Data Access")
         } footer: {
             Text(
-                "Apple shows the final per-type read controls next. Apple does not tell apps which individual read types you denied. Missing or unreadable values remain empty, never false zeroes."
+                "Never includes routes, location, heart rate, raw samples, identifiers, device details, notes, or metadata."
             )
-        }
-    }
-
-    private var excludedDataSection: some View {
-        Section {
-            Label("Routes and location", systemImage: "location.slash")
-            Label("Heart rate and heart-rate samples", systemImage: "heart.slash")
-            Label(
-                "Raw samples, HealthKit identifiers, device and source details",
-                systemImage: "eye.slash"
-            )
-            Label(
-                "Workout events, titles, notes, and free-form metadata",
-                systemImage: "doc.badge.ellipsis"
-            )
-        } header: {
-            Text("Never shared")
         }
     }
 
@@ -162,13 +126,13 @@ struct HealthBridgeView: View {
         Section {
             switch bridgeModel.authorizationState {
             case .unavailable:
-                Label("Apple Health is unavailable", systemImage: "heart.slash")
+                Label("Health is unavailable", systemImage: "heart.slash")
             case .reviewRequired:
                 Button {
                     Task { await bridgeModel.requestAccess() }
                 } label: {
                     busyLabel(
-                        title: "Continue to Apple Health",
+                        title: "Continue to Health",
                         systemImage: "checkmark.shield"
                     )
                 }
@@ -177,21 +141,19 @@ struct HealthBridgeView: View {
                 )
             case .reviewed:
                 Label(
-                    "Apple Health access reviewed for the selected summaries",
+                    "Health access reviewed",
                     systemImage: "checkmark.shield.fill"
                 )
                 .foregroundStyle(.secondary)
-                Button("Review Apple Health Access Again") {
+                Button("Review Health Access") {
                     Task { await bridgeModel.requestAccess() }
                 }
                 .disabled(bridgeModel.isBusy)
             }
         } header: {
-            Text("Apple authorization")
+            Text("Health Access")
         } footer: {
-            Text(
-                "Changing a Tesserae selection may require reviewing additional Apple Health types. Health permissions remain under your control in Apple Health and iOS Settings."
-            )
+            Text("Permissions remain under your control in Health and iOS Settings.")
         }
     }
 
@@ -227,13 +189,10 @@ struct HealthBridgeView: View {
     private var retentionSection: some View {
         Section {
             Text(
-                "The server keeps only the latest expiring raw snapshot. Health values rendered on a Dashboard may remain temporarily visible in normal History thumbnails and on an e-ink display."
-            )
-            Text(
-                "Stopping sync deletes the raw server snapshot, but it cannot retroactively erase rendered images. Display another Dashboard to replace health values already shown on a panel."
+                "The server keeps one expiring snapshot. Rendered values may remain in History or on a display until replaced."
             )
         } header: {
-            Text("Server and rendered copies")
+            Text("Privacy")
         }
     }
 
@@ -297,9 +256,7 @@ struct HealthBridgeView: View {
         } header: {
             Text("Sync")
         } footer: {
-            Text(
-                "Tesserae checks for changes when the app becomes active. Sync Now always uploads. Background delivery is best effort and is not promised by this version."
-            )
+            Text("Checks when the app becomes active. Background updates are best effort.")
         }
     }
 
@@ -322,7 +279,7 @@ struct HealthBridgeView: View {
     private var unsupportedSection: some View {
         Section {
             Label(
-                "The connected server does not support Apple Health summaries yet.",
+                "The connected server does not support Health summaries.",
                 systemImage: "server.rack"
             )
             .foregroundStyle(.secondary)
@@ -332,7 +289,7 @@ struct HealthBridgeView: View {
     private var unavailableSection: some View {
         Section {
             Label(
-                "Apple Health data is not available on this device. Use a physical iPhone to configure Health access.",
+                "Health data is unavailable. Use a physical iPhone to configure access.",
                 systemImage: "heart.slash"
             )
             .foregroundStyle(.secondary)

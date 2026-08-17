@@ -37,6 +37,7 @@ targets:
         NSCameraUsageDescription: Scan the temporary setup code shown on a Tesserae display.
         NSRemindersFullAccessUsageDescription: Choose Reminders lists to send a minimal, expiring snapshot to your Tesserae server.
         NSHealthShareUsageDescription: Read only the Activity, Sleep, and Workout summaries you select and send a minimal seven-day snapshot directly to your paired Tesserae server.
+        NSHealthUpdateUsageDescription: Tesserae does not write data to Health. HealthKit access is read-only and is used only to build the seven-day summaries you choose for your paired Tesserae server.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         TesseraeAppGroupIdentifier: group.com.charmmmz.tesseraecompanion

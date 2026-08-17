@@ -310,7 +310,10 @@ final class HealthKitStore: HealthDataAccessing {
     private func activitySummaries(
         in window: HealthDateWindow
     ) async throws -> [String: HealthActivityRingSource] {
-        guard let timeZone = TimeZone(identifier: window.timeZoneIdentifier) else {
+        guard
+            let timeZone = TimeZone(identifier: window.timeZoneIdentifier),
+            let components = Self.activitySummaryDateComponents(in: window)
+        else {
             return [:]
         }
         let calendar: Calendar = {
@@ -318,14 +321,9 @@ final class HealthKitStore: HealthDataAccessing {
             value.timeZone = timeZone
             return value
         }()
-        let componentSet: Set<Calendar.Component> = [.era, .year, .month, .day]
-        let start = calendar.dateComponents(componentSet, from: window.start)
-        let endDate = calendar.date(byAdding: .second, value: -1, to: window.end)
-            ?? window.end
-        let end = calendar.dateComponents(componentSet, from: endDate)
         let predicate = HKQuery.predicate(
-            forActivitySummariesBetweenStart: start,
-            end: end
+            forActivitySummariesBetweenStart: components.start,
+            end: components.end
         )
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKActivitySummaryQuery(predicate: predicate) {
@@ -377,6 +375,31 @@ final class HealthKitStore: HealthDataAccessing {
             }
             healthStore.execute(query)
         }
+    }
+
+    static func activitySummaryDateComponents(
+        in window: HealthDateWindow
+    ) -> (start: DateComponents, end: DateComponents)? {
+        guard let timeZone = TimeZone(identifier: window.timeZoneIdentifier) else {
+            return nil
+        }
+        let calendar: Calendar = {
+            var value = Calendar(identifier: .gregorian)
+            value.timeZone = timeZone
+            return value
+        }()
+        let componentSet: Set<Calendar.Component> = [.era, .year, .month, .day]
+        var start = calendar.dateComponents(componentSet, from: window.start)
+        let endDate = calendar.date(byAdding: .second, value: -1, to: window.end)
+            ?? window.end
+        var end = calendar.dateComponents(componentSet, from: endDate)
+
+        // HealthKit raises an Objective-C exception (not a catchable Swift
+        // error) when either component omits its calendar. Calendar's
+        // dateComponents(_:from:) does not populate this property for us.
+        start.calendar = calendar
+        end.calendar = calendar
+        return (start, end)
     }
 
     private func cumulativeSum(
@@ -932,7 +955,7 @@ enum HealthSnapshotFactory {
         let items = retained.map { source -> HealthWorkout in
             let wallDuration = source.end.timeIntervalSince(source.start)
             let duration = min(
-                Int(wallDuration.rounded()),
+                Int(wallDuration.rounded(.down)),
                 max(0, Int(source.duration.rounded()))
             )
             let candidateActivities = source.activities.count > 1
@@ -960,7 +983,7 @@ enum HealthSnapshotFactory {
                         startAt: activity.start,
                         endAt: activity.end,
                         durationSeconds: min(
-                            Int(wall.rounded()),
+                            Int(wall.rounded(.down)),
                             max(0, Int(activity.duration.rounded()))
                         ),
                         activeEnergyKcal: metricDecimal(

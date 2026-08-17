@@ -37,6 +37,8 @@
 	<string>Scan the temporary setup code shown on a Tesserae display.</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Read only the Activity, Sleep, and Workout summaries you select and send a minimal seven-day snapshot directly to your paired Tesserae server.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Tesserae does not write data to Health. HealthKit access is read-only and is used only to build the seven-day summaries you choose for your paired Tesserae server.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
 	<string>Choose Reminders lists to send a minimal, expiring snapshot to your Tesserae server.</string>
 	<key>TesseraeAppGroupIdentifier</key>

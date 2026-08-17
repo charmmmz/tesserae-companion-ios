@@ -1,4 +1,5 @@
 import Foundation
+import HealthKit
 import TesseraeKit
 import XCTest
 @testable import Tesserae_Companion
@@ -14,6 +15,24 @@ final class HealthSnapshotFactoryTests: XCTestCase {
         XCTAssertEqual(window.dateStrings.first, "2026-08-09")
         XCTAssertEqual(window.dateStrings.last, "2026-08-15")
         XCTAssertEqual(window.dateStrings.count, 7)
+    }
+
+    func testActivitySummaryPredicateComponentsIncludeGregorianCalendar() throws {
+        let components = try XCTUnwrap(
+            HealthKitStore.activitySummaryDateComponents(in: window())
+        )
+
+        XCTAssertEqual(components.start.calendar?.identifier, .gregorian)
+        XCTAssertEqual(components.end.calendar?.identifier, .gregorian)
+        XCTAssertEqual(components.start.calendar?.timeZone.identifier, "Asia/Shanghai")
+        XCTAssertEqual(components.end.calendar?.timeZone.identifier, "Asia/Shanghai")
+
+        // This API raises NSInvalidArgumentException instead of returning a
+        // Swift error when the DateComponents calendar property is absent.
+        _ = HKQuery.predicate(
+            forActivitySummariesBetweenStart: components.start,
+            end: components.end
+        )
     }
 
     func testActivityProducesSevenDaysAndPreservesNullInsteadOfFalseZero() throws {
@@ -162,6 +181,32 @@ final class HealthSnapshotFactoryTests: XCTestCase {
         let workout = try XCTUnwrap(snapshot.data.workouts?.items.first)
         XCTAssertTrue(workout.segments.isEmpty)
         XCTAssertTrue(workout.segmentsTruncated)
+    }
+
+    func testWorkoutDurationDoesNotRoundPastSerializedInterval() throws {
+        let start = date("2026-08-16T01:00:00Z").addingTimeInterval(0.1)
+        let end = date("2026-08-16T01:00:30Z").addingTimeInterval(0.9)
+        let source = HealthWorkoutSource(
+            localIdentifier: "fractional-workout-id",
+            activityType: .running,
+            start: start,
+            end: end,
+            duration: 30.8,
+            metrics: .empty,
+            activities: []
+        )
+
+        let snapshot = try workoutSnapshot(
+            source: source,
+            salt: Data("salt".utf8)
+        )
+        let workout = try XCTUnwrap(snapshot.data.workouts?.items.first)
+
+        XCTAssertEqual(workout.durationSeconds, 30)
+        XCTAssertLessThanOrEqual(
+            Double(workout.durationSeconds),
+            workout.endAt.timeIntervalSince(workout.startAt)
+        )
     }
 
     func testModelReviewsAuthorizationAndUploadsSelectedSnapshot() async throws {
