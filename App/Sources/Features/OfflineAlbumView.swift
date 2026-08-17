@@ -56,6 +56,14 @@ func offlineAlbumCanSelectTarget(_ support: DeviceCapabilitySupport?) -> Bool {
     support?.state != .unsupported
 }
 
+func offlineAlbumShouldShowReview(
+    isExistingAlbum: Bool,
+    draft: OfflineAlbumEditorDraft,
+    baseline: OfflineAlbumEditorDraft
+) -> Bool {
+    !isExistingAlbum || draft != baseline
+}
+
 func offlineAlbumTargetStatus(
     _ target: OfflineAlbumTarget
 ) -> String {
@@ -162,6 +170,7 @@ struct OfflineAlbumEditorView: View {
     @Environment(\.openURL) private var openURL
 
     @State private var draft: OfflineAlbumEditorDraft
+    @State private var baselineDraft: OfflineAlbumEditorDraft
     @State private var preflight: OfflineAlbumPreflightResponse?
     @State private var isWorking = false
     @State private var replaceConflicts = false
@@ -182,13 +191,13 @@ struct OfflineAlbumEditorView: View {
         self.folder = folder
         self.images = images
         self.current = current
-        _draft = State(
-            initialValue: OfflineAlbumEditorDraft(
-                folderName: folder.name,
-                imageIDs: images.map(\.id),
-                album: current?.album
-            )
+        let initialDraft = OfflineAlbumEditorDraft(
+            folderName: folder.name,
+            imageIDs: images.map(\.id),
+            album: current?.album
         )
+        _draft = State(initialValue: initialDraft)
+        _baselineDraft = State(initialValue: initialDraft)
     }
 
     private var hasConflicts: Bool {
@@ -197,6 +206,14 @@ struct OfflineAlbumEditorView: View {
 
     private var hasUnsupportedTarget: Bool {
         preflight?.targets.contains { $0.support.state == .unsupported } == true
+    }
+
+    private var shouldShowReview: Bool {
+        offlineAlbumShouldShowReview(
+            isExistingAlbum: current != nil,
+            draft: draft,
+            baseline: baselineDraft
+        )
     }
 
     var body: some View {
@@ -225,23 +242,25 @@ struct OfflineAlbumEditorView: View {
                     .disabled(isWorking)
                 }
 
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(preflight == nil ? "Review" : "Save") {
-                        Task {
-                            if preflight == nil {
-                                await runPreflight()
-                            } else {
-                                await save()
+                if preflight != nil || shouldShowReview {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(preflight == nil ? "Review" : "Save") {
+                            Task {
+                                if preflight == nil {
+                                    await runPreflight()
+                                } else {
+                                    await save()
+                                }
                             }
                         }
+                        .disabled(
+                            isWorking
+                                || draft.validationMessage != nil
+                                || (preflight != nil && hasUnsupportedTarget)
+                                || (hasConflicts && !replaceConflicts)
+                                || model.offlineAlbumAuthoringPermission == .denied
+                        )
                     }
-                    .disabled(
-                        isWorking
-                            || draft.validationMessage != nil
-                            || (preflight != nil && hasUnsupportedTarget)
-                            || (hasConflicts && !replaceConflicts)
-                            || model.offlineAlbumAuthoringPermission == .denied
-                    )
                 }
             }
             .interactiveDismissDisabled(isWorking)
@@ -554,7 +573,7 @@ struct OfflineAlbumEditorView: View {
     }
 
     private func runPreflight() async {
-        guard draft.validationMessage == nil else { return }
+        guard draft.validationMessage == nil, shouldShowReview else { return }
         isWorking = true
         defer { isWorking = false }
         do {
@@ -604,11 +623,13 @@ struct OfflineAlbumEditorView: View {
                 return
             case let .server(code, _, _) where code == "precondition_failed":
                 let latest = model.offlineAlbumsByFolderID[folder.id]?.album
-                draft = OfflineAlbumEditorDraft(
+                let latestDraft = OfflineAlbumEditorDraft(
                     folderName: folder.name,
                     imageIDs: images.map(\.id),
                     album: latest
                 )
+                draft = latestDraft
+                baselineDraft = latestDraft
                 preflight = nil
                 replaceConflicts = false
                 errorMessage = String(

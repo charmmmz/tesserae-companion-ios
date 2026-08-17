@@ -13,6 +13,8 @@ capabilities.
 
 ### Fixed
 
+- Hid the Offline Album Review action until an existing Album has actual
+  unsaved configuration changes.
 - Showed an explicit acknowledgement after restart, Wi-Fi clear, and factory
   reset commands so the expected Bluetooth disconnect no longer looks like an
   unresponsive maintenance action.

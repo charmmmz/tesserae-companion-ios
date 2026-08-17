@@ -184,6 +184,47 @@ final class GalleryViewTests: XCTestCase {
         )
     }
 
+    func testOfflineAlbumReviewOnlyAppearsForNewOrChangedConfiguration() {
+        let baseline = OfflineAlbumEditorDraft(
+            folderName: "Family",
+            imageIDs: ["one", "two"]
+        )
+
+        XCTAssertTrue(
+            offlineAlbumShouldShowReview(
+                isExistingAlbum: false,
+                draft: baseline,
+                baseline: baseline
+            )
+        )
+        XCTAssertFalse(
+            offlineAlbumShouldShowReview(
+                isExistingAlbum: true,
+                draft: baseline,
+                baseline: baseline
+            )
+        )
+
+        var changed = baseline
+        changed.fit = .fit
+        XCTAssertTrue(
+            offlineAlbumShouldShowReview(
+                isExistingAlbum: true,
+                draft: changed,
+                baseline: baseline
+            )
+        )
+
+        changed.fit = baseline.fit
+        XCTAssertFalse(
+            offlineAlbumShouldShowReview(
+                isExistingAlbum: true,
+                draft: changed,
+                baseline: baseline
+            )
+        )
+    }
+
     func testOfflineAlbumMockBackedPreflightSaveAndDelete() async throws {
         let model = makeGalleryModel()
         await model.connectDemo()
