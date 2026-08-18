@@ -11,6 +11,12 @@ capabilities.
 
 ## [Unreleased]
 
+### Fixed
+
+- Anchored Clear Wi-Fi and Factory Reset confirmations to their corresponding
+  maintenance actions so the system prompt no longer appears offset from the
+  selected row inside the resizable nearby-display sheet.
+
 ## [0.7.0] - 2026-08-18
 
 ### Fixed

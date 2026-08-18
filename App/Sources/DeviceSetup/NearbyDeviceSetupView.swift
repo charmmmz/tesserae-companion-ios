@@ -27,15 +27,10 @@ struct NearbyDeviceSetupView: View {
     @State private var isSubmitting = false
     @State private var savePassword = false
     @State private var localError: String?
-    @State private var pendingDestructiveAction: DestructiveAction?
+    @State private var clearWiFiConfirmationPresented = false
+    @State private var factoryResetConfirmationPresented = false
     @State private var recentEventsExpanded = false
     @State private var selectedDetent: PresentationDetent = .height(360)
-
-    private enum DestructiveAction: String, Identifiable {
-        case clearWiFi
-        case factoryReset
-        var id: String { rawValue }
-    }
 
     private var hardwarePresentation: DisplayHardwarePresentation {
         DisplayHardwarePresentation(
@@ -129,32 +124,6 @@ struct NearbyDeviceSetupView: View {
             Button("OK", role: .cancel) { localError = nil }
         } message: {
             Text(localError ?? "")
-        }
-        .confirmationDialog(
-            destructiveDialogTitle,
-            isPresented: Binding(
-                get: { pendingDestructiveAction != nil },
-                set: { if !$0 { pendingDestructiveAction = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            switch pendingDestructiveAction {
-            case .clearWiFi:
-                Button("Clear Wi-Fi Settings", role: .destructive) {
-                    nearby.clearWiFi()
-                }
-            case .factoryReset:
-                Button("Factory Reset Display", role: .destructive) {
-                    nearby.factoryReset()
-                }
-            case nil:
-                EmptyView()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text(pendingDestructiveAction == .clearWiFi
-                 ? "Forgets Wi-Fi and restarts. Tesserae server settings stay saved."
-                 : "Erases Wi-Fi, server, and display settings, then restarts as a new display.")
         }
         .onChange(of: nearby.connectionState) { _, state in
             switch state {
@@ -446,16 +415,41 @@ struct NearbyDeviceSetupView: View {
 
             Section("Reset") {
                 Button(role: .destructive) {
-                    pendingDestructiveAction = .clearWiFi
+                    clearWiFiConfirmationPresented = true
                 } label: {
                     Label("Clear Wi-Fi Settings", systemImage: "wifi.slash")
                         .foregroundStyle(.red)
                 }
+                .confirmationDialog(
+                    "Clear this display's Wi-Fi settings?",
+                    isPresented: $clearWiFiConfirmationPresented,
+                    titleVisibility: .visible
+                ) {
+                    Button("Clear Wi-Fi Settings", role: .destructive) {
+                        nearby.clearWiFi()
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Forgets Wi-Fi and restarts. Tesserae server settings stay saved.")
+                }
+
                 Button(role: .destructive) {
-                    pendingDestructiveAction = .factoryReset
+                    factoryResetConfirmationPresented = true
                 } label: {
                     Label("Factory Reset", systemImage: "trash")
                         .foregroundStyle(.red)
+                }
+                .confirmationDialog(
+                    "Factory reset this display?",
+                    isPresented: $factoryResetConfirmationPresented,
+                    titleVisibility: .visible
+                ) {
+                    Button("Factory Reset Display", role: .destructive) {
+                        nearby.factoryReset()
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Erases Wi-Fi, server, and display settings, then restarts as a new display.")
                 }
             }
 
@@ -554,14 +548,6 @@ struct NearbyDeviceSetupView: View {
         ).isEmpty else { return true }
         return nearby.networks.first(where: { $0.ssid == selectedSSID })?
             .isSecure ?? true
-    }
-
-    private var destructiveDialogTitle: String {
-        switch pendingDestructiveAction {
-        case .clearWiFi: "Clear this display's Wi-Fi settings?"
-        case .factoryReset: "Factory reset this display?"
-        case nil: "Confirm action"
-        }
     }
 
     private func submitConfiguration() {
