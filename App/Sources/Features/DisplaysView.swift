@@ -436,10 +436,17 @@ private struct DisplayDetailView: View {
         case next
     }
 
+    private struct UpdateAnchor: Equatable {
+        let eventID: String
+        let start: Date
+        let end: Date
+    }
+
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedScreenPage: ScreenPage = .current
+    @State private var updateAnchor: UpdateAnchor?
     @State private var hapticEvent = TesseraeHapticEvent()
     let display: DisplaySummary
 
@@ -456,7 +463,7 @@ private struct DisplayDetailView: View {
             VStack(spacing: 14) {
                 screenCarouselCard
 
-                if model.supportsDeviceTimeline {
+                if shouldShowNextUpdateCard {
                     nextUpdateCard
                 }
 
@@ -585,13 +592,52 @@ private struct DisplayDetailView: View {
             await model.refreshDeviceUpcoming(displayID: currentDisplay.id)
         }
         .task(id: nextUpcomingEvent?.id) {
+            if let event = nextUpcomingEvent {
+                let needsReanchor: Bool
+                if let anchor = updateAnchor {
+                    needsReanchor = abs(
+                        anchor.end.timeIntervalSince(event.scheduledAt)
+                    ) > 30
+                } else {
+                    needsReanchor = true
+                }
+                if needsReanchor {
+                    updateAnchor = UpdateAnchor(
+                        eventID: event.id,
+                        start: Date(),
+                        end: event.scheduledAt
+                    )
+                } else if let anchor = updateAnchor,
+                          anchor.eventID != event.id
+                {
+                    updateAnchor = UpdateAnchor(
+                        eventID: event.id,
+                        start: anchor.start,
+                        end: anchor.end
+                    )
+                }
+            }
             guard let scheduledAt = nextUpcomingEvent?.scheduledAt else { return }
             let delay = scheduledAt.timeIntervalSinceNow
             if delay > 0 {
                 try? await Task.sleep(for: .seconds(delay + 1))
             }
-            guard !Task.isCancelled else { return }
-            await model.refreshDeviceUpcoming(displayID: currentDisplay.id)
+            while !Task.isCancelled {
+                await model.refreshDeviceUpcoming(displayID: currentDisplay.id)
+                guard
+                    let event = model.deviceUpcomingResponses[currentDisplay.id]?
+                        .events.first,
+                    event.scheduledAt.timeIntervalSinceNow <= 10
+                else {
+                    break
+                }
+                try? await Task.sleep(for: .seconds(15))
+            }
+        }
+        .onChange(of: currentDisplay.lastSeenAt) { _, _ in
+            Task {
+                await model.refreshDeviceUpcoming(displayID: currentDisplay.id)
+            }
         }
         .refreshable {
             await model.refreshDisplays(showErrors: false)
@@ -629,21 +675,36 @@ private struct DisplayDetailView: View {
         upcomingResponse?.events.first
     }
 
+    private var shouldShowNextUpdateCard: Bool {
+        guard model.supportsDeviceTimeline else { return false }
+        if model.loadingDeviceTimelineIDs.contains(currentDisplay.id) {
+            return true
+        }
+        if model.deviceTimelineErrors[currentDisplay.id] != nil {
+            return true
+        }
+        return model.deviceUpcomingResponses[currentDisplay.id]?.events.isEmpty == false
+    }
+
     @ViewBuilder
     private var nextUpdateCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label("Next Update", systemImage: "clock.arrow.circlepath")
+            Label("Next in Line", systemImage: "clock.arrow.circlepath")
                 .font(.headline)
 
             if let event = nextUpcomingEvent,
                let response = upcomingResponse
             {
-                TimelineView(.periodic(from: .now, by: 30)) { context in
+                TimelineView(.animation) { context in
                     nextUpdateContent(
                         event: event,
-                        response: response,
                         now: context.date
                     )
+                }
+
+                if !upcomingQueue.isEmpty {
+                    Divider()
+                    upcomingQueueList
                 }
             } else if model.loadingDeviceTimelineIDs.contains(currentDisplay.id),
                       upcomingResponse == nil
@@ -672,26 +733,78 @@ private struct DisplayDetailView: View {
                     }
                     .buttonStyle(.bordered)
                 }
-            } else if let response = upcomingResponse {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("No scheduled update")
-                        .font(.subheadline.weight(.semibold))
-                    Text("Nothing projected through \(response.throughAt.formatted(date: .abbreviated, time: .shortened)).")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
             }
         }
         .tesseraeCard()
         .accessibilityIdentifier("display-next-update-\(currentDisplay.id)")
     }
 
+    private var upcomingQueue: [DeviceUpcomingEvent] {
+        guard let response = upcomingResponse else { return [] }
+        return Array(response.events.dropFirst().prefix(4))
+    }
+
+    private var upcomingQueueList: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(Array(upcomingQueue.enumerated()), id: \.element.id) {
+                index,
+                event in
+                HStack(spacing: 10) {
+                    upcomingQueueIcon(for: event)
+                        .frame(width: 18)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(upcomingTarget(event))
+                            .font(.subheadline.weight(.medium))
+                            .lineLimit(1)
+                        Text(upcomingReason(event))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    Text(
+                        event.scheduledAt,
+                        format: .dateTime.weekday(.abbreviated).hour().minute()
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
+                }
+
+                if index < upcomingQueue.count - 1 {
+                    Divider()
+                }
+            }
+        }
+        .accessibilityIdentifier("display-next-in-line-queue-\(currentDisplay.id)")
+    }
+
+    @ViewBuilder
+    private func upcomingQueueIcon(for event: DeviceUpcomingEvent) -> some View {
+        if let dashboardID = event.dashboardID,
+           let dashboard = model.dashboards.first(where: { $0.id == dashboardID })
+        {
+            PhosphorIcon(
+                name: dashboard.iconName,
+                size: 15,
+                color: TesseraeTheme.accent,
+                fallbackSystemName: "rectangle.grid.2x2"
+            )
+        } else {
+            Image(systemName: upcomingSymbol(event))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     private func nextUpdateContent(
         event: DeviceUpcomingEvent,
-        response: DeviceUpcomingResponse,
         now: Date
     ) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let isDue = event.scheduledAt <= now.addingTimeInterval(10)
+        return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(upcomingTarget(event))
@@ -705,9 +818,15 @@ private struct DisplayDetailView: View {
                 Spacer(minLength: 8)
 
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(event.scheduledAt, style: .relative)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(upcomingAccent(event.certainty))
+                    if isDue {
+                        Text("Waiting for display…")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(upcomingAccent(event.certainty))
+                    } else {
+                        Text(event.scheduledAt, style: .relative)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(upcomingAccent(event.certainty))
+                    }
                     Text(
                         event.scheduledAt,
                         format: .dateTime.weekday(.abbreviated).hour().minute()
@@ -718,15 +837,14 @@ private struct DisplayDetailView: View {
                 .fixedSize(horizontal: true, vertical: false)
             }
 
-            if let start = response.currentFrameAt,
-               start < event.scheduledAt
-            {
+            if let anchor = updateAnchor {
+                let total = max(anchor.end.timeIntervalSince(anchor.start), 1)
                 ProgressView(
                     value: min(
-                        max(now.timeIntervalSince(start), 0),
-                        event.scheduledAt.timeIntervalSince(start)
+                        max(now.timeIntervalSince(anchor.start), 0),
+                        total
                     ),
-                    total: event.scheduledAt.timeIntervalSince(start)
+                    total: total
                 )
                 .tint(upcomingAccent(event.certainty))
                 .accessibilityLabel("Time until next update")
@@ -742,35 +860,6 @@ private struct DisplayDetailView: View {
             }
             .font(.caption.weight(.medium))
             .foregroundStyle(.secondary)
-        }
-    }
-
-    private func upcomingTarget(_ event: DeviceUpcomingEvent) -> String {
-        event.dashboardName
-            ?? event.lineupName
-            ?? String(localized: "Lineup update")
-    }
-
-    private func upcomingReason(_ event: DeviceUpcomingEvent) -> String {
-        switch (event.cause, event.effect) {
-        case (.interval, .refreshScreen):
-            String(localized: "Keep Fresh")
-        case (.cycle, .changeScreen):
-            String(localized: "Lineup rotation")
-        case (.cycle, .refreshScreen):
-            String(localized: "Lineup refresh")
-        case (.daily, .changeScreen):
-            String(localized: "Daily schedule")
-        case (.daily, .refreshScreen):
-            String(localized: "Daily refresh")
-        case (.homeReturn, _):
-            String(localized: "Home Return")
-        case (.dashboardRefresh, _):
-            String(localized: "Dashboard refresh")
-        case (.widgetRefresh, _):
-            String(localized: "Widget refresh")
-        case (.interval, .changeScreen):
-            String(localized: "Interval schedule")
         }
     }
 
@@ -791,6 +880,29 @@ private struct DisplayDetailView: View {
             String(localized: "Conditional")
         case .estimated:
             String(localized: "Estimated")
+        }
+    }
+
+    private func upcomingTarget(_ event: DeviceUpcomingEvent) -> String {
+        event.dashboardName
+            ?? event.lineupName
+            ?? String(localized: "Lineup update")
+    }
+
+    private func upcomingReason(_ event: DeviceUpcomingEvent) -> String {
+        switch event.cause {
+        case .interval:
+            String(localized: "Keep Fresh")
+        case .cycle:
+            String(localized: "Cycle")
+        case .daily:
+            String(localized: "Daily")
+        case .homeReturn:
+            String(localized: "Home Return")
+        case .dashboardRefresh:
+            String(localized: "Dashboard refresh")
+        case .widgetRefresh:
+            String(localized: "Widget refresh")
         }
     }
 

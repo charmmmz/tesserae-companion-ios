@@ -11,8 +11,21 @@ capabilities.
 
 ## [Unreleased]
 
+### Added
+
+- Display details now show the server-projected update queue under the
+  "Next in Line" card, listing the following Lineup advances and refreshes
+  alongside the immediate countdown, each row with its dashboard icon.
+
 ### Changed
 
+- Renamed the Display detail timeline card from "Next Update" to
+  "Next in Line" so it reads as part of the Lineup experience instead of a
+  generic refresh countdown.
+- Unified Lineup type naming across the app to Tesserae's canonical set
+  (Daily / Cycle / Keep Fresh / Manual), including the "Next in Line" reason
+  labels, instead of ad-hoc wording like "Lineup rotation" or
+  "Interval schedule".
 - Reordered the Health settings page to match Reminders: sync status is now
   the first section, followed by Health access, the Share toggles, and sync
   controls; the status row also shows "Syncing…" while a sync is in progress.
@@ -34,9 +47,25 @@ capabilities.
 
 ### Fixed
 
+- Refreshed the Display timeline immediately after a manual dashboard push,
+  image or link send, history resend, or Lineup playback action so the
+  projected queue reflects the manual change right away.
+- Hid the "Next in Line" card entirely when the server projects no upcoming
+  events for a display, instead of showing an empty "no scheduled update"
+  card.
+- Refreshed the "Next in Line" timeline while it shows the waiting state and
+  whenever the display checks in, so the card stops saying "Waiting for
+  display" after the screen has actually woken and rendered a new frame.
+- Anchored the Display timeline countdown to the event shown when the card
+  first renders it, so the progress bar counts down smoothly and no longer
+  jumps or restarts when the server re-projects slightly different times.
 - Anchored Clear Wi-Fi and Factory Reset confirmations to their corresponding
   maintenance actions so the system prompt no longer appears offset from the
   selected row inside the resizable nearby-display sheet.
+- Stopped showing a "Something Went Wrong — No job with that id" alert when a
+  tracked push job has expired on the server after its 24-hour retention
+  window; the stale activity card is removed instead of being retried on every
+  launch.
 
 ## [0.7.0] - 2026-08-18
 

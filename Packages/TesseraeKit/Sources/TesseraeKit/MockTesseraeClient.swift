@@ -18,6 +18,7 @@ public actor MockTesseraeClient: TesseraeServing {
     private var offlineAlbumVersionsByFolderID: [String: Int] = [:]
     private let lineupIntent: LineupIntent
     private let lineupFetchError: TesseraeClientError?
+    private let jobFetchError: TesseraeClientError?
     private let lineupAuthoringGranted: Bool
     private let offlineAlbumAuthoringGranted: Bool
 
@@ -25,12 +26,14 @@ public actor MockTesseraeClient: TesseraeServing {
         latency: Duration = .milliseconds(180),
         lineupIntent: LineupIntent = .manual,
         lineupFetchError: TesseraeClientError? = nil,
+        jobFetchError: TesseraeClientError? = nil,
         lineupAuthoringGranted: Bool = true,
         offlineAlbumAuthoringGranted: Bool = true
     ) {
         self.latency = latency
         self.lineupIntent = lineupIntent
         self.lineupFetchError = lineupFetchError
+        self.jobFetchError = jobFetchError
         self.lineupAuthoringGranted = lineupAuthoringGranted
         self.offlineAlbumAuthoringGranted = offlineAlbumAuthoringGranted
         let family = GalleryFolder(
@@ -1177,6 +1180,9 @@ public actor MockTesseraeClient: TesseraeServing {
 
     public func fetchJob(id: String, instance: TesseraeInstance) async throws -> PushJob {
         try await pause()
+        if let jobFetchError {
+            throw jobFetchError
+        }
         guard let job = completedJobs[id] else {
             throw TesseraeClientError.unavailable
         }

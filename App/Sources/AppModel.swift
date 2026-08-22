@@ -733,6 +733,12 @@ final class AppModel {
         }
     }
 
+    private func refreshDeviceUpcomingIfSupported(deviceIDs: [String]) async {
+        for deviceID in deviceIDs {
+            await refreshDeviceUpcoming(displayID: deviceID)
+        }
+    }
+
     func refreshActivity(
         showErrors: Bool = true,
         saveSnapshot: Bool = true
@@ -1572,6 +1578,7 @@ final class AppModel {
             jobs.insert(job, at: 0)
             await persistSnapshot()
             await updateUntilTerminal(job, instance: activeInstance)
+            await refreshDeviceUpcomingIfSupported(deviceIDs: deviceIDs)
             return true
         } catch {
             await presentOperationError(error)
@@ -1647,6 +1654,7 @@ final class AppModel {
             await persistSnapshot()
             await updateUntilTerminal(job, instance: activeInstance)
             await refreshLineups(showErrors: false)
+            await refreshDeviceUpcomingIfSupported(deviceIDs: deviceIDs)
             return true
         } catch {
             if let error = error as? TesseraeClientError,
@@ -1801,6 +1809,9 @@ final class AppModel {
         for job in acceptedJobs {
             await updateUntilTerminal(job, instance: activeInstance)
         }
+        await refreshDeviceUpcomingIfSupported(
+            deviceIDs: targetGroups.flatMap(\.deviceIDs)
+        )
         if let firstError {
             await presentOperationError(firstError)
             return false
@@ -1839,6 +1850,7 @@ final class AppModel {
             jobs.insert(job, at: 0)
             await persistSnapshot()
             await updateUntilTerminal(job, instance: activeInstance)
+            await refreshDeviceUpcomingIfSupported(deviceIDs: deviceIDs)
             return true
         } catch {
             await presentOperationError(error)
@@ -1889,6 +1901,7 @@ final class AppModel {
             jobs.insert(job, at: 0)
             await persistSnapshot()
             await updateUntilTerminal(job, instance: activeInstance)
+            await refreshDeviceUpcomingIfSupported(deviceIDs: deviceIDs)
             return true
         } catch {
             await presentOperationError(error)
@@ -1945,6 +1958,7 @@ final class AppModel {
             jobs.insert(job, at: 0)
             await persistSnapshot()
             await updateUntilTerminal(job, instance: activeInstance)
+            await refreshDeviceUpcomingIfSupported(deviceIDs: item.deviceIDs)
         } catch {
             await presentOperationError(error)
         }
@@ -2778,6 +2792,19 @@ final class AppModel {
                     try await Task.sleep(for: .milliseconds(500))
                 }
             } catch is CancellationError {
+                return
+            } catch let error as TesseraeClientError {
+                if case .server("not_found", _, _) = error {
+                    // The server swept this job after its advertised
+                    // retention window (24 h), usually because the app never
+                    // observed the terminal state. Drop the stale card instead
+                    // of raising "No job with that id" on every launch; the
+                    // published outcome remains in server History.
+                    jobs.removeAll { $0.id == current.id }
+                    await persistSnapshot(showErrors: false)
+                    return
+                }
+                await presentOperationError(error)
                 return
             } catch {
                 await presentOperationError(error)

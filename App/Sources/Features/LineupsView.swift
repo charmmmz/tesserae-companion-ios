@@ -1613,7 +1613,7 @@ private extension LineupIntent {
     var displayName: String {
         switch self {
         case .daily: String(localized: "Daily")
-        case .interval: String(localized: "Interval")
+        case .interval: String(localized: "Keep Fresh")
         case .cycle: String(localized: "Cycle")
         case .manual: String(localized: "Manual")
         }
