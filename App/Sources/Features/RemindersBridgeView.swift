@@ -15,6 +15,10 @@ struct RemindersBridgeView: View {
 
                 Section {
                     authorizationContent
+                    Link(
+                        "Open in iOS Settings",
+                        destination: URL(string: UIApplication.openSettingsURLString)!
+                    )
                 } header: {
                     Text("Reminders Access")
                 } footer: {
@@ -26,23 +30,30 @@ struct RemindersBridgeView: View {
                 if bridgeModel.authorizationState == .fullAccess {
                     Section {
                         ForEach(bridgeModel.lists) { list in
-                            Button {
-                                bridgeModel.toggleList(list.id)
-                            } label: {
-                                HStack {
+                            Toggle(
+                                isOn: Binding(
+                                    get: {
+                                        bridgeModel.selectedListIDs.contains(list.id)
+                                    },
+                                    set: { _ in
+                                        bridgeModel.toggleList(list.id)
+                                    }
+                                )
+                            ) {
+                                VStack(alignment: .leading, spacing: 2) {
                                     Text(list.title)
-                                        .foregroundStyle(.primary)
-                                    Spacer()
-                                    if bridgeModel.selectedListIDs.contains(list.id) {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundStyle(.tint)
-                                    } else {
-                                        Image(systemName: "circle")
-                                            .foregroundStyle(.tertiary)
+                                    if let itemCount = bridgeModel.listItemCounts[list.id] {
+                                        Text(
+                                            String.localizedStringWithFormat(
+                                                String(localized: "%lld items"),
+                                                itemCount
+                                            )
+                                        )
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
                                     }
                                 }
                             }
-                            .buttonStyle(.plain)
                             .disabled(bridgeModel.isBusy)
                         }
                         ForEach(
@@ -65,7 +76,7 @@ struct RemindersBridgeView: View {
                             .disabled(bridgeModel.isBusy)
                         }
                     } header: {
-                        Text("Lists")
+                        Text("Share")
                     } footer: {
                         Text("Choose up to 20 lists.")
                     }
@@ -108,55 +119,36 @@ struct RemindersBridgeView: View {
             guard newPhase == .active else { return }
             Task { await bridgeModel.load(using: appModel) }
         }
-        .confirmationDialog(
-            "Stop Reminders Sync?",
-            isPresented: $deleteConfirmationPresented,
-            titleVisibility: .visible
-        ) {
-            Button("Stop Sync and Delete Snapshot", role: .destructive) {
-                Task {
-                    await bridgeModel.disableAndDelete(using: appModel)
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text(
-                "Selected lists stay on this iPhone. Tesserae deletes the latest snapshot now; rendered History thumbnails expire normally."
-            )
-        }
     }
 
     private var syncStatusSection: some View {
         Section("Sync Status") {
-            LabeledContent("Status", value: syncStatus)
-            if let status = bridgeModel.sourceStatus {
-                LabeledContent("Snapshot", value: status.state.displayName)
-                LabeledContent("Last Sync") {
-                    Text(status.generatedAt, style: .relative)
-                }
-                LabeledContent("Expires") {
-                    Text(status.expiresAt, style: .relative)
-                }
-            }
-            if let itemCount = bridgeModel.itemCount {
-                LabeledContent(
-                    "Last Upload",
-                    value: String.localizedStringWithFormat(
-                        String(localized: "%lld items"),
-                        itemCount
-                    )
-                )
-            }
+            PersonalDataSyncStatusView(
+                sourceStatus: bridgeModel.sourceStatus,
+                counts: remindersSyncCounts
+            )
         }
     }
 
-    private var syncStatus: String {
-        if bridgeModel.isBusy {
-            return String(localized: "Syncing…")
+    private var remindersSyncCounts: [String] {
+        var values: [String] = []
+        if bridgeModel.selectedListCount > 0 {
+            values.append(
+                String.localizedStringWithFormat(
+                    String(localized: "%lld lists"),
+                    bridgeModel.selectedListCount
+                )
+            )
         }
-        return bridgeModel.isEnabled
-            ? String(localized: "On")
-            : String(localized: "Off")
+        if let itemCount = bridgeModel.itemCount {
+            values.append(
+                String.localizedStringWithFormat(
+                    String(localized: "%lld items"),
+                    itemCount
+                )
+            )
+        }
+        return values
     }
 
     @ViewBuilder
@@ -182,10 +174,6 @@ struct RemindersBridgeView: View {
                 systemImage: "hand.raised.fill"
             )
             .foregroundStyle(.secondary)
-            Link(
-                "Open iOS Settings",
-                destination: URL(string: UIApplication.openSettingsURLString)!
-            )
         case .fullAccess:
             Label("Full access allowed", systemImage: "checkmark.shield.fill")
                 .foregroundStyle(.secondary)
@@ -202,16 +190,10 @@ struct RemindersBridgeView: View {
             }
             .disabled(bridgeModel.isBusy)
 
-            Button(role: .destructive) {
-                deleteConfirmationPresented = true
-            } label: {
-                busyLabel(
-                    title: "Stop Sync and Delete Snapshot",
-                    systemImage: "trash",
-                    showsProgress: false
-                )
-            }
-            .disabled(bridgeModel.isBusy)
+            deleteSnapshotButton(
+                title: "Stop Sync and Delete Snapshot",
+                systemImage: "trash"
+            )
         } else {
             Button {
                 Task { await bridgeModel.enableAndSync(using: appModel) }
@@ -221,17 +203,43 @@ struct RemindersBridgeView: View {
             .disabled(bridgeModel.isBusy || bridgeModel.selectedListIDs.isEmpty)
 
             if bridgeModel.sourceStatus != nil {
-                Button(role: .destructive) {
-                    deleteConfirmationPresented = true
-                } label: {
-                    busyLabel(
-                        title: "Delete Existing Snapshot",
-                        systemImage: "trash",
-                        showsProgress: false
-                    )
-                }
-                .disabled(bridgeModel.isBusy)
+                deleteSnapshotButton(
+                    title: "Delete Existing Snapshot",
+                    systemImage: "trash"
+                )
             }
+        }
+    }
+
+    private func deleteSnapshotButton(
+        title: LocalizedStringKey,
+        systemImage: String
+    ) -> some View {
+        Button(role: .destructive) {
+            deleteConfirmationPresented = true
+        } label: {
+            busyLabel(
+                title: title,
+                systemImage: systemImage,
+                showsProgress: false
+            )
+        }
+        .disabled(bridgeModel.isBusy)
+        .confirmationDialog(
+            "Stop Reminders Sync?",
+            isPresented: $deleteConfirmationPresented,
+            titleVisibility: .visible
+        ) {
+            Button("Stop Sync and Delete Snapshot", role: .destructive) {
+                Task {
+                    await bridgeModel.disableAndDelete(using: appModel)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(
+                "Selected lists stay on this iPhone. Tesserae deletes the latest snapshot now; rendered History thumbnails expire normally."
+            )
         }
     }
 
@@ -250,16 +258,6 @@ struct RemindersBridgeView: View {
             }
             .frame(width: 28)
             Text(title)
-        }
-    }
-}
-
-private extension PersonalDataFreshness {
-    var displayName: String {
-        switch self {
-        case .fresh: String(localized: "Fresh")
-        case .stale: String(localized: "Stale")
-        case .expired: String(localized: "Expired")
         }
     }
 }

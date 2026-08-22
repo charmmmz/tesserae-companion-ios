@@ -351,3 +351,8 @@
 "Uploading…" = "正在上传…";
 "This photo format is not accepted by the Gallery." = "图库不接受这种照片格式。";
 "This photo exceeds the Gallery upload limit of %@." = "此照片超过图库的上传大小限制（%@）。";
+"Open in iOS Settings" = "在 iOS 设置中打开";
+"%lld days" = "%lld 天";
+"%lld nights" = "%lld 晚";
+"%lld workouts" = "%lld 次训练";
+"%lld lists" = "%lld 个列表";

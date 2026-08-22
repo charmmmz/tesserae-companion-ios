@@ -14,21 +14,16 @@ struct HealthBridgeView: View {
             } else if bridgeModel.authorizationState == .unavailable {
                 unavailableSection
             } else {
+                syncStatusSection
+                authorizationSection
                 selectionSection
-                if !bridgeModel.selectedSections.isEmpty {
-                    requestedDataSection
-                    authorizationSection
-                }
-                if bridgeModel.isEnabled || bridgeModel.sourceStatus != nil {
-                    syncStatusSection
-                }
-                retentionSection
                 if !bridgeModel.selectedSections.isEmpty
                     || bridgeModel.isEnabled
                     || bridgeModel.sourceStatus != nil
                 {
                     syncControlsSection
                 }
+                retentionSection
                 feedbackSections
             }
         }
@@ -38,22 +33,6 @@ struct HealthBridgeView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task(id: appModel.activeInstance?.id) {
             await bridgeModel.load(using: appModel)
-        }
-        .confirmationDialog(
-            "Stop Health Sync?",
-            isPresented: $deleteConfirmationPresented,
-            titleVisibility: .visible
-        ) {
-            Button("Stop Sync and Delete Snapshot", role: .destructive) {
-                Task {
-                    await bridgeModel.disableAndDelete(using: appModel)
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text(
-                "This deletes the latest server snapshot. Rendered images remain until replaced or expired."
-            )
         }
     }
 
@@ -77,48 +56,16 @@ struct HealthBridgeView: View {
         } header: {
             Text("Share")
         } footer: {
-            if bridgeModel.isEnabled && bridgeModel.selectedSections.isEmpty {
-                Text("Nothing selected. Stop sync to delete the server snapshot.")
-            } else if bridgeModel.hasPendingSelectionChanges {
-                Text("Sync to apply these changes.")
-            }
-        }
-    }
-
-    private var requestedDataSection: some View {
-        Section {
-            if bridgeModel.selectedSections.contains(.activity) {
-                disclosureGroup(
-                    title: "Activity data",
-                    items: [
-                        "Move, Exercise, and Stand values and goals",
-                        "Daily steps and walking + running distance"
-                    ]
+            VStack(alignment: .leading, spacing: 4) {
+                if bridgeModel.isEnabled && bridgeModel.selectedSections.isEmpty {
+                    Text("Nothing selected. Stop sync to delete the server snapshot.")
+                } else if bridgeModel.hasPendingSelectionChanges {
+                    Text("Sync to apply these changes.")
+                }
+                Text(
+                    "Never includes routes, location, heart rate, raw samples, identifiers, device details, notes, or metadata."
                 )
             }
-            if bridgeModel.selectedSections.contains(.sleep) {
-                disclosureGroup(
-                    title: "Sleep data",
-                    items: [
-                        "Start, end, in-bed, asleep, awake, Core, Deep, REM, and unspecified totals"
-                    ]
-                )
-            }
-            if bridgeModel.selectedSections.contains(.workouts) {
-                disclosureGroup(
-                    title: "Workout data",
-                    items: [
-                        "Activity type, start, end, duration, and segment timing",
-                        "Energy, supported distances, flights, and swimming strokes"
-                    ]
-                )
-            }
-        } header: {
-            Text("Data Access")
-        } footer: {
-            Text(
-                "Never includes routes, location, heart rate, raw samples, identifiers, device details, notes, or metadata."
-            )
         }
     }
 
@@ -145,10 +92,10 @@ struct HealthBridgeView: View {
                     systemImage: "checkmark.shield.fill"
                 )
                 .foregroundStyle(.secondary)
-                Button("Review Health Access") {
-                    Task { await bridgeModel.requestAccess() }
-                }
-                .disabled(bridgeModel.isBusy)
+                Link(
+                    "Open in iOS Settings",
+                    destination: URL(string: UIApplication.openSettingsURLString)!
+                )
             }
         } header: {
             Text("Health Access")
@@ -159,31 +106,40 @@ struct HealthBridgeView: View {
 
     private var syncStatusSection: some View {
         Section("Sync Status") {
-            LabeledContent(
-                "Status",
-                value: bridgeModel.isEnabled
-                    ? String(localized: "On")
-                    : String(localized: "Off")
+            PersonalDataSyncStatusView(
+                sourceStatus: bridgeModel.sourceStatus,
+                counts: healthSyncCounts
             )
-            if let status = bridgeModel.sourceStatus {
-                LabeledContent("Snapshot", value: status.state.healthDisplayName)
-                LabeledContent("Last Sync") {
-                    Text(status.generatedAt, style: .relative)
-                }
-                LabeledContent("Expires") {
-                    Text(status.expiresAt, style: .relative)
-                }
-            }
-            if let activityDayCount = bridgeModel.activityDayCount {
-                LabeledContent("Activity", value: "\(activityDayCount) days")
-            }
-            if let sleepNightCount = bridgeModel.sleepNightCount {
-                LabeledContent("Sleep", value: "\(sleepNightCount) nights")
-            }
-            if let workoutCount = bridgeModel.workoutCount {
-                LabeledContent("Workouts", value: "\(workoutCount)")
-            }
         }
+    }
+
+    private var healthSyncCounts: [String] {
+        var values: [String] = []
+        if let activityDayCount = bridgeModel.activityDayCount {
+            values.append(
+                String.localizedStringWithFormat(
+                    String(localized: "%lld days"),
+                    activityDayCount
+                )
+            )
+        }
+        if let sleepNightCount = bridgeModel.sleepNightCount {
+            values.append(
+                String.localizedStringWithFormat(
+                    String(localized: "%lld nights"),
+                    sleepNightCount
+                )
+            )
+        }
+        if let workoutCount = bridgeModel.workoutCount {
+            values.append(
+                String.localizedStringWithFormat(
+                    String(localized: "%lld workouts"),
+                    workoutCount
+                )
+            )
+        }
+        return values
     }
 
     private var retentionSection: some View {
@@ -215,16 +171,10 @@ struct HealthBridgeView: View {
                             || bridgeModel.authorizationState != .reviewed
                     )
                 }
-                Button(role: .destructive) {
-                    deleteConfirmationPresented = true
-                } label: {
-                    busyLabel(
-                        title: "Stop Sync and Delete Snapshot",
-                        systemImage: "trash",
-                        showsProgress: false
-                    )
-                }
-                .disabled(bridgeModel.isBusy)
+                deleteSnapshotButton(
+                    title: "Stop Sync and Delete Snapshot",
+                    systemImage: "trash"
+                )
             } else {
                 Button {
                     Task { await bridgeModel.enableAndSync(using: appModel) }
@@ -241,16 +191,10 @@ struct HealthBridgeView: View {
                 )
 
                 if bridgeModel.sourceStatus != nil {
-                    Button(role: .destructive) {
-                        deleteConfirmationPresented = true
-                    } label: {
-                        busyLabel(
-                            title: "Delete Existing Snapshot",
-                            systemImage: "trash",
-                            showsProgress: false
-                        )
-                    }
-                    .disabled(bridgeModel.isBusy)
+                    deleteSnapshotButton(
+                        title: "Delete Existing Snapshot",
+                        systemImage: "trash"
+                    )
                 }
             }
         } header: {
@@ -316,18 +260,35 @@ struct HealthBridgeView: View {
         }
     }
 
-    private func disclosureGroup(
+    private func deleteSnapshotButton(
         title: LocalizedStringKey,
-        items: [LocalizedStringKey]
+        systemImage: String
     ) -> some View {
-        DisclosureGroup(title) {
-            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                Text(item)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 2)
+        Button(role: .destructive) {
+            deleteConfirmationPresented = true
+        } label: {
+            busyLabel(
+                title: title,
+                systemImage: systemImage,
+                showsProgress: false
+            )
+        }
+        .disabled(bridgeModel.isBusy)
+        .confirmationDialog(
+            "Stop Health Sync?",
+            isPresented: $deleteConfirmationPresented,
+            titleVisibility: .visible
+        ) {
+            Button("Stop Sync and Delete Snapshot", role: .destructive) {
+                Task {
+                    await bridgeModel.disableAndDelete(using: appModel)
+                }
             }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(
+                "This deletes the latest server snapshot. Rendered images remain until replaced or expired."
+            )
         }
     }
 
@@ -350,12 +311,122 @@ struct HealthBridgeView: View {
     }
 }
 
-private extension PersonalDataFreshness {
-    var healthDisplayName: String {
-        switch self {
-        case .fresh: String(localized: "Fresh")
-        case .stale: String(localized: "Stale")
-        case .expired: String(localized: "Expired")
+/// Shared Sync Status visual used by the Health and Reminders settings pages.
+/// Colour and shape carry the state; text stays for accessibility and clarity.
+struct PersonalDataSyncStatusView: View {
+    let sourceStatus: PersonalDataSourceStatus?
+    let counts: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let sourceStatus {
+                freshnessAxis
+                freshnessBar(sourceStatus)
+                metaRow(sourceStatus)
+            }
+            if !counts.isEmpty {
+                countPills
+            }
+        }
+    }
+
+    private func freshnessBar(
+        _ status: PersonalDataSourceStatus
+    ) -> some View {
+        let now = Date()
+        let total = status.expiresAt.timeIntervalSince(status.generatedAt)
+        let fraction = total > 0
+            ? min(1, max(0, now.timeIntervalSince(status.generatedAt) / total))
+            : 1
+        let staleFraction = total > 0
+            ? min(
+                1,
+                max(
+                    0,
+                    status.staleAt.timeIntervalSince(status.generatedAt) / total
+                )
+            )
+            : 1
+        return GeometryReader { proxy in
+            let width = proxy.size.width
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color.primary.opacity(0.08))
+                Capsule()
+                    .fill(freshnessColor)
+                    .frame(width: max(4, width * fraction))
+                Rectangle()
+                    .fill(Color.primary.opacity(0.35))
+                    .frame(width: 1)
+                    .offset(x: width * staleFraction - 0.5)
+            }
+        }
+        .frame(height: 6)
+    }
+
+    private var freshnessColor: Color {
+        guard let sourceStatus else { return Color.secondary }
+        switch sourceStatus.state {
+        case .fresh: return .green
+        case .stale: return .orange
+        case .expired: return .red
+        }
+    }
+
+    private var freshnessAxis: some View {
+        HStack {
+            axisLabel(title: String(localized: "Fresh"), color: .green)
+            Spacer()
+            axisLabel(title: String(localized: "Stale"), color: .orange)
+            Spacer()
+            axisLabel(title: String(localized: "Expired"), color: .red)
+        }
+        .font(.caption2)
+        .foregroundStyle(.tertiary)
+    }
+
+    private func axisLabel(
+        title: String,
+        color: Color
+    ) -> some View {
+        HStack(spacing: 3) {
+            Circle()
+                .fill(color)
+                .frame(width: 5, height: 5)
+            Text(title)
+        }
+    }
+
+    private func metaRow(
+        _ status: PersonalDataSourceStatus
+    ) -> some View {
+        HStack {
+            HStack(spacing: 5) {
+                Image(systemName: "clock")
+                    .accessibilityLabel(Text("Last Sync"))
+                Text(status.generatedAt, style: .relative)
+            }
+            Spacer()
+            HStack(spacing: 5) {
+                Image(systemName: "hourglass")
+                    .accessibilityLabel(Text("Expires"))
+                Text(status.expiresAt, style: .relative)
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    }
+
+    private var countPills: some View {
+        HStack(spacing: 6) {
+            ForEach(counts, id: \.self) { label in
+                Text(label)
+                    .font(.caption.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.primary.opacity(0.055), in: Capsule())
+            }
         }
     }
 }

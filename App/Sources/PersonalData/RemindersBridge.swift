@@ -399,6 +399,7 @@ final class RemindersBridgeModel {
     var isEnabled = false
     var isBusy = false
     var itemCount: Int?
+    var listItemCounts: [String: Int] = [:]
     var sourceStatus: PersonalDataSourceStatus?
     var confirmationMessage: String?
     var errorMessage: String?
@@ -644,6 +645,7 @@ final class RemindersBridgeModel {
             isEnabled = false
             sourceStatus = nil
             itemCount = nil
+            listItemCounts = [:]
             lastSuccessfulContentDigest = nil
             savePreferences()
             confirmationMessage = String(
@@ -701,6 +703,11 @@ final class RemindersBridgeModel {
             )
             let contentDigest = try Self.contentDigest(for: snapshot.data)
             itemCount = snapshot.data.lists.reduce(0) { $0 + $1.items.count }
+            var counts: [String: Int] = [:]
+            for (list, listSnapshot) in zip(selectedLists, snapshot.data.lists) {
+                counts[list.id] = listSnapshot.items.count
+            }
+            listItemCounts = counts
 
             var uploadIsRequired = forceUpload
                 || contentDigest != lastSuccessfulContentDigest
