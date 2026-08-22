@@ -162,7 +162,7 @@ struct SendImageToTesseraeIntent: AppIntent {
 
     @Parameter(
         title: "Image",
-        supportedTypeIdentifiers: ["public.image"]
+        supportedContentTypes: [UTType.image]
     )
     var image: IntentFile
 

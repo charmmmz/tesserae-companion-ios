@@ -908,9 +908,7 @@ private struct DisplayDetailView: View {
             Label("Next in Line", systemImage: "clock.arrow.circlepath")
                 .font(.headline)
 
-            if let event = nextUpcomingEvent,
-               let response = upcomingResponse
-            {
+            if let event = nextUpcomingEvent {
                 TimelineView(.animation) { context in
                     nextUpdateContent(
                         event: event,
