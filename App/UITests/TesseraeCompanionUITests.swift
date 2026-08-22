@@ -979,6 +979,59 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(kitchenCard.waitForExistence(timeout: 2))
     }
 
+    func testDisplayCardsReorderWithLongPressDrag() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launch()
+
+        XCTAssertTrue(
+            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
+        )
+        app.buttons["Explore with Demo Data"].tap()
+
+        let kitchen = app.buttons["display-card-picpak-kitchen"]
+        let desk = app.buttons["display-card-e1004-desk"]
+        XCTAssertTrue(kitchen.waitForExistence(timeout: 3))
+        XCTAssertTrue(desk.waitForExistence(timeout: 3))
+
+        for _ in 0..<3 where !kitchen.isHittable || !desk.isHittable {
+            app.swipeUp()
+        }
+        XCTAssertTrue(kitchen.isHittable)
+        XCTAssertTrue(desk.isHittable)
+
+        let upper = kitchen.frame.minY < desk.frame.minY ? kitchen : desk
+        let lower = kitchen.frame.minY < desk.frame.minY ? desk : kitchen
+        let cardWidth = upper.frame.width
+
+        lower.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)
+        ).press(
+            forDuration: 0.45,
+            thenDragTo: upper.coordinate(
+                withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)
+            )
+        )
+
+        let reordered = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in
+                lower.frame.minY < upper.frame.minY
+            },
+            object: nil
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [reordered], timeout: 2),
+            .completed
+        )
+        XCTAssertEqual(lower.frame.width, cardWidth, accuracy: 1)
+        XCTAssertEqual(lower.frame.minX, upper.frame.minX, accuracy: 1)
+
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Reordered Display Cards"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
     func testDemoSendSupportsLinkActions() {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"

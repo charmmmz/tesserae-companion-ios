@@ -1,5 +1,7 @@
 import SwiftUI
 import TesseraeKit
+import UIKit
+import Observation
 
 private struct DisplayPreviewRefreshID: Hashable {
     let generation: Int
@@ -12,13 +14,16 @@ struct DisplaysView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.presentTesseraeSettings) private var presentSettings
     @State private var draggedDisplayID: String?
-    @State private var dropTargetDisplayID: String?
+    @State private var reorderMotion = DisplayReorderMotion()
     @State private var transientDisplayOrderIDs: [String]?
-    @State private var lastReorderedTargetID: String?
-    @State private var reorderTargetResetTask: Task<Void, Never>?
+    @State private var displayFrames: [String: CGRect] = [:]
+    @State private var dragStartFrames: [String: CGRect] = [:]
+    @State private var dragStartOrderIDs: [String] = []
+    @State private var lastReorderedIndex: Int?
     @State private var selectedDisplay: DisplaySummary?
     @State private var lineupsPresented = false
     @State private var hapticEvent = TesseraeHapticEvent()
+    private let displayCardSpacing: CGFloat = 14
 
     let isActive: Bool
 
@@ -44,7 +49,7 @@ struct DisplaysView: View {
         let displayOrder = displays.map(\.id)
 
         ScrollView {
-            LazyVStack(spacing: 14) {
+            LazyVStack(spacing: displayCardSpacing) {
                 if model.supportsLineups {
                     Button {
                         lineupsPresented = true
@@ -103,35 +108,63 @@ struct DisplaysView: View {
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("display-card-\(display.id)")
                     .accessibilityAddTraits(.isButton)
-                    .onDrag {
-                        draggedDisplayID = display.id
-                        transientDisplayOrderIDs = displayOrder
-                        lastReorderedTargetID = nil
-                        return NSItemProvider(object: display.id as NSString)
-                    } preview: {
-                        displayDragPreview(display)
-                    }
-                    .dropDestination(
-                        for: String.self
-                    ) { items, _ in
-                        defer { endDisplayDrag() }
-                        return items.first != nil
-                    } isTargeted: { targeted in
-                        updateDropTarget(display.id, targeted: targeted)
-                    }
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear.preference(
+                                key: DisplayCardFrameKey.self,
+                                value: [
+                                    display.id: proxy.frame(
+                                        in: .named("displays-scroll")
+                                    )
+                                ]
+                            )
+                        }
+                    )
+                    .opacity(draggedDisplayID == display.id ? 0 : 1)
                     .overlay {
-                        if dropTargetDisplayID == display.id {
+                        if draggedDisplayID == display.id {
                             RoundedRectangle(
                                 cornerRadius: 16,
                                 style: .continuous
                             )
-                            .strokeBorder(
-                                TesseraeTheme.accent.opacity(0.8),
-                                lineWidth: 2
-                            )
+                            .fill(TesseraeTheme.accent.opacity(0.07))
+                            .overlay {
+                                RoundedRectangle(
+                                    cornerRadius: 16,
+                                    style: .continuous
+                                )
+                                .stroke(
+                                    TesseraeTheme.accent.opacity(0.4),
+                                    style: StrokeStyle(
+                                        lineWidth: 1.5,
+                                        dash: [6, 5]
+                                    )
+                                )
+                            }
                             .allowsHitTesting(false)
                         }
                     }
+                    .gesture(
+                        DisplayReorderLongPressGesture(
+                            onBegan: { currentOrigin in
+                                beginDisplayDrag(
+                                    displayID: display.id,
+                                    displayOrder: displayOrder,
+                                    currentOrigin: currentOrigin
+                                )
+                            },
+                            onChanged: { translation in
+                                guard draggedDisplayID == display.id else {
+                                    return
+                                }
+                                reorderMotion.translation = translation
+                                reorderMotion.didMove = reorderMotion.didMove
+                                    || abs(translation.height) > 2
+                                updateLiveReorder(translation: translation)
+                            },
+                            onEnded: endDisplayDrag
+                        )
+                    )
                     .accessibilityHint(
                         "Tap for details. Long press and drag to reorder."
                     )
@@ -145,13 +178,36 @@ struct DisplaysView: View {
                 }
             }
             .padding(16)
+            .onPreferenceChange(DisplayCardFrameKey.self) { frames in
+                guard draggedDisplayID == nil else { return }
+                displayFrames = frames
+            }
             .animation(
-                .spring(
-                    response: 0.24,
-                    dampingFraction: 0.88
-                ),
+                .easeInOut(duration: 0.18),
                 value: displayOrder
             )
+        }
+        .coordinateSpace(name: "displays-scroll")
+        .scrollDisabled(draggedDisplayID != nil)
+        .overlay {
+            GeometryReader { _ in
+                if
+                    let draggedDisplayID,
+                    let display = model.displays.first(
+                        where: { $0.id == draggedDisplayID }
+                    ),
+                    let origin = dragStartFrames[draggedDisplayID]
+                {
+                    LiftedDisplayCard(
+                        display: display,
+                        preview: model.displayPreviews[display.id],
+                        origin: origin,
+                        motion: reorderMotion
+                    )
+                    .accessibilityHidden(true)
+                    .allowsHitTesting(false)
+                }
+            }
         }
         .overlay {
             if model.isRefreshing && model.displays.isEmpty {
@@ -202,6 +258,10 @@ struct DisplaysView: View {
                 )
             }
         }
+        .onDisappear {
+            guard draggedDisplayID != nil else { return }
+            endDisplayDrag()
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 TesseraeSettingsToolbarButton(openSettings: presentSettings)
@@ -211,77 +271,233 @@ struct DisplaysView: View {
         .tesseraeHapticFeedback(trigger: hapticEvent)
     }
 
-    private func displayDragPreview(
-        _ display: DisplaySummary
-    ) -> some View {
-        ReorderDragPreview(title: display.name) {
-            PhosphorIcon(
-                name: display.canonicalIconName,
-                size: 28,
-                fallbackSystemName: display.previewSymbol
-            )
-        }
-        .onDisappear {
-            endDisplayDrag()
-        }
+    private func beginDisplayDrag(
+        displayID: String,
+        displayOrder: [String],
+        currentOrigin: CGPoint
+    ) {
+        guard
+            draggedDisplayID == nil,
+            let sourceIndex = displayOrder.firstIndex(of: displayID),
+            let cachedSourceFrame = displayFrames[displayID]
+                ?? displayFrames.values.first
+        else { return }
+
+        // Preference values can briefly retain the right slot positions under
+        // the wrong IDs while LazyVStack is animating a previous reorder. Use
+        // them only for card size, then rebuild ordered slots around the exact
+        // frame origin reported by the recognizer for the card being lifted.
+        let slotStride = cachedSourceFrame.height + displayCardSpacing
+        let correctedFrames = Dictionary(
+            uniqueKeysWithValues: displayOrder.enumerated().map { index, id in
+                let offset = CGFloat(index - sourceIndex) * slotStride
+                return (
+                    id,
+                    CGRect(
+                        x: currentOrigin.x,
+                        y: currentOrigin.y + offset,
+                        width: cachedSourceFrame.width,
+                        height: cachedSourceFrame.height
+                    )
+                )
+            }
+        )
+
+        draggedDisplayID = displayID
+        dragStartFrames = correctedFrames
+        dragStartOrderIDs = displayOrder
+        transientDisplayOrderIDs = displayOrder
+        reorderMotion.reset()
+        lastReorderedIndex = sourceIndex
+        hapticEvent.trigger(.lightImpact)
     }
 
-    private func updateDropTarget(
-        _ targetID: String,
-        targeted: Bool
-    ) {
-        guard targeted else {
-            if dropTargetDisplayID == targetID {
-                dropTargetDisplayID = nil
-            }
-            reorderTargetResetTask?.cancel()
-            reorderTargetResetTask = Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(120))
-                guard !Task.isCancelled, dropTargetDisplayID == nil else {
-                    return
-                }
-                lastReorderedTargetID = nil
-                reorderTargetResetTask = nil
-            }
-            return
-        }
-
-        reorderTargetResetTask?.cancel()
-        reorderTargetResetTask = nil
-        dropTargetDisplayID = targetID
-
+    private func updateLiveReorder(translation: CGSize) {
         guard
             let sourceID = draggedDisplayID,
-            sourceID != targetID,
-            targetID != lastReorderedTargetID,
-            var order = transientDisplayOrderIDs,
-            let sourceIndex = order.firstIndex(of: sourceID),
-            let targetIndex = order.firstIndex(of: targetID)
+            let sourceFrame = dragStartFrames[sourceID],
+            let sourceIndex = dragStartOrderIDs.firstIndex(of: sourceID)
         else {
             return
         }
 
+        let draggedCenterY = sourceFrame.midY + translation.height
+        let slots = dragStartOrderIDs.enumerated().compactMap {
+            index, id -> (index: Int, frame: CGRect)? in
+            guard let frame = dragStartFrames[id] else { return nil }
+            return (index, frame)
+        }
+
+        guard let targetIndex = slots.min(by: {
+                abs($0.frame.midY - draggedCenterY)
+                    < abs($1.frame.midY - draggedCenterY)
+            })?.index
+        else {
+            return
+        }
+
+        guard targetIndex != lastReorderedIndex else { return }
+
+        if
+            let lastReorderedIndex,
+            let lastFrame = dragStartFrames[dragStartOrderIDs[lastReorderedIndex]],
+            let targetFrame = dragStartFrames[dragStartOrderIDs[targetIndex]]
+        {
+            let midpoint = (lastFrame.midY + targetFrame.midY) / 2
+            let hysteresis = min(
+                18,
+                abs(lastFrame.midY - targetFrame.midY) * 0.1
+            )
+            if targetIndex < lastReorderedIndex {
+                guard draggedCenterY < midpoint - hysteresis else { return }
+            } else {
+                guard draggedCenterY > midpoint + hysteresis else { return }
+            }
+        }
+
+        var order = dragStartOrderIDs
         order.remove(at: sourceIndex)
         order.insert(sourceID, at: min(targetIndex, order.count))
         guard order != transientDisplayOrderIDs else { return }
 
-        lastReorderedTargetID = targetID
+        lastReorderedIndex = targetIndex
         transientDisplayOrderIDs = order
-        hapticEvent.trigger(.rigidImpact)
+        hapticEvent.trigger(.selection)
     }
 
     private func endDisplayDrag() {
-        reorderTargetResetTask?.cancel()
         if let sourceID = draggedDisplayID,
            let finalIndex = transientDisplayOrderIDs?.firstIndex(of: sourceID)
         {
             model.moveDisplay(sourceID, to: finalIndex)
+            if reorderMotion.didMove {
+                hapticEvent.trigger(.rigidImpact)
+            }
         }
         draggedDisplayID = nil
-        dropTargetDisplayID = nil
+        reorderMotion.reset()
         transientDisplayOrderIDs = nil
-        lastReorderedTargetID = nil
-        reorderTargetResetTask = nil
+        dragStartFrames = [:]
+        dragStartOrderIDs = []
+        lastReorderedIndex = nil
+    }
+}
+
+private struct DisplayCardFrameKey: PreferenceKey {
+    static let defaultValue: [String: CGRect] = [:]
+    static func reduce(
+        value: inout [String: CGRect],
+        nextValue: () -> [String: CGRect]
+    ) {
+        value.merge(nextValue()) { _, new in new }
+    }
+}
+
+@Observable
+private final class DisplayReorderMotion {
+    var translation: CGSize = .zero
+    var didMove = false
+
+    func reset() {
+        translation = .zero
+        didMove = false
+    }
+}
+
+private struct LiftedDisplayCard: View {
+    let display: DisplaySummary
+    let preview: PreviewImageState?
+    let origin: CGRect
+    let motion: DisplayReorderMotion
+
+    var body: some View {
+        DisplayCard(display: display, preview: preview)
+            .frame(width: origin.width, height: origin.height)
+            .drawingGroup()
+            .scaleEffect(1.015)
+            .shadow(
+                color: .black.opacity(0.18),
+                radius: 14,
+                y: 7
+            )
+            .position(
+                x: origin.midX,
+                y: origin.midY + motion.translation.height
+            )
+    }
+}
+
+private struct DisplayReorderLongPressGesture: UIGestureRecognizerRepresentable {
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var startLocation: CGPoint?
+        var didBegin = false
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            true
+        }
+    }
+
+    let onBegan: (CGPoint) -> Void
+    let onChanged: (CGSize) -> Void
+    let onEnded: () -> Void
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator {
+        Coordinator()
+    }
+
+    func makeUIGestureRecognizer(
+        context: Context
+    ) -> UILongPressGestureRecognizer {
+        let recognizer = UILongPressGestureRecognizer()
+        recognizer.minimumPressDuration = 0.35
+        recognizer.allowableMovement = 10
+        recognizer.cancelsTouchesInView = false
+        recognizer.delaysTouchesBegan = false
+        recognizer.delaysTouchesEnded = false
+        recognizer.delegate = context.coordinator
+        return recognizer
+    }
+
+    func handleUIGestureRecognizerAction(
+        _ recognizer: UILongPressGestureRecognizer,
+        context: Context
+    ) {
+        let location = context.converter.location(
+            in: .named("displays-scroll")
+        )
+        let localLocation = context.converter.localLocation
+
+        switch recognizer.state {
+        case .began:
+            context.coordinator.startLocation = location
+            context.coordinator.didBegin = true
+            onBegan(
+                CGPoint(
+                    x: location.x - localLocation.x,
+                    y: location.y - localLocation.y
+                )
+            )
+        case .changed:
+            guard let startLocation = context.coordinator.startLocation else {
+                return
+            }
+            onChanged(
+                CGSize(
+                    width: location.x - startLocation.x,
+                    height: location.y - startLocation.y
+                )
+            )
+        case .ended, .cancelled:
+            guard context.coordinator.didBegin else { return }
+            context.coordinator.startLocation = nil
+            context.coordinator.didBegin = false
+            onEnded()
+        default:
+            break
+        }
     }
 }
 

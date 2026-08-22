@@ -47,6 +47,10 @@ capabilities.
 
 ### Fixed
 
+- Rebuilt Display card long-press reordering around one stable lifted card and
+  an in-list destination placeholder, preventing duplicated previews, jumping
+  offsets, stale drop positions, and blocked vertical scrolling while
+  preserving tap-to-open behavior.
 - Refreshed the Display timeline immediately after a manual dashboard push,
   image or link send, history resend, or Lineup playback action so the
   projected queue reflects the manual change right away.
