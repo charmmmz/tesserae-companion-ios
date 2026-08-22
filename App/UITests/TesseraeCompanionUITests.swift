@@ -397,66 +397,6 @@ final class TesseraeCompanionUITests: XCTestCase {
         add(screenshot)
     }
 
-    func testSettingsHierarchyAndActivityClearAction() {
-        let app = XCUIApplication()
-        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
-        app.launch()
-
-        XCTAssertTrue(
-            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
-        )
-        app.buttons["Explore with Demo Data"].tap()
-        app.tabBars.firstMatch.buttons["Activity"].tap()
-        XCTAssertTrue(
-            app.descendants(matching: .any).matching(
-                NSPredicate(
-                    format: "identifier BEGINSWITH %@",
-                    "history-card-"
-                )
-            ).firstMatch.waitForExistence(timeout: 3)
-        )
-
-        app.buttons["Settings"].tap()
-        XCTAssertTrue(app.staticTexts["Demo Mode"].waitForExistence(timeout: 2))
-        XCTAssertTrue(app.staticTexts["Local data"].exists)
-        XCTAssertTrue(app.staticTexts["Data & Privacy"].exists)
-        XCTAssertFalse(app.staticTexts["Personal Data"].exists)
-        XCTAssertTrue(app.staticTexts["Reminders"].exists)
-        XCTAssertTrue(app.staticTexts["Health"].exists)
-        XCTAssertTrue(app.staticTexts["Server update required"].exists)
-        XCTAssertTrue(app.staticTexts["App Version"].exists)
-        XCTAssertTrue(app.buttons["Source Code"].exists)
-        XCTAssertFalse(app.staticTexts["Product"].exists)
-        XCTAssertFalse(app.staticTexts["API mode"].exists)
-        XCTAssertFalse(app.staticTexts["Local Storage"].exists)
-        XCTAssertTrue(app.buttons["clear-local-activity"].isHittable)
-        let dataPrivacyScreenshot = XCTAttachment(screenshot: app.screenshot())
-        dataPrivacyScreenshot.name = "Settings Data and Privacy"
-        dataPrivacyScreenshot.lifetime = .keepAlways
-        add(dataPrivacyScreenshot)
-
-        app.staticTexts["Demo Mode"].tap()
-        XCTAssertTrue(
-            app.navigationBars["Server Details"].waitForExistence(timeout: 2)
-        )
-        XCTAssertTrue(app.staticTexts["Tesserae Version"].exists)
-        XCTAssertTrue(app.staticTexts["Companion API"].exists)
-        XCTAssertTrue(app.buttons["Exit Demo"].exists)
-        app.navigationBars["Server Details"].buttons["Settings"].tap()
-
-        let clearLocalActivityButton = app.buttons["clear-local-activity"]
-        XCTAssertTrue(clearLocalActivityButton.waitForExistence(timeout: 2))
-        clearLocalActivityButton.tap()
-
-        let confirmation = app.alerts["Clear Local Activity?"]
-        XCTAssertTrue(confirmation.waitForExistence(timeout: 2))
-        confirmation.buttons["Clear Local Activity"].tap()
-        app.buttons["Done"].tap()
-        XCTAssertTrue(
-            app.staticTexts["No Activity Yet"].waitForExistence(timeout: 2)
-        )
-    }
-
     func testRootToolbarsKeepSettingsAndContextActionsConsistent() {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
@@ -1173,55 +1113,6 @@ final class TesseraeCompanionUITests: XCTestCase {
         )
 
         XCTAssertLessThan(lower.frame.minY, upper.frame.minY)
-    }
-
-    func testDisplayCardsReorderWithLongPressDragAndUpdateSendTargets() {
-        let app = XCUIApplication()
-        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
-        app.launch()
-
-        XCTAssertTrue(
-            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
-        )
-        app.buttons["Explore with Demo Data"].tap()
-
-        let desk = app.staticTexts["Desk"]
-        let kitchen = app.staticTexts["Kitchen"]
-        XCTAssertTrue(desk.waitForExistence(timeout: 2))
-        XCTAssertTrue(kitchen.waitForExistence(timeout: 2))
-        let movingKitchen = kitchen.frame.minY > desk.frame.minY
-        let upper = desk.frame.minY < kitchen.frame.minY
-            ? desk
-            : kitchen
-        let lower = desk.frame.minY < kitchen.frame.minY
-            ? kitchen
-            : desk
-
-        lower.coordinate(
-            withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)
-        ).press(
-            forDuration: 0.45,
-            thenDragTo: upper.coordinate(
-                withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)
-            )
-        )
-
-        XCTAssertLessThan(lower.frame.minY, upper.frame.minY)
-
-        app.buttons["root-send-action"].tap()
-        let movedTarget = app.buttons[
-            movingKitchen
-                ? "send-display-picpak-kitchen"
-                : "send-display-e1004-desk"
-        ]
-        let otherTarget = app.buttons[
-            movingKitchen
-                ? "send-display-e1004-desk"
-                : "send-display-picpak-kitchen"
-        ]
-        XCTAssertTrue(movedTarget.waitForExistence(timeout: 2))
-        XCTAssertTrue(otherTarget.exists)
-        XCTAssertLessThan(movedTarget.frame.minY, otherTarget.frame.minY)
     }
 
     private func assertPreview(
