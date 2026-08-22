@@ -16,9 +16,10 @@ struct RemindersBridgeView: View {
                 Section {
                     authorizationContent
                     Link(
-                        "Open in iOS Settings",
                         destination: URL(string: UIApplication.openSettingsURLString)!
-                    )
+                    ) {
+                        Label("Open in iOS Settings", systemImage: "gearshape")
+                    }
                 } header: {
                     Text("Reminders Access")
                 } footer: {
@@ -80,23 +81,10 @@ struct RemindersBridgeView: View {
                     } footer: {
                         Text("Choose up to 20 lists.")
                     }
-
-                    Section {
-                        syncControls
-                    } header: {
-                        Text("Sync")
-                    } footer: {
-                        Text(
-                            "Tesserae checks selected lists when the app becomes active and after Reminders changes. Unchanged content is not uploaded. Sync Now always uploads."
-                        )
-                    }
                 }
 
-                if let error = bridgeModel.errorMessage {
-                    Section {
-                        Label(error, systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.red)
-                    }
+                if bridgeModel.isEnabled || bridgeModel.sourceStatus != nil {
+                    syncManagementSection
                 }
             } else {
                 Section {
@@ -122,33 +110,100 @@ struct RemindersBridgeView: View {
     }
 
     private var syncStatusSection: some View {
-        Section("Sync Status") {
+        Section {
             PersonalDataSyncStatusView(
+                state: syncState,
                 sourceStatus: bridgeModel.sourceStatus,
-                counts: remindersSyncCounts
+                summary: remindersSyncSummary,
+                feedbackMessage: syncFeedbackMessage
+            )
+
+            if let action = primarySyncAction {
+                Button {
+                    Task { await action.perform() }
+                } label: {
+                    Label(action.title, systemImage: action.systemImage)
+                }
+            }
+        } header: {
+            Text("Sync Status")
+        } footer: {
+            Text(
+                "Tesserae checks selected lists when the app becomes active and after Reminders changes. Unchanged content is not uploaded. Sync Now always uploads."
             )
         }
     }
 
-    private var remindersSyncCounts: [String] {
+    private var syncState: PersonalDataSyncState {
+        .reminders(
+            isSupported: appModel.supportsRemindersPersonalData,
+            model: bridgeModel
+        )
+    }
+
+    private var syncFeedbackMessage: String? {
+        if let errorMessage = bridgeModel.errorMessage {
+            if bridgeModel.sourceStatus != nil {
+                return String(
+                    localized: "The latest refresh did not complete. The existing server snapshot is still available."
+                )
+            }
+            return errorMessage
+        }
+        switch syncState {
+        case .off, .needsAccess:
+            return bridgeModel.confirmationMessage
+        default:
+            return nil
+        }
+    }
+
+    private var remindersSyncSummary: String? {
+        guard bridgeModel.sourceStatus != nil else { return nil }
         var values: [String] = []
-        if bridgeModel.selectedListCount > 0 {
+        if let includedListCount = bridgeModel.includedListCount {
             values.append(
                 String.localizedStringWithFormat(
                     String(localized: "%lld lists"),
-                    bridgeModel.selectedListCount
+                    includedListCount
                 )
             )
         }
         if let itemCount = bridgeModel.itemCount {
             values.append(
                 String.localizedStringWithFormat(
-                    String(localized: "%lld items"),
+                    String(localized: "%lld incomplete reminders"),
                     itemCount
                 )
             )
         }
-        return values
+        return values.isEmpty ? nil : values.joined(separator: " · ")
+    }
+
+    private var primarySyncAction: PersonalDataSyncAction? {
+        guard
+            !bridgeModel.isBusy,
+            bridgeModel.authorizationState == .fullAccess
+        else { return nil }
+        if bridgeModel.isEnabled {
+            return PersonalDataSyncAction(
+                title: bridgeModel.hasPendingSelectionChanges
+                    ? "Apply Changes and Sync"
+                    : "Sync Now",
+                systemImage: "arrow.triangle.2.circlepath",
+                perform: {
+                    await bridgeModel.syncNow(using: appModel)
+                }
+            )
+        }
+        guard !bridgeModel.selectedListIDs.isEmpty else { return nil }
+        return PersonalDataSyncAction(
+            title: "Enable and Sync",
+            systemImage: "arrow.up.circle",
+            perform: {
+                await bridgeModel.enableAndSync(using: appModel)
+            }
+        )
     }
 
     @ViewBuilder
@@ -180,28 +235,22 @@ struct RemindersBridgeView: View {
         }
     }
 
-    @ViewBuilder
-    private var syncControls: some View {
-        if bridgeModel.isEnabled {
-            Button {
-                Task { await bridgeModel.syncNow(using: appModel) }
-            } label: {
-                busyLabel(title: "Sync Now", systemImage: "arrow.triangle.2.circlepath")
-            }
-            .disabled(bridgeModel.isBusy)
+    private var syncManagementSection: some View {
+        Section {
+            syncManagementControls
+        } header: {
+            Text("Manage Sync")
+        }
+    }
 
+    @ViewBuilder
+    private var syncManagementControls: some View {
+        if bridgeModel.isEnabled {
             deleteSnapshotButton(
                 title: "Stop Sync and Delete Snapshot",
                 systemImage: "trash"
             )
         } else {
-            Button {
-                Task { await bridgeModel.enableAndSync(using: appModel) }
-            } label: {
-                busyLabel(title: "Enable and Sync", systemImage: "arrow.up.circle")
-            }
-            .disabled(bridgeModel.isBusy || bridgeModel.selectedListIDs.isEmpty)
-
             if bridgeModel.sourceStatus != nil {
                 deleteSnapshotButton(
                     title: "Delete Existing Snapshot",

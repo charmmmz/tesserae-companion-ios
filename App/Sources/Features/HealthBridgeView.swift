@@ -1,11 +1,12 @@
 import SwiftUI
 import TesseraeKit
-import UIKit
 
 struct HealthBridgeView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(HealthBridgeModel.self) private var bridgeModel
+    @Environment(\.openURL) private var openURL
     @State private var deleteConfirmationPresented = false
+    @State private var healthAccessInstructionsPresented = false
 
     var body: some View {
         Form {
@@ -17,14 +18,10 @@ struct HealthBridgeView: View {
                 syncStatusSection
                 authorizationSection
                 selectionSection
-                if !bridgeModel.selectedSections.isEmpty
-                    || bridgeModel.isEnabled
-                    || bridgeModel.sourceStatus != nil
-                {
-                    syncControlsSection
+                if bridgeModel.isEnabled || bridgeModel.sourceStatus != nil {
+                    syncManagementSection
                 }
                 retentionSection
-                feedbackSections
             }
         }
         .scrollContentBackground(.hidden)
@@ -92,33 +89,91 @@ struct HealthBridgeView: View {
                     systemImage: "checkmark.shield.fill"
                 )
                 .foregroundStyle(.secondary)
-                Link(
-                    "Open in iOS Settings",
-                    destination: URL(string: UIApplication.openSettingsURLString)!
-                )
+                Button {
+                    healthAccessInstructionsPresented = true
+                } label: {
+                    Label(
+                        "Manage Health Access",
+                        systemImage: "heart.text.clipboard"
+                    )
+                }
+                .alert(
+                    "Manage Health Access",
+                    isPresented: $healthAccessInstructionsPresented
+                ) {
+                    Button("Open Health App") {
+                        if let url = URL(string: "x-apple-health://") {
+                            openURL(url)
+                        }
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text(
+                        "Open Health, tap your profile picture, then Apps, then Tesserae."
+                    )
+                }
             }
         } header: {
             Text("Health Access")
         } footer: {
-            Text("Permissions remain under your control in Health and iOS Settings.")
+            Text("Permissions remain under your control in Health.")
         }
     }
 
     private var syncStatusSection: some View {
-        Section("Sync Status") {
+        Section {
             PersonalDataSyncStatusView(
+                state: syncState,
                 sourceStatus: bridgeModel.sourceStatus,
-                counts: healthSyncCounts
+                summary: healthSyncSummary,
+                feedbackMessage: syncFeedbackMessage
             )
+
+            if let action = primarySyncAction {
+                Button {
+                    Task { await action.perform() }
+                } label: {
+                    Label(action.title, systemImage: action.systemImage)
+                }
+            }
+        } header: {
+            Text("Sync Status")
+        } footer: {
+            Text("Checks when the app becomes active. Background updates are best effort.")
         }
     }
 
-    private var healthSyncCounts: [String] {
+    private var syncState: PersonalDataSyncState {
+        .health(
+            isSupported: appModel.supportsHealthSummaryPersonalData,
+            model: bridgeModel
+        )
+    }
+
+    private var syncFeedbackMessage: String? {
+        if let errorMessage = bridgeModel.errorMessage {
+            if bridgeModel.sourceStatus != nil {
+                return String(
+                    localized: "The latest refresh did not complete. The existing server snapshot is still available."
+                )
+            }
+            return errorMessage
+        }
+        switch syncState {
+        case .off, .needsAccess:
+            return bridgeModel.confirmationMessage
+        default:
+            return nil
+        }
+    }
+
+    private var healthSyncSummary: String? {
+        guard bridgeModel.sourceStatus != nil else { return nil }
         var values: [String] = []
         if let activityDayCount = bridgeModel.activityDayCount {
             values.append(
                 String.localizedStringWithFormat(
-                    String(localized: "%lld days"),
+                    String(localized: "%lld activity days"),
                     activityDayCount
                 )
             )
@@ -126,7 +181,7 @@ struct HealthBridgeView: View {
         if let sleepNightCount = bridgeModel.sleepNightCount {
             values.append(
                 String.localizedStringWithFormat(
-                    String(localized: "%lld nights"),
+                    String(localized: "%lld sleep nights"),
                     sleepNightCount
                 )
             )
@@ -139,7 +194,37 @@ struct HealthBridgeView: View {
                 )
             )
         }
-        return values
+        return values.isEmpty ? nil : values.joined(separator: " · ")
+    }
+
+    private var primarySyncAction: PersonalDataSyncAction? {
+        guard !bridgeModel.isBusy else { return nil }
+        if bridgeModel.isEnabled {
+            guard
+                !bridgeModel.selectedSections.isEmpty,
+                bridgeModel.authorizationState == .reviewed
+            else { return nil }
+            return PersonalDataSyncAction(
+                title: bridgeModel.hasPendingSelectionChanges
+                    ? "Apply Changes and Sync"
+                    : "Sync Now",
+                systemImage: "arrow.triangle.2.circlepath",
+                perform: {
+                    await bridgeModel.syncNow(using: appModel)
+                }
+            )
+        }
+        guard
+            !bridgeModel.selectedSections.isEmpty,
+            bridgeModel.authorizationState == .reviewed
+        else { return nil }
+        return PersonalDataSyncAction(
+            title: "Enable and Sync",
+            systemImage: "arrow.up.circle",
+            perform: {
+                await bridgeModel.enableAndSync(using: appModel)
+            }
+        )
     }
 
     private var retentionSection: some View {
@@ -152,44 +237,14 @@ struct HealthBridgeView: View {
         }
     }
 
-    private var syncControlsSection: some View {
+    private var syncManagementSection: some View {
         Section {
             if bridgeModel.isEnabled {
-                if !bridgeModel.selectedSections.isEmpty {
-                    Button {
-                        Task { await bridgeModel.syncNow(using: appModel) }
-                    } label: {
-                        busyLabel(
-                            title: bridgeModel.hasPendingSelectionChanges
-                                ? "Apply Changes and Sync"
-                                : "Sync Now",
-                            systemImage: "arrow.triangle.2.circlepath"
-                        )
-                    }
-                    .disabled(
-                        bridgeModel.isBusy
-                            || bridgeModel.authorizationState != .reviewed
-                    )
-                }
                 deleteSnapshotButton(
                     title: "Stop Sync and Delete Snapshot",
                     systemImage: "trash"
                 )
             } else {
-                Button {
-                    Task { await bridgeModel.enableAndSync(using: appModel) }
-                } label: {
-                    busyLabel(
-                        title: "Enable and Sync",
-                        systemImage: "arrow.up.circle"
-                    )
-                }
-                .disabled(
-                    bridgeModel.isBusy
-                        || bridgeModel.selectedSections.isEmpty
-                        || bridgeModel.authorizationState != .reviewed
-                )
-
                 if bridgeModel.sourceStatus != nil {
                     deleteSnapshotButton(
                         title: "Delete Existing Snapshot",
@@ -198,25 +253,7 @@ struct HealthBridgeView: View {
                 }
             }
         } header: {
-            Text("Sync")
-        } footer: {
-            Text("Checks when the app becomes active. Background updates are best effort.")
-        }
-    }
-
-    @ViewBuilder
-    private var feedbackSections: some View {
-        if let confirmation = bridgeModel.confirmationMessage {
-            Section {
-                Label(confirmation, systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.secondary)
-            }
-        }
-        if let error = bridgeModel.errorMessage {
-            Section {
-                Label(error, systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
-            }
+            Text("Manage Sync")
         }
     }
 
@@ -311,122 +348,253 @@ struct HealthBridgeView: View {
     }
 }
 
-/// Shared Sync Status visual used by the Health and Reminders settings pages.
-/// Colour and shape carry the state; text stays for accessibility and clarity.
+struct PersonalDataSyncAction {
+    let title: LocalizedStringKey
+    let systemImage: String
+    let perform: @MainActor () async -> Void
+}
+
+enum PersonalDataSyncState: Equatable {
+    case unsupported
+    case unavailable
+    case needsAccess
+    case off
+    case syncing
+    case changesPending
+    case waitingForFirstSync
+    case fresh
+    case stale
+    case expired
+    case failed
+
+    @MainActor
+    static func reminders(
+        isSupported: Bool,
+        model: RemindersBridgeModel
+    ) -> Self {
+        resolve(
+            isSupported: isSupported,
+            isAvailable: true,
+            isBusy: model.isBusy,
+            hasError: model.errorMessage != nil,
+            needsAccess: model.authorizationState == .denied
+                || model.isEnabled
+                    && model.authorizationState != .fullAccess,
+            isEnabled: model.isEnabled,
+            hasPendingChanges: model.hasPendingSelectionChanges,
+            freshness: model.sourceStatus?.state
+        )
+    }
+
+    @MainActor
+    static func health(
+        isSupported: Bool,
+        model: HealthBridgeModel
+    ) -> Self {
+        resolve(
+            isSupported: isSupported,
+            isAvailable: model.authorizationState != .unavailable,
+            isBusy: model.isBusy,
+            hasError: model.errorMessage != nil,
+            needsAccess: model.isEnabled
+                && model.authorizationState != .reviewed,
+            isEnabled: model.isEnabled,
+            hasPendingChanges: model.hasPendingSelectionChanges,
+            freshness: model.sourceStatus?.state
+        )
+    }
+
+    static func resolve(
+        isSupported: Bool,
+        isAvailable: Bool,
+        isBusy: Bool,
+        hasError: Bool,
+        needsAccess: Bool,
+        isEnabled: Bool,
+        hasPendingChanges: Bool,
+        freshness: PersonalDataFreshness?
+    ) -> Self {
+        guard isSupported else { return .unsupported }
+        guard isAvailable else { return .unavailable }
+        if isBusy { return .syncing }
+        if needsAccess { return .needsAccess }
+        guard isEnabled else { return .off }
+        if hasPendingChanges { return .changesPending }
+        if let freshness {
+            switch freshness {
+            case .fresh: return .fresh
+            case .stale: return .stale
+            case .expired: return .expired
+            }
+        }
+        return hasError ? .failed : .waitingForFirstSync
+    }
+
+    var settingsLabel: String {
+        switch self {
+        case .unsupported: String(localized: "Server update required")
+        case .unavailable: String(localized: "Unavailable")
+        case .needsAccess: String(localized: "Needs Access")
+        case .off: String(localized: "Off")
+        case .syncing: String(localized: "Syncing…")
+        case .changesPending: String(localized: "Changes Pending")
+        case .waitingForFirstSync: String(localized: "Not Synced")
+        case .fresh: String(localized: "Synced")
+        case .stale: String(localized: "Needs Refresh")
+        case .expired: String(localized: "Expired")
+        case .failed: String(localized: "Sync Failed")
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .unsupported: String(localized: "Server update required")
+        case .unavailable: String(localized: "Health is unavailable")
+        case .needsAccess: String(localized: "Access required")
+        case .off: String(localized: "Sync is off")
+        case .syncing: String(localized: "Syncing…")
+        case .changesPending: String(localized: "Changes ready to apply")
+        case .waitingForFirstSync: String(localized: "Waiting for first sync")
+        case .fresh: String(localized: "Up to date")
+        case .stale: String(localized: "Needs refresh")
+        case .expired: String(localized: "Snapshot expired")
+        case .failed: String(localized: "Sync failed")
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .unsupported:
+            String(localized: "Update the connected Tesserae server to use this source.")
+        case .unavailable:
+            String(localized: "This source is not available on this device.")
+        case .needsAccess:
+            String(localized: "Review access below to continue syncing.")
+        case .off:
+            String(localized: "No new data is being sent to this Tesserae server.")
+        case .syncing:
+            String(localized: "Preparing and sending the latest selected data.")
+        case .changesPending:
+            String(localized: "Sync to update the server snapshot with your current selection.")
+        case .waitingForFirstSync:
+            String(localized: "Complete the first sync to create a server snapshot.")
+        case .fresh:
+            String(localized: "The latest server snapshot is ready.")
+        case .stale:
+            String(localized: "Sync now to refresh the server snapshot.")
+        case .expired:
+            String(localized: "Widgets can no longer use this snapshot.")
+        case .failed:
+            String(localized: "The latest sync did not complete.")
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .unsupported: "server.rack"
+        case .unavailable: "heart.slash.fill"
+        case .needsAccess: "exclamationmark.shield.fill"
+        case .off: "pause.circle.fill"
+        case .syncing: "arrow.triangle.2.circlepath"
+        case .changesPending: "arrow.up.circle.fill"
+        case .waitingForFirstSync: "clock.fill"
+        case .fresh: "checkmark.circle.fill"
+        case .stale: "exclamationmark.circle.fill"
+        case .expired: "xmark.octagon.fill"
+        case .failed: "exclamationmark.triangle.fill"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .fresh: .green
+        case .needsAccess, .changesPending, .stale: .orange
+        case .expired, .failed: .red
+        case .syncing: TesseraeTheme.accent
+        case .unsupported, .unavailable, .off, .waitingForFirstSync: .secondary
+        }
+    }
+
+    var showsExpiration: Bool {
+        switch self {
+        case .stale, .expired: true
+        default: false
+        }
+    }
+}
+
+/// Native settings rows shared by the Health and Reminders pages.
 struct PersonalDataSyncStatusView: View {
+    let state: PersonalDataSyncState
     let sourceStatus: PersonalDataSourceStatus?
-    let counts: [String]
+    let summary: String?
+    let feedbackMessage: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        Group {
+            Label {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(state.title)
+                    if let detailMessage {
+                        Text(detailMessage)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            } icon: {
+                Image(systemName: state.symbolName)
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(state.tint)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("personal-data-sync-status")
+
             if let sourceStatus {
-                freshnessAxis
-                freshnessBar(sourceStatus)
-                metaRow(sourceStatus)
+                LabeledContent {
+                    Text(sourceStatus.generatedAt, style: .relative)
+                        .foregroundStyle(.secondary)
+                } label: {
+                    Label("Last synced", systemImage: "clock")
+                }
+
+                if state.showsExpiration {
+                    LabeledContent {
+                        expirationText(sourceStatus)
+                            .foregroundStyle(.secondary)
+                    } label: {
+                        Label("Expires", systemImage: "hourglass")
+                    }
+                }
             }
-            if !counts.isEmpty {
-                countPills
+
+            if let summary {
+                LabeledContent {
+                    Text(summary)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.trailing)
+                } label: {
+                    Label("Included", systemImage: "chart.bar.doc.horizontal")
+                }
             }
         }
     }
 
-    private func freshnessBar(
+    private var detailMessage: String? {
+        if let feedbackMessage {
+            return feedbackMessage
+        }
+        return state == .fresh ? nil : state.message
+    }
+
+    @ViewBuilder
+    private func expirationText(
         _ status: PersonalDataSourceStatus
     ) -> some View {
-        let now = Date()
-        let total = status.expiresAt.timeIntervalSince(status.generatedAt)
-        let fraction = total > 0
-            ? min(1, max(0, now.timeIntervalSince(status.generatedAt) / total))
-            : 1
-        let staleFraction = total > 0
-            ? min(
-                1,
-                max(
-                    0,
-                    status.staleAt.timeIntervalSince(status.generatedAt) / total
-                )
-            )
-            : 1
-        return GeometryReader { proxy in
-            let width = proxy.size.width
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(Color.primary.opacity(0.08))
-                Capsule()
-                    .fill(freshnessColor)
-                    .frame(width: max(4, width * fraction))
-                Rectangle()
-                    .fill(Color.primary.opacity(0.35))
-                    .frame(width: 1)
-                    .offset(x: width * staleFraction - 0.5)
-            }
-        }
-        .frame(height: 6)
-    }
-
-    private var freshnessColor: Color {
-        guard let sourceStatus else { return Color.secondary }
-        switch sourceStatus.state {
-        case .fresh: return .green
-        case .stale: return .orange
-        case .expired: return .red
-        }
-    }
-
-    private var freshnessAxis: some View {
-        HStack {
-            axisLabel(title: String(localized: "Fresh"), color: .green)
-            Spacer()
-            axisLabel(title: String(localized: "Stale"), color: .orange)
-            Spacer()
-            axisLabel(title: String(localized: "Expired"), color: .red)
-        }
-        .font(.caption2)
-        .foregroundStyle(.tertiary)
-    }
-
-    private func axisLabel(
-        title: String,
-        color: Color
-    ) -> some View {
-        HStack(spacing: 3) {
-            Circle()
-                .fill(color)
-                .frame(width: 5, height: 5)
-            Text(title)
-        }
-    }
-
-    private func metaRow(
-        _ status: PersonalDataSourceStatus
-    ) -> some View {
-        HStack {
-            HStack(spacing: 5) {
-                Image(systemName: "clock")
-                    .accessibilityLabel(Text("Last Sync"))
-                Text(status.generatedAt, style: .relative)
-            }
-            Spacer()
-            HStack(spacing: 5) {
-                Image(systemName: "hourglass")
-                    .accessibilityLabel(Text("Expires"))
-                Text(status.expiresAt, style: .relative)
-            }
-        }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-    }
-
-    private var countPills: some View {
-        HStack(spacing: 6) {
-            ForEach(counts, id: \.self) { label in
-                Text(label)
-                    .font(.caption.monospacedDigit().weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.primary.opacity(0.055), in: Capsule())
-            }
+        if status.expiresAt <= .now {
+            Text("Expired \(status.expiresAt, style: .relative)")
+        } else {
+            Text("Expires \(status.expiresAt, style: .relative)")
         }
     }
 }

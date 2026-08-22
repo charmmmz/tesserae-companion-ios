@@ -249,7 +249,11 @@ final class HealthKitStore: HealthDataAccessing {
                 ]
             ) { _, samples, error in
                 if let error {
-                    continuation.resume(throwing: error)
+                    if Self.isNoDataError(error) {
+                        continuation.resume(returning: [])
+                    } else {
+                        continuation.resume(throwing: error)
+                    }
                     return
                 }
                 let values = (samples as? [HKCategorySample] ?? []).compactMap {
@@ -294,7 +298,11 @@ final class HealthKitStore: HealthDataAccessing {
                 ]
             ) { _, samples, error in
                 if let error {
-                    continuation.resume(throwing: error)
+                    if Self.isNoDataError(error) {
+                        continuation.resume(returning: [])
+                    } else {
+                        continuation.resume(throwing: error)
+                    }
                     return
                 }
                 continuation.resume(
@@ -329,7 +337,11 @@ final class HealthKitStore: HealthDataAccessing {
             let query = HKActivitySummaryQuery(predicate: predicate) {
                 _, summaries, error in
                 if let error {
-                    continuation.resume(throwing: error)
+                    if Self.isNoDataError(error) {
+                        continuation.resume(returning: [:])
+                    } else {
+                        continuation.resume(throwing: error)
+                    }
                     return
                 }
                 var values: [String: HealthActivityRingSource] = [:]
@@ -419,7 +431,11 @@ final class HealthKitStore: HealthDataAccessing {
                 options: .cumulativeSum
             ) { _, statistics, error in
                 if let error {
-                    continuation.resume(throwing: error)
+                    if Self.isNoDataError(error) {
+                        continuation.resume(returning: nil)
+                    } else {
+                        continuation.resume(throwing: error)
+                    }
                 } else {
                     continuation.resume(
                         returning: statistics?.sumQuantity()?.doubleValue(for: unit)
@@ -428,6 +444,12 @@ final class HealthKitStore: HealthDataAccessing {
             }
             healthStore.execute(query)
         }
+    }
+
+    nonisolated static func isNoDataError(_ error: Error) -> Bool {
+        let error = error as NSError
+        return error.domain == HKError.errorDomain
+            && error.code == HKError.Code.errorNoData.rawValue
     }
 
     private static func readTypes(
@@ -1131,6 +1153,9 @@ struct HealthBridgePreferences: Codable, Equatable {
     var publicationSaltBase64: String
     var lastSuccessfulContentDigest: String?
     var lastSuccessfulSections: [HealthSummarySection]
+    var lastSuccessfulActivityDayCount: Int?
+    var lastSuccessfulSleepNightCount: Int?
+    var lastSuccessfulWorkoutCount: Int?
     var isEnabled: Bool
 
     init(
@@ -1140,6 +1165,9 @@ struct HealthBridgePreferences: Codable, Equatable {
             .base64EncodedString(),
         lastSuccessfulContentDigest: String? = nil,
         lastSuccessfulSections: [HealthSummarySection] = [],
+        lastSuccessfulActivityDayCount: Int? = nil,
+        lastSuccessfulSleepNightCount: Int? = nil,
+        lastSuccessfulWorkoutCount: Int? = nil,
         isEnabled: Bool = false
     ) {
         self.instanceID = instanceID
@@ -1147,6 +1175,9 @@ struct HealthBridgePreferences: Codable, Equatable {
         self.publicationSaltBase64 = publicationSaltBase64
         self.lastSuccessfulContentDigest = lastSuccessfulContentDigest
         self.lastSuccessfulSections = lastSuccessfulSections
+        self.lastSuccessfulActivityDayCount = lastSuccessfulActivityDayCount
+        self.lastSuccessfulSleepNightCount = lastSuccessfulSleepNightCount
+        self.lastSuccessfulWorkoutCount = lastSuccessfulWorkoutCount
         self.isEnabled = isEnabled
     }
 
@@ -1306,6 +1337,9 @@ final class HealthBridgeModel {
         publicationSalt = preferences.publicationSalt
         lastSuccessfulContentDigest = preferences.lastSuccessfulContentDigest
         lastSuccessfulSections = Set(preferences.lastSuccessfulSections)
+        activityDayCount = preferences.lastSuccessfulActivityDayCount
+        sleepNightCount = preferences.lastSuccessfulSleepNightCount
+        workoutCount = preferences.lastSuccessfulWorkoutCount
         isEnabled = preferences.isEnabled
         updateAuthorizationState()
         guard server.supportsHealthSummaryPersonalData else { return }
@@ -1447,9 +1481,6 @@ final class HealthBridgeModel {
                 serverMaximumTTLSeconds: server.personalDataMaximumTTLSeconds
             )
             let digest = try Self.contentDigest(for: snapshot.data)
-            activityDayCount = snapshot.data.activity?.days.count
-            sleepNightCount = snapshot.data.sleep?.nights.count
-            workoutCount = snapshot.data.workouts?.items.count
 
             var uploadRequired = forceUpload
                 || digest != lastSuccessfulContentDigest
@@ -1457,11 +1488,14 @@ final class HealthBridgeModel {
                 sourceStatus = try await server.healthSummaryPersonalDataStatus()
                 uploadRequired = sourceStatus?.state != .fresh
             }
-            guard uploadRequired else { return }
+            guard uploadRequired else {
+                recordSuccessfulSnapshot(snapshot, digest: digest)
+                savePreferences()
+                return
+            }
 
             sourceStatus = try await server.putHealthSummarySnapshot(snapshot)
-            lastSuccessfulContentDigest = digest
-            lastSuccessfulSections = selectedSections
+            recordSuccessfulSnapshot(snapshot, digest: digest)
             if enabling { isEnabled = true }
             savePreferences()
             if forceUpload {
@@ -1470,6 +1504,17 @@ final class HealthBridgeModel {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func recordSuccessfulSnapshot(
+        _ snapshot: HealthSummarySnapshot,
+        digest: String
+    ) {
+        lastSuccessfulContentDigest = digest
+        lastSuccessfulSections = selectedSections
+        activityDayCount = snapshot.data.activity?.days.count
+        sleepNightCount = snapshot.data.sleep?.nights.count
+        workoutCount = snapshot.data.workouts?.items.count
     }
 
     static func contentDigest(for data: HealthSummaryData) throws -> String {
@@ -1534,6 +1579,9 @@ final class HealthBridgeModel {
                 lastSuccessfulSections: lastSuccessfulSections.sorted {
                     $0.rawValue < $1.rawValue
                 },
+                lastSuccessfulActivityDayCount: activityDayCount,
+                lastSuccessfulSleepNightCount: sleepNightCount,
+                lastSuccessfulWorkoutCount: workoutCount,
                 isEnabled: isEnabled
             )
         )

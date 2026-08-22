@@ -6,6 +6,142 @@ import XCTest
 
 @MainActor
 final class HealthSnapshotFactoryTests: XCTestCase {
+    func testPersonalDataSyncStateMakesEmptyStatesExplicit() {
+        XCTAssertEqual(
+            PersonalDataSyncState.resolve(
+                isSupported: true,
+                isAvailable: true,
+                isBusy: false,
+                hasError: false,
+                needsAccess: false,
+                isEnabled: false,
+                hasPendingChanges: false,
+                freshness: nil
+            ),
+            .off
+        )
+        XCTAssertEqual(
+            PersonalDataSyncState.resolve(
+                isSupported: true,
+                isAvailable: true,
+                isBusy: false,
+                hasError: false,
+                needsAccess: false,
+                isEnabled: true,
+                hasPendingChanges: false,
+                freshness: nil
+            ),
+            .waitingForFirstSync
+        )
+    }
+
+    func testPersonalDataSyncStatePrioritizesActionableConditions() {
+        XCTAssertEqual(
+            PersonalDataSyncState.resolve(
+                isSupported: true,
+                isAvailable: true,
+                isBusy: true,
+                hasError: true,
+                needsAccess: true,
+                isEnabled: true,
+                hasPendingChanges: true,
+                freshness: .expired
+            ),
+            .syncing
+        )
+        XCTAssertEqual(
+            PersonalDataSyncState.resolve(
+                isSupported: true,
+                isAvailable: true,
+                isBusy: false,
+                hasError: true,
+                needsAccess: true,
+                isEnabled: true,
+                hasPendingChanges: true,
+                freshness: .fresh
+            ),
+            .needsAccess
+        )
+        XCTAssertEqual(
+            PersonalDataSyncState.resolve(
+                isSupported: true,
+                isAvailable: true,
+                isBusy: false,
+                hasError: false,
+                needsAccess: false,
+                isEnabled: true,
+                hasPendingChanges: true,
+                freshness: .fresh
+            ),
+            .changesPending
+        )
+    }
+
+    func testPersonalDataSyncStateUsesServerFreshness() {
+        for (freshness, expected) in [
+            (PersonalDataFreshness.fresh, PersonalDataSyncState.fresh),
+            (.stale, .stale),
+            (.expired, .expired),
+        ] {
+            XCTAssertEqual(
+                PersonalDataSyncState.resolve(
+                    isSupported: true,
+                    isAvailable: true,
+                    isBusy: false,
+                    hasError: false,
+                    needsAccess: false,
+                    isEnabled: true,
+                    hasPendingChanges: false,
+                    freshness: freshness
+                ),
+                expected
+            )
+        }
+
+        XCTAssertEqual(
+            PersonalDataSyncState.resolve(
+                isSupported: true,
+                isAvailable: true,
+                isBusy: false,
+                hasError: true,
+                needsAccess: false,
+                isEnabled: true,
+                hasPendingChanges: false,
+                freshness: .fresh
+            ),
+            .fresh,
+            "A failed refresh must not replace the state of a usable server snapshot."
+        )
+
+        XCTAssertEqual(
+            PersonalDataSyncState.resolve(
+                isSupported: true,
+                isAvailable: true,
+                isBusy: false,
+                hasError: true,
+                needsAccess: false,
+                isEnabled: true,
+                hasPendingChanges: false,
+                freshness: nil
+            ),
+            .failed
+        )
+    }
+
+    func testHealthKitNoDataErrorIsRecognizedAsAnEmptyResult() {
+        let noData = NSError(
+            domain: HKError.errorDomain,
+            code: HKError.Code.errorNoData.rawValue
+        )
+        let other = NSError(
+            domain: HKError.errorDomain,
+            code: HKError.Code.errorAuthorizationDenied.rawValue
+        )
+
+        XCTAssertTrue(HealthKitStore.isNoDataError(noData))
+        XCTAssertFalse(HealthKitStore.isNoDataError(other))
+    }
+
     func testSevenDayWindowUsesInstanceTimeZone() throws {
         let window = try HealthDateWindow.sevenDays(
             endingAt: date("2026-08-16T00:30:00Z"),
@@ -236,6 +372,22 @@ final class HealthSnapshotFactoryTests: XCTestCase {
         XCTAssertEqual(server.snapshots[0].data.activity?.days.count, 7)
         XCTAssertNil(server.snapshots[0].data.sleep)
         XCTAssertNil(server.snapshots[0].data.workouts)
+
+        let restoredModel = HealthBridgeModel(
+            health: health,
+            preferencesStore: preferences
+        )
+        await restoredModel.load(using: server)
+
+        XCTAssertEqual(restoredModel.activityDayCount, 7)
+        XCTAssertNil(restoredModel.sleepNightCount)
+        XCTAssertFalse(restoredModel.hasPendingSelectionChanges)
+
+        restoredModel.toggleSection(.sleep)
+
+        XCTAssertTrue(restoredModel.hasPendingSelectionChanges)
+        XCTAssertEqual(restoredModel.activityDayCount, 7)
+        XCTAssertNil(restoredModel.sleepNightCount)
     }
 
     private func window() throws -> HealthDateWindow {

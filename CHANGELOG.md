@@ -31,22 +31,29 @@ capabilities.
   controls; the status row also shows "Syncing…" while a sync is in progress.
 - Removed the redundant Data Access section from Health settings (the Share
   toggles and footer carry the disclosure) and replaced "Review Health Access"
-  with an "Open iOS Settings" link, since iOS does not re-present the Health
-  authorization sheet after it has been answered.
+  with a "Manage Health Access" guide to the Health app's per-app permissions,
+  including an action that opens the Health app; iOS does not expose a public
+  deep link to the per-app screen or re-present the authorization sheet after
+  it has been answered.
 - Anchored the Stop Sync confirmation dialogs in Health and Reminders settings
   to the action buttons that trigger them instead of the whole page.
-- Reminders settings now include an "Open in iOS Settings" link, renamed the
-  Lists section to Share, and show how many items were synced under each
-  selected list.
+- Reminders settings now include an icon-labelled "Open in iOS Settings" link,
+  renamed the Lists section to Share, and show how many items were synced under
+  each selected list.
 - Reminders settings Share list now uses the same toggle switches as Health
   instead of checkmark rows.
-- Replaced the text-only Sync Status rows in Health and Reminders settings
-  with a shared visual card: a freshness bar with a stale marker,
-  Fresh/Stale/Expired axis labels, icon-led relative sync times, and count
-  capsules.
+- Reworked Health and Reminders Sync Status into compact native settings rows
+  for the current state, last sync, included data, and primary action, while
+  keeping Settings and detail-page status wording aligned.
 
 ### Fixed
 
+- Treated HealthKit's no-data result as an empty day instead of a failed Health
+  sync, and kept an existing server snapshot's freshness authoritative when a
+  later refresh attempt fails.
+- Aligned Reminders with Health when Share selections change: both now show
+  pending changes, and Included counts continue to describe the last
+  successfully uploaded snapshot until the next sync succeeds.
 - Rebuilt Display card long-press reordering around one stable lifted card and
   an in-list destination placeholder, preventing duplicated previews, jumping
   offsets, stale drop positions, and blocked vertical scrolling while

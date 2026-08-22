@@ -167,63 +167,17 @@ struct SettingsView: View {
     }
 
     private var remindersStatus: String {
-        guard model.supportsRemindersPersonalData else {
-            return String(localized: "Server update required")
-        }
-        if remindersBridgeModel.isBusy {
-            return String(localized: "Syncing…")
-        }
-        if remindersBridgeModel.authorizationState == .denied
-            || remindersBridgeModel.isEnabled
-                && remindersBridgeModel.authorizationState != .fullAccess
-        {
-            return String(localized: "Needs Access")
-        }
-        guard remindersBridgeModel.isEnabled else {
-            return String(localized: "Off")
-        }
-        guard let sourceStatus = remindersBridgeModel.sourceStatus else {
-            return String(localized: "On")
-        }
-        switch sourceStatus.state {
-        case .fresh:
-            return String(localized: "Synced")
-        case .stale:
-            return String(localized: "Stale")
-        case .expired:
-            return String(localized: "Expired")
-        }
+        PersonalDataSyncState.reminders(
+            isSupported: model.supportsRemindersPersonalData,
+            model: remindersBridgeModel
+        ).settingsLabel
     }
 
     private var healthStatus: String {
-        guard model.supportsHealthSummaryPersonalData else {
-            return String(localized: "Server update required")
-        }
-        if healthBridgeModel.isBusy {
-            return String(localized: "Syncing…")
-        }
-        if healthBridgeModel.authorizationState == .unavailable {
-            return String(localized: "Unavailable")
-        }
-        if healthBridgeModel.isEnabled
-            && healthBridgeModel.authorizationState != .reviewed
-        {
-            return String(localized: "Needs Access")
-        }
-        guard healthBridgeModel.isEnabled else {
-            return String(localized: "Off")
-        }
-        if healthBridgeModel.hasPendingSelectionChanges {
-            return String(localized: "Changes Pending")
-        }
-        guard let sourceStatus = healthBridgeModel.sourceStatus else {
-            return String(localized: "On")
-        }
-        switch sourceStatus.state {
-        case .fresh: return String(localized: "Synced")
-        case .stale: return String(localized: "Stale")
-        case .expired: return String(localized: "Expired")
-        }
+        PersonalDataSyncState.health(
+            isSupported: model.supportsHealthSummaryPersonalData,
+            model: healthBridgeModel
+        ).settingsLabel
     }
 
     private var appVersion: String {

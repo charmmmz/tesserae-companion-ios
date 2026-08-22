@@ -280,6 +280,9 @@ struct RemindersBridgePreferences: Codable, Equatable {
     var selectedListTitles: [String: String]
     var publicationIDs: [String: String]
     var lastSuccessfulContentDigest: String?
+    var lastSuccessfulListIDs: [String]?
+    var lastSuccessfulItemCount: Int?
+    var lastSuccessfulListItemCounts: [String: Int]?
     var isEnabled: Bool
 
     init(
@@ -288,6 +291,9 @@ struct RemindersBridgePreferences: Codable, Equatable {
         selectedListTitles: [String: String] = [:],
         publicationIDs: [String: String] = [:],
         lastSuccessfulContentDigest: String? = nil,
+        lastSuccessfulListIDs: [String]? = nil,
+        lastSuccessfulItemCount: Int? = nil,
+        lastSuccessfulListItemCounts: [String: Int]? = nil,
         isEnabled: Bool = false
     ) {
         self.instanceID = instanceID
@@ -295,6 +301,9 @@ struct RemindersBridgePreferences: Codable, Equatable {
         self.selectedListTitles = selectedListTitles
         self.publicationIDs = publicationIDs
         self.lastSuccessfulContentDigest = lastSuccessfulContentDigest
+        self.lastSuccessfulListIDs = lastSuccessfulListIDs
+        self.lastSuccessfulItemCount = lastSuccessfulItemCount
+        self.lastSuccessfulListItemCounts = lastSuccessfulListItemCounts
         self.isEnabled = isEnabled
     }
 }
@@ -396,6 +405,7 @@ final class RemindersBridgeModel {
     private var selectedListTitles: [String: String] = [:]
     private var publicationIDs: [String: String] = [:]
     private var lastSuccessfulContentDigest: String?
+    private var lastSuccessfulListIDs: Set<String> = []
     var isEnabled = false
     var isBusy = false
     var itemCount: Int?
@@ -404,8 +414,12 @@ final class RemindersBridgeModel {
     var confirmationMessage: String?
     var errorMessage: String?
 
-    var selectedListCount: Int {
-        selectedListIDs.count
+    var includedListCount: Int? {
+        sourceStatus == nil ? nil : lastSuccessfulListIDs.count
+    }
+
+    var hasPendingSelectionChanges: Bool {
+        isEnabled && selectedListIDs != lastSuccessfulListIDs
     }
 
     var unavailableSelectedLists: [UnavailableSelectedList] {
@@ -552,6 +566,14 @@ final class RemindersBridgeModel {
         selectedListTitles = preferences.selectedListTitles
         publicationIDs = preferences.publicationIDs
         lastSuccessfulContentDigest = preferences.lastSuccessfulContentDigest
+        lastSuccessfulListIDs = Set(
+            preferences.lastSuccessfulListIDs
+                ?? (preferences.lastSuccessfulContentDigest == nil
+                    ? []
+                    : preferences.selectedListIDs)
+        )
+        itemCount = preferences.lastSuccessfulItemCount
+        listItemCounts = preferences.lastSuccessfulListItemCounts ?? [:]
         isEnabled = preferences.isEnabled
         authorizationState = reminders.authorizationState
         if authorizationState == .fullAccess {
@@ -647,6 +669,7 @@ final class RemindersBridgeModel {
             itemCount = nil
             listItemCounts = [:]
             lastSuccessfulContentDigest = nil
+            lastSuccessfulListIDs = []
             savePreferences()
             confirmationMessage = String(
                 localized: "Reminders sync is off and the server snapshot was deleted."
@@ -702,12 +725,6 @@ final class RemindersBridgeModel {
                 serverMaximumTTLSeconds: appModel.personalDataMaximumTTLSeconds
             )
             let contentDigest = try Self.contentDigest(for: snapshot.data)
-            itemCount = snapshot.data.lists.reduce(0) { $0 + $1.items.count }
-            var counts: [String: Int] = [:]
-            for (list, listSnapshot) in zip(selectedLists, snapshot.data.lists) {
-                counts[list.id] = listSnapshot.items.count
-            }
-            listItemCounts = counts
 
             var uploadIsRequired = forceUpload
                 || contentDigest != lastSuccessfulContentDigest
@@ -720,9 +737,21 @@ final class RemindersBridgeModel {
                 )
             }
 
-            guard uploadIsRequired else { return }
+            guard uploadIsRequired else {
+                recordSuccessfulSnapshot(
+                    snapshot,
+                    selectedLists: selectedLists,
+                    contentDigest: contentDigest
+                )
+                savePreferences()
+                return
+            }
             sourceStatus = try await appModel.putRemindersSnapshot(snapshot)
-            lastSuccessfulContentDigest = contentDigest
+            recordSuccessfulSnapshot(
+                snapshot,
+                selectedLists: selectedLists,
+                contentDigest: contentDigest
+            )
             if enabling {
                 isEnabled = true
             }
@@ -735,6 +764,22 @@ final class RemindersBridgeModel {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func recordSuccessfulSnapshot(
+        _ snapshot: RemindersSnapshot,
+        selectedLists: [RemindersListDescriptor],
+        contentDigest: String
+    ) {
+        lastSuccessfulContentDigest = contentDigest
+        lastSuccessfulListIDs = Set(selectedLists.map(\.id))
+        itemCount = snapshot.data.lists.reduce(0) { $0 + $1.items.count }
+        listItemCounts = Dictionary(
+            uniqueKeysWithValues: zip(selectedLists, snapshot.data.lists).map {
+                list, listSnapshot in
+                (list.id, listSnapshot.items.count)
+            }
+        )
     }
 
     static func contentDigest(for data: RemindersData) throws -> String {
@@ -797,6 +842,9 @@ final class RemindersBridgeModel {
                 selectedListTitles: selectedListTitles,
                 publicationIDs: publicationIDs,
                 lastSuccessfulContentDigest: lastSuccessfulContentDigest,
+                lastSuccessfulListIDs: lastSuccessfulListIDs.sorted(),
+                lastSuccessfulItemCount: itemCount,
+                lastSuccessfulListItemCounts: listItemCounts,
                 isEnabled: isEnabled
             )
         )

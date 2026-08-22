@@ -176,6 +176,12 @@ final class ReminderSnapshotFactoryTests: XCTestCase {
             ],
             publicationIDs: ["grocery-list": "public-grocery"],
             lastSuccessfulContentDigest: "digest-1",
+            lastSuccessfulListIDs: ["grocery-list", "weekend-list"],
+            lastSuccessfulItemCount: 12,
+            lastSuccessfulListItemCounts: [
+                "grocery-list": 8,
+                "weekend-list": 4,
+            ],
             isEnabled: true
         )
 
@@ -207,6 +213,9 @@ final class ReminderSnapshotFactoryTests: XCTestCase {
 
         XCTAssertTrue(preferences.isEnabled)
         XCTAssertNil(preferences.lastSuccessfulContentDigest)
+        XCTAssertNil(preferences.lastSuccessfulListIDs)
+        XCTAssertNil(preferences.lastSuccessfulItemCount)
+        XCTAssertNil(preferences.lastSuccessfulListItemCounts)
     }
 
     @MainActor
@@ -357,6 +366,61 @@ final class ReminderSnapshotFactoryTests: XCTestCase {
             model.confirmationMessage,
             "Synced 0 incomplete reminders from 0 list(s)."
         )
+    }
+
+    @MainActor
+    func testSelectionChangeKeepsIncludedSnapshotAndMarksChangesPending() async throws {
+        let suiteName = "ReminderSnapshotFactoryTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let preferencesStore = RemindersBridgePreferencesStore(
+            defaults: defaults,
+            keyPrefix: "test-reminders"
+        )
+        preferencesStore.save(
+            RemindersBridgePreferences(
+                instanceID: "home",
+                selectedListIDs: ["grocery-list"],
+                selectedListTitles: ["grocery-list": "Grocery List"],
+                publicationIDs: ["grocery-list": "public-grocery"],
+                isEnabled: true
+            )
+        )
+        let reminders = TestRemindersStore(
+            lists: [
+                .init(id: "grocery-list", title: "Grocery List"),
+                .init(id: "weekend-list", title: "Weekend"),
+            ],
+            authorizationState: .fullAccess
+        )
+        let model = RemindersBridgeModel(
+            reminders: reminders,
+            preferencesStore: preferencesStore
+        )
+        let appModel = makeRemindersAppModel()
+
+        await model.load(using: appModel)
+        await model.syncNow(using: appModel)
+
+        XCTAssertEqual(model.includedListCount, 1)
+        XCTAssertFalse(model.hasPendingSelectionChanges)
+
+        model.toggleList("weekend-list")
+
+        XCTAssertEqual(model.includedListCount, 1)
+        XCTAssertTrue(model.hasPendingSelectionChanges)
+        XCTAssertEqual(
+            PersonalDataSyncState.reminders(
+                isSupported: true,
+                model: model
+            ),
+            .changesPending
+        )
+
+        await model.syncNow(using: appModel)
+
+        XCTAssertEqual(model.includedListCount, 2)
+        XCTAssertFalse(model.hasPendingSelectionChanges)
     }
 
     @MainActor
