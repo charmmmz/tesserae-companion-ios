@@ -62,10 +62,34 @@ leaving authoring and administration in Tesserae's web interface.
 - Browse server-managed Gallery folders in a pinch-zoomable square or
   original-ratio photo grid, add photos, and hand existing images into Send.
 - Send photos, image URLs, and webpage snapshots with display-aware layouts.
+- Use Auto Frame in photo Fill previews to keep detected faces and subjects
+  in view, then adjust by dragging or pinching if needed.
 - Share an image or link to Tesserae directly from other iOS apps.
 - Run common display actions from Shortcuts.
 - Bridge selected Apple Reminders data with explicit permission and retention
   controls.
+
+### Auto Frame
+
+Choose a photo and a display in **Fill**. Auto Frame applies once when the
+preview is ready, with up to **2×** zoom for smaller subjects (within the server's
+limit). Each preview aspect ratio gets its own composition. Drag, pinch, or
+reset to centered Fill; those edits stay in place until you tap the wand again.
+The gesture hint bar keeps its frosted style and fits its icons and zoom level
+in a compact, centered bar. A green wand marks an automatic composition; dragging,
+pinching, or resetting clears the highlight. Tap the wand to run Auto Frame again.
+The hand is a gesture cue without a popup. Icons and the zoom level have even
+visual gaps despite their different widths.
+Long-press the wand for details when its status badge shows a warning.
+It keeps detected faces together when they fit, and aims to show as much
+of other subjects as possible, allowing partial crops. If faces cannot all fit,
+use Fit or Blur to show the whole photo.
+
+Auto Frame works in Send and the Share Sheet when the server advertises image
+framing support. Analysis runs locally with Apple Vision on iOS 18 or later
+and does not require Apple Intelligence. Once a Share send has been queued,
+its composition and targets remain fixed for retries.
+Shared photos start with Fill when no saved layout preference exists.
 
 ## Your server, your data
 

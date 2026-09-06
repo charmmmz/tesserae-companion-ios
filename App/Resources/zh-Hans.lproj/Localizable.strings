@@ -395,3 +395,28 @@
 "Manage Sync" = "管理同步";
 "Apply Changes and Sync" = "应用更改并同步";
 "Checks when the app becomes active. Background updates are best effort." = "App 进入前台时会检查更新；后台更新由系统尽力执行。";
+
+/* On-device photo framing */
+"Auto Frame" = "自动构图";
+"Analyzing photo" = "正在分析照片";
+"Adjust the photo for the current display aspect ratio." = "按当前预览屏幕的比例调整照片。";
+"Framing adjusted" = "已调整构图";
+"Framing already fits" = "当前构图已合适";
+"No clear subject found" = "未找到明确主体";
+"Faces won't all fit. Try Fit or Blur." = "无法完整保留所有人脸，可尝试 Fit 或 Blur。";
+"Couldn't analyze photo. Try again." = "无法分析照片，请重试。";
+"Auto" = "自动";
+
+"Unchanged" = "无需调整";
+
+"No subject" = "无主体";
+
+"Try Fit" = "试试 Fit";
+
+"Try again" = "重试";
+
+"Drag · Zoom" = "拖动 · 缩放";
+
+"Auto Zoom" = "自动构图";
+
+"Reset Framing" = "重置构图";

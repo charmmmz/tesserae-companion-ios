@@ -40,3 +40,34 @@
 "The shared item does not contain one readable image or web link." = "分享的内容中没有可读取的图片或网页链接。";
 "Pair Tesserae Companion with a server before using the Share Sheet." = "使用分享菜单前，请先将 Tesserae 伴侣与服务器配对。";
 "The Tesserae server does not accept %@ images." = "Tesserae 服务器不接受 %@ 格式的图片。";
+
+/* On-device photo framing */
+"Auto Frame" = "自动构图";
+"Analyzing photo" = "正在分析照片";
+"Adjust the photo for the current display aspect ratio." = "按当前预览屏幕的比例调整照片。";
+"Framing adjusted" = "已调整构图";
+"Framing already fits" = "当前构图已合适";
+"No clear subject found" = "未找到明确主体";
+"Faces won't all fit. Try Fit or Blur." = "无法完整保留所有人脸，可尝试 Fit 或 Blur。";
+"Couldn't analyze photo. Try again." = "无法分析照片，请重试。";
+"Auto" = "自动";
+
+"Adjusted" = "已调整";
+
+"Unchanged" = "无需调整";
+
+"No subject" = "无主体";
+
+"Try Fit" = "试试 Fit";
+
+"Try again" = "重试";
+
+"Drag · Zoom" = "拖动 · 缩放";
+
+"Auto Zoom" = "自动构图";
+
+"Manual" = "手动";
+
+"Drag · Pinch to zoom" = "拖动 · 双指缩放";
+
+"Reset Framing" = "重置构图";

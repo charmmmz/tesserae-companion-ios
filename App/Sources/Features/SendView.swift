@@ -17,6 +17,8 @@ struct SendView: View {
     @Environment(\.presentTesseraeSettings) private var presentSettings
     @State private var source: SendSource = .photo
     @State private var pickerItem: PhotosPickerItem?
+    @State private var loadedPickerItem: PhotosPickerItem?
+    @State private var initialImageWasPrepared = false
     @State private var isPhotoPickerPresented = false
     @State private var imageData: Data?
     @State private var previewImage: UIImage?
@@ -24,7 +26,10 @@ struct SendView: View {
     @State private var linkText = ""
     @State private var linkKind: LinkPushKind = .webpage
     @State private var fitMode: ImageFitMode = .fill
-    @State private var imageFramingsByAspect: [PanelAspectRatio: ImageFraming] = [:]
+    @State private var framingSession = PhotoFramingSession()
+    @State private var imageLoadRevision = UUID()
+    @State private var isPreparingImage = false
+    @State private var isSubmitting = false
     @State private var imageRevision = UUID()
     @State private var imageSendAttempt: ImageSendAttempt?
     @State private var selectedDeviceIDs: Set<String> = []
@@ -33,19 +38,14 @@ struct SendView: View {
     @State private var hapticEvent = TesseraeHapticEvent()
     @FocusState private var linkFieldIsFocused: Bool
     private let prioritizesFramingGesture: Bool
+    private let initialImage: SendImageDraft?
 
     init(
         initialImage: SendImageDraft? = nil,
         prioritizesFramingGesture: Bool = false
     ) {
         self.prioritizesFramingGesture = prioritizesFramingGesture
-        _imageData = State(initialValue: initialImage?.data)
-        _previewImage = State(
-            initialValue: initialImage.flatMap { UIImage(data: $0.data) }
-        )
-        _imageContentType = State(
-            initialValue: initialImage?.contentType ?? "image/jpeg"
-        )
+        self.initialImage = initialImage
     }
 
     private var previewSlotHeight: CGFloat {
@@ -67,35 +67,47 @@ struct SendView: View {
                 fitCard
 
                 Button {
+                    framingSession.freeze()
+                    isSubmitting = true
+                    let submittedSource = source
+                    let submittedData = imageData
+                    let submittedFit = fitMode
+                    let submittedContentType = imageContentType
+                    let targetGroups = outgoingImageTargetGroups
+                    let keys = imageIdempotencyKeys(for: targetGroups)
+                    let submittedURL = linkURL
+                    let submittedLinkKind = linkKind
+                    let submittedIDs = Array(selectedDeviceIDs)
                     Task {
+                        defer {
+                            isSubmitting = false
+                            framingSession.resumeEditing()
+                        }
                         showSendingMessage()
                         let sent: Bool
-                        switch source {
+                        switch submittedSource {
                         case .photo:
-                            guard let imageData else {
+                            guard let submittedData else {
                                 messageCenter.dismiss(id: "send.submission")
                                 return
                             }
-                            let targetGroups = outgoingImageTargetGroups
                             sent = await model.sendImage(
-                                data: imageData,
-                                fit: fitMode,
+                                data: submittedData,
+                                fit: submittedFit,
                                 targetGroups: targetGroups,
-                                idempotencyKeys: imageIdempotencyKeys(
-                                    for: targetGroups
-                                ),
-                                contentType: imageContentType
+                                idempotencyKeys: keys,
+                                contentType: submittedContentType
                             )
                         case .link:
-                            guard let linkURL else {
+                            guard let submittedURL else {
                                 messageCenter.dismiss(id: "send.submission")
                                 return
                             }
                             sent = await model.sendLink(
-                                url: linkURL,
-                                kind: linkKind,
-                                fit: fitMode,
-                                deviceIDs: Array(selectedDeviceIDs)
+                                url: submittedURL,
+                                kind: submittedLinkKind,
+                                fit: submittedFit,
+                                deviceIDs: submittedIDs
                             )
                         }
                         if sent {
@@ -120,6 +132,7 @@ struct SendView: View {
                 )
             }
             .padding(TesseraeComposerLayout.pagePadding)
+            .disabled(isSubmitting)
         }
         .task(id: sendPreferenceContextID) {
             await loadSendPreferences()
@@ -136,10 +149,22 @@ struct SendView: View {
                 )
             }
         }
-        .onChange(of: pickerItem) { _, newItem in
-            Task {
-                await load(newItem)
+        .task(id: pickerItem) {
+            if let pickerItem, pickerItem != loadedPickerItem { await load(pickerItem) }
+        }
+        .task(id: initialImage?.id) {
+            if !initialImageWasPrepared, imageData == nil, let initialImage {
+                await prepareInitialImage(initialImage)
             }
+        }
+        .onChange(of: automaticFramingContext, initial: true) { _, context in
+            framingSession.updateAutomaticContext(context, data: imageData)
+        }
+        .onChange(of: model.activeInstance?.id) { framingSession.discardAnalysis() }
+        .onDisappear {
+            imageLoadRevision = UUID()
+            isPreparingImage = false
+            framingSession.discardAnalysis()
         }
         .photosPicker(
             isPresented: $isPhotoPickerPresented,
@@ -236,6 +261,8 @@ struct SendView: View {
 
             if model.connectionMode == .demo {
                 Button("Use Sample") {
+                    imageLoadRevision = UUID()
+                    isPreparingImage = false
                     let renderer = UIGraphicsImageRenderer(
                         size: CGSize(width: 800, height: 600)
                     )
@@ -314,7 +341,12 @@ struct SendView: View {
                     framing: previewImageFramingBinding,
                     maximumFramingZoom: maximumFramingZoom,
                     onCanvasTap: choosePhotoFromPreview,
-                    prioritizesFramingGesture: prioritizesFramingGesture
+                    prioritizesFramingGesture: prioritizesFramingGesture,
+                    framingEditingEnabled: !framingSession.isFrozen,
+                    onAutoFrame: canAutoFrame ? { autoFrame() } : nil,
+                    isAutoFraming: framingSession.isAnalyzing,
+                    autoFramingFeedback: framingSession.feedback,
+                    onFramingInteraction: { framingInteractionStarted() }
                 )
                 .accessibilityValue(
                     previewAccessibilityValue(
@@ -333,7 +365,7 @@ struct SendView: View {
                     choosePhotoFromPreview()
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: 276, alignment: .top)
+                .frame(height: dynamicTypeSize.isAccessibilitySize ? nil : 276, alignment: .top)
             } else {
                 ContentUnavailableView {
                     Label("No display selected", systemImage: "rectangle.slash")
@@ -346,7 +378,7 @@ struct SendView: View {
 
             previewFooter
         }
-        .frame(height: previewSlotHeight)
+        .frame(height: dynamicTypeSize.isAccessibilitySize ? nil : previewSlotHeight)
     }
 
     private var previewFooter: some View {
@@ -530,7 +562,7 @@ struct SendView: View {
     private var sourceIsReady: Bool {
         switch source {
         case .photo:
-            imageData != nil
+            imageData != nil && !isPreparingImage
         case .link:
             linkURL != nil && supportedLinkKinds.contains(linkKind)
         }
@@ -626,23 +658,45 @@ struct SendView: View {
             && supportsImageFraming
     }
 
+    private var canAutoFrame: Bool {
+        framingEditorIsActive && !selectedDeviceIDs.isEmpty && !isPreparingImage
+    }
+
+    private var automaticFramingContext: PhotoFramingSession.AutomaticContext {
+        .init(
+            imageID: framingSession.imageID, instanceID: model.activeInstance?.id,
+            aspect: previewAspectRatio, targetIDs: selectedDeviceIDs, maximumZoom: maximumFramingZoom,
+            isReady: canAutoFrame && didLoadSendPreferences && !isSubmitting
+        )
+    }
+
+    private func framingInteractionStarted() {
+        guard let previewAspectRatio else { return }
+        framingSession.userDidInteract(with: previewAspectRatio)
+    }
+
+    private func autoFrame() {
+        guard canAutoFrame, let imageData, let previewAspectRatio else { return }
+        framingSession.request(data: imageData, aspect: previewAspectRatio, maximumZoom: maximumFramingZoom)
+    }
+
     private var previewAspectRatio: PanelAspectRatio? {
         previewDisplay.map { PanelAspectRatio(panel: $0.panel) }
     }
 
     private var previewImageFraming: ImageFraming {
         guard let previewAspectRatio else { return .centeredFill }
-        return imageFramingsByAspect[previewAspectRatio] ?? .centeredFill
+        return framingSession.framing(for: previewAspectRatio)
     }
 
     private var previewImageFramingBinding: Binding<ImageFraming>? {
         guard framingEditorIsActive, let previewAspectRatio else { return nil }
         return Binding(
             get: {
-                imageFramingsByAspect[previewAspectRatio] ?? .centeredFill
+                framingSession.framing(for: previewAspectRatio)
             },
             set: { framing in
-                imageFramingsByAspect[previewAspectRatio] = framing
+                framingSession.setFraming(framing, for: previewAspectRatio)
             }
         )
     }
@@ -651,7 +705,7 @@ struct SendView: View {
         imageSendTargetGroups(
             displays: model.sortedDisplays,
             selectedDeviceIDs: selectedDeviceIDs,
-            framingsByAspect: imageFramingsByAspect,
+            framingsByAspect: framingSession.framings,
             separatesByAspect: framingEditorIsActive,
             maximumZoom: maximumFramingZoom
         )
@@ -735,6 +789,7 @@ struct SendView: View {
             imageData = nil
             previewImage = nil
             pickerItem = nil
+            loadedPickerItem = nil
             resetImageFramingState()
         case .link:
             linkText = ""
@@ -742,12 +797,9 @@ struct SendView: View {
     }
 
     private func load(_ item: PhotosPickerItem?) async {
-        guard let item else {
-            imageData = nil
-            previewImage = nil
-            resetImageFramingState()
-            return
-        }
+        guard let item else { return }
+        let revision = beginImageLoad()
+        defer { if imageLoadRevision == revision { isPreparingImage = false } }
         do {
             guard let data = try await item.loadTransferable(type: Data.self) else {
                 throw UploadImagePreparationError.decoding
@@ -755,28 +807,51 @@ struct SendView: View {
             let fallbackContentType = item.supportedContentTypes
                 .compactMap(\.preferredMIMEType)
                 .first ?? "image/jpeg"
-            let maximumPixelSize = imagePreparationMaxEdge
-            let prepared = try await Task.detached(priority: .userInitiated) {
-                try UploadImagePreparer.prepare(
-                    data: data,
-                    fallbackContentType: fallbackContentType,
-                    maximumPixelSize: maximumPixelSize
-                )
-            }.value
-            imageData = prepared.data
-            imageContentType = prepared.contentType
-            previewImage = UIImage(data: prepared.data)
-            resetImageFramingState()
+            guard imageLoadRevision == revision, !Task.isCancelled else { return }
+            try await finishImageLoad(data: data, contentType: fallbackContentType, revision: revision)
+            if imageLoadRevision == revision, !Task.isCancelled { loadedPickerItem = item }
         } catch {
-            imageData = nil
-            previewImage = nil
-            resetImageFramingState()
+            guard imageLoadRevision == revision, !Task.isCancelled else { return }
             model.lastError = error.localizedDescription
         }
     }
 
+    private func prepareInitialImage(_ draft: SendImageDraft) async {
+        let revision = beginImageLoad()
+        defer { if imageLoadRevision == revision { isPreparingImage = false } }
+        do {
+            try await finishImageLoad(data: draft.data, contentType: draft.contentType, revision: revision)
+            if imageLoadRevision == revision, !Task.isCancelled { initialImageWasPrepared = true }
+        } catch {
+            guard imageLoadRevision == revision, !Task.isCancelled else { return }
+            model.lastError = error.localizedDescription
+        }
+    }
+
+    private func beginImageLoad() -> UUID {
+        imageLoadRevision = UUID()
+        imageData = nil
+        previewImage = nil
+        isPreparingImage = true
+        resetImageFramingState()
+        return imageLoadRevision
+    }
+
+    private func finishImageLoad(data: Data, contentType: String, revision: UUID) async throws {
+        let maximumPixelSize = imagePreparationMaxEdge
+        let prepared = try await Task.detached(priority: .userInitiated) {
+            try UploadImagePreparer.prepare(
+                data: data, fallbackContentType: contentType, maximumPixelSize: maximumPixelSize
+            )
+        }.value
+        guard imageLoadRevision == revision, !Task.isCancelled else { return }
+        imageData = prepared.data
+        imageContentType = prepared.contentType
+        previewImage = UIImage(data: prepared.data)
+    }
+
     private func resetImageFramingState() {
-        imageFramingsByAspect = [:]
+        framingSession.replaceImage()
         imageRevision = UUID()
         imageSendAttempt = nil
     }

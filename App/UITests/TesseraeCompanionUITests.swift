@@ -26,6 +26,7 @@ final class TesseraeCompanionUITests: XCTestCase {
     func testDemoGalleryBrowsesFoldersAndHandsPhotoToSend() {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_AUTO_FRAMING"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
         app.launchEnvironment["TESSERAE_UI_TEST_GALLERY_GRID_MODE"] = "square"
         app.launchEnvironment["TESSERAE_UI_TEST_GALLERY_GRID_COLUMNS"] = "3"
@@ -206,6 +207,10 @@ final class TesseraeCompanionUITests: XCTestCase {
             app.buttons["send-change-photo"].waitForExistence(timeout: 3)
         )
         XCTAssertTrue(app.buttons["Send to Displays"].exists)
+        let framingAuto = app.buttons["send-auto-framing"]
+        XCTAssertTrue(framingAuto.waitForExistence(timeout: 4))
+        XCTAssertEqual(framingAuto.value as? String, "Adjusted")
+        XCTAssertEqual(app.staticTexts["send-framing-zoom"].label, "2.0×")
     }
 
     func testDemoGalleryFolderLoadingLabelStaysReadable() {
@@ -1454,6 +1459,105 @@ final class TesseraeCompanionUITests: XCTestCase {
                 )
             ).firstMatch.exists
         )
+    }
+
+    func testAutoFramingAppliesResetsAndSends() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_AUTO_FRAMING"] = "1"
+        app.launch()
+        XCTAssertTrue(app.buttons["Explore with Demo Data"].waitForExistence(timeout: 5))
+        app.buttons["Explore with Demo Data"].tap()
+        XCTAssertTrue(app.buttons["root-send-action"].waitForExistence(timeout: 5))
+        app.buttons["root-send-action"].tap()
+        let picker = app.descendants(matching: .any)["send-preview-display-picker"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 3))
+        if !picker.label.contains("Desk") { app.buttons["send-display-e1004-desk"].tap() }
+        let sample = app.buttons["Use Sample"]
+        for _ in 0..<3 where !sample.isHittable { app.swipeUp() }
+        sample.tap()
+        let auto = app.buttons["send-auto-framing"]
+        XCTAssertTrue(auto.waitForExistence(timeout: 3))
+        let reset = app.buttons["send-framing-reset"]
+        XCTAssertEqual(auto.value as? String, "Adjusted")
+        let hint = app.descendants(matching: .any)["send-framing-hint"]
+        XCTAssertTrue(hint.exists)
+        let zoom = app.staticTexts["send-framing-zoom"]
+        XCTAssertEqual(zoom.label, "2.0×")
+        XCTAssertTrue(reset.isEnabled)
+        let controls = app.descendants(matching: .any)["send-framing-controls"]
+        let controlsHeight = controls.frame.height
+        XCTAssertLessThanOrEqual(hint.frame.maxX, auto.frame.minX + 1)
+        XCTAssertLessThanOrEqual(auto.frame.maxX, zoom.frame.minX)
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Auto Frame applied"
+        shot.lifetime = .keepAlways
+        add(shot)
+        XCTAssertFalse(app.staticTexts["send-auto-framing-feedback"].exists)
+        XCTAssertFalse(app.buttons["send-framing-hint"].exists)
+        reset.tap()
+        XCTAssertFalse(reset.isEnabled)
+        XCTAssertEqual(auto.value as? String, "Manual")
+        XCTAssertEqual(controls.frame.height, controlsHeight, accuracy: 0.5)
+        auto.tap()
+        XCTAssertTrue(reset.isEnabled)
+        auto.tap()
+        XCTAssertEqual(auto.value as? String, "Unchanged")
+        XCTAssertEqual(controls.frame.height, controlsHeight, accuracy: 0.5)
+        XCTAssertLessThanOrEqual(hint.frame.maxX, auto.frame.minX + 1)
+        XCTAssertLessThanOrEqual(auto.frame.maxX, zoom.frame.minX)
+        let send = app.buttons["Send to Displays"]
+        for _ in 0..<3 where !send.isHittable { app.swipeUp() }
+        send.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["send-success-banner"].waitForExistence(timeout: 5))
+    }
+
+    func testAutoFramingChineseAccessibilityLayout() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_AUTO_FRAMING"] = "1"
+        app.launchArguments += [
+            "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+        ]
+        app.launch()
+        XCTAssertTrue(app.buttons["使用演示数据体验"].waitForExistence(timeout: 5))
+        app.buttons["使用演示数据体验"].tap()
+        XCTAssertTrue(app.buttons["root-send-action"].waitForExistence(timeout: 5))
+        app.buttons["root-send-action"].tap()
+        let sample = app.buttons["使用示例"]
+        for _ in 0..<6 where !sample.isHittable { app.swipeUp() }
+        XCTAssertTrue(sample.isHittable)
+        sample.tap()
+        let auto = app.buttons["send-auto-framing"]
+        XCTAssertTrue(auto.waitForExistence(timeout: 3))
+        for _ in 0..<6 where !auto.isHittable { app.swipeDown() }
+        XCTAssertTrue(auto.isHittable)
+        XCTAssertEqual(auto.value as? String, "已调整")
+        XCTAssertFalse(app.staticTexts["send-auto-framing-feedback"].exists)
+        let panel = app.descendants(matching: .any)["send-panel-preview"]
+        let image = app.descendants(matching: .any)["selected-image-preview"]
+        let reset = app.buttons["send-framing-reset"]
+        let controls = app.descendants(matching: .any)["send-framing-controls"]
+        let hint = app.descendants(matching: .any)["send-framing-hint"]
+        let zoom = app.staticTexts["send-framing-zoom"]
+        XCTAssertGreaterThanOrEqual(auto.frame.minX, panel.frame.minX)
+        XCTAssertGreaterThan(auto.frame.minY, image.frame.maxY)
+        XCTAssertLessThanOrEqual(auto.frame.maxX, panel.frame.maxX)
+        XCTAssertLessThanOrEqual(reset.frame.maxX, panel.frame.maxX)
+        XCTAssertLessThanOrEqual(hint.frame.maxX, auto.frame.minX + 1)
+        XCTAssertLessThanOrEqual(auto.frame.maxX, zoom.frame.minX)
+        XCTAssertLessThanOrEqual(zoom.frame.maxX, reset.frame.minX)
+        // Accessibility can round the shared bottom edge to slightly different values.
+        XCTAssertLessThanOrEqual(controls.frame.maxY, panel.frame.maxY + 0.5)
+        let target = app.descendants(matching: .any)["send-preview-display-picker"]
+        XCTAssertGreaterThan(target.frame.minY, controls.frame.maxY)
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Auto Frame Chinese accessibility"
+        shot.lifetime = .keepAlways
+        add(shot)
+        XCTAssertFalse(app.buttons["send-framing-hint"].exists)
+        XCTAssertTrue(auto.isHittable)
     }
 
     func testManualConnectionAgainstFixtureServer() throws {

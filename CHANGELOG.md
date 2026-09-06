@@ -13,6 +13,17 @@ capabilities.
 
 ### Added
 
+- Added on-device Auto Frame to Fill previews in Send and the Share Sheet.
+  Photos are composed automatically on first preview, with up to 2× zoom for
+  smaller subjects within the server's limit. Manual edits and resets are preserved.
+  It prioritizes complete faces and allows partial crops of other subjects
+  for the current display aspect ratio, with manual adjustment still available.
+  Share retries preserve the confirmed composition. Apple Intelligence is not required.
+  The gesture hint bar now fits its icons and zoom level in a compact, centered bar.
+  A green wand indicates automatic composition; manual edits clear its highlight.
+  The hand is a gesture cue without a help popup; controls and the zoom level
+  share even visual gaps despite their different widths. Tap the wand to compose again.
+  Shared photos default to Fill when no saved layout preference exists.
 - Display details now show the server-projected update queue under the
   "Next in Line" card, listing the following Lineup advances and refreshes
   alongside the immediate countdown, each row with its dashboard icon.

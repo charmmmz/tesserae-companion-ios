@@ -52,6 +52,7 @@ private final class ShareComposerModel: ObservableObject {
     @Published var sharedURL: URL?
     @Published var linkKind: LinkPushKind = .webpage
     @Published var errorMessage: String?
+    let framingSession = PhotoFramingSession()
 
     private weak var extensionContext: NSExtensionContext?
     private var imageData: Data?
@@ -133,6 +134,25 @@ private final class ShareComposerModel: ObservableObject {
             )
             && !selectedDeviceIDs.isEmpty
             && snapshot != nil
+    }
+
+    func autoFrame(aspect: PanelAspectRatio) {
+        guard phase == .ready, framingEditorIsActive, !selectedDeviceIDs.isEmpty,
+              let imageData else { return }
+        framingSession.request(data: imageData, aspect: aspect, maximumZoom: maximumFramingZoom)
+    }
+
+    var automaticFramingContext: PhotoFramingSession.AutomaticContext {
+        .init(
+            imageID: framingSession.imageID, instanceID: snapshot?.activeInstance.id,
+            aspect: previewDisplay.map { PanelAspectRatio(panel: $0.panel) },
+            targetIDs: selectedDeviceIDs, maximumZoom: maximumFramingZoom,
+            isReady: phase == .ready && framingEditorIsActive
+        )
+    }
+
+    func updateAutomaticFraming(_ context: PhotoFramingSession.AutomaticContext) {
+        framingSession.updateAutomaticContext(context, data: imageData)
     }
 
     var previewDisplay: DisplaySummary? {
@@ -225,10 +245,12 @@ private final class ShareComposerModel: ObservableObject {
                     capabilities: snapshot.capabilities
                 )
                 imageData = loaded.data
+                framingSession.replaceImage()
                 previewImage = UIImage(data: loaded.data)
                 contentType = loaded.contentType
                 fileName = loaded.fileName
                 contentKind = .image
+                fit = .fill
             }
 
             self.snapshot = snapshot
@@ -263,11 +285,13 @@ private final class ShareComposerModel: ObservableObject {
     func send(imageTargetGroups: [ImageSendTargetGroup] = []) async {
         guard
             let snapshot,
+            phase == .ready || phase == .failed,
             !selectedDeviceIDs.isEmpty
         else {
             return
         }
         phase = .submitting
+        if contentKind == .image { framingSession.freeze() }
         errorMessage = nil
         failedRequestRetained = false
         await savePreferences()
@@ -681,7 +705,6 @@ private struct ShareComposerView: View {
     @ObservedObject var model: ShareComposerModel
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var imageFramingsByAspect: [PanelAspectRatio: ImageFraming] = [:]
     @State private var hapticEvent = TesseraeHapticEvent()
 
     var body: some View {
@@ -735,6 +758,10 @@ private struct ShareComposerView: View {
         }
         .tint(TesseraeTheme.accent)
         .tesseraeHapticFeedback(trigger: hapticEvent)
+        .onChange(of: model.automaticFramingContext, initial: true) { _, context in
+            model.updateAutomaticFraming(context)
+        }
+        .onDisappear { model.framingSession.discardAnalysis() }
         .onChange(of: model.phase) { oldValue, newValue in
             guard oldValue == .submitting else { return }
             switch newValue {
@@ -760,8 +787,10 @@ private struct ShareComposerView: View {
         ScrollView {
             VStack(spacing: TesseraeComposerLayout.sectionSpacing) {
                 displaysCard
+                    .disabled(model.framingSession.isFrozen)
                 contentCard
                 layoutCard
+                    .disabled(model.framingSession.isFrozen)
 
                 if let errorMessage = model.errorMessage {
                     Label(errorMessage, systemImage: "exclamationmark.triangle")
@@ -777,8 +806,10 @@ private struct ShareComposerView: View {
 
     private var sendToolbarButton: some View {
         Button {
+            if model.contentKind == .image { model.framingSession.freeze() }
+            let groups = outgoingImageTargetGroups
             Task {
-                await model.send(imageTargetGroups: outgoingImageTargetGroups)
+                await model.send(imageTargetGroups: groups)
             }
         } label: {
             if model.phase == .submitting {
@@ -790,7 +821,7 @@ private struct ShareComposerView: View {
             }
         }
         .buttonStyle(.borderedProminent)
-        .disabled(!model.canSend && model.phase != .failed)
+        .disabled(model.phase == .submitting || (!model.canSend && model.phase != .failed))
         .accessibilityLabel(
             model.phase == .submitting
                 ? "Sending"
@@ -829,14 +860,19 @@ private struct ShareComposerView: View {
                     imageAccessibilityIdentifier: "shared-image-preview",
                     framing: previewImageFramingBinding,
                     maximumFramingZoom: model.maximumFramingZoom,
-                    prioritizesFramingGesture: true
+                    prioritizesFramingGesture: true,
+                    framingEditingEnabled: !model.framingSession.isFrozen,
+                    onAutoFrame: model.framingEditorIsActive ? { autoFrame() } : nil,
+                    isAutoFraming: model.framingSession.isAnalyzing,
+                    autoFramingFeedback: model.framingSession.feedback,
+                    onFramingInteraction: { framingInteractionStarted() }
                 )
                 .accessibilityLabel("Display image preview")
                 .accessibilityValue(
                     previewAccessibilityValue(panel: previewDisplay.panel)
                 )
                 .accessibilityHint(
-                    model.framingEditorIsActive
+                    model.framingEditorIsActive && !model.framingSession.isFrozen
                         ? "Drag to reposition the photo and pinch to zoom."
                         : ""
                 )
@@ -1046,7 +1082,7 @@ private struct ShareComposerView: View {
 
     private var previewImageFraming: ImageFraming {
         guard let previewAspectRatio else { return .centeredFill }
-        return imageFramingsByAspect[previewAspectRatio] ?? .centeredFill
+        return model.framingSession.framing(for: previewAspectRatio)
     }
 
     private var previewImageFramingBinding: Binding<ImageFraming>? {
@@ -1055,10 +1091,10 @@ private struct ShareComposerView: View {
         }
         return Binding(
             get: {
-                imageFramingsByAspect[previewAspectRatio] ?? .centeredFill
+                model.framingSession.framing(for: previewAspectRatio)
             },
             set: { framing in
-                imageFramingsByAspect[previewAspectRatio] = framing
+                model.framingSession.setFraming(framing, for: previewAspectRatio)
             }
         )
     }
@@ -1067,10 +1103,20 @@ private struct ShareComposerView: View {
         imageSendTargetGroups(
             displays: model.displays,
             selectedDeviceIDs: model.selectedDeviceIDs,
-            framingsByAspect: imageFramingsByAspect,
+            framingsByAspect: model.framingSession.framings,
             separatesByAspect: model.framingEditorIsActive,
             maximumZoom: model.maximumFramingZoom
         )
+    }
+
+    private func autoFrame() {
+        guard let previewAspectRatio else { return }
+        model.autoFrame(aspect: previewAspectRatio)
+    }
+
+    private func framingInteractionStarted() {
+        guard let previewAspectRatio else { return }
+        model.framingSession.userDidInteract(with: previewAspectRatio)
     }
 
     private func linkKindName(_ kind: LinkPushKind) -> String {

@@ -15,6 +15,13 @@ SDK, analytics SDK, tracking, or telemetry.
 - Photos selected in the app, Share Sheet, or Shortcuts are sent directly to
   the user's selected Tesserae instance. They do not pass through a service
   operated by the iOS app maintainer.
+- Auto Frame analyzes a thumbnail locally using Apple Vision when a selected
+  photo's Fill preview first becomes ready, or when the user taps Auto again.
+  Detected face and subject regions remain in memory for
+  the current photo session and are discarded on exit or image replacement.
+  These detections are not uploaded or saved. Sending still uploads the photo
+  and its chosen focus/zoom parameters directly to the selected Tesserae
+  instance; queued retries retain those parameters with the existing photo.
 - Photos added to Gallery are queued only in memory while the import sheet is
   open and uploaded one at a time to the selected Tesserae instance. Tesserae
   removes location metadata, normalizes orientation, and retains the resulting

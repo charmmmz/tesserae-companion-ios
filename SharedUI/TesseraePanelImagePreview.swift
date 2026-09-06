@@ -6,6 +6,8 @@ import UIKit
 /// modes. The image is laid out explicitly and clipped by the canvas, avoiding
 /// SwiftUI's implicit `aspectRatio` sizing from escaping its parent.
 struct TesseraePanelImagePreview: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let image: UIImage?
     let panel: PanelProfile
     let fit: ImageFitMode
@@ -17,6 +19,11 @@ struct TesseraePanelImagePreview: View {
     let maximumFramingZoom: Double
     let onCanvasTap: (() -> Void)?
     let prioritizesFramingGesture: Bool
+    let framingEditingEnabled: Bool
+    let onAutoFrame: (() -> Void)?
+    let isAutoFraming: Bool
+    let autoFramingFeedback: PhotoFramingSession.Feedback?
+    let onFramingInteraction: (() -> Void)?
     @GestureState private var framingGestureState = FramingGestureState()
     @State private var isFramingGestureActive = false
     @State private var framingControlsRevealTask: Task<Void, Never>?
@@ -35,7 +42,12 @@ struct TesseraePanelImagePreview: View {
         framing: Binding<ImageFraming>? = nil,
         maximumFramingZoom: Double = 1,
         onCanvasTap: (() -> Void)? = nil,
-        prioritizesFramingGesture: Bool = false
+        prioritizesFramingGesture: Bool = false,
+        framingEditingEnabled: Bool = true,
+        onAutoFrame: (() -> Void)? = nil,
+        isAutoFraming: Bool = false,
+        autoFramingFeedback: PhotoFramingSession.Feedback? = nil,
+        onFramingInteraction: (() -> Void)? = nil
     ) {
         self.image = image
         self.panel = panel
@@ -48,9 +60,31 @@ struct TesseraePanelImagePreview: View {
         self.maximumFramingZoom = maximumFramingZoom
         self.onCanvasTap = onCanvasTap
         self.prioritizesFramingGesture = prioritizesFramingGesture
+        self.framingEditingEnabled = framingEditingEnabled
+        self.onAutoFrame = onAutoFrame
+        self.isAutoFraming = isAutoFraming
+        self.autoFramingFeedback = autoFramingFeedback
+        self.onFramingInteraction = onFramingInteraction
     }
 
     var body: some View {
+        VStack(spacing: 12) {
+            previewPanel
+            if dynamicTypeSize.isAccessibilitySize, let framing {
+                framingControls(framing: framing)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(accessibilityIdentifier)
+        .tesseraeHapticFeedback(trigger: hapticEvent)
+        .onDisappear {
+            framingControlsRevealTask?.cancel()
+        }
+    }
+
+    private var previewPanel: some View {
         PanelAspectLayout(
             aspectRatio: CGFloat(max(panel.width, 1))
                 / CGFloat(max(panel.height, 1)),
@@ -59,8 +93,13 @@ struct TesseraePanelImagePreview: View {
             GeometryReader { proxy in
                 ZStack(alignment: .bottom) {
                     panelCanvas(size: proxy.size)
+                        .animation(
+                            !reduceMotion && autoFramingFeedback == .applied
+                                ? .easeOut(duration: 0.18) : nil,
+                            value: framing?.wrappedValue
+                        )
 
-                    if let framing {
+                    if !dynamicTypeSize.isAccessibilitySize, let framing {
                         framingControls(framing: framing)
                             .padding(8)
                             .opacity(isFramingGestureActive ? 0 : 1)
@@ -76,12 +115,6 @@ struct TesseraePanelImagePreview: View {
             in: RoundedRectangle(cornerRadius: 13, style: .continuous)
         )
         .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier(accessibilityIdentifier)
-        .tesseraeHapticFeedback(trigger: hapticEvent)
-        .onDisappear {
-            framingControlsRevealTask?.cancel()
-        }
     }
 
     @ViewBuilder
@@ -203,19 +236,86 @@ struct TesseraePanelImagePreview: View {
     private func framingControls(
         framing: Binding<ImageFraming>
     ) -> some View {
-        HStack(spacing: 8) {
-            Label {
-                ViewThatFits(in: .horizontal) {
-                    Text("Drag · Pinch to zoom")
-                    Text("Adjust")
-                }
-            } icon: {
-                Image(systemName: "hand.draw")
-            }
-                .lineLimit(1)
-                .accessibilityIdentifier("send-framing-hint")
+        framingAdjustmentControls(framing: framing)
+            .disabled(!framingEditingEnabled)
+            .font(.caption)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 5)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("send-framing-controls")
+    }
 
-            Spacer(minLength: 2)
+    private var framingButtonSize: CGFloat {
+        dynamicTypeSize.isAccessibilitySize ? 44 : 32
+    }
+
+    private var framingItemPadding: CGFloat {
+        dynamicTypeSize.isAccessibilitySize ? 6 : 10
+    }
+
+    private var framingGestureHint: some View {
+        Image(systemName: "hand.draw")
+            .padding(.horizontal, framingItemPadding)
+            .frame(minHeight: framingButtonSize)
+            .accessibilityLabel("Drag · Pinch to zoom")
+            .accessibilityIdentifier("send-framing-hint")
+    }
+
+    private var autoFrameButton: some View {
+        Button {
+            onAutoFrame?()
+        } label: {
+            Image(systemName: "wand.and.stars")
+                .opacity(isAutoFraming ? 0 : 1)
+                .overlay {
+                    if isAutoFraming {
+                        ProgressView().controlSize(.mini)
+                    }
+                }
+                .padding(.horizontal, framingItemPadding)
+                .frame(minHeight: framingButtonSize)
+                .foregroundStyle(autoFramingIsApplied ? Color.accentColor : Color.primary)
+                .overlay(alignment: .topTrailing) {
+                    if !isAutoFraming, !autoFramingIsApplied, autoFramingFeedback != nil {
+                        Image(systemName: "exclamationmark.circle.fill")
+                            .font(.system(size: dynamicTypeSize.isAccessibilitySize ? 13 : 10, weight: .bold))
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, Color.secondary)
+                            .accessibilityHidden(true)
+                    }
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isAutoFraming)
+        .accessibilityLabel("Auto Zoom")
+        .accessibilityValue(isAutoFraming ? String(localized: "Analyzing photo") : autoFramingFeedback?.text ?? String(localized: "Manual"))
+        .accessibilityHint("Adjust the photo for the current display aspect ratio.")
+        .accessibilityIdentifier("send-auto-framing")
+        .contextMenu {
+            if let autoFramingFeedback {
+                Text(autoFramingFeedback.explanation)
+            }
+            Button("Auto Zoom", systemImage: "wand.and.stars") { onAutoFrame?() }
+                .disabled(isAutoFraming || !framingEditingEnabled)
+        }
+    }
+
+    private var autoFramingIsApplied: Bool {
+        autoFramingFeedback == .applied || autoFramingFeedback == .unchanged
+    }
+
+    private func framingAdjustmentControls(framing: Binding<ImageFraming>)
+        -> some View
+    {
+        HStack(spacing: 0) {
+            framingGestureHint
+
+            if onAutoFrame != nil {
+                autoFrameButton
+            }
 
             Text(
                 framing.wrappedValue.zoom.formatted(
@@ -224,13 +324,17 @@ struct TesseraePanelImagePreview: View {
             )
             .monospacedDigit()
             .fontWeight(.semibold)
+            .fixedSize()
+            .padding(.horizontal, framingItemPadding)
+            .frame(minHeight: framingButtonSize)
             .accessibilityIdentifier("send-framing-zoom")
 
             Button {
                 resetFraming(framing)
             } label: {
                 Image(systemName: "arrow.counterclockwise")
-                    .frame(width: 24, height: 24)
+                    .padding(.horizontal, framingItemPadding)
+                    .frame(minHeight: framingButtonSize)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -238,18 +342,11 @@ struct TesseraePanelImagePreview: View {
             .accessibilityLabel("Reset Framing")
             .accessibilityIdentifier("send-framing-reset")
         }
-        .font(.caption)
-        .padding(.leading, 10)
-        .padding(.trailing, 5)
-        .padding(.vertical, 5)
-        .background(
-            .regularMaterial,
-            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-        )
-        .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private func resetFraming(_ framing: Binding<ImageFraming>) {
+        onFramingInteraction?()
         framingControlsRevealTask?.cancel()
         framingControlsRevealTask = nil
         framing.wrappedValue = .centeredFill
@@ -271,7 +368,7 @@ struct TesseraePanelImagePreview: View {
                 )
             }
             .onChanged { value in
-                guard let image, let framing else { return }
+                guard framingEditingEnabled, let image, let framing else { return }
                 let previewFraming = framing.wrappedValue.applyingPreviewGesture(
                     translationX: Double(value.first?.translation.width ?? 0),
                     translationY: Double(value.first?.translation.height ?? 0),
@@ -285,6 +382,7 @@ struct TesseraePanelImagePreview: View {
                     maximumZoom: maximumFramingZoom
                 )
                 if !isFramingGestureActive {
+                    onFramingInteraction?()
                     framingControlsRevealTask?.cancel()
                     framingControlsRevealTask = nil
                     isFramingGestureActive = true
@@ -296,7 +394,7 @@ struct TesseraePanelImagePreview: View {
                 updateFramingHaptics(with: previewFraming)
             }
             .onEnded { value in
-                guard let image, let framing else { return }
+                guard framingEditingEnabled, let image, let framing else { return }
                 let translation = value.first?.translation ?? .zero
                 let magnification = value.second ?? 1
                 framing.wrappedValue = framing.wrappedValue
@@ -326,7 +424,7 @@ struct TesseraePanelImagePreview: View {
         prioritized: Bool,
         image: UIImage?
     ) -> GestureMask {
-        guard framing != nil, image != nil,
+        guard framingEditingEnabled, framing != nil, image != nil,
               prioritizesFramingGesture == prioritized else {
             return .none
         }
