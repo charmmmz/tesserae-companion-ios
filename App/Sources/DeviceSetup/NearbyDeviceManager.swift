@@ -40,6 +40,22 @@ struct NearbyDeviceDiagnostics: Equatable, Sendable {
     let ssid: String?
     let ipAddress: String?
     let logs: [String]
+    let refreshSpeed: BLERefreshSpeed?
+
+    init(event: [String: Any]) {
+        firmware = event["firmware"] as? String ?? "—"
+        model = event["model"] as? String ?? "—"
+        batteryMillivolts = event["battery_mv"] as? Int ?? 0
+        freeHeapBytes = event["free_heap"] as? Int ?? 0
+        resetReason = event["reset_reason"] as? Int ?? 0
+        isWiFiConfigured = event["wifi_configured"] as? Bool ?? false
+        isServerConfigured = event["server_configured"] as? Bool ?? false
+        rssi = event["rssi"] as? Int ?? 0
+        ssid = event["ssid"] as? String
+        ipAddress = event["ip"] as? String
+        logs = event["logs"] as? [String] ?? []
+        refreshSpeed = (event["refresh_speed"] as? String).flatMap(BLERefreshSpeed.init)
+    }
 }
 
 enum NearbyDeviceConnectionState: Equatable, Sendable {
@@ -70,6 +86,7 @@ final class NearbyDeviceManager: NSObject {
     private(set) var deviceInfo: BLESetupDeviceInfo?
     private(set) var networks: [NearbyWiFiNetwork] = []
     private(set) var diagnostics: NearbyDeviceDiagnostics?
+    private(set) var refreshSpeedSetting = NearbyRefreshSpeedSetting()
     private(set) var connectionState: NearbyDeviceConnectionState = .idle
     private(set) var statusMessage: String?
     private(set) var isScanning = false
@@ -98,6 +115,12 @@ final class NearbyDeviceManager: NSObject {
     private var disconnectWasRequested = false
     private var pendingConnection: PendingConnection?
     private var appIsActive = false
+    private var refreshSpeedTimeoutTask: Task<Void, Never>?
+#if DEBUG
+    private let isPicPakUIFixture = ProcessInfo.processInfo.environment[
+        "TESSERAE_UI_TEST_PICPAK_BLE"
+    ] == "1"
+#endif
 
     private func trace(_ message: String) {
 #if DEBUG
@@ -113,6 +136,17 @@ final class NearbyDeviceManager: NSObject {
 
     override init() {
         super.init()
+#if DEBUG
+        if isPicPakUIFixture {
+            nearbyDevices = [NearbyTesseraeDevice(
+                id: UUID(uuidString: "00000000-0000-0000-0000-000000000011")!,
+                name: "Tesserae-A1B2C3", rssi: -45, mode: .maintenance,
+                hardware: .picPak42, hardwareSuffix: "A1B2C3",
+                sessionID: Data([1, 2, 3, 4])
+            )]
+            return
+        }
+#endif
         central = CBCentralManager(delegate: self, queue: .main)
     }
 
@@ -126,6 +160,9 @@ final class NearbyDeviceManager: NSObject {
     }
 
     func startScanning() {
+#if DEBUG
+        if isPicPakUIFixture { return }
+#endif
         guard appIsActive, central.state == .poweredOn, !isScanning else { return }
         isScanning = true
         scanGeneration &+= 1
@@ -199,6 +236,21 @@ final class NearbyDeviceManager: NSObject {
     }
 
     func connect(to device: NearbyTesseraeDevice, qrCode: BLESetupQRCode?) {
+#if DEBUG
+        if isPicPakUIFixture {
+            resetConnectionState()
+            activeDevice = device
+            deviceInfo = BLESetupDeviceInfo(
+                protocol: 2, id: "picpak-a1b2c3", sid: "01020304",
+                connectionNonce: "000102030405060708090a0b0c0d0e0f",
+                hardware: 11, model: "picpak_4_2", firmware: "0.9.3",
+                mode: "maintenance"
+            )
+            connectionState = .authenticating
+            requestDiagnostics()
+            return
+        }
+#endif
         guard let peripheral = peripherals[device.id] else {
             fail(String(localized: "That display is no longer nearby."))
             return
@@ -302,6 +354,25 @@ final class NearbyDeviceManager: NSObject {
         sendCommand(["op": "diagnostics"])
     }
 
+    func setRefreshSpeed(_ value: BLERefreshSpeed) {
+        guard activeDevice?.hardware == .picPak42,
+              activeDevice?.mode == .maintenance,
+              connectionState == .ready,
+              refreshSpeedSetting.beginSaving(value) else { return }
+        refreshSpeedTimeoutTask?.cancel()
+        refreshSpeedTimeoutTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(8))
+            guard !Task.isCancelled, let self,
+                  self.refreshSpeedSetting.isSaving else { return }
+            self.refreshSpeedSetting.fail(
+                String(localized: "Save not confirmed. Checking display…"),
+                needsReadback: true
+            )
+            self.requestDiagnostics()
+        }
+        sendCommand(["op": "set_refresh_speed", "value": value.rawValue])
+    }
+
     func reboot() {
         connectionState = .performingMaintenanceAction
         statusMessage = String(localized: "Sending restart command…")
@@ -321,6 +392,7 @@ final class NearbyDeviceManager: NSObject {
     }
 
     private func resetConnectionState() {
+        resetRefreshSpeedSetting()
         connectedPeripheral = nil
         infoCharacteristic = nil
         qrControlCharacteristic = nil
@@ -341,7 +413,19 @@ final class NearbyDeviceManager: NSObject {
         statusMessage = nil
     }
 
+    private func resetRefreshSpeedSetting() {
+        refreshSpeedTimeoutTask?.cancel()
+        refreshSpeedTimeoutTask = nil
+        refreshSpeedSetting.reset()
+    }
+
     private func sendCommand(_ object: [String: Any]) {
+#if DEBUG
+        if isPicPakUIFixture {
+            receivePicPakFixtureCommand(object)
+            return
+        }
+#endif
         guard
             let peripheral = connectedPeripheral,
             controlCharacteristic != nil
@@ -389,6 +473,39 @@ final class NearbyDeviceManager: NSObject {
             fail(error.localizedDescription)
         }
     }
+
+#if DEBUG
+    /// Transport-only fixture: exercise the real event and setting state logic
+    /// without discovering, pairing with, or writing to a physical display.
+    private func receivePicPakFixtureCommand(_ command: [String: Any]) {
+        switch command["op"] as? String {
+        case "diagnostics":
+            let event: [String: Any] = [
+                "event": "diagnostics", "firmware": "0.9.3",
+                "model": "picpak_4_2", "battery_mv": 3900,
+                "wifi_configured": true, "server_configured": true,
+                "ssid": "Home Wi-Fi", "refresh_speed": "5s",
+            ]
+            if let data = try? JSONSerialization.data(withJSONObject: event) {
+                try? handleEvent(data)
+            }
+        case "set_refresh_speed":
+            guard let value = command["value"] as? String,
+                  let sessionDeviceID = activeDevice?.id else { return }
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(700))
+                guard let self, self.activeDevice?.id == sessionDeviceID,
+                      self.refreshSpeedSetting.isSaving else { return }
+                let event = ["event": "refresh_speed", "value": value]
+                if let data = try? JSONSerialization.data(withJSONObject: event) {
+                    try? self.handleEvent(data)
+                }
+            }
+        default:
+            break
+        }
+    }
+#endif
 
     private func writeNextFrameIfNeeded() {
         guard
@@ -460,7 +577,9 @@ final class NearbyDeviceManager: NSObject {
             connectionState = .testingWiFi
             statusMessage = String(localized: "Connecting to Wi-Fi…")
         case "wifi_connected":
-            statusMessage = String(localized: "Wi-Fi connected. Checking server…")
+            statusMessage = activeDevice?.hardware == .picPak42
+                ? String(localized: "Wi-Fi connected. Saving settings…")
+                : String(localized: "Wi-Fi connected. Checking server…")
         case "testing_server":
             connectionState = .testingServer
             statusMessage = String(localized: "Checking Tesserae server…")
@@ -468,25 +587,30 @@ final class NearbyDeviceManager: NSObject {
             statusMessage = String(localized: "Server verified. Saving configuration…")
         case "configured":
             connectionState = .configured
-            statusMessage = String(localized: "Display configured. It is restarting now.")
+            statusMessage = activeDevice?.hardware == .picPak42
+                ? String(localized: "Wi-Fi saved. Display is restarting…")
+                : String(localized: "Display configured. It is restarting now.")
         case "diagnostics":
-            diagnostics = NearbyDeviceDiagnostics(
-                firmware: object["firmware"] as? String ?? "—",
-                model: object["model"] as? String ?? "—",
-                batteryMillivolts: object["battery_mv"] as? Int ?? 0,
-                freeHeapBytes: object["free_heap"] as? Int ?? 0,
-                resetReason: object["reset_reason"] as? Int ?? 0,
-                isWiFiConfigured: object["wifi_configured"] as? Bool ?? false,
-                isServerConfigured: object["server_configured"] as? Bool ?? false,
-                rssi: object["rssi"] as? Int ?? 0,
-                ssid: object["ssid"] as? String,
-                ipAddress: object["ip"] as? String,
-                logs: object["logs"] as? [String] ?? []
+            diagnostics = NearbyDeviceDiagnostics(event: object)
+            refreshSpeedSetting.receiveDiagnostics(
+                diagnostics?.refreshSpeed,
+                hardware: activeDevice?.hardware
             )
             if connectionState == .authenticating {
                 connectionState = .ready
             }
             statusMessage = nil
+        case "refresh_speed":
+            guard refreshSpeedSetting.isSaving else { return }
+            refreshSpeedTimeoutTask?.cancel()
+            refreshSpeedTimeoutTask = nil
+            if !refreshSpeedSetting.acknowledge(object["value"] as? String) {
+                refreshSpeedSetting.fail(
+                    String(localized: "Save not confirmed. Checking display…"),
+                    needsReadback: true
+                )
+                requestDiagnostics()
+            }
         case "rebooting":
             connectionState = .restarting
             statusMessage = String(localized: "Display is restarting…")
@@ -496,6 +620,14 @@ final class NearbyDeviceManager: NSObject {
         case "factory_resetting":
             connectionState = .restarting
             statusMessage = String(localized: "Display reset. It is restarting…")
+        case "error" where refreshSpeedSetting.isSaving || refreshSpeedSetting.needsReadback:
+            refreshSpeedTimeoutTask?.cancel()
+            refreshSpeedTimeoutTask = nil
+            refreshSpeedSetting.fail(
+                object["message"] as? String
+                    ?? String(localized: "Couldn't save refresh speed. Try again."),
+                needsReadback: refreshSpeedSetting.needsReadback
+            )
         case "wifi_failed", "server_failed", "error":
             fail(object["message"] as? String ?? String(localized: "Display setup failed."))
         default:
@@ -504,6 +636,7 @@ final class NearbyDeviceManager: NSObject {
     }
 
     private func fail(_ message: String) {
+        resetRefreshSpeedSetting()
         trace("failed state=\(String(describing: connectionState)) message=\(message)")
         let peripheral = connectedPeripheral
         connectedPeripheral = nil
@@ -637,6 +770,7 @@ extension NearbyDeviceManager: @preconcurrency CBCentralManagerDelegate {
         error: Error?
     ) {
         trace("disconnected id=\(peripheral.identifier) error=\(describe(error))")
+        resetRefreshSpeedSetting()
         connectedPeripheral = nil
         let requestedDisconnect = disconnectWasRequested
         disconnectWasRequested = false

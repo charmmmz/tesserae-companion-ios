@@ -69,6 +69,51 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Nearby Displays"].waitForExistence(timeout: 3))
     }
 
+    func testPicPakMaintenanceShowsRefreshSpeedsAndConfirmsSelection() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_BLE"] = "1"
+        app.launch()
+        let nearby = app.buttons["onboarding-nearby-devices"]
+        XCTAssertTrue(nearby.waitForExistence(timeout: 4))
+        for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
+        nearby.tap()
+        app.buttons.containing(.staticText, identifier: "Tesserae-A1B2C3").firstMatch.tap()
+        app.buttons["Continue"].tap()
+        app.buttons["Enter 6-Digit Code"].tap()
+        XCTAssertTrue(app.navigationBars["Maintenance"].waitForExistence(timeout: 4))
+
+        let speed = app.buttons["nearby-refresh-speed"]
+        XCTAssertTrue(speed.waitForExistence(timeout: 3))
+        XCTAssertTrue(speed.isHittable)
+        XCTAssertEqual(speed.value as? String, "5 s")
+        let initial = XCTAttachment(screenshot: app.screenshot())
+        initial.name = "PicPak Bluetooth Refresh Speed"
+        initial.lifetime = .keepAlways
+        add(initial)
+
+        speed.tap()
+        XCTAssertTrue(app.buttons["5 s"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.buttons["10 s"].exists)
+        XCTAssertTrue(app.buttons["Native"].exists)
+        let options = XCTAttachment(screenshot: app.screenshot())
+        options.name = "PicPak Refresh Speed Options"
+        options.lifetime = .keepAlways
+        add(options)
+        app.buttons["10 s"].tap()
+
+        let saved = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@ AND isEnabled == true", "10 s"),
+            object: speed
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [saved], timeout: 3), .completed)
+        XCTAssertTrue(app.navigationBars["Maintenance"].exists)
+        let confirmed = XCTAttachment(screenshot: app.screenshot())
+        confirmed.name = "PicPak Refresh Speed Confirmed"
+        confirmed.lifetime = .keepAlways
+        add(confirmed)
+    }
+
     func testDemoGalleryBrowsesFoldersAndHandsPhotoToSend() {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"

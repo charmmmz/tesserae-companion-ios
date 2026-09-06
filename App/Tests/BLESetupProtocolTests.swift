@@ -73,6 +73,116 @@ final class BLESetupProtocolTests: XCTestCase {
         )
     }
 
+    func testPicPakAdvertisementUsesMaintenanceHardwareCatalog() throws {
+        let advertisement = try XCTUnwrap(BLESetupAdvertisement(
+            serviceData: Data([2, 0x02, 11, 0xA1, 0xB2, 0xC3, 1, 2, 3, 4])
+        ))
+        XCTAssertEqual(advertisement.mode, .maintenance)
+        XCTAssertEqual(advertisement.hardware, .picPak42)
+        XCTAssertEqual(advertisement.hardware.catalogKind, "picpak_4_2")
+    }
+
+    func testRefreshSpeedDiagnosticsDecodeSupportedValuesWithoutNetwork() {
+        for speed in BLERefreshSpeed.allCases {
+            let diagnostics = NearbyDeviceDiagnostics(event: [
+                "firmware": "0.9.3",
+                "refresh_speed": speed.rawValue,
+                "wifi_configured": true,
+            ])
+            XCTAssertEqual(diagnostics.refreshSpeed, speed)
+            XCTAssertTrue(diagnostics.isWiFiConfigured)
+            XCTAssertNil(diagnostics.ipAddress)
+            XCTAssertEqual(diagnostics.rssi, 0)
+        }
+    }
+
+    func testRefreshSpeedIgnoresMissingUnknownAndMalformedValues() {
+        for event: [String: Any] in [[:], ["refresh_speed": "future"], ["refresh_speed": 5]] {
+            let diagnostics = NearbyDeviceDiagnostics(event: event)
+            XCTAssertNil(diagnostics.refreshSpeed)
+            var setting = NearbyRefreshSpeedSetting()
+            setting.receiveDiagnostics(diagnostics.refreshSpeed, hardware: .picPak42)
+            XCTAssertNil(setting.confirmedValue)
+            XCTAssertFalse(setting.beginSaving(.fiveSeconds))
+        }
+    }
+
+    func testRefreshSpeedIsNotEnabledForOtherHardware() {
+        var setting = NearbyRefreshSpeedSetting()
+        setting.receiveDiagnostics(.native, hardware: .seeedReTerminalE1004)
+        XCTAssertNil(setting.confirmedValue)
+        XCTAssertFalse(setting.beginSaving(.fiveSeconds))
+    }
+
+    func testRefreshSpeedRetainsConfirmedValueUntilMatchingAcknowledgement() {
+        var setting = NearbyRefreshSpeedSetting()
+        setting.receiveDiagnostics(.native, hardware: .picPak42)
+        XCTAssertFalse(setting.beginSaving(.native))
+        XCTAssertTrue(setting.beginSaving(.fiveSeconds))
+        XCTAssertEqual(setting.confirmedValue, .native)
+        XCTAssertTrue(setting.isSaving)
+        XCTAssertFalse(setting.beginSaving(.tenSeconds))
+        XCTAssertFalse(setting.acknowledge("future"))
+        XCTAssertFalse(setting.acknowledge("10s"))
+        XCTAssertFalse(setting.acknowledge(nil))
+        XCTAssertEqual(setting.confirmedValue, .native)
+
+        setting.receiveDiagnostics(.fiveSeconds, hardware: .picPak42)
+        XCTAssertEqual(setting.confirmedValue, .native)
+        XCTAssertTrue(setting.acknowledge("5s"))
+        XCTAssertEqual(setting.confirmedValue, .fiveSeconds)
+        XCTAssertFalse(setting.isSaving)
+    }
+
+    func testRefreshSpeedSaveFailureAllowsRetryWithoutChangingConfirmedValue() {
+        var setting = NearbyRefreshSpeedSetting()
+        setting.receiveDiagnostics(.tenSeconds, hardware: .picPak42)
+        XCTAssertTrue(setting.beginSaving(.fiveSeconds))
+        setting.fail("Settings could not be saved.")
+        XCTAssertEqual(setting.confirmedValue, .tenSeconds)
+        XCTAssertEqual(setting.errorMessage, "Settings could not be saved.")
+        XCTAssertFalse(setting.isSaving)
+        XCTAssertTrue(setting.beginSaving(.fiveSeconds))
+        XCTAssertNil(setting.errorMessage)
+    }
+
+    func testRefreshSpeedTimeoutRequiresReadbackAndIgnoresLateAcknowledgement() {
+        var setting = NearbyRefreshSpeedSetting()
+        setting.receiveDiagnostics(.native, hardware: .picPak42)
+        XCTAssertTrue(setting.beginSaving(.fiveSeconds))
+        setting.fail("Save not confirmed.", needsReadback: true)
+        XCTAssertEqual(setting.confirmedValue, .native)
+        XCTAssertTrue(setting.needsReadback)
+        XCTAssertFalse(setting.acknowledge("5s"))
+        XCTAssertFalse(setting.beginSaving(.fiveSeconds))
+        XCTAssertFalse(setting.beginSaving(.tenSeconds))
+
+        // Persistence can have succeeded even if its acknowledgement timed out.
+        setting.receiveDiagnostics(.fiveSeconds, hardware: .picPak42)
+        XCTAssertEqual(setting.confirmedValue, .fiveSeconds)
+        XCTAssertFalse(setting.needsReadback)
+        XCTAssertNil(setting.errorMessage)
+        XCTAssertTrue(setting.beginSaving(.tenSeconds))
+    }
+
+    func testRefreshSpeedDisconnectClearsStateBeforeDifferentDeviceReconnects() {
+        var setting = NearbyRefreshSpeedSetting()
+        setting.receiveDiagnostics(.fiveSeconds, hardware: .picPak42)
+        XCTAssertTrue(setting.beginSaving(.native))
+        setting.reset()
+        XCTAssertNil(setting.confirmedValue)
+        XCTAssertNil(setting.pendingValue)
+        XCTAssertNil(setting.errorMessage)
+        XCTAssertFalse(setting.acknowledge("native"))
+        XCTAssertFalse(setting.beginSaving(.tenSeconds))
+
+        setting.receiveDiagnostics(nil, hardware: .seeedReTerminalE1004)
+        XCTAssertNil(setting.confirmedValue)
+        setting.reset()
+        setting.receiveDiagnostics(.tenSeconds, hardware: .picPak42)
+        XCTAssertEqual(setting.confirmedValue, .tenSeconds)
+    }
+
     func testDeviceInfoRejectsMissingOrShortConnectionNonce() throws {
         let code = try makeCode()
         let missing = Data(#"{"protocol":2,"id":"device-123","sid":"12345678","hardware":4,"model":"reTerminal_E1004","firmware":"1.13.0","mode":"maintenance"}"#.utf8)

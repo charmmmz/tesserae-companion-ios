@@ -120,6 +120,7 @@ enum BLESetupHardware: UInt8, Equatable, Sendable {
     case seeedXIAO75 = 8
     case waveshare133E6 = 9
     case wavesharePhotoPainter73 = 10
+    case picPak42 = 11
 
     var catalogKind: String {
         switch self {
@@ -133,7 +134,72 @@ enum BLESetupHardware: UInt8, Equatable, Sendable {
         case .seeedXIAO75: "seeed_xiao_75"
         case .waveshare133E6: "waveshare_133e6"
         case .wavesharePhotoPainter73: "waveshare_photopainter_73"
+        case .picPak42: "picpak_4_2"
         }
+    }
+}
+
+enum BLERefreshSpeed: String, CaseIterable, Equatable, Sendable {
+    case fiveSeconds = "5s"
+    case tenSeconds = "10s"
+    case native = "native"
+
+    var displayName: String {
+        switch self {
+        case .fiveSeconds: String(localized: "5 s")
+        case .tenSeconds: String(localized: "10 s")
+        case .native: String(localized: "Native")
+        }
+    }
+}
+
+/// Tracks the device-confirmed setting separately from an in-flight write.
+/// After a timeout, read back before allowing another write: protocol v2 does
+/// not include request IDs, so a late acknowledgement must not confirm a retry.
+struct NearbyRefreshSpeedSetting: Equatable, Sendable {
+    private(set) var confirmedValue: BLERefreshSpeed?
+    private(set) var pendingValue: BLERefreshSpeed?
+    private(set) var needsReadback = false
+    private(set) var errorMessage: String?
+
+    var isSaving: Bool { pendingValue != nil }
+
+    mutating func receiveDiagnostics(_ value: BLERefreshSpeed?, hardware: BLESetupHardware?) {
+        guard !isSaving else { return }
+        confirmedValue = hardware == .picPak42 ? value : nil
+        if needsReadback { errorMessage = nil }
+        needsReadback = false
+    }
+
+    @discardableResult
+    mutating func beginSaving(_ value: BLERefreshSpeed) -> Bool {
+        guard let confirmedValue, value != confirmedValue,
+              !isSaving, !needsReadback else { return false }
+        pendingValue = value
+        errorMessage = nil
+        return true
+    }
+
+    @discardableResult
+    mutating func acknowledge(_ rawValue: String?) -> Bool {
+        guard let pendingValue,
+              let rawValue,
+              let value = BLERefreshSpeed(rawValue: rawValue),
+              value == pendingValue else { return false }
+        confirmedValue = value
+        self.pendingValue = nil
+        errorMessage = nil
+        return true
+    }
+
+    mutating func fail(_ message: String, needsReadback: Bool = false) {
+        pendingValue = nil
+        errorMessage = message
+        self.needsReadback = needsReadback
+    }
+
+    mutating func reset() {
+        self = Self()
     }
 }
 

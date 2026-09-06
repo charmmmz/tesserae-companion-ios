@@ -32,6 +32,10 @@ struct NearbyDeviceSetupView: View {
     @State private var recentEventsExpanded = false
     @State private var selectedDetent: PresentationDetent = .height(360)
 
+    private var isPicPakMaintenance: Bool {
+        device.hardware == .picPak42 && device.mode == .maintenance
+    }
+
     private var hardwarePresentation: DisplayHardwarePresentation {
         DisplayHardwarePresentation(
             kind: nearby.deviceInfo?.model ?? device.hardware.catalogKind
@@ -349,12 +353,16 @@ struct NearbyDeviceSetupView: View {
             }
 
             Section {
-                Button(isSubmitting ? "Testing Connection…" : "Connect Display") {
+                Button(isSubmitting
+                       ? "Testing Connection…"
+                       : isPicPakMaintenance ? "Save Wi-Fi" : "Connect Display") {
                     submitConfiguration()
                 }
                 .disabled(chosenSSID.isEmpty || isSubmitting)
             } footer: {
-                Text("Saved only after Wi-Fi and server checks pass.")
+                Text(isPicPakMaintenance
+                     ? "Saved after Wi-Fi connects. Server settings stay unchanged."
+                     : "Saved only after Wi-Fi and server checks pass.")
             }
         }
         .scrollContentBackground(.hidden)
@@ -363,7 +371,7 @@ struct NearbyDeviceSetupView: View {
     private var maintenance: some View {
         Form {
             if let diagnostics = nearby.diagnostics {
-                Section("Display") {
+                Section {
                     displayIdentityRows
                     LabeledContent("Firmware", value: diagnostics.firmware)
                     LabeledContent(
@@ -372,6 +380,48 @@ struct NearbyDeviceSetupView: View {
                             ? String(format: "%.2f V", Double(diagnostics.batteryMillivolts) / 1000)
                             : "—"
                     )
+                    if isPicPakMaintenance,
+                       let speed = nearby.refreshSpeedSetting.confirmedValue {
+                        Picker(selection: Binding(
+                            get: { nearby.refreshSpeedSetting.confirmedValue ?? speed },
+                            set: { nearby.setRefreshSpeed($0) }
+                        )) {
+                            ForEach(BLERefreshSpeed.allCases, id: \.self) { option in
+                                Text(option.displayName).tag(option)
+                            }
+                        } label: {
+                            HStack {
+                                Text("Refresh Speed")
+                                if nearby.refreshSpeedSetting.isSaving {
+                                    ProgressView()
+                                        .accessibilityLabel("Saving refresh speed")
+                                }
+                            }
+                        }
+                        .disabled(
+                            nearby.refreshSpeedSetting.isSaving
+                                || nearby.refreshSpeedSetting.needsReadback
+                                || nearby.connectionState != .ready
+                        )
+                        .accessibilityIdentifier("nearby-refresh-speed")
+                        .accessibilityValue(nearby.refreshSpeedSetting.confirmedValue?.displayName ?? "")
+
+                        if let message = nearby.refreshSpeedSetting.errorMessage {
+                            Text(message)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            if nearby.refreshSpeedSetting.needsReadback {
+                                Button("Check Again") { nearby.requestDiagnostics() }
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Display")
+                } footer: {
+                    if isPicPakMaintenance,
+                       nearby.refreshSpeedSetting.confirmedValue != nil {
+                        Text("Faster refresh may leave ghosting. Applies next refresh.")
+                    }
                 }
                 Section("Current Network") {
                     LabeledContent("Wi-Fi", value: diagnostics.ssid ?? "Not configured")
@@ -415,6 +465,7 @@ struct NearbyDeviceSetupView: View {
                     nearby.reboot()
                 }
             }
+            .disabled(nearby.refreshSpeedSetting.isSaving || nearby.refreshSpeedSetting.needsReadback)
 
             Section("Reset") {
                 Button(role: .destructive) {
@@ -455,6 +506,7 @@ struct NearbyDeviceSetupView: View {
                     Text("Erases Wi-Fi, server, and display settings, then restarts as a new display.")
                 }
             }
+            .disabled(nearby.refreshSpeedSetting.isSaving || nearby.refreshSpeedSetting.needsReadback)
 
             if let status = nearby.statusMessage {
                 Section { Text(status).foregroundStyle(.secondary) }
@@ -469,9 +521,11 @@ struct NearbyDeviceSetupView: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 68))
                 .foregroundStyle(.green)
-            Text("Display Connected")
+            Text(isPicPakMaintenance ? "Wi-Fi Saved" : "Display Connected")
                 .font(.title2.bold())
-            Text("Wi-Fi and Tesserae are connected. The display is restarting.")
+            Text(isPicPakMaintenance
+                 ? "Wi-Fi settings are saved. The display is restarting."
+                 : "Wi-Fi and Tesserae are connected. The display is restarting.")
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .lineLimit(nil)
@@ -776,7 +830,10 @@ struct NearbyDisplaysView: View {
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.primary)
 
-                            Text("For maintenance, hold Refresh for 3 seconds.")
+                            Text("For maintenance, hold Refresh for 3 seconds, then release.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("PicPak: hold its button for 3 seconds and release before 5. Hold 5 seconds to refresh, or 20 for Wi-Fi setup.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

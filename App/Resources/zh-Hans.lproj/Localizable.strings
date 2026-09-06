@@ -449,3 +449,22 @@
 "Update the Tesserae server to enable longer retention and Never." = "更新 Tesserae 服务器后可使用更长保留时间和“永不过期”。";
 "Update the server or choose a supported retention period." = "请更新服务器，或选择服务器支持的保留时长。";
 "The server keeps only the latest snapshot for the selected retention period. Rendered values may remain in History or on a display until replaced." = "服务器按所选时长仅保留最新快照。已渲染的内容可能保留在历史记录或屏幕上，直到被替换。";
+
+/* PicPak Bluetooth maintenance */
+"Refresh Speed" = "刷新速度";
+"5 s" = "5 秒";
+"10 s" = "10 秒";
+"Native" = "原生";
+"Saving refresh speed" = "正在保存刷新速度";
+"Faster refresh may leave ghosting. Applies next refresh." = "较快刷新可能留下残影。下次刷新生效。";
+"Save not confirmed. Checking display…" = "保存尚未确认，正在读取设备设置…";
+"Couldn't save refresh speed. Try again." = "无法保存刷新速度，请重试。";
+"Check Again" = "重新读取";
+"Save Wi-Fi" = "保存 Wi-Fi";
+"Saved after Wi-Fi connects. Server settings stay unchanged." = "Wi-Fi 连接成功后保存，服务器设置保持不变。";
+"Wi-Fi connected. Saving settings…" = "Wi-Fi 已连接，正在保存设置…";
+"Wi-Fi saved. Display is restarting…" = "Wi-Fi 已保存，显示屏正在重启…";
+"Wi-Fi Saved" = "Wi-Fi 已保存";
+"Wi-Fi settings are saved. The display is restarting." = "Wi-Fi 设置已保存，显示屏正在重启。";
+"For maintenance, hold Refresh for 3 seconds, then release." = "长按刷新键 3 秒后松开，即可进入维护模式。";
+"PicPak: hold its button for 3 seconds and release before 5. Hold 5 seconds to refresh, or 20 for Wi-Fi setup." = "PicPak：长按按键 3 秒，在 5 秒前松开。长按 5 秒刷新，20 秒进入 Wi-Fi 设置。";

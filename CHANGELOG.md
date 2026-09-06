@@ -13,6 +13,11 @@ capabilities.
 
 ### Added
 
+- Added Bluetooth maintenance for supported PicPak firmware, including a Refresh
+  Speed setting with 5 s, 10 s, and Native options. The setting shows the device's
+  confirmed value and applies on its next refresh. PicPak Wi-Fi repair works
+  without contacting the saved Tesserae server.
+
 - Reminders and Health settings now offer independent per-server snapshot retention: 1, 2 (default), 7, 30, or 90 days, or Never. Sync applies a changed period even when content is unchanged; longer periods and Never require server support.
 
 - Added on-device Auto Frame to Fill previews in Send and the Share Sheet.
