@@ -80,6 +80,8 @@ final class AppModel {
     private let linkShareQueue: any LinkShareQueueStoring
     private let activityThumbnails: any ActivityThumbnailStoring
     private let discovery: any TesseraeDiscovering
+    private let connectionTimeout: Duration
+    private var connectionRevision = UUID()
     private var didAttemptRestore = false
     private var isSynchronizingSharedState = false
     private var activityRefreshTask: Task<Void, Never>?
@@ -231,7 +233,8 @@ final class AppModel {
         shareQueue: any ShareQueueStoring,
         linkShareQueue: any LinkShareQueueStoring,
         activityThumbnails: any ActivityThumbnailStoring,
-        discovery: any TesseraeDiscovering
+        discovery: any TesseraeDiscovering,
+        connectionTimeout: Duration = .seconds(8)
     ) {
         self.liveClient = liveClient
         self.demoClient = demoClient
@@ -243,6 +246,7 @@ final class AppModel {
         self.linkShareQueue = linkShareQueue
         self.activityThumbnails = activityThumbnails
         self.discovery = discovery
+        self.connectionTimeout = connectionTimeout
     }
 
     var sortedDashboards: [DashboardSummary] {
@@ -294,7 +298,7 @@ final class AppModel {
     }
 
     func discoverNearby() async {
-        guard activeInstance == nil, !isDiscovering else { return }
+        guard !isDiscovering else { return }
         isDiscovering = true
         discoveryError = nil
         defer { isDiscovering = false }
@@ -313,7 +317,7 @@ final class AppModel {
             return
         }
 
-        await connect(
+        _ = await connect(
             using: demoClient,
             mode: .demo,
             baseURL: resolvedURL,
@@ -322,13 +326,18 @@ final class AppModel {
         )
     }
 
-    func connectLive(baseURL: URL, code: String, clientName: String) async {
+    @discardableResult
+    func connectLive(
+        baseURL: URL, code: String, clientName: String,
+        onFailure: ((String) -> Void)? = nil
+    ) async -> Bool {
         await connect(
             using: liveClient,
             mode: .live,
             baseURL: baseURL,
             code: code,
-            clientName: clientName
+            clientName: clientName,
+            onFailure: onFailure
         )
     }
 
@@ -337,24 +346,32 @@ final class AppModel {
         mode: ConnectionMode,
         baseURL: URL,
         code: String,
-        clientName: String
-    ) async {
-        connectionNotice = nil
+        clientName: String,
+        onFailure: ((String) -> Void)? = nil
+    ) async -> Bool {
+        guard !activeOperationIDs.contains("pair") else { return false }
         activeOperationIDs.insert("pair")
         defer { activeOperationIDs.remove("pair") }
         do {
-            let capabilities = try await candidate.probe(baseURL: baseURL)
+            let capabilities = try await probeConnection(using: candidate, baseURL: baseURL)
             let session = try await candidate.pair(
                 baseURL: baseURL,
                 code: code,
                 clientName: clientName
             )
+            try Task.checkCancellation()
             if mode == .live {
                 try await credentials.save(
                     token: session.token,
                     for: session.instance.id
                 )
             }
+            connectionRevision = UUID()
+            isRestoringConnection = false
+            isRefreshing = false
+            isRefreshingDashboards = false
+            isRefreshingLineups = false
+            connectionNotice = nil
             activeClient = candidate
             connectionMode = mode
             connectionHealth = .connected
@@ -380,6 +397,8 @@ final class AppModel {
             activeInstance = session.instance.updatingServerVersion(
                 to: capabilities.serverVersion
             )
+            displays = []
+            dashboards = []
             activityThumbnailData = [:]
             queuedImageRequests = []
             queuedLinkRequests = []
@@ -414,9 +433,40 @@ final class AppModel {
             await reloadQueuedLinks()
             await retryPendingSharedImages()
             await retryPendingSharedLinks()
+            return true
+        } catch is CancellationError {
+            return false
         } catch {
-            lastError = error.localizedDescription
+            if !Task.isCancelled {
+                if let onFailure {
+                    onFailure(error.localizedDescription)
+                } else {
+                    lastError = error.localizedDescription
+                }
+            }
+            return false
         }
+    }
+
+    private func probeConnection(
+        using client: any TesseraeServing,
+        baseURL: URL
+    ) async throws -> ServerCapabilities {
+        let timeout = connectionTimeout
+        return try await withThrowingTaskGroup(of: ServerCapabilities.self) { group in
+            group.addTask { try await client.probe(baseURL: baseURL) }
+            group.addTask {
+                try await Task.sleep(for: timeout)
+                throw URLError(.timedOut)
+            }
+            defer { group.cancelAll() }
+            return try await group.next()!
+        }
+    }
+
+    private func checkConnectionRevision(_ revision: UUID) throws {
+        try Task.checkCancellation()
+        guard connectionRevision == revision else { throw CancellationError() }
     }
 
     func restoreConnectionIfNeeded() async {
@@ -424,13 +474,34 @@ final class AppModel {
         didAttemptRestore = true
         isRestoringConnection = true
         connectionHealth = .restoring
-        defer { isRestoringConnection = false }
+        let revision = connectionRevision
+        defer {
+            if connectionRevision == revision { isRestoringConnection = false }
+        }
 
         do {
+#if DEBUG
+            if ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_OFFLINE_RESTORE"] == "1",
+                credentials is InMemoryCredentialStore, stateStore is InMemoryCompanionStateStore {
+                let instance = TesseraeInstance(
+                    id: "offline-ui-test", name: "Saved Tesserae",
+                    baseURL: URL(string: "http://127.0.0.1:9")!,
+                    serverVersion: "0.311.0", timezone: "Asia/Shanghai", webURL: "/"
+                )
+                try await credentials.save(token: "offline-ui-test", for: instance.id)
+                let cachedDisplays = try await MockTesseraeClient(latency: .zero)
+                    .fetchDisplays(instance: instance)
+                try await stateStore.save(CompanionSnapshot(
+                    activeInstance: instance, capabilities: nil,
+                    displays: cachedDisplays, dashboards: [], jobs: [], updatedAt: Date()
+                ))
+            }
+#endif
             guard let snapshot = try await stateStore.load() else {
                 connectionHealth = .idle
                 return
             }
+            try checkConnectionRevision(revision)
             guard try await credentials.token(for: snapshot.activeInstance.id) != nil else {
                 try await stateStore.clear()
                 connectionHealth = .requiresPairing
@@ -439,6 +510,7 @@ final class AppModel {
                 )
                 return
             }
+            try checkConnectionRevision(revision)
 
             activeClient = liveClient
             connectionMode = .live
@@ -462,13 +534,18 @@ final class AppModel {
             lineups = snapshot.lineups ?? []
             activityClearedBefore = snapshot.activityClearedBefore
             jobs = retainedActivityJobs(snapshot.jobs)
+            // Cached screens and Bluetooth maintenance do not depend on the server.
+            isRestoringConnection = false
             await reloadActivityThumbnails(instanceID: snapshot.activeInstance.id)
             await reloadQueuedImages()
             await reloadQueuedLinks()
 
-            let currentCapabilities = try await liveClient.probe(
+            try checkConnectionRevision(revision)
+            let currentCapabilities = try await probeConnection(
+                using: liveClient,
                 baseURL: snapshot.activeInstance.baseURL
             )
+            try checkConnectionRevision(revision)
             capabilities = currentCapabilities
             if !supportsLineupAuthoring {
                 lineupAuthoringPermission = .unavailable
@@ -487,13 +564,17 @@ final class AppModel {
                 showErrors: false,
                 probeCapabilities: false
             )
+            try checkConnectionRevision(revision)
+            guard connectionHealth == .connected else { return }
             await retryPendingSharedImages()
             await retryPendingSharedLinks()
         } catch is CancellationError {
             return
         } catch let error as TesseraeClientError {
+            guard connectionRevision == revision, !Task.isCancelled else { return }
             await handleConnectionError(error)
         } catch {
+            guard connectionRevision == revision, !Task.isCancelled else { return }
             connectionHealth = .offline
             connectionNotice = error.localizedDescription
         }
@@ -505,18 +586,25 @@ final class AppModel {
     ) async {
         guard
             var currentInstance = activeInstance,
-            !isRefreshing
+            !isRefreshing,
+            !(connectionHealth == .restoring && probeCapabilities)
         else {
             return
         }
         isRefreshing = true
-        defer { isRefreshing = false }
+        let revision = connectionRevision
+        let client = activeClient
+        defer {
+            if connectionRevision == revision { isRefreshing = false }
+        }
 
         do {
             if probeCapabilities, connectionMode == .live {
-                let currentCapabilities = try await activeClient.probe(
+                let currentCapabilities = try await probeConnection(
+                    using: client,
                     baseURL: currentInstance.baseURL
                 )
+                try checkConnectionRevision(revision)
                 capabilities = currentCapabilities
                 currentInstance = currentInstance.updatingServerVersion(
                     to: currentCapabilities.serverVersion
@@ -524,14 +612,21 @@ final class AppModel {
                 activeInstance = currentInstance
             }
 
-            displays = try await activeClient.fetchDisplays(instance: currentInstance)
-            dashboards = try await activeClient.fetchDashboards(instance: currentInstance)
+            let refreshedDisplays = try await client.fetchDisplays(instance: currentInstance)
+            try checkConnectionRevision(revision)
+            displays = refreshedDisplays
+            let refreshedDashboards = try await client.fetchDashboards(instance: currentInstance)
+            try checkConnectionRevision(revision)
+            dashboards = refreshedDashboards
             if supportsLineups {
                 do {
-                    lineups = try await activeClient.fetchLineups(
+                    let refreshedLineups = try await client.fetchLineups(
                         instance: currentInstance
                     )
+                    try checkConnectionRevision(revision)
+                    lineups = refreshedLineups
                 } catch let error as TesseraeClientError {
+                    try checkConnectionRevision(revision)
                     guard case .forbidden = error else { throw error }
                     lineups = []
                     if showErrors {
@@ -542,12 +637,14 @@ final class AppModel {
                 lineups = []
             }
             await refreshLineupAuthoringPermission(showErrors: false)
+            try checkConnectionRevision(revision)
             if supportsHistory {
-                let history = try await activeClient.fetchHistory(
+                let history = try await client.fetchHistory(
                     beforeID: nil,
                     limit: 30,
                     instance: currentInstance
                 )
+                try checkConnectionRevision(revision)
                 let retainedHistory = retainedHistoryPage(history)
                 historyItems = retainedHistory.items
                 historyNextBeforeID = retainedHistory.nextBeforeID
@@ -561,6 +658,7 @@ final class AppModel {
                 historyPreviews = [:]
             }
             await refreshTrackedJobs(instance: currentInstance)
+            try checkConnectionRevision(revision)
             reconcileDisplayOrder()
             reconcileDashboardOrder()
             connectionHealth = .connected
@@ -598,8 +696,10 @@ final class AppModel {
         } catch is CancellationError {
             return
         } catch let error as TesseraeClientError {
+            guard connectionRevision == revision, !Task.isCancelled else { return }
             await handleConnectionError(error)
         } catch {
+            guard connectionRevision == revision, !Task.isCancelled else { return }
             connectionHealth = .offline
             connectionNotice = error.localizedDescription
             lastError = nil
@@ -612,18 +712,22 @@ final class AppModel {
     ) async {
         guard
             let currentInstance = activeInstance,
-            !isRefreshing
+            !isRefreshing,
+            connectionHealth != .restoring
         else {
             return
         }
+        let revision = connectionRevision
         isRefreshing = true
-        defer { isRefreshing = false }
+        defer {
+            if connectionRevision == revision { isRefreshing = false }
+        }
 
         do {
             let refreshedDisplays = try await activeClient.fetchDisplays(
                 instance: currentInstance
             )
-            guard activeInstance?.id == currentInstance.id else {
+            guard connectionRevision == revision, !Task.isCancelled else {
                 return
             }
 
@@ -656,6 +760,7 @@ final class AppModel {
         } catch is CancellationError {
             return
         } catch let error as TesseraeClientError {
+            guard connectionRevision == revision, !Task.isCancelled else { return }
             if showErrors
                 || error == .unauthorized
                 || error == .missingCredential
@@ -663,6 +768,7 @@ final class AppModel {
                 await handleConnectionError(error)
             }
         } catch {
+            guard connectionRevision == revision, !Task.isCancelled else { return }
             if showErrors {
                 connectionHealth = .offline
                 connectionNotice = error.localizedDescription
@@ -745,12 +851,16 @@ final class AppModel {
     ) async {
         guard
             let currentInstance = activeInstance,
-            !isRefreshing
+            !isRefreshing,
+            connectionHealth != .restoring
         else {
             return
         }
+        let revision = connectionRevision
         isRefreshing = true
-        defer { isRefreshing = false }
+        defer {
+            if connectionRevision == revision { isRefreshing = false }
+        }
 
         await reloadQueuedImages(showErrors: showErrors)
         await reloadQueuedLinks(showErrors: showErrors)
@@ -762,9 +872,11 @@ final class AppModel {
                     limit: 30,
                     instance: currentInstance
                 )
-                guard activeInstance?.id == currentInstance.id else {
+                guard connectionRevision == revision, !Task.isCancelled else {
                     return
                 }
+                connectionHealth = .connected
+                connectionNotice = nil
                 let retainedHistory = retainedHistoryPage(history)
                 historyItems = retainedHistory.items
                 historyNextBeforeID = retainedHistory.nextBeforeID
@@ -775,17 +887,16 @@ final class AppModel {
             }
 
             await refreshTrackedJobs(instance: currentInstance)
-            guard activeInstance?.id == currentInstance.id else {
+            guard connectionRevision == revision, !Task.isCancelled else {
                 return
             }
-            connectionHealth = .connected
-            connectionNotice = nil
             if connectionMode == .live, saveSnapshot {
                 await persistSnapshot(showErrors: showErrors)
             }
         } catch is CancellationError {
             return
         } catch let error as TesseraeClientError {
+            guard connectionRevision == revision, !Task.isCancelled else { return }
             if showErrors
                 || error == .unauthorized
                 || error == .missingCredential
@@ -793,6 +904,7 @@ final class AppModel {
                 await handleConnectionError(error)
             }
         } catch {
+            guard connectionRevision == revision, !Task.isCancelled else { return }
             if showErrors {
                 connectionHealth = .offline
                 connectionNotice = error.localizedDescription
@@ -807,19 +919,23 @@ final class AppModel {
     ) async {
         guard
             let currentInstance = activeInstance,
-            !isRefreshingDashboards
+            !isRefreshingDashboards,
+            connectionHealth != .restoring
         else {
             return
         }
+        let revision = connectionRevision
         isRefreshingDashboards = true
-        defer { isRefreshingDashboards = false }
+        defer {
+            if connectionRevision == revision { isRefreshingDashboards = false }
+        }
 
         do {
             let refreshedDashboards = try await activeClient.fetchDashboards(
                 instance: currentInstance
             )
             guard
-                activeInstance?.id == currentInstance.id,
+                connectionRevision == revision,
                 !Task.isCancelled
             else {
                 return
@@ -850,6 +966,7 @@ final class AppModel {
         } catch is CancellationError {
             return
         } catch let error as TesseraeClientError {
+            guard connectionRevision == revision, !Task.isCancelled else { return }
             if showErrors
                 || error == .unauthorized
                 || error == .missingCredential
@@ -857,6 +974,7 @@ final class AppModel {
                 await handleConnectionError(error)
             }
         } catch {
+            guard connectionRevision == revision, !Task.isCancelled else { return }
             if showErrors {
                 connectionHealth = .offline
                 connectionNotice = error.localizedDescription
@@ -872,19 +990,23 @@ final class AppModel {
         guard
             supportsLineups,
             let currentInstance = activeInstance,
-            !isRefreshingLineups
+            !isRefreshingLineups,
+            connectionHealth != .restoring
         else {
             return
         }
+        let revision = connectionRevision
         isRefreshingLineups = true
-        defer { isRefreshingLineups = false }
+        defer {
+            if connectionRevision == revision { isRefreshingLineups = false }
+        }
 
         do {
             let refreshedLineups = try await activeClient.fetchLineups(
                 instance: currentInstance
             )
             guard
-                activeInstance?.id == currentInstance.id,
+                connectionRevision == revision,
                 !Task.isCancelled
             else {
                 return
@@ -901,6 +1023,7 @@ final class AppModel {
         } catch is CancellationError {
             return
         } catch let error as TesseraeClientError {
+            guard connectionRevision == revision, !Task.isCancelled else { return }
             if case .forbidden = error {
                 connectionHealth = .connected
                 connectionNotice = nil
@@ -917,6 +1040,7 @@ final class AppModel {
                 await handleConnectionError(error)
             }
         } catch {
+            guard connectionRevision == revision, !Task.isCancelled else { return }
             if showErrors {
                 connectionHealth = .offline
                 connectionNotice = error.localizedDescription
@@ -2853,6 +2977,7 @@ final class AppModel {
     }
 
     func disconnect() async {
+        connectionRevision = UUID()
         var disconnectError: Error?
         let disconnectedInstanceID = activeInstance?.id
         if let activeInstance, connectionMode == .live {

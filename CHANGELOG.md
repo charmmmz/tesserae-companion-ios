@@ -30,6 +30,9 @@ capabilities.
 
 ### Changed
 
+- Other Servers now sizes its sheet to the server list and connection controls,
+  with scrolling for longer content. Its duplicate Bluetooth maintenance entry
+  has been removed; onboarding, offline recovery, and Settings retain that entry.
 - Renamed the Display detail timeline card from "Next Update" to
   "Next in Line" so it reads as part of the Lineup experience instead of a
   generic refresh countdown.
@@ -59,6 +62,14 @@ capabilities.
 
 ### Fixed
 
+- Offline Displays keeps its large title directly below the connection controls,
+  hiding the Settings navigation row to avoid unused space above the list.
+- Saved-server reconnection no longer blocks access to cached screens or local
+  Bluetooth maintenance. Connection probes time out after eight seconds, with
+  retry, nearby-server selection, and manual address entry available while offline.
+  Switching servers preserves the previous pairing until the new pairing succeeds.
+- Bluetooth diagnostics, restart, and Wi-Fi maintenance remain accessible without
+  a paired server. Initial display registration still requires a reachable server.
 - Treated HealthKit's no-data result as an empty day instead of a failed Health
   sync, and kept an existing server snapshot's freshness authoritative when a
   later refresh attempt fails.

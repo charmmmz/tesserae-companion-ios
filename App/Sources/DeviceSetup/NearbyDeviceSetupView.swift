@@ -174,7 +174,7 @@ struct NearbyDeviceSetupView: View {
                 Label(
                     device.mode == .setup
                         ? "Connect this app to a Tesserae Server first."
-                        : "Connect to a Tesserae Server to change Wi-Fi.",
+                        : "Bluetooth maintenance works without a server.",
                     systemImage: "server.rack"
                 )
                 .font(.footnote)
@@ -246,7 +246,8 @@ struct NearbyDeviceSetupView: View {
     }
 
     private var wifiSetup: some View {
-        let knownSSIDs = Set(setupNetworks.networks.map(\.ssid))
+        let knownNetworks = model.activeInstance == nil ? [] : setupNetworks.networks
+        let knownSSIDs = Set(knownNetworks.map(\.ssid))
         let otherNetworks = nearby.networks.filter { !knownSSIDs.contains($0.ssid) }
 
         return Form {
@@ -254,9 +255,9 @@ struct NearbyDeviceSetupView: View {
                 displayIdentityRows
             }
 
-            if !setupNetworks.networks.isEmpty {
+            if !knownNetworks.isEmpty {
                 Section {
-                    ForEach(setupNetworks.networks) { knownNetwork in
+                    ForEach(knownNetworks) { knownNetwork in
                         Button {
                             selectNetwork(knownNetwork.ssid)
                         } label: {
@@ -334,14 +335,16 @@ struct NearbyDeviceSetupView: View {
                         savePassword = false
                     }
             } header: {
-                Text(setupNetworks.networks.isEmpty ? "Wi-Fi Networks" : "Other Networks")
+                Text(knownNetworks.isEmpty ? "Wi-Fi Networks" : "Other Networks")
             }
 
             if requiresWiFiPassword {
                 Section("Password") {
                     SecureField("Wi-Fi password", text: $password)
                         .textContentType(.password)
-                    Toggle("Save on this iPhone", isOn: $savePassword)
+                    if model.activeInstance != nil {
+                        Toggle("Save on this iPhone", isOn: $savePassword)
+                    }
                 }
             }
 
@@ -551,10 +554,6 @@ struct NearbyDeviceSetupView: View {
     }
 
     private func submitConfiguration() {
-        guard let instance = model.activeInstance else {
-            localError = NearbyDeviceSetupError.noServer.localizedDescription
-            return
-        }
         isSubmitting = true
         Task {
             do {
@@ -566,6 +565,9 @@ struct NearbyDeviceSetupView: View {
                     pairingCode = ""
                     serverURL = nil
                 } else if model.supportsDeviceSetup {
+                    guard let instance = model.activeInstance else {
+                        throw NearbyDeviceSetupError.noServer
+                    }
                     let pairing = try await model.createFirmwareDevicePairing()
                     pairingCode = pairing.code
                     serverURL = instance.baseURL
@@ -710,7 +712,7 @@ struct NearbyDisplaysView: View {
 
     var body: some View {
         List {
-            if !setupNetworks.networks.isEmpty {
+            if model.activeInstance != nil, !setupNetworks.networks.isEmpty {
                 Section {
                     ForEach(setupNetworks.networks) { network in
                         HStack(spacing: 12) {

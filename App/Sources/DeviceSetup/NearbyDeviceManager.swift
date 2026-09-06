@@ -285,13 +285,17 @@ final class NearbyDeviceManager: NSObject {
         serverURL: URL?,
         pairingCode: String
     ) {
-        sendCommand([
+        var command: [String: Any] = [
             "op": "stage",
             "ssid": ssid,
             "password": password,
             "server_url": serverURL?.absoluteString ?? "",
             "pairing_code": pairingCode,
-        ])
+        ]
+        if activeDevice?.mode == .maintenance {
+            command["preserve_server"] = true
+        }
+        sendCommand(command)
     }
 
     func requestDiagnostics() {

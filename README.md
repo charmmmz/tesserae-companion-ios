@@ -91,6 +91,20 @@ and does not require Apple Intelligence. Once a Share send has been queued,
 its composition and targets remain fixed for retries.
 Shared photos start with Fill when no saved layout preference exists.
 
+### Offline access and Bluetooth maintenance
+
+Saved screens appear before the server reconnects. The connection check has an
+eight-second deadline; **Other Servers** and **Bluetooth Maintenance** are available
+throughout the attempt and after a failure. Server discovery also offers manual
+address entry when no server is found. A failed new pairing keeps the old pairing.
+Other Servers is also available in Settings.
+
+Nearby Setup & Maintenance is available from onboarding without pairing. Local
+Bluetooth diagnostics, restart, and Wi-Fi repair do not require the app to reach
+a Tesserae server. Wi-Fi repair retains the display's saved server URL and token;
+the firmware still performs its normal connection checks. Registering a new
+display requires a reachable paired server to issue its registration code.
+
 ## Your server, your data
 
 The app connects directly to your own Tesserae server. There is no separate

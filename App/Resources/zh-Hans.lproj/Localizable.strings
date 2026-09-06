@@ -420,3 +420,17 @@
 "Auto Zoom" = "自动构图";
 
 "Reset Framing" = "重置构图";
+
+"Other Servers" = "其他服务器";
+
+"Bluetooth Maintenance" = "蓝牙维护";
+
+"Reconnecting…" = "正在重连…";
+
+"Server unavailable" = "服务器无法连接";
+
+"Tesserae Servers" = "Tesserae 服务器";
+
+"Bluetooth maintenance works without a server." = "无需连接服务器即可进行蓝牙维护。";
+
+"Unable to Connect" = "无法连接";

@@ -74,13 +74,15 @@ private final class BonjourNetServiceSession: NSObject, @unchecked Sendable {
     }
 
     func discover(for duration: Duration) async throws -> [DiscoveredInstance] {
+        defer {
+            browser.stop()
+            services.values.forEach { $0.stop() }
+        }
         browser.searchForServices(
             ofType: "_tesserae._tcp.",
             inDomain: "local."
         )
         try await Task.sleep(for: duration)
-        browser.stop()
-        services.values.forEach { $0.stop() }
 
         if let failure {
             throw TesseraeDiscoveryError.browser(failure)

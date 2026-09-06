@@ -8,26 +8,47 @@ struct RootView: View {
     @Environment(TesseraeMessageCenter.self) private var messageCenter
     @Environment(NearbyDeviceManager.self) private var nearbyDevices
     @Environment(\.scenePhase) private var scenePhase
+    @State private var serversPresented = false
+    @State private var nearbyPresented = false
 
     var body: some View {
         Group {
-            if model.isRestoringConnection {
+            if model.isRestoringConnection && model.activeInstance == nil {
                 VStack(spacing: 12) {
                     ProgressView()
                     Text("Restoring Tesserae connection…")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                    connectionActions
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .tesseraeScreenBackground()
             } else if model.activeInstance == nil {
                 OnboardingView()
             } else {
-                MainTabView()
+                VStack(spacing: 0) {
+                    if model.connectionHealth == .restoring || model.connectionHealth == .offline {
+                        connectionRecovery
+                    }
+                    MainTabView()
+                }
             }
         }
         .animation(.snappy, value: model.activeInstance?.id)
         .tesseraeMessageCenterOverlay()
+        .sheet(isPresented: $serversPresented) {
+            OnboardingView(isChoosingServer: true)
+        }
+        .sheet(isPresented: $nearbyPresented) {
+            NavigationStack {
+                NearbyDisplaysView()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") { nearbyPresented = false }
+                        }
+                    }
+            }
+        }
         .task {
             await model.restoreConnectionIfNeeded()
             model.openWebIfRequested()
@@ -114,6 +135,11 @@ struct RootView: View {
     }
 
     private func synchronizeConnectionMessage() {
+        if model.activeInstance != nil,
+            model.connectionHealth == .offline || model.connectionHealth == .restoring {
+            messageCenter.dismiss(id: "connection.status")
+            return
+        }
         guard let notice = model.connectionNotice else {
             messageCenter.dismiss(id: "connection.status")
             return
@@ -144,6 +170,48 @@ struct RootView: View {
                 action: retryAction
             )
         )
+    }
+
+    private var connectionRecovery: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                if model.connectionHealth == .restoring {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: "wifi.exclamationmark")
+                }
+                Text(model.connectionHealth == .restoring
+                     ? "Reconnecting…" : "Server unavailable")
+                    .font(.subheadline.weight(.semibold))
+                Spacer(minLength: 0)
+                if model.connectionHealth == .offline {
+                    Button("Retry") { Task { await model.refresh(showErrors: false) } }
+                        .disabled(model.isRefreshing)
+                }
+            }
+            connectionActions
+        }
+        .font(.subheadline)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(.regularMaterial)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("connection-recovery")
+    }
+
+    private var connectionActions: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 18) { connectionButtons }
+            VStack(alignment: .leading, spacing: 12) { connectionButtons }
+        }
+    }
+
+    @ViewBuilder
+    private var connectionButtons: some View {
+        Button("Other Servers", systemImage: "server.rack") { serversPresented = true }
+            .accessibilityIdentifier("choose-server")
+        Button("Bluetooth Maintenance", systemImage: "dot.radiowaves.left.and.right") { nearbyPresented = true }
+            .accessibilityIdentifier("offline-nearby-devices")
     }
 
     private var connectionMessageText: String {

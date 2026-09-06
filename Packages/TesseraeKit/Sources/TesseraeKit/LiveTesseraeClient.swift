@@ -26,11 +26,12 @@ public actor LiveTesseraeClient: TesseraeServing {
     }
 
     public func probe(baseURL: URL) async throws -> ServerCapabilities {
-        let request = try makeRequest(
+        var request = try makeRequest(
             baseURL: baseURL,
             path: [],
             method: "GET"
         )
+        request.timeoutInterval = 8
         let capabilities: ServerCapabilities = try await perform(
             request,
             expectedStatusCodes: [200]
@@ -59,12 +60,13 @@ public actor LiveTesseraeClient: TesseraeServing {
                 installationID: identity.installationID
             )
         )
-        let request = try makeRequest(
+        var request = try makeRequest(
             baseURL: baseURL,
             path: ["pair"],
             method: "POST",
             body: TesseraeJSON.encoder().encode(body)
         )
+        request.timeoutInterval = 15
         let response: PairingResponse = try await perform(
             request,
             expectedStatusCodes: [201]

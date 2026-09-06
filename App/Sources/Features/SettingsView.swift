@@ -9,6 +9,7 @@ struct SettingsView: View {
     @Environment(HealthBridgeModel.self) private var healthBridgeModel
     @State private var clearActivityConfirmationPresented = false
     @State private var hapticFeedbackEnabled = TesseraeHapticSettings.isEnabled
+    @State private var serversPresented = false
 
     var body: some View {
         NavigationStack {
@@ -34,11 +35,14 @@ struct SettingsView: View {
                             Link(destination: webURL(for: instance)) {
                                 Label("Open Tesserae Web", systemImage: "safari")
                             }
+                            Button("Other Servers", systemImage: "server.rack") {
+                                serversPresented = true
+                            }
                         }
                     }
                 }
 
-                if model.connectionMode == .live {
+                if model.connectionMode != .demo {
                     Section("Displays") {
                         NavigationLink {
                             NearbyDisplaysView()
@@ -131,6 +135,9 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
+            .sheet(isPresented: $serversPresented) {
+                OnboardingView(isChoosingServer: true)
+            }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }

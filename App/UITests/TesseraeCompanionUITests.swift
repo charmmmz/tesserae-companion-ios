@@ -23,6 +23,52 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertFalse(app.buttons["Scan Pairing QR"].exists)
     }
 
+    func testOfflineRestoreOffersBluetoothAndOtherServers() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_OFFLINE_RESTORE"] = "1"
+        app.launchEnvironment["TESSERAE_SERVER_URL"] = "http://127.0.0.1:9"
+        app.launchEnvironment["TESSERAE_PAIRING_CODE"] = "123456"
+        app.launch()
+        XCTAssertTrue(app.buttons["offline-nearby-devices"].waitForExistence(timeout: 4))
+        XCTAssertTrue(app.staticTexts["Server unavailable"].waitForExistence(timeout: 10))
+        let recoveryShot = XCTAttachment(screenshot: app.screenshot())
+        recoveryShot.name = "Offline recovery and cached displays"
+        recoveryShot.lifetime = .keepAlways
+        add(recoveryShot)
+        app.buttons["offline-nearby-devices"].tap()
+        XCTAssertTrue(app.navigationBars["Nearby Displays"].waitForExistence(timeout: 3))
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Offline Bluetooth maintenance"
+        shot.lifetime = .keepAlways
+        add(shot)
+        app.buttons["Done"].tap()
+        app.buttons["choose-server"].tap()
+        XCTAssertTrue(app.navigationBars["Tesserae Servers"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["No server found. Manual connection still works when discovery is unavailable."].waitForExistence(timeout: 3))
+        app.buttons["Enter Server Address"].tap()
+        XCTAssertTrue(app.textFields["http://host:port"].waitForExistence(timeout: 3))
+        app.buttons["Connect"].tap()
+        XCTAssertTrue(app.alerts.firstMatch.waitForExistence(timeout: 12))
+        app.alerts.buttons["OK"].tap()
+        XCTAssertTrue(app.navigationBars["Connect Manually"].exists)
+        XCTAssertTrue(app.buttons["Connect"].isEnabled)
+        app.navigationBars["Connect Manually"].buttons["Cancel"].tap()
+        app.navigationBars["Tesserae Servers"].buttons["Cancel"].tap()
+        XCTAssertTrue(app.buttons["choose-server"].waitForExistence(timeout: 3))
+    }
+
+    func testOnboardingOffersBluetoothWithoutPairing() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launch()
+        let nearby = app.buttons["onboarding-nearby-devices"]
+        XCTAssertTrue(nearby.waitForExistence(timeout: 4))
+        for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
+        nearby.tap()
+        XCTAssertTrue(app.navigationBars["Nearby Displays"].waitForExistence(timeout: 3))
+    }
+
     func testDemoGalleryBrowsesFoldersAndHandsPhotoToSend() {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"

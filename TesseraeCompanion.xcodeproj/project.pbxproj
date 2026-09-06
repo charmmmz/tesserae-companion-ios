@@ -65,6 +65,7 @@
 		E537E660E8D727EBC31DF725 /* BLESetupProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68AB5B0479A37A3F55286299 /* BLESetupProtocol.swift */; };
 		E54AC51B7720A95C60C3FB96 /* PhotoSubjectAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09B9A585A1539B7342FE714 /* PhotoSubjectAnalyzer.swift */; };
 		E709F26674D4C30631B50A3E /* GalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2580AD3D2102823CA75A8E12 /* GalleryView.swift */; };
+		E8F9020298F307760D7FA918 /* ConnectionRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6BCE92FAB7DF4093DAAE45D /* ConnectionRecoveryTests.swift */; };
 		EDA7DAFA44340F1BDCBE5FCB /* TesseraeTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD8060E9227692A0914DB946 /* TesseraeTheme.swift */; };
 		EF027BEE001DABA6D3E84627 /* BLESetupProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD5EEF99A30C18C07C717772 /* BLESetupProtocolTests.swift */; };
 		F0209EEDC79E28C76F13B892 /* AppConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DABD7AC708239FDC0621487 /* AppConfiguration.swift */; };
@@ -176,6 +177,7 @@
 		E726D6EBD2787B7CEED6CC14 /* PhotoFramingSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoFramingSessionTests.swift; sourceTree = "<group>"; };
 		EEABAD3353BA2EB74A7FFD23 /* LineupEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineupEditorView.swift; sourceTree = "<group>"; };
 		F1964C9534AA2D6526D1275E /* TesseraeCompanionUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = TesseraeCompanionUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F6BCE92FAB7DF4093DAAE45D /* ConnectionRecoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionRecoveryTests.swift; sourceTree = "<group>"; };
 		FD8060E9227692A0914DB946 /* TesseraeTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TesseraeTheme.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -257,6 +259,7 @@
 			children = (
 				99F8FB591FB5C627BC90D186 /* ActivityJobExpiryTests.swift */,
 				BD5EEF99A30C18C07C717772 /* BLESetupProtocolTests.swift */,
+				F6BCE92FAB7DF4093DAAE45D /* ConnectionRecoveryTests.swift */,
 				E4901B9808092D465184CABA /* GalleryViewTests.swift */,
 				259C8594008E905790574F3A /* HealthSnapshotFactoryTests.swift */,
 				80F13F36D4E7990EF0B890C3 /* LineupsAppModelTests.swift */,
@@ -637,6 +640,7 @@
 			files = (
 				B77A29D5903251374F98C622 /* ActivityJobExpiryTests.swift in Sources */,
 				EF027BEE001DABA6D3E84627 /* BLESetupProtocolTests.swift in Sources */,
+				E8F9020298F307760D7FA918 /* ConnectionRecoveryTests.swift in Sources */,
 				FF4C2B0911D8ED227B8224AD /* GalleryViewTests.swift in Sources */,
 				69E964DA91CB8FFDFC343170 /* HealthSnapshotFactoryTests.swift in Sources */,
 				1E5FF7A01F07A246FF6E813F /* LineupsAppModelTests.swift in Sources */,

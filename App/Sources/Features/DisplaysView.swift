@@ -31,6 +31,10 @@ struct DisplaysView: View {
         isActive && !lineupsPresented && scenePhase == .active
     }
 
+    private var usesCompactOfflineHeader: Bool {
+        model.connectionHealth == .restoring || model.connectionHealth == .offline
+    }
+
     private var displayedDisplays: [DisplaySummary] {
         guard let transientDisplayOrderIDs else {
             return model.sortedDisplays
@@ -50,6 +54,12 @@ struct DisplaysView: View {
 
         ScrollView {
             LazyVStack(spacing: displayCardSpacing) {
+                if usesCompactOfflineHeader {
+                    Text("Displays")
+                        .font(.largeTitle.bold())
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityAddTraits(.isHeader)
+                }
                 if model.supportsLineups {
                     Button {
                         lineupsPresented = true
@@ -263,10 +273,16 @@ struct DisplaysView: View {
             endDisplayDrag()
         }
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                TesseraeSettingsToolbarButton(openSettings: presentSettings)
+            if !usesCompactOfflineHeader {
+                ToolbarItem(placement: .topBarTrailing) {
+                    TesseraeSettingsToolbarButton(openSettings: presentSettings)
+                }
             }
         }
+        .toolbar(
+            usesCompactOfflineHeader && !lineupsPresented ? .hidden : .visible,
+            for: .navigationBar
+        )
         .tesseraeScreenBackground()
         .tesseraeHapticFeedback(trigger: hapticEvent)
     }
