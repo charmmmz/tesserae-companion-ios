@@ -5,6 +5,14 @@ import XCTest
 @testable import Tesserae_Companion
 
 final class ReminderSnapshotFactoryTests: XCTestCase {
+    func testSelectedRetentionOverridesDefaultAndNeverHasNoDeadline() {
+        let date = Date(timeIntervalSince1970: 1_700_000_000)
+        let longer = ReminderSnapshotFactory.makeSnapshot(from: [], generatedAt: date, serverMaximumTTLSeconds: 31_536_000, retention: .thirtyDays)
+        XCTAssertEqual(longer.expiresAt, date.addingTimeInterval(30 * 86400))
+        let never = ReminderSnapshotFactory.makeSnapshot(from: [], generatedAt: date, serverMaximumTTLSeconds: 31_536_000, retention: .never)
+        XCTAssertNil(never.expiresAt)
+    }
+
     func testEventKitFetchCompletionCanRunOnBackgroundQueue() async {
         let items: [ReminderSourceItem] = await withCheckedContinuation {
             continuation in
@@ -86,7 +94,7 @@ final class ReminderSnapshotFactoryTests: XCTestCase {
         XCTAssertEqual(items[1].priority, .low)
         XCTAssertTrue(items.allSatisfy { !$0.completed })
         XCTAssertEqual(
-            snapshot.expiresAt.timeIntervalSince(snapshot.generatedAt),
+            snapshot.expiresAt!.timeIntervalSince(snapshot.generatedAt),
             86_400,
             accuracy: 0.001
         )
@@ -112,7 +120,7 @@ final class ReminderSnapshotFactoryTests: XCTestCase {
 
         XCTAssertEqual(snapshot.data.lists[0].items.count, 200)
         XCTAssertEqual(
-            snapshot.expiresAt.timeIntervalSince(snapshot.generatedAt),
+            snapshot.expiresAt!.timeIntervalSince(snapshot.generatedAt),
             48 * 60 * 60,
             accuracy: 0.001
         )
@@ -182,6 +190,8 @@ final class ReminderSnapshotFactoryTests: XCTestCase {
                 "grocery-list": 8,
                 "weekend-list": 4,
             ],
+            retention: .never,
+            lastSuccessfulRetention: .sevenDays,
             isEnabled: true
         )
 

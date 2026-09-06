@@ -198,7 +198,7 @@ final class HealthSnapshotFactoryTests: XCTestCase {
         XCTAssertNil(snapshot.data.sleep)
         XCTAssertNil(snapshot.data.workouts)
         XCTAssertEqual(
-            snapshot.expiresAt.timeIntervalSince(snapshot.generatedAt),
+            snapshot.expiresAt!.timeIntervalSince(snapshot.generatedAt),
             3_600
         )
     }
@@ -390,6 +390,45 @@ final class HealthSnapshotFactoryTests: XCTestCase {
         XCTAssertNil(restoredModel.sleepNightCount)
     }
 
+    func testRetentionChangeUploadsUnchangedDataAndSurvivesReload() async throws {
+        let suite = "HealthRetention.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let preferences = HealthBridgePreferencesStore(defaults: defaults, keyPrefix: "Health", authorizationKey: "Authorization")
+        let health = TestHealthDataStore()
+        let server = TestHealthServer()
+        server.personalDataMaximumTTLSeconds = 31_536_000
+        server.supportsPersonalDataRetention = true
+        let model = HealthBridgeModel(health: health, preferencesStore: preferences)
+        await model.load(using: server)
+        model.toggleSection(.activity)
+        await model.requestAccess()
+        await model.enableAndSync(using: server)
+        model.setRetention(.never)
+        XCTAssertTrue(model.hasPendingSelectionChanges)
+        await model.foregroundCatchUp(using: server)
+        XCTAssertEqual(server.snapshots.count, 2)
+        XCTAssertNil(server.snapshots.last?.expiresAt)
+        XCTAssertFalse(model.hasPendingSelectionChanges)
+        let restored = HealthBridgeModel(health: health, preferencesStore: preferences)
+        await restored.load(using: server)
+        XCTAssertEqual(restored.retention, .never)
+        XCTAssertFalse(restored.hasPendingSelectionChanges)
+        restored.setRetention(.sevenDays)
+        await restored.foregroundCatchUp(using: server)
+        let latest = try XCTUnwrap(server.snapshots.last)
+        XCTAssertEqual(latest.expiresAt, latest.generatedAt.addingTimeInterval(7 * 86400))
+        server.supportsPersonalDataRetention = false
+        restored.setRetention(.never)
+        await restored.syncNow(using: server)
+        XCTAssertNotNil(restored.errorMessage)
+        XCTAssertEqual(server.snapshots.count, 3)
+        XCTAssertTrue(restored.hasPendingSelectionChanges)
+        server.activeHealthInstanceID = "other-server"
+        await restored.load(using: server)
+        XCTAssertEqual(restored.retention, .twoDays)
+    }
+
     private func window() throws -> HealthDateWindow {
         try HealthDateWindow.sevenDays(
             endingAt: date("2026-08-16T04:00:00Z"),
@@ -478,6 +517,7 @@ private final class TestHealthDataStore: HealthDataAccessing {
 @MainActor
 private final class TestHealthServer: HealthBridgeServing {
     var supportsHealthSummaryPersonalData = true
+    var supportsPersonalDataRetention = false
     var personalDataMaximumTTLSeconds: Int? = 48 * 60 * 60
     var activeHealthInstanceID: String? = "instance-1"
     var activeHealthTimeZone: String? = "Asia/Shanghai"

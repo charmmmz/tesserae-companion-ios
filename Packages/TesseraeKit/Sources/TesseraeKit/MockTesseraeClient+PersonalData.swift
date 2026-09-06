@@ -13,7 +13,7 @@ public extension MockTesseraeClient {
     ) async throws -> PersonalDataSourceStatus {
         PersonalDataSourceStatus(
             sourceID: snapshot.sourceID,
-            state: snapshot.expiresAt > Date() ? .fresh : .expired,
+            state: snapshot.expiresAt.map { $0 <= Date() } == true ? .expired : .fresh,
             generatedAt: snapshot.generatedAt,
             staleAt: snapshot.generatedAt.addingTimeInterval(86_400),
             expiresAt: snapshot.expiresAt
@@ -26,7 +26,7 @@ public extension MockTesseraeClient {
     ) async throws -> PersonalDataSourceStatus {
         PersonalDataSourceStatus(
             sourceID: snapshot.sourceID,
-            state: snapshot.expiresAt > Date() ? .fresh : .expired,
+            state: snapshot.expiresAt.map { $0 <= Date() } == true ? .expired : .fresh,
             generatedAt: snapshot.generatedAt,
             staleAt: snapshot.generatedAt.addingTimeInterval(86_400),
             expiresAt: snapshot.expiresAt

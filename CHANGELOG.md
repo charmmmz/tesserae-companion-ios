@@ -13,6 +13,8 @@ capabilities.
 
 ### Added
 
+- Reminders and Health settings now offer independent per-server snapshot retention: 1, 2 (default), 7, 30, or 90 days, or Never. Sync applies a changed period even when content is unchanged; longer periods and Never require server support.
+
 - Added on-device Auto Frame to Fill previews in Send and the Share Sheet.
   Photos are composed automatically on first preview, with up to 2× zoom for
   smaller subjects within the server's limit. Manual edits and resets are preserved.

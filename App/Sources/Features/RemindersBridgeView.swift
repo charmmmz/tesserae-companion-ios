@@ -12,6 +12,15 @@ struct RemindersBridgeView: View {
         Form {
             if appModel.supportsRemindersPersonalData {
                 syncStatusSection
+                PersonalDataRetentionSection(
+                    selection: Binding(
+                        get: { bridgeModel.retention },
+                        set: { bridgeModel.setRetention($0) }
+                    ),
+                    maximumTTLSeconds: appModel.personalDataMaximumTTLSeconds,
+                    allowsNever: appModel.supportsPersonalDataRetention,
+                    isBusy: bridgeModel.isBusy
+                )
 
                 Section {
                     authorizationContent

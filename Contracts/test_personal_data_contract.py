@@ -73,6 +73,30 @@ def test_personal_data_fixtures_match_strict_schemas() -> None:
     validate_fixture("personal-data-status.json", "PersonalDataStatusResponse")
 
 
+def test_retention_capability_advertises_a_finite_limit() -> None:
+    validate_fixture("capabilities-personal-data-retention.json", "Capabilities")
+    capabilities = load_fixture("capabilities-personal-data-retention.json")
+    assert "personal_data_retention" in capabilities["features"]
+    assert capabilities["limits"]["personal_data_max_ttl_seconds"] == 365 * 86400
+
+
+@pytest.mark.parametrize(
+    ("fixture", "schema"),
+    [
+        ("personal-data-reminders-never.json", "PersonalDataSnapshot"),
+        ("personal-data-status-never.json", "PersonalDataSourceStatus"),
+    ],
+)
+def test_never_retention_requires_an_explicit_null_deadline(
+    fixture: str, schema: str
+) -> None:
+    validate_fixture(fixture, schema)
+    payload = load_fixture(fixture)
+    assert payload.pop("expires_at") is None
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(payload, _json_schema(SPEC["components"]["schemas"][schema]))
+
+
 def test_reminders_snapshot_is_minimal_and_expiring() -> None:
     snapshot = load_fixture("personal-data-reminders-fridge.json")
     generated_at = datetime.fromisoformat(snapshot["generated_at"].replace("Z", "+00:00"))

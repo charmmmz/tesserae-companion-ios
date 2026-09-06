@@ -405,6 +405,16 @@ The extension must be small and deterministic:
 Video, Live Photo motion, multi-image albums, RAW editing, and automatic
 background retry are out of scope.
 
+### 6.5 Personal Data retention
+
+Current Personal Data retention behavior: Reminders and Health each retain one
+latest snapshot with a per-server choice of 1, 2 (default), 7, 30, or 90 days,
+or Never. Finite choices respect the server's advertised maximum; Never requires
+`personal_data_retention` and an explicit user selection. Sync applies a changed
+choice even when contents are unchanged. Freshness continues to report data age
+independently, and stopping sync with deletion removes the stored snapshot.
+This is an optional extension to D-027; older servers retain finite deadlines.
+
 ## 7. Server integration strategy
 
 ### 7.1 What exists today

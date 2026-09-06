@@ -117,7 +117,6 @@ final class EventKitRemindersStore: RemindersAccessing {
 }
 
 enum ReminderSnapshotFactory {
-    static let privacyTTLSeconds = 48 * 60 * 60
     static let maximumItemCount = 200
     static let maximumListCount = 20
 
@@ -130,9 +129,9 @@ enum ReminderSnapshotFactory {
     static func makeSnapshot(
         from sourceLists: [SourceList],
         generatedAt: Date = .now,
-        serverMaximumTTLSeconds: Int?
+        serverMaximumTTLSeconds: Int?,
+        retention: PersonalDataRetention = .twoDays
     ) -> RemindersSnapshot {
-        let ttlSeconds = maximumTTL(serverMaximumTTLSeconds)
         var remainingItems = maximumItemCount
         var lists: [ReminderListSnapshot] = []
 
@@ -161,7 +160,10 @@ enum ReminderSnapshotFactory {
 
         return RemindersSnapshot(
             generatedAt: generatedAt,
-            expiresAt: generatedAt.addingTimeInterval(TimeInterval(ttlSeconds)),
+            expiresAt: retention.expirationDate(
+                from: generatedAt,
+                maximumTTLSeconds: serverMaximumTTLSeconds
+            ),
             data: RemindersData(lists: lists)
         )
     }
@@ -173,16 +175,6 @@ enum ReminderSnapshotFactory {
             .filter { !$0.isCompleted }
             .compactMap(snapshotItem)
             .sorted(by: precedes)
-    }
-
-    private static func maximumTTL(_ serverMaximumTTLSeconds: Int?) -> Int {
-        max(
-            1,
-            min(
-                serverMaximumTTLSeconds ?? privacyTTLSeconds,
-                privacyTTLSeconds
-            )
-        )
     }
 
     private static func snapshotItem(
@@ -283,6 +275,8 @@ struct RemindersBridgePreferences: Codable, Equatable {
     var lastSuccessfulListIDs: [String]?
     var lastSuccessfulItemCount: Int?
     var lastSuccessfulListItemCounts: [String: Int]?
+    var retention: PersonalDataRetention?
+    var lastSuccessfulRetention: PersonalDataRetention?
     var isEnabled: Bool
 
     init(
@@ -294,6 +288,8 @@ struct RemindersBridgePreferences: Codable, Equatable {
         lastSuccessfulListIDs: [String]? = nil,
         lastSuccessfulItemCount: Int? = nil,
         lastSuccessfulListItemCounts: [String: Int]? = nil,
+        retention: PersonalDataRetention? = nil,
+        lastSuccessfulRetention: PersonalDataRetention? = nil,
         isEnabled: Bool = false
     ) {
         self.instanceID = instanceID
@@ -304,6 +300,8 @@ struct RemindersBridgePreferences: Codable, Equatable {
         self.lastSuccessfulListIDs = lastSuccessfulListIDs
         self.lastSuccessfulItemCount = lastSuccessfulItemCount
         self.lastSuccessfulListItemCounts = lastSuccessfulListItemCounts
+        self.retention = retention
+        self.lastSuccessfulRetention = lastSuccessfulRetention
         self.isEnabled = isEnabled
     }
 }
@@ -406,6 +404,8 @@ final class RemindersBridgeModel {
     private var publicationIDs: [String: String] = [:]
     private var lastSuccessfulContentDigest: String?
     private var lastSuccessfulListIDs: Set<String> = []
+    private(set) var retention: PersonalDataRetention = .twoDays
+    private var lastSuccessfulRetention: PersonalDataRetention = .twoDays
     var isEnabled = false
     var isBusy = false
     var itemCount: Int?
@@ -419,7 +419,8 @@ final class RemindersBridgeModel {
     }
 
     var hasPendingSelectionChanges: Bool {
-        isEnabled && selectedListIDs != lastSuccessfulListIDs
+        isEnabled && (selectedListIDs != lastSuccessfulListIDs
+            || retention != lastSuccessfulRetention)
     }
 
     var unavailableSelectedLists: [UnavailableSelectedList] {
@@ -574,6 +575,8 @@ final class RemindersBridgeModel {
         )
         itemCount = preferences.lastSuccessfulItemCount
         listItemCounts = preferences.lastSuccessfulListItemCounts ?? [:]
+        retention = preferences.retention ?? .twoDays
+        lastSuccessfulRetention = preferences.lastSuccessfulRetention ?? .twoDays
         isEnabled = preferences.isEnabled
         authorizationState = reminders.authorizationState
         if authorizationState == .fullAccess {
@@ -603,6 +606,14 @@ final class RemindersBridgeModel {
             authorizationState = reminders.authorizationState
             errorMessage = error.localizedDescription
         }
+    }
+
+    func setRetention(_ value: PersonalDataRetention) {
+        guard !isBusy else { return }
+        retention = value
+        confirmationMessage = nil
+        errorMessage = nil
+        savePreferences()
     }
 
     func toggleList(_ listID: String) {
@@ -701,6 +712,13 @@ final class RemindersBridgeModel {
             errorMessage = RemindersBridgeError.listUnavailable.localizedDescription
             return
         }
+        guard retention.isSupported(
+            maximumTTLSeconds: appModel.personalDataMaximumTTLSeconds,
+            allowsNever: appModel.supportsPersonalDataRetention
+        ) else {
+            errorMessage = String(localized: "Update the server or choose a supported retention period.")
+            return
+        }
         isBusy = true
         errorMessage = nil
         if forceUpload {
@@ -722,12 +740,14 @@ final class RemindersBridgeModel {
             }
             let snapshot = ReminderSnapshotFactory.makeSnapshot(
                 from: sourceLists,
-                serverMaximumTTLSeconds: appModel.personalDataMaximumTTLSeconds
+                serverMaximumTTLSeconds: appModel.personalDataMaximumTTLSeconds,
+                retention: retention
             )
             let contentDigest = try Self.contentDigest(for: snapshot.data)
 
             var uploadIsRequired = forceUpload
                 || contentDigest != lastSuccessfulContentDigest
+                || retention != lastSuccessfulRetention
             if !uploadIsRequired {
                 sourceStatus = try await appModel.remindersPersonalDataStatus()
                 uploadIsRequired = Self.automaticUploadIsRequired(
@@ -771,6 +791,7 @@ final class RemindersBridgeModel {
         selectedLists: [RemindersListDescriptor],
         contentDigest: String
     ) {
+        lastSuccessfulRetention = retention
         lastSuccessfulContentDigest = contentDigest
         lastSuccessfulListIDs = Set(selectedLists.map(\.id))
         itemCount = snapshot.data.lists.reduce(0) { $0 + $1.items.count }
@@ -845,6 +866,8 @@ final class RemindersBridgeModel {
                 lastSuccessfulListIDs: lastSuccessfulListIDs.sorted(),
                 lastSuccessfulItemCount: itemCount,
                 lastSuccessfulListItemCounts: listItemCounts,
+                retention: retention,
+                lastSuccessfulRetention: lastSuccessfulRetention,
                 isEnabled: isEnabled
             )
         )

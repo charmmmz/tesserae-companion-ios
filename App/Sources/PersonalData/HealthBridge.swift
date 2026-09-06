@@ -639,7 +639,6 @@ final class HealthKitStore: HealthDataAccessing {
 }
 
 enum HealthSnapshotFactory {
-    static let privacyTTLSeconds = 48 * 60 * 60
     static let maximumWorkoutCount = 100
     static let maximumSegmentsPerWorkout = 64
     static let maximumSegmentsPerSnapshot = 256
@@ -655,15 +654,12 @@ enum HealthSnapshotFactory {
         workouts: [HealthWorkoutSource],
         publicationSalt: Data,
         generatedAt: Date = .now,
-        serverMaximumTTLSeconds: Int?
+        serverMaximumTTLSeconds: Int?,
+        retention: PersonalDataRetention = .twoDays
     ) throws -> HealthSummarySnapshot {
         guard !selectedSections.isEmpty else {
             throw HealthBridgeError.sectionRequired
         }
-        let ttl = max(
-            1,
-            min(serverMaximumTTLSeconds ?? privacyTTLSeconds, privacyTTLSeconds)
-        )
         let activity = selectedSections.contains(.activity)
             ? HealthActivityData(
                 days: normalizedActivityDays(activityDays, window: window)
@@ -680,7 +676,10 @@ enum HealthSnapshotFactory {
 
         return HealthSummarySnapshot(
             generatedAt: generatedAt,
-            expiresAt: generatedAt.addingTimeInterval(TimeInterval(ttl)),
+            expiresAt: retention.expirationDate(
+                from: generatedAt,
+                maximumTTLSeconds: serverMaximumTTLSeconds
+            ),
             data: HealthSummaryData(
                 timeZone: window.timeZoneIdentifier,
                 windowStartDate: window.dateStrings[0],
@@ -1156,6 +1155,8 @@ struct HealthBridgePreferences: Codable, Equatable {
     var lastSuccessfulActivityDayCount: Int?
     var lastSuccessfulSleepNightCount: Int?
     var lastSuccessfulWorkoutCount: Int?
+    var retention: PersonalDataRetention?
+    var lastSuccessfulRetention: PersonalDataRetention?
     var isEnabled: Bool
 
     init(
@@ -1168,6 +1169,8 @@ struct HealthBridgePreferences: Codable, Equatable {
         lastSuccessfulActivityDayCount: Int? = nil,
         lastSuccessfulSleepNightCount: Int? = nil,
         lastSuccessfulWorkoutCount: Int? = nil,
+        retention: PersonalDataRetention? = nil,
+        lastSuccessfulRetention: PersonalDataRetention? = nil,
         isEnabled: Bool = false
     ) {
         self.instanceID = instanceID
@@ -1178,6 +1181,8 @@ struct HealthBridgePreferences: Codable, Equatable {
         self.lastSuccessfulActivityDayCount = lastSuccessfulActivityDayCount
         self.lastSuccessfulSleepNightCount = lastSuccessfulSleepNightCount
         self.lastSuccessfulWorkoutCount = lastSuccessfulWorkoutCount
+        self.retention = retention
+        self.lastSuccessfulRetention = lastSuccessfulRetention
         self.isEnabled = isEnabled
     }
 
@@ -1280,6 +1285,7 @@ enum HealthBridgeError: Error, LocalizedError {
 protocol HealthBridgeServing: AnyObject {
     var supportsHealthSummaryPersonalData: Bool { get }
     var personalDataMaximumTTLSeconds: Int? { get }
+    var supportsPersonalDataRetention: Bool { get }
     var activeHealthInstanceID: String? { get }
     var activeHealthTimeZone: String? { get }
 
@@ -1289,6 +1295,10 @@ protocol HealthBridgeServing: AnyObject {
         _ snapshot: HealthSummarySnapshot
     ) async throws -> PersonalDataSourceStatus
     func deleteHealthSummaryPersonalData() async throws
+}
+
+extension HealthBridgeServing {
+    var supportsPersonalDataRetention: Bool { false }
 }
 
 @MainActor
@@ -1303,6 +1313,8 @@ final class HealthBridgeModel {
 
     var authorizationState: HealthAuthorizationState = .reviewRequired
     var selectedSections: Set<HealthSummarySection> = []
+    private(set) var retention: PersonalDataRetention = .twoDays
+    private var lastSuccessfulRetention: PersonalDataRetention = .twoDays
     var isEnabled = false
     var isBusy = false
     var sourceStatus: PersonalDataSourceStatus?
@@ -1313,7 +1325,8 @@ final class HealthBridgeModel {
     var errorMessage: String?
 
     var hasPendingSelectionChanges: Bool {
-        isEnabled && selectedSections != lastSuccessfulSections
+        isEnabled && (selectedSections != lastSuccessfulSections
+            || retention != lastSuccessfulRetention)
     }
 
     init(
@@ -1340,6 +1353,8 @@ final class HealthBridgeModel {
         activityDayCount = preferences.lastSuccessfulActivityDayCount
         sleepNightCount = preferences.lastSuccessfulSleepNightCount
         workoutCount = preferences.lastSuccessfulWorkoutCount
+        retention = preferences.retention ?? .twoDays
+        lastSuccessfulRetention = preferences.lastSuccessfulRetention ?? .twoDays
         isEnabled = preferences.isEnabled
         updateAuthorizationState()
         guard server.supportsHealthSummaryPersonalData else { return }
@@ -1354,6 +1369,14 @@ final class HealthBridgeModel {
         updateAuthorizationState()
         guard isEnabled, !selectedSections.isEmpty else { return }
         await synchronize(using: server, enabling: false, forceUpload: false)
+    }
+
+    func setRetention(_ value: PersonalDataRetention) {
+        guard !isBusy else { return }
+        retention = value
+        confirmationMessage = nil
+        errorMessage = nil
+        savePreferences()
     }
 
     func toggleSection(_ section: HealthSummarySection) {
@@ -1452,6 +1475,13 @@ final class HealthBridgeModel {
             return
         }
 
+        guard retention.isSupported(
+            maximumTTLSeconds: server.personalDataMaximumTTLSeconds,
+            allowsNever: server.supportsPersonalDataRetention
+        ) else {
+            errorMessage = String(localized: "Update the server or choose a supported retention period.")
+            return
+        }
         isBusy = true
         errorMessage = nil
         if forceUpload { confirmationMessage = nil }
@@ -1478,12 +1508,14 @@ final class HealthBridgeModel {
                 sleepSamples: sleep,
                 workouts: workouts,
                 publicationSalt: publicationSalt,
-                serverMaximumTTLSeconds: server.personalDataMaximumTTLSeconds
+                serverMaximumTTLSeconds: server.personalDataMaximumTTLSeconds,
+                retention: retention
             )
             let digest = try Self.contentDigest(for: snapshot.data)
 
             var uploadRequired = forceUpload
                 || digest != lastSuccessfulContentDigest
+                || retention != lastSuccessfulRetention
             if !uploadRequired {
                 sourceStatus = try await server.healthSummaryPersonalDataStatus()
                 uploadRequired = sourceStatus?.state != .fresh
@@ -1510,6 +1542,7 @@ final class HealthBridgeModel {
         _ snapshot: HealthSummarySnapshot,
         digest: String
     ) {
+        lastSuccessfulRetention = retention
         lastSuccessfulContentDigest = digest
         lastSuccessfulSections = selectedSections
         activityDayCount = snapshot.data.activity?.days.count
@@ -1582,6 +1615,8 @@ final class HealthBridgeModel {
                 lastSuccessfulActivityDayCount: activityDayCount,
                 lastSuccessfulSleepNightCount: sleepNightCount,
                 lastSuccessfulWorkoutCount: workoutCount,
+                retention: retention,
+                lastSuccessfulRetention: lastSuccessfulRetention,
                 isEnabled: isEnabled
             )
         )
@@ -1594,4 +1629,8 @@ final class HealthBridgeModel {
     }
 }
 
-extension AppModel: HealthBridgeServing {}
+extension AppModel: HealthBridgeServing {
+    var supportsPersonalDataRetention: Bool {
+        capabilities?.features.contains("personal_data_retention") == true
+    }
+}

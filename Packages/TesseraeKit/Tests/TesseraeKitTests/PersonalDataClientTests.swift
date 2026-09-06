@@ -3,6 +3,44 @@ import XCTest
 @testable import TesseraeKit
 
 final class PersonalDataClientTests: XCTestCase {
+    func testNeverRetentionEncodesExplicitNullAndStatusDecodesIt() throws {
+        let generated = Date(timeIntervalSince1970: 1_700_000_000)
+        let reminders = RemindersSnapshot(generatedAt: generated, expiresAt: nil, data: .init(lists: []))
+        let reminderJSON = try TesseraeJSON.encoder().encode(reminders)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: reminderJSON) as? [String: Any])
+        XCTAssertTrue(object["expires_at"] is NSNull)
+        XCTAssertNil(try TesseraeJSON.decoder().decode(RemindersSnapshot.self, from: reminderJSON).expiresAt)
+
+        let finiteHealth = try decode(HealthSummarySnapshot.self, fixture: "personal-data-health-summary.json")
+        let health = HealthSummarySnapshot(generatedAt: generated, expiresAt: nil, data: finiteHealth.data)
+        let healthJSON = try TesseraeJSON.encoder().encode(health)
+        let healthObject = try XCTUnwrap(JSONSerialization.jsonObject(with: healthJSON) as? [String: Any])
+        XCTAssertTrue(healthObject["expires_at"] is NSNull)
+        XCTAssertNil(try TesseraeJSON.decoder().decode(HealthSummarySnapshot.self, from: healthJSON).expiresAt)
+        let statusJSON = Data("""
+        {"source_id":"reminders","state":"stale","generated_at":"2026-09-01T00:00:00Z", "stale_at":"2026-09-02T00:00:00Z","expires_at":null}
+        """.utf8)
+        let status = try TesseraeJSON.decoder().decode(PersonalDataSourceStatus.self, from: statusJSON)
+        XCTAssertNil(status.expiresAt)
+        XCTAssertEqual(status.state, .stale)
+        let encodedStatus = try TesseraeJSON.encoder().encode(status)
+        let statusObject = try XCTUnwrap(JSONSerialization.jsonObject(with: encodedStatus) as? [String: Any])
+        XCTAssertTrue(statusObject["expires_at"] is NSNull)
+        var missing = statusObject
+        missing.removeValue(forKey: "expires_at")
+        XCTAssertThrowsError(try TesseraeJSON.decoder().decode(PersonalDataSourceStatus.self, from: JSONSerialization.data(withJSONObject: missing)))
+    }
+
+    func testRetentionGatesOldServersAndComputesDeadlines() {
+        let date = Date(timeIntervalSince1970: 1_700_000_000)
+        XCTAssertTrue(PersonalDataRetention.twoDays.isSupported(maximumTTLSeconds: nil, allowsNever: false))
+        XCTAssertFalse(PersonalDataRetention.sevenDays.isSupported(maximumTTLSeconds: 172800, allowsNever: false))
+        XCTAssertFalse(PersonalDataRetention.never.isSupported(maximumTTLSeconds: 31_536_000, allowsNever: false))
+        XCTAssertTrue(PersonalDataRetention.never.isSupported(maximumTTLSeconds: 31_536_000, allowsNever: true))
+        XCTAssertEqual(PersonalDataRetention.thirtyDays.expirationDate(from: date, maximumTTLSeconds: 31_536_000), date.addingTimeInterval(30 * 86400))
+        XCTAssertNil(PersonalDataRetention.never.expirationDate(from: date, maximumTTLSeconds: 31_536_000))
+    }
+
     func testReminderWithoutDueDateEncodesRequiredNullField() throws {
         let item = ReminderSnapshotItem(
             id: "undated-reminder",

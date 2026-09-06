@@ -290,10 +290,13 @@ HealthKit denial because Apple does not expose individual read authorization.
 
 - `version` must equal `personal_data_bridge_v1`.
 - `source_id` must equal both `health.summary` and the endpoint path value.
-- `generated_at` and `expires_at` are UTC ISO 8601 instants.
-- `expires_at` must be after `generated_at` and no later than the server's
-  advertised personal-data maximum TTL. The proposed initial policy remains
-  stale after 24 hours and expired after at most 48 hours.
+- `generated_at` and finite `expires_at` values are UTC ISO 8601 instants.
+- With `personal_data_retention`, explicit `expires_at: null` means the user
+  chose to retain the latest snapshot until replacement or deletion.
+- Finite `expires_at` must be after `generated_at` and no later than the server's
+  advertised personal-data maximum TTL. The default freshness policy remains
+  stale after 24 hours. Companion defaults to 48-hour expiry, with configurable
+  finite retention up to the advertised maximum (365 days on updated servers).
 - `data` permits only `time_zone`, `window_start_date`, `window_end_date`,
   `activity`, `sleep`, and `workouts`.
 - `time_zone` must be the active Tesserae instance's valid IANA time zone.

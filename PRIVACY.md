@@ -62,7 +62,7 @@ operators remain responsible for their own privacy policy and configuration.
 ## Apple Health bridge
 
 The Apple Health extension has no developer-operated relay. It sends one
-selected, expiring seven-date summary directly through the existing paired
+selected seven-date summary directly through the existing paired
 connection to the user's selected Tesserae Server. The user independently
 enables Activity, Sleep, and Workouts. Before the Apple authorization sheet,
 Companion lists every HealthKit type it requests and every value the
@@ -85,9 +85,13 @@ Nullable fields remain null rather than becoming false zeroes. Apple does not
 reveal each read denial to apps, so the snapshot does not claim or upload
 per-type authorization status.
 
-The server retains only the latest snapshot. It becomes stale using the
-server-advertised 24-hour default, expires within the advertised 48-hour maximum,
-and is deleted immediately when Health sync is disabled. Raw values are excluded
+The server retains only the latest snapshot. Reminders and Health each have a
+per-server retention setting: 1, 2 (default), 7, 30, or 90 days, or Never. The
+period starts at the last successful sync; syncing applies a changed setting.
+Never explicitly keeps that snapshot until replacement or deletion. Longer
+periods and Never require an updated server; existing settings keep the 48-hour
+default. The 24-hour stale indicator still reports data age and does not delete
+values. Stopping sync and deleting the snapshot removes server values immediately. Raw values are excluded
 from ordinary logs, API errors, diagnostics, and backups. A normal live History
 thumbnail may contain health values already rendered, and an e-ink display keeps
 its prior image until another frame replaces it. Both limitations must be shown

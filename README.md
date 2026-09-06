@@ -112,9 +112,17 @@ Companion cloud account, and the built-in demo journey works without a server
 when you just want to explore the interface.
 
 Personal-data bridges are opt-in. Selected Reminders lists stay on the iPhone;
-only the minimal expiring snapshot needed by Tesserae is uploaded. See
+only the minimal snapshot needed by Tesserae is uploaded. See
 [PRIVACY.md](PRIVACY.md) for data flow, storage, permissions, and draft App
 Store privacy details.
+
+In **Settings → Personal Data → Reminders / Health → Keep Synced Data**, choose
+1, 2 (default), 7, 30, or 90 days, or **Never**, then sync to apply. The setting
+belongs to this phone's source on the selected server and applies to every widget
+using it. Never suits a fridge inventory that should remain until changed.
+Longer periods and Never require a server advertising `personal_data_retention`.
+A stale label still means the data has not refreshed for 24 hours; it does not
+hide or delete a snapshot before its chosen deadline.
 
 ## Get the beta
 

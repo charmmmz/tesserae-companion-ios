@@ -236,7 +236,7 @@ Contract 0.7.0 adds the first privacy-preserving personal-data source:
   fallback;
 - `limits.personal_data_stale_after_seconds` tells clients when the server will
   mark a snapshot stale;
-- `limits.personal_data_max_ttl_seconds` bounds the required expiry without
+- `limits.personal_data_max_ttl_seconds` bounds finite expiry without
   making the app hard-code a retention policy;
 - paired clients need the separate `personal_data:write` scope;
 - capability support does not grant EventKit permission or enable upload. The
@@ -246,6 +246,15 @@ Contract 0.7.0 adds the first privacy-preserving personal-data source:
 The first fixtures use a 24-hour stale threshold and 48-hour maximum TTL as a
 reviewable proposal. Both values remain server-advertised so the accepted
 policy can change without an app release.
+
+The optional `personal_data_retention` capability allows an explicit
+`expires_at: null` when the user chooses Never. The expiry field remains
+required in snapshots and status responses. Finite deadlines must respect
+`personal_data_max_ttl_seconds`; the content window and stale threshold are
+independent of retention. Companion defaults to two days and stores separate
+Reminders and Health choices per server. Changing retention requires a sync,
+including when snapshot contents have not changed. Older servers keep their
+advertised finite limits and do not receive null deadlines.
 
 Contract 0.9.0 extends the 0.8.0 Lineups read/control surface with authoring:
 
@@ -309,8 +318,9 @@ Contract 0.10.0 adds the separately approved Apple Health source:
   denied;
 - routes, coordinates, heart rate, raw samples, HealthKit UUIDs, device/source
   identity, workout events, and free-form metadata are outside the schema;
-- the content window does not extend retention: the server still advertises a
-  24-hour stale threshold and enforces a maximum 48-hour snapshot TTL;
+- the content window does not extend retention: the original defaults are a
+  24-hour stale threshold and 48-hour maximum TTL. Optional retention support
+  uses the capability and finite limit described above;
 - a semantic change may emit source-wide
   `personal_data.health.summary` after the PUT returns. Timestamp- or
   expiry-only renewal emits no data-change event, and the upload response never
@@ -462,8 +472,9 @@ source remains fresh and widgets show their selected-list-unavailable state.
 already published `reminders_fridge` widget. This Companion neither writes that
 source nor migrates it into grouped `reminders`.
 
-The store retains only the latest value. Raw values are deleted at the required
-`expires_at` deadline or immediately after
+The store retains only the latest value. Raw values are deleted at a finite
+`expires_at` deadline, or retained until replacement/deletion when the deadline
+is explicitly null on a supporting server. They are removed immediately after
 the matching `DELETE /personal-data/{source_id}`. `GET /personal-data/status` returns
 only source ID, fresh/stale/expired state, and generated/stale/expiry times. It
 is deliberately not a read API for snapshot contents.

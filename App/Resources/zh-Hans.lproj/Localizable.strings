@@ -434,3 +434,18 @@
 "Bluetooth maintenance works without a server." = "无需连接服务器即可进行蓝牙维护。";
 
 "Unable to Connect" = "无法连接";
+
+/* Personal data retention */
+"Retention" = "保留时长";
+"Keep Synced Data" = "同步数据保留时间";
+"1 day" = "1 天";
+"2 days (default)" = "2 天（默认）";
+"7 days" = "7 天";
+"30 days" = "30 天";
+"90 days" = "90 天";
+"Never" = "永不过期";
+"Counted from the last sync. Sync to apply changes to all widgets using this source." = "从最后一次同步起计算。同步后，设置将应用到使用此数据源的所有小组件。";
+"Keeps the latest snapshot until you replace it or stop sync and delete it." = "保留最新快照，直到下次同步替换，或停止同步并删除。";
+"Update the Tesserae server to enable longer retention and Never." = "更新 Tesserae 服务器后可使用更长保留时间和“永不过期”。";
+"Update the server or choose a supported retention period." = "请更新服务器，或选择服务器支持的保留时长。";
+"The server keeps only the latest snapshot for the selected retention period. Rendered values may remain in History or on a display until replaced." = "服务器按所选时长仅保留最新快照。已渲染的内容可能保留在历史记录或屏幕上，直到被替换。";

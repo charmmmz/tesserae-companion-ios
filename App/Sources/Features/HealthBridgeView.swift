@@ -16,6 +16,15 @@ struct HealthBridgeView: View {
                 unavailableSection
             } else {
                 syncStatusSection
+                PersonalDataRetentionSection(
+                    selection: Binding(
+                        get: { bridgeModel.retention },
+                        set: { bridgeModel.setRetention($0) }
+                    ),
+                    maximumTTLSeconds: appModel.personalDataMaximumTTLSeconds,
+                    allowsNever: appModel.supportsPersonalDataRetention,
+                    isBusy: bridgeModel.isBusy
+                )
                 authorizationSection
                 selectionSection
                 if bridgeModel.isEnabled || bridgeModel.sourceStatus != nil {
@@ -230,7 +239,7 @@ struct HealthBridgeView: View {
     private var retentionSection: some View {
         Section {
             Text(
-                "The server keeps one expiring snapshot. Rendered values may remain in History or on a display until replaced."
+                "The server keeps only the latest snapshot for the selected retention period. Rendered values may remain in History or on a display until replaced."
             )
         } header: {
             Text("Privacy")
@@ -514,13 +523,6 @@ enum PersonalDataSyncState: Equatable {
         case .unsupported, .unavailable, .off, .waitingForFirstSync: .secondary
         }
     }
-
-    var showsExpiration: Bool {
-        switch self {
-        case .stale, .expired: true
-        default: false
-        }
-    }
 }
 
 /// Native settings rows shared by the Health and Reminders pages.
@@ -558,13 +560,11 @@ struct PersonalDataSyncStatusView: View {
                     Label("Last synced", systemImage: "clock")
                 }
 
-                if state.showsExpiration {
-                    LabeledContent {
-                        expirationText(sourceStatus)
-                            .foregroundStyle(.secondary)
-                    } label: {
-                        Label("Expires", systemImage: "hourglass")
-                    }
+                LabeledContent {
+                    expirationText(sourceStatus)
+                        .foregroundStyle(.secondary)
+                } label: {
+                    Label("Expires", systemImage: "hourglass")
                 }
             }
 
@@ -591,10 +591,63 @@ struct PersonalDataSyncStatusView: View {
     private func expirationText(
         _ status: PersonalDataSourceStatus
     ) -> some View {
-        if status.expiresAt <= .now {
-            Text("Expired \(status.expiresAt, style: .relative)")
+        if let expiresAt = status.expiresAt {
+            if expiresAt <= .now {
+                Text("Expired \(expiresAt, style: .relative)")
+            } else {
+                Text("Expires \(expiresAt, style: .relative)")
+            }
         } else {
-            Text("Expires \(status.expiresAt, style: .relative)")
+            Text("Never")
+        }
+    }
+}
+
+struct PersonalDataRetentionSection: View {
+    @Binding var selection: PersonalDataRetention
+    let maximumTTLSeconds: Int?
+    let allowsNever: Bool
+    let isBusy: Bool
+
+    var body: some View {
+        Section {
+            Picker("Retention", selection: $selection) {
+                ForEach(PersonalDataRetention.allCases, id: \.self) { period in
+                    Text(period.title)
+                        .tag(period)
+                        .disabled(!period.isSupported(
+                            maximumTTLSeconds: maximumTTLSeconds,
+                            allowsNever: allowsNever
+                        ))
+                }
+            }
+            .disabled(isBusy)
+            .accessibilityIdentifier("personal-data-retention")
+        } header: {
+            Text("Keep Synced Data")
+        } footer: {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Counted from the last sync. Sync to apply changes to all widgets using this source.")
+                if selection == .never {
+                    Text("Keeps the latest snapshot until you replace it or stop sync and delete it.")
+                }
+                if !allowsNever {
+                    Text("Update the Tesserae server to enable longer retention and Never.")
+                }
+            }
+        }
+    }
+}
+
+private extension PersonalDataRetention {
+    var title: LocalizedStringKey {
+        switch self {
+        case .oneDay: "1 day"
+        case .twoDays: "2 days (default)"
+        case .sevenDays: "7 days"
+        case .thirtyDays: "30 days"
+        case .ninetyDays: "90 days"
+        case .never: "Never"
         }
     }
 }

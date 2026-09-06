@@ -352,14 +352,14 @@ public struct HealthSummarySnapshot: Codable, Hashable, Sendable {
     public let version: PersonalDataSnapshotVersion
     public let sourceID: PersonalDataSourceID
     public let generatedAt: Date
-    public let expiresAt: Date
+    public let expiresAt: Date?
     public let data: HealthSummaryData
 
     public init(
         version: PersonalDataSnapshotVersion = .v1,
         sourceID: PersonalDataSourceID = .healthSummary,
         generatedAt: Date,
-        expiresAt: Date,
+        expiresAt: Date?,
         data: HealthSummaryData
     ) {
         self.version = version
@@ -367,6 +367,24 @@ public struct HealthSummarySnapshot: Codable, Hashable, Sendable {
         self.generatedAt = generatedAt
         self.expiresAt = expiresAt
         self.data = data
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(version, forKey: .version)
+        try container.encode(sourceID, forKey: .sourceID)
+        try container.encode(generatedAt, forKey: .generatedAt)
+        try container.encode(expiresAt, forKey: .expiresAt)
+        try container.encode(data, forKey: .data)
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        version = try container.decode(PersonalDataSnapshotVersion.self, forKey: .version)
+        sourceID = try container.decode(PersonalDataSourceID.self, forKey: .sourceID)
+        generatedAt = try container.decode(Date.self, forKey: .generatedAt)
+        expiresAt = try container.decode(Date?.self, forKey: .expiresAt)
+        data = try container.decode(HealthSummaryData.self, forKey: .data)
     }
 
     private enum CodingKeys: String, CodingKey {
