@@ -14,7 +14,6 @@
 		059821755403DD0ADCC646A0 /* TesseraeKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7A7EA7E4D096679EEEC58B6C /* TesseraeKit */; };
 		0C0D109EF327D44C0755AC62 /* LineupsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30CBA6B44083893EBB93FB17 /* LineupsView.swift */; };
 		1E5FF7A01F07A246FF6E813F /* LineupsAppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80F13F36D4E7990EF0B890C3 /* LineupsAppModelTests.swift */; };
-		EE2689B4578F2A86FF3413EC /* ActivityJobExpiryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF594B5E665CD953BC1AFC84 /* ActivityJobExpiryTests.swift */; };
 		28315FF4BF85AAE536A42F85 /* TesseraePanelImagePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 135374B71848FF0E87F4A6D3 /* TesseraePanelImagePreview.swift */; };
 		2DB239AB23E1BEDF30BF73EA /* PhosphorRegularGlyphs.json in Resources */ = {isa = PBXBuildFile; fileRef = 5CCA51F737B4F27E6617E7E4 /* PhosphorRegularGlyphs.json */; };
 		3046E3D5594FAAD50F5E1467 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = DF8B7156D9BACE5476E42EA4 /* Localizable.strings */; };
@@ -49,6 +48,7 @@
 		A822986A4CCE386F6A7ED1D5 /* SetupNetworkStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20D62C46FB3E95326C7B906 /* SetupNetworkStore.swift */; };
 		ADE2EF08AEC3F760A31BA858 /* Phosphor.ttf in Resources */ = {isa = PBXBuildFile; fileRef = CB98E98A7C6727AE8FE4694E /* Phosphor.ttf */; };
 		B3B4F023539326701EB077DF /* LineupsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCAC4A35BBC2B83469A3411C /* LineupsUITests.swift */; };
+		B77A29D5903251374F98C622 /* ActivityJobExpiryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99F8FB591FB5C627BC90D186 /* ActivityJobExpiryTests.swift */; };
 		BCC58FB96478BC3992F3946E /* ActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1A411679F997EDCC5BDFF5 /* ActivityView.swift */; };
 		BEF54278387345E5B5961B61 /* NearbyDeviceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 431BEA456C9FDD3620503327 /* NearbyDeviceManager.swift */; };
 		C43F0E113EF4A9E5D6AC77F0 /* OfflineAlbumView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A788C388472DC02CC74EDEB /* OfflineAlbumView.swift */; };
@@ -111,7 +111,6 @@
 		025F289A1CFEF8C9B59D15E0 /* PhosphorDashboardIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhosphorDashboardIcon.swift; sourceTree = "<group>"; };
 		0580CE81ECB940408B4B84B9 /* InfoPlist.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = InfoPlist.strings; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		135374B71848FF0E87F4A6D3 /* TesseraePanelImagePreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TesseraePanelImagePreview.swift; sourceTree = "<group>"; };
-		1595109BA73E8D8DE2555D38 /* TesseraeCompanion.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TesseraeCompanion.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A42C7DE38872598E48EFA11 /* HealthBridgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthBridgeView.swift; sourceTree = "<group>"; };
 		216C90508EC6D953751E6523 /* InfoPlist.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = InfoPlist.strings; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		2580AD3D2102823CA75A8E12 /* GalleryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalleryView.swift; sourceTree = "<group>"; };
@@ -137,13 +136,13 @@
 		6F532D2BC8A0893B35702D88 /* TesseraeShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = TesseraeShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		7F7B082A4F4C920F49545310 /* TesseraeCompanionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TesseraeCompanionUITests.swift; sourceTree = "<group>"; };
 		80F13F36D4E7990EF0B890C3 /* LineupsAppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineupsAppModelTests.swift; sourceTree = "<group>"; };
-		DF594B5E665CD953BC1AFC84 /* ActivityJobExpiryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityJobExpiryTests.swift; sourceTree = "<group>"; };
 		878F2E4D47D31218D70ED033 /* MessageCenterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCenterTests.swift; sourceTree = "<group>"; };
 		8CBD8BCA89698A1281940F5D /* RemindersBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersBridge.swift; sourceTree = "<group>"; };
 		8FE0A6BC06BC1C26FD5AD93A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		90014E225C2AB46EE0CA6530 /* RemindersBridgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersBridgeView.swift; sourceTree = "<group>"; };
 		914B26F3EA9F8A2DE58A81B8 /* NearbyDeviceSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearbyDeviceSetupView.swift; sourceTree = "<group>"; };
 		98EB9E58C42AF0D99B2F11DF /* TesseraeCompanionTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = TesseraeCompanionTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		99F8FB591FB5C627BC90D186 /* ActivityJobExpiryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityJobExpiryTests.swift; sourceTree = "<group>"; };
 		9A04E5CC172EAC80A6C24F75 /* FittedPreviewLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FittedPreviewLayout.swift; sourceTree = "<group>"; };
 		9BC6F53F178D10E050100D5A /* TesseraeCompanionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TesseraeCompanionApp.swift; sourceTree = "<group>"; };
 		A6B1174AA85BE4EB711F746F /* DisplaysView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplaysView.swift; sourceTree = "<group>"; };
@@ -152,6 +151,7 @@
 		AEF28EF26B0AF20FD40F858C /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		B285D6042818DD9ECF798800 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		B2A5670FEC5BD4923C95159E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		B85A93A46B59C02E13F75509 /* Tesserae Companion.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "Tesserae Companion.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BD5EEF99A30C18C07C717772 /* BLESetupProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BLESetupProtocolTests.swift; sourceTree = "<group>"; };
 		CB98E98A7C6727AE8FE4694E /* Phosphor.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Phosphor.ttf; sourceTree = "<group>"; };
 		CCAC4A35BBC2B83469A3411C /* LineupsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineupsUITests.swift; sourceTree = "<group>"; };
@@ -245,7 +245,7 @@
 		39E174B4EB45783A473AB121 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
-				DF594B5E665CD953BC1AFC84 /* ActivityJobExpiryTests.swift */,
+				99F8FB591FB5C627BC90D186 /* ActivityJobExpiryTests.swift */,
 				BD5EEF99A30C18C07C717772 /* BLESetupProtocolTests.swift */,
 				E4901B9808092D465184CABA /* GalleryViewTests.swift */,
 				259C8594008E905790574F3A /* HealthSnapshotFactoryTests.swift */,
@@ -371,7 +371,7 @@
 		EEAC4FB1E2EF711A00FADF57 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				1595109BA73E8D8DE2555D38 /* TesseraeCompanion.app */,
+				B85A93A46B59C02E13F75509 /* Tesserae Companion.app */,
 				98EB9E58C42AF0D99B2F11DF /* TesseraeCompanionTests.xctest */,
 				F1964C9534AA2D6526D1275E /* TesseraeCompanionUITests.xctest */,
 				6F532D2BC8A0893B35702D88 /* TesseraeShare.appex */,
@@ -430,7 +430,7 @@
 				E392BF45FD381310B341C63D /* TesseraeKit */,
 			);
 			productName = TesseraeCompanion;
-			productReference = 1595109BA73E8D8DE2555D38 /* TesseraeCompanion.app */;
+			productReference = B85A93A46B59C02E13F75509 /* Tesserae Companion.app */;
 			productType = "com.apple.product-type.application";
 		};
 		A98D2993617B8AE8AD8A7FDA /* TesseraeCompanionTests */ = {
@@ -617,7 +617,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				EE2689B4578F2A86FF3413EC /* ActivityJobExpiryTests.swift in Sources */,
+				B77A29D5903251374F98C622 /* ActivityJobExpiryTests.swift in Sources */,
 				EF027BEE001DABA6D3E84627 /* BLESetupProtocolTests.swift in Sources */,
 				FF4C2B0911D8ED227B8224AD /* GalleryViewTests.swift in Sources */,
 				69E964DA91CB8FFDFC343170 /* HealthSnapshotFactoryTests.swift in Sources */,

@@ -13,6 +13,7 @@ packages:
 targets:
   TesseraeCompanion:
     type: application
+    productName: Tesserae Companion
     platform: iOS
     sources:
       - path: App/Sources
