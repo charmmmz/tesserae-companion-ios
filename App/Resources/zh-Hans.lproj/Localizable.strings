@@ -468,3 +468,4 @@
 "Wi-Fi settings are saved. The display is restarting." = "Wi-Fi 设置已保存，显示屏正在重启。";
 "For maintenance, hold Refresh for 3 seconds, then release." = "长按刷新键 3 秒后松开，即可进入维护模式。";
 "PicPak: hold its button for 3 seconds and release before 5. Hold 5 seconds to refresh, or 20 for Wi-Fi setup." = "PicPak：长按按键 3 秒，在 5 秒前松开。长按 5 秒刷新，20 秒进入 Wi-Fi 设置。";
+"Authorize this iPhone in PicPak Maintenance first, then choose Manual (Bluetooth)." = "请先在 PicPak 蓝牙维护中授权这部 iPhone，然后选择手动（蓝牙）模式。";

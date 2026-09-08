@@ -13,6 +13,19 @@ capabilities.
 
 ### Added
 
+- PicPak's Bluetooth photo editor now shows battery voltage, a low-battery warning
+  when reported, and refresh speed. Expand the status row for screen mode and
+  firmware version. Requires compatible firmware for the additional status values.
+- PicPak Screen Mode in Bluetooth Maintenance: choose Automatic (Wi-Fi) or Manual
+  (Bluetooth) with compatible firmware. The mode is confirmed by the display;
+  photo authorization is stored in this iPhone's Keychain.
+- Direct Bluetooth photo sending to PicPak. Press the display's button in Manual
+  mode with the app open to show a compact invitation; tap Send to open the photo
+  editor, using the same preview, framing gestures and Image Fit layout as Send.
+  Crop, Auto Frame, Fill/Fit,
+  local four-colour processing, verified transfer progress and cancellation work
+  without a Tesserae server. Requires the matching PicPak BLE photo firmware.
+
 - Added Bluetooth maintenance for supported PicPak firmware, including a Refresh
   Speed setting with 5 s, 10 s, and Native options. The setting shows the device's
   confirmed value and applies on its next refresh. PicPak Wi-Fi repair works
@@ -37,6 +50,9 @@ capabilities.
 
 ### Changed
 
+- PicPak Bluetooth connection and result messages are centered in compact
+  sheets. A successful photo transfer now returns to a small confirmation
+  with a single Done button.
 - Other Servers now sizes its sheet to the server list and connection controls,
   with scrolling for longer content. Its duplicate Bluetooth maintenance entry
   has been removed; onboarding, offline recovery, and Settings retain that entry.
@@ -69,6 +85,8 @@ capabilities.
 
 ### Fixed
 
+- PicPak's Bluetooth photo editor now responds to short crop drags without
+  first moving the sheet or scrolling the page.
 - Offline Displays keeps its large title directly below the connection controls,
   hiding the Settings navigation row to avoid unused space above the list.
 - Saved-server reconnection no longer blocks access to cached screens or local

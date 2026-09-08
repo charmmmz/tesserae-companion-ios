@@ -3,6 +3,8 @@ import Foundation
 
 enum BLESetupProtocol {
     static let serviceUUID = "7A5E0001-7B6D-4F8B-9C2E-1D0A5A110001"
+    static let photoServiceUUID = "7A5E0007-7B6D-4F8B-9C2E-1D0A5A110001"
+    static let photoDataUUID = "7A5E0006-7B6D-4F8B-9C2E-1D0A5A110001"
     static let infoUUID = "7A5E0002-7B6D-4F8B-9C2E-1D0A5A110001"
     static let qrControlUUID = "7A5E0003-7B6D-4F8B-9C2E-1D0A5A110001"
     static let passkeyControlUUID = "7A5E0004-7B6D-4F8B-9C2E-1D0A5A110001"
@@ -43,6 +45,12 @@ struct BLESetupQRCode: Equatable, Sendable {
     let deviceID: String
     let sessionID: Data
     let secret: Data
+
+    init(deviceID: String, sessionID: Data, secret: Data) {
+        self.deviceID = deviceID
+        self.sessionID = sessionID
+        self.secret = secret
+    }
 
     init(string: String) throws {
         guard
@@ -100,7 +108,8 @@ struct BLESetupAdvertisement: Equatable, Sendable {
             payload[0] == BLESetupProtocol.protocolMajor,
             let hardware = BLESetupHardware(rawValue: payload[2])
         else { return nil }
-        mode = payload[1] & 0x02 != 0 ? .maintenance : .setup
+        guard payload[1] <= 4 else { return nil }
+        mode = payload[1] == 4 ? .photo : (payload[1] & 0x02 != 0 ? .maintenance : .setup)
         self.hardware = hardware
         hardwareSuffix = payload[3..<6]
             .map { String(format: "%02X", $0) }

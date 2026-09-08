@@ -32,7 +32,7 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Discover and connect to your Tesserae server on the local network.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Find and securely configure nearby Tesserae displays.</string>
+	<string>Find, securely configure, and send photos to nearby Tesserae displays.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Scan the temporary setup code shown on a Tesserae display.</string>
 	<key>NSHealthShareUsageDescription</key>

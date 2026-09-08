@@ -92,7 +92,7 @@ struct RootView: View {
                 }
             }
         )) { device in
-            NearbyDeviceSetupView(device: device)
+            NearbyDeviceSheet(device: device)
         }
         .onChange(of: model.activeInstance?.id) { previousID, currentID in
             if previousID != nil, previousID != currentID {

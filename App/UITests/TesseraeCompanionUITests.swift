@@ -114,6 +114,124 @@ final class TesseraeCompanionUITests: XCTestCase {
         add(confirmed)
     }
 
+    func testPicPakScreenModeSavesAndAuthorizesThisPhone() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_BLE"] = "1"
+        app.launch()
+        let nearby = app.buttons["onboarding-nearby-devices"]
+        XCTAssertTrue(nearby.waitForExistence(timeout: 5))
+        for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
+        nearby.tap()
+        app.buttons.containing(.staticText, identifier: "Tesserae-A1B2C3").firstMatch.tap()
+        app.buttons["Continue"].tap()
+        app.buttons["Enter 6-Digit Code"].tap()
+        let mode = app.buttons["nearby-screen-mode"]
+        XCTAssertTrue(mode.waitForExistence(timeout: 4))
+        XCTAssertEqual(mode.value as? String, "Automatic (Wi-Fi)")
+        mode.tap()
+        app.buttons["Manual (Bluetooth)"].tap()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@", "Manual (Bluetooth)"), object: mode
+        )], timeout: 3), .completed)
+        XCTAssertFalse(app.buttons["Allow This iPhone"].exists)
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "PicPak Manual Bluetooth Mode"; shot.lifetime = .keepAlways; add(shot)
+        mode.tap()
+        app.buttons["Automatic (Wi-Fi)"].tap()
+        XCTAssertEqual(mode.value as? String, "Automatic (Wi-Fi)")
+    }
+
+    func testPicPakPhotoSessionOpensSendSheetAndReceivesImage() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_BLE"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_PHOTO"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_CONNECTION_DELAY_MS"] = "6000"
+        app.launch()
+        let nearby = app.buttons["onboarding-nearby-devices"]
+        XCTAssertTrue(nearby.waitForExistence(timeout: 5))
+        for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
+        nearby.tap()
+        app.buttons.containing(.staticText, identifier: "Tesserae-A1B2C3").firstMatch.tap()
+        let invitation = app.staticTexts["Ready to Receive"]
+        XCTAssertTrue(invitation.waitForExistence(timeout: 4))
+        XCTAssertFalse(app.navigationBars["Send to PicPak"].exists)
+        XCTAssertFalse(app.buttons["ble-send-photo"].exists)
+        XCTAssertGreaterThan(invitation.frame.minY, app.frame.height / 2)
+        let invitationShot = XCTAttachment(screenshot: app.screenshot())
+        invitationShot.name = "PicPak Photo Invitation"; invitationShot.lifetime = .keepAlways; add(invitationShot)
+        app.buttons["ble-photo-start"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["ble-photo-status"].waitForExistence(timeout: 3))
+        let connectingShot = XCTAttachment(screenshot: app.screenshot())
+        connectingShot.name = "PicPak Centered Connection"; connectingShot.lifetime = .keepAlways; add(connectingShot)
+        XCTAssertTrue(app.navigationBars["Send to PicPak"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.navigationBars["Maintenance"].exists)
+        XCTAssertTrue(app.buttons["ble-change-photo"].waitForExistence(timeout: 4))
+        XCTAssertTrue(app.staticTexts["Image Fit"].exists)
+        let deviceInfo = app.buttons["ble-photo-device-info"]
+        XCTAssertTrue(deviceInfo.exists)
+        XCTAssertTrue(app.staticTexts["Battery voltage: 3.90 V"].exists)
+        XCTAssertTrue(app.staticTexts["Refresh speed: 5 s"].exists)
+        deviceInfo.tap()
+        let infoShot = XCTAttachment(screenshot: app.screenshot())
+        infoShot.name = "PicPak Photo Device Info"; infoShot.lifetime = .keepAlways; add(infoShot)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Manual (Bluetooth)"))
+            .firstMatch.waitForExistence(timeout: 2))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "0.9.3"))
+            .firstMatch.exists)
+        deviceInfo.tap()
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "PicPak Bluetooth Photo Sheet"; shot.lifetime = .keepAlways; add(shot)
+        app.buttons["ble-send-photo"].tap()
+        XCTAssertTrue(app.staticTexts["Photo Sent"].waitForExistence(timeout: 12))
+        let completionShot = XCTAttachment(screenshot: app.screenshot())
+        completionShot.name = "PicPak Compact Completion"; completionShot.lifetime = .keepAlways; add(completionShot)
+    }
+
+    func testPicPakPhotoDiscoveryWaitsForSendAndRespondsToShortDrag() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_BLE"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_PHOTO"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_AUTO_DISCOVERY"] = "1"
+        app.launch()
+        XCTAssertTrue(app.buttons["ble-photo-start"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["ble-send-photo"].exists)
+        app.buttons["Close"].tap()
+        XCTAssertFalse(app.buttons["ble-photo-start"].exists)
+
+        // Dismissing an invitation still allows a deliberate selection from Nearby Displays.
+        let nearby = app.buttons["onboarding-nearby-devices"]
+        for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
+        nearby.tap()
+        app.buttons.containing(.staticText, identifier: "Tesserae-A1B2C3").firstMatch.tap()
+        XCTAssertTrue(app.buttons["ble-photo-start"].waitForExistence(timeout: 3))
+        app.buttons["ble-photo-start"].tap()
+        let canvas = app.descendants(matching: .any)["ble-photo-image"]
+        XCTAssertTrue(canvas.waitForExistence(timeout: 4))
+        let originalFrame = canvas.frame
+        let reset = app.buttons["send-framing-reset"]
+        XCTAssertFalse(reset.isEnabled)
+        let start = canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
+        start.press(forDuration: 0, thenDragTo: start.withOffset(CGVector(dx: 8, dy: 0)))
+        expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: reset)
+        waitForExpectations(timeout: 4)
+        XCTAssertEqual(canvas.frame.minY, originalFrame.minY, accuracy: 1)
+        XCTAssertEqual(canvas.frame.height, originalFrame.height, accuracy: 1)
+        // The shared editor hides its controls briefly while finishing a crop gesture.
+        expectation(for: NSPredicate(format: "hittable == true"), evaluatedWith: reset)
+        waitForExpectations(timeout: 4)
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "PicPak Short Crop Drag"; shot.lifetime = .keepAlways; add(shot)
+        reset.tap()
+        XCTAssertFalse(reset.isEnabled)
+        app.segmentedControls.buttons["Fit"].tap()
+        XCTAssertFalse(app.buttons["send-framing-reset"].exists)
+        app.segmentedControls.buttons["Fill"].tap()
+        XCTAssertTrue(app.buttons["send-framing-reset"].exists)
+    }
+
     func testDemoGalleryBrowsesFoldersAndHandsPhotoToSend() {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"

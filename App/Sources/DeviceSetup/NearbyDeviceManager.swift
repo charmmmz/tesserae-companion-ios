@@ -5,6 +5,7 @@ import Observation
 enum NearbyDeviceMode: String, Sendable {
     case setup
     case maintenance
+    case photo
 }
 
 struct NearbyTesseraeDevice: Identifiable, Equatable, Sendable {
@@ -40,6 +41,7 @@ struct NearbyDeviceDiagnostics: Equatable, Sendable {
     let ssid: String?
     let ipAddress: String?
     let logs: [String]
+    let screenMode: BLEScreenMode?
     let refreshSpeed: BLERefreshSpeed?
 
     init(event: [String: Any]) {
@@ -54,6 +56,7 @@ struct NearbyDeviceDiagnostics: Equatable, Sendable {
         ssid = event["ssid"] as? String
         ipAddress = event["ip"] as? String
         logs = event["logs"] as? [String] ?? []
+        screenMode = (event["screen_mode"] as? String).flatMap(BLEScreenMode.init)
         refreshSpeed = (event["refresh_speed"] as? String).flatMap(BLERefreshSpeed.init)
     }
 }
@@ -91,6 +94,23 @@ final class NearbyDeviceManager: NSObject {
     private(set) var statusMessage: String?
     private(set) var isScanning = false
 
+    private(set) var screenMode: BLEScreenMode?
+    private(set) var isSavingScreenMode = false
+    private(set) var screenModeNeedsReadback = false
+    private(set) var screenModeError: String?
+    private(set) var photoAuthorized = false
+    private(set) var photoState: BLEPhotoState = .idle
+    private(set) var photoProgress: Double = 0
+    private(set) var photoDeviceStatus: BLEPhotoDeviceStatus?
+    private var screenModeRequest: UInt32?
+    private var screenModeTimeoutTask: Task<Void, Never>?
+    private var photoTimeoutTask: Task<Void, Never>?
+    private var photoTransfer: BLEPhotoTransfer?
+    private var pendingPhotoMessage: Data?
+    private var pendingPhotoIsBinary = false
+    private var photoRetries = 0
+    private var photoCharacteristic: CBCharacteristic?
+
     private var central: CBCentralManager!
     private var peripherals: [UUID: CBPeripheral] = [:]
     private var sightings: [UUID: Int] = [:]
@@ -110,13 +130,14 @@ final class NearbyDeviceManager: NSObject {
     private var crypto: BLESetupCrypto?
     private var reassembler = BLESetupReassembler()
     private var outgoingMessageID: UInt16 = 0
-    private var pendingWrites: [Data] = []
+    private var pendingWrites: [(data: Data, characteristic: CBCharacteristic)] = []
     private var isWriteInFlight = false
     private var disconnectWasRequested = false
     private var pendingConnection: PendingConnection?
     private var appIsActive = false
     private var refreshSpeedTimeoutTask: Task<Void, Never>?
 #if DEBUG
+    private let isPhotoUIFixture = ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_PICPAK_PHOTO"] == "1"
     private let isPicPakUIFixture = ProcessInfo.processInfo.environment[
         "TESSERAE_UI_TEST_PICPAK_BLE"
     ] == "1"
@@ -140,7 +161,7 @@ final class NearbyDeviceManager: NSObject {
         if isPicPakUIFixture {
             nearbyDevices = [NearbyTesseraeDevice(
                 id: UUID(uuidString: "00000000-0000-0000-0000-000000000011")!,
-                name: "Tesserae-A1B2C3", rssi: -45, mode: .maintenance,
+                name: "Tesserae-A1B2C3", rssi: -45, mode: isPhotoUIFixture ? .photo : .maintenance,
                 hardware: .picPak42, hardwareSuffix: "A1B2C3",
                 sessionID: Data([1, 2, 3, 4])
             )]
@@ -161,14 +182,22 @@ final class NearbyDeviceManager: NSObject {
 
     func startScanning() {
 #if DEBUG
-        if isPicPakUIFixture { return }
+        if isPicPakUIFixture {
+            if ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_PICPAK_AUTO_DISCOVERY"] == "1",
+               suggestedDevice == nil, activeDevice == nil,
+               let device = nearbyDevices.first,
+               !suppressedSuggestionSessions.contains(device.suggestionSessionKey) {
+                suggestedDevice = device
+            }
+            return
+        }
 #endif
         guard appIsActive, central.state == .poweredOn, !isScanning else { return }
         isScanning = true
         scanGeneration &+= 1
         scanStartedAt = Date()
         central.scanForPeripherals(
-            withServices: [CBUUID(string: BLESetupProtocol.serviceUUID)],
+            withServices: [CBUUID(string: BLESetupProtocol.serviceUUID), CBUUID(string: BLESetupProtocol.photoServiceUUID)],
             options: [CBCentralManagerScanOptionAllowDuplicatesKey: true]
         )
         startPresenceExpiryTask(for: scanGeneration)
@@ -244,10 +273,19 @@ final class NearbyDeviceManager: NSObject {
                 protocol: 2, id: "picpak-a1b2c3", sid: "01020304",
                 connectionNonce: "000102030405060708090a0b0c0d0e0f",
                 hardware: 11, model: "picpak_4_2", firmware: "0.9.3",
-                mode: "maintenance"
+                mode: device.mode.rawValue
             )
             connectionState = .authenticating
-            requestDiagnostics()
+            if device.mode == .photo {
+                let delay = Int(ProcessInfo.processInfo.environment[
+                    "TESSERAE_UI_TEST_PICPAK_CONNECTION_DELAY_MS"
+                ] ?? "0") ?? 0
+                photoTimeoutTask = Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .milliseconds(min(max(delay, 0), 10_000)))
+                    guard !Task.isCancelled else { return }
+                    self?.sendCommand(["op": "photo_info"])
+                }
+            } else { requestDiagnostics() }
             return
         }
 #endif
@@ -293,6 +331,13 @@ final class NearbyDeviceManager: NSObject {
         stopScanning()
         trace("connect requested id=\(peripheral.identifier) state=\(peripheral.state.rawValue) rssi=\(device.rssi) qr=\(qrCode != nil)")
         central.connect(peripheral)
+        if device.mode == .photo {
+            photoTimeoutTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(20))
+                guard !Task.isCancelled, let self, self.connectionState != .ready else { return }
+                self.fail(String(localized: "Could not connect. Press PicPak's button and try again."))
+            }
+        }
     }
 
     private func resumePendingConnection() -> Bool {
@@ -393,6 +438,7 @@ final class NearbyDeviceManager: NSObject {
 
     private func resetConnectionState() {
         resetRefreshSpeedSetting()
+        resetPhotoSession()
         connectedPeripheral = nil
         infoCharacteristic = nil
         qrControlCharacteristic = nil
@@ -426,57 +472,70 @@ final class NearbyDeviceManager: NSObject {
             return
         }
 #endif
-        guard
-            let peripheral = connectedPeripheral,
-            controlCharacteristic != nil
-        else {
-            fail(String(localized: "Connect to the display first."))
+        do {
+            let message = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+            queueMessage(message, binary: false)
+        } catch { fail(error.localizedDescription) }
+    }
+
+    private func queueMessage(_ message: Data, binary: Bool) {
+#if DEBUG
+        if isPicPakUIFixture {
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(15))
+                guard let self, self.activeDevice != nil else { return }
+                if binary, message.count > 8 {
+                    let id = message.prefix(4).reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
+                    let offset = message.dropFirst(4).prefix(4).reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
+                    self.receiveFixtureEvent(["event": "photo_ack", "id": id, "offset": Int(offset) + message.count - 8])
+                } else if let object = try? JSONSerialization.jsonObject(with: message) as? [String: Any] {
+                    self.receivePicPakFixtureCommand(object)
+                }
+            }
             return
         }
+#endif
+        guard let peripheral = connectedPeripheral,
+              let characteristic = binary ? photoCharacteristic : controlCharacteristic
+        else { fail(String(localized: "Connect to the display first.")); return }
         do {
-            let message = try JSONSerialization.data(
-                withJSONObject: object,
-                options: [.sortedKeys]
-            )
             guard message.count <= BLESetupProtocol.maximumMessageBytes else {
                 throw BLESetupProtocolError.messageTooLarge
             }
             outgoingMessageID &+= 1
-            let secured = qrCode != nil
-            let overhead = 4 + (secured ? 21 : 1)
+            let overhead = 4 + (qrCode != nil ? 21 : 1)
             let maximumWrite = peripheral.maximumWriteValueLength(for: .withResponse)
-            let payloadLimit = max(1, maximumWrite - overhead)
+            guard maximumWrite > overhead else { throw BLESetupProtocolError.invalidFrame }
+            let payloadLimit = maximumWrite - overhead
             let count = max(1, (message.count + payloadLimit - 1) / payloadLimit)
-            guard count <= Int(UInt8.max) else {
-                throw BLESetupProtocolError.messageTooLarge
-            }
+            guard count <= Int(UInt8.max) else { throw BLESetupProtocolError.messageTooLarge }
             for index in 0..<count {
                 let lower = index * payloadLimit
                 let upper = min(message.count, lower + payloadLimit)
                 var chunk = Data([
                     UInt8(truncatingIfNeeded: outgoingMessageID >> 8),
-                    UInt8(truncatingIfNeeded: outgoingMessageID),
-                    UInt8(index),
-                    UInt8(count),
+                    UInt8(truncatingIfNeeded: outgoingMessageID), UInt8(index), UInt8(count),
                 ])
                 chunk.append(message[lower..<upper])
+                let frame: Data
                 if var crypto {
-                    let frame = try crypto.seal(chunk, direction: .appToDevice)
+                    frame = try crypto.seal(chunk, direction: .appToDevice)
                     self.crypto = crypto
-                    pendingWrites.append(frame)
                 } else {
-                    pendingWrites.append(Data([BLESetupProtocol.nativeFrame]) + chunk)
+                    frame = Data([BLESetupProtocol.nativeFrame]) + chunk
                 }
+                pendingWrites.append((frame, characteristic))
             }
             writeNextFrameIfNeeded()
-        } catch {
-            fail(error.localizedDescription)
-        }
+        } catch { fail(error.localizedDescription) }
     }
 
 #if DEBUG
     /// Transport-only fixture: exercise the real event and setting state logic
     /// without discovering, pairing with, or writing to a physical display.
+    private func receiveFixtureEvent(_ event: [String: Any]) {
+        if let data = try? JSONSerialization.data(withJSONObject: event) { try? handleEvent(data) }
+    }
     private func receivePicPakFixtureCommand(_ command: [String: Any]) {
         switch command["op"] as? String {
         case "diagnostics":
@@ -484,11 +543,24 @@ final class NearbyDeviceManager: NSObject {
                 "event": "diagnostics", "firmware": "0.9.3",
                 "model": "picpak_4_2", "battery_mv": 3900,
                 "wifi_configured": true, "server_configured": true,
-                "ssid": "Home Wi-Fi", "refresh_speed": "5s",
+                "ssid": "Home Wi-Fi", "refresh_speed": "5s", "screen_mode": screenMode?.rawValue ?? "wifi",
             ]
             if let data = try? JSONSerialization.data(withJSONObject: event) {
                 try? handleEvent(data)
             }
+        case "set_screen_mode":
+            receiveFixtureEvent(["event": "screen_mode", "value": command["value"] ?? "wifi",
+                                 "request": command["request"] ?? 0,
+                                 "photo_key": Data(repeating: 0x5a, count: 32).base64EncodedString()])
+        case "photo_info":
+            receiveFixtureEvent(["event": "photo_info", "version": 1, "width": 400, "height": 300,
+                                 "bytes": 30000, "chunk_bytes": 192, "format": BLEPhotoTransfer.format,
+                                 "battery_mv": 3900, "low_battery": false,
+                                 "refresh_speed": "5s", "screen_mode": "bluetooth"])
+        case "photo_begin":
+            receiveFixtureEvent(["event": "photo_ack", "id": command["id"] ?? 0, "offset": 0])
+        case "photo_end":
+            receiveFixtureEvent(["event": "photo_received", "id": command["id"] ?? 0])
         case "set_refresh_speed":
             guard let value = command["value"] as? String,
                   let sessionDeviceID = activeDevice?.id else { return }
@@ -510,12 +582,11 @@ final class NearbyDeviceManager: NSObject {
     private func writeNextFrameIfNeeded() {
         guard
             let peripheral = connectedPeripheral,
-            let controlCharacteristic = controlCharacteristic,
             !isWriteInFlight,
             let next = pendingWrites.first
         else { return }
         isWriteInFlight = true
-        peripheral.writeValue(next, for: controlCharacteristic, type: .withResponse)
+        peripheral.writeValue(next.data, for: next.characteristic, type: .withResponse)
     }
 
     private func receiveEventFrame(_ frame: Data) {
@@ -526,7 +597,7 @@ final class NearbyDeviceManager: NSObject {
                 chunk = try crypto.open(frame, direction: .deviceToApp)
                 self.crypto = crypto
             } else {
-                guard frame.first == BLESetupProtocol.nativeFrame else {
+                guard crypto == nil, frame.first == BLESetupProtocol.nativeFrame else {
                     throw BLESetupProtocolError.invalidFrame
                 }
                 chunk = Data(frame.dropFirst())
@@ -592,6 +663,9 @@ final class NearbyDeviceManager: NSObject {
                 : String(localized: "Display configured. It is restarting now.")
         case "diagnostics":
             diagnostics = NearbyDeviceDiagnostics(event: object)
+            screenMode = diagnostics?.screenMode
+            screenModeNeedsReadback = false
+            photoAuthorized = deviceInfo.map { BLEPhotoKeyStore.read($0.id) != nil } ?? false
             refreshSpeedSetting.receiveDiagnostics(
                 diagnostics?.refreshSpeed,
                 hardware: activeDevice?.hardware
@@ -600,6 +674,64 @@ final class NearbyDeviceManager: NSObject {
                 connectionState = .ready
             }
             statusMessage = nil
+        case "screen_mode":
+            guard let request = object["request"] as? UInt32,
+                  request == screenModeRequest,
+                  let mode = (object["value"] as? String).flatMap(BLEScreenMode.init),
+                  let id = deviceInfo?.id else { return }
+            screenModeTimeoutTask?.cancel()
+            screenModeRequest = nil
+            isSavingScreenMode = false
+            screenMode = mode
+            do {
+                if mode == .bluetooth {
+                    guard let encoded = object["photo_key"] as? String,
+                          let key = Data(base64URLEncoded: encoded) else {
+                        throw BLESetupProtocolError.invalidFrame
+                    }
+                    try BLEPhotoKeyStore.save(key, for: id)
+                    photoAuthorized = true
+                } else {
+                    BLEPhotoKeyStore.remove(id)
+                    photoAuthorized = false
+                }
+                screenModeError = nil
+            } catch {
+                trace("Photo authorization storage failed: \(describe(error))")
+                screenModeError = String(localized: "Mode saved, but this iPhone could not be authorized. Try Allow This iPhone again.")
+            }
+        case "photo_info":
+            guard activeDevice?.mode == .photo,
+                  object["version"] as? Int == 1,
+                  object["width"] as? Int == 400, object["height"] as? Int == 300,
+                  object["bytes"] as? Int == BLEPhotoTransfer.byteCount,
+                  object["format"] as? String == BLEPhotoTransfer.format,
+                  object["chunk_bytes"] as? Int == BLEPhotoTransfer.chunkBytes else {
+                throw BLESetupProtocolError.invalidFrame
+            }
+            photoDeviceStatus = BLEPhotoDeviceStatus(event: object)
+            photoTimeoutTask?.cancel()
+            connectionState = .ready
+            statusMessage = nil
+        case "photo_ack":
+            guard var transfer = photoTransfer,
+                  object["id"] as? UInt32 == transfer.id,
+                  let offset = object["offset"] as? Int,
+                  try transfer.acknowledge(offset) else { return }
+            photoTimeoutTask?.cancel()
+            photoProgress = Double(offset) / Double(transfer.data.count)
+            let packet = transfer.nextPacket()
+            photoTransfer = transfer
+            if let packet { sendPhotoMessage(packet, binary: true) }
+            else { sendPhotoControl(["op": "photo_end", "id": transfer.id]) }
+        case "photo_received":
+            guard let transfer = photoTransfer, transfer.waitingForReceipt,
+                  object["id"] as? UInt32 == transfer.id else { return }
+            photoTimeoutTask?.cancel()
+            photoTransfer = nil
+            pendingPhotoMessage = nil
+            photoProgress = 1
+            photoState = .received
         case "refresh_speed":
             guard refreshSpeedSetting.isSaving else { return }
             refreshSpeedTimeoutTask?.cancel()
@@ -618,8 +750,16 @@ final class NearbyDeviceManager: NSObject {
             connectionState = .restarting
             statusMessage = String(localized: "Wi-Fi settings cleared. Display is restarting…")
         case "factory_resetting":
+            if let id = deviceInfo?.id { BLEPhotoKeyStore.remove(id) }
             connectionState = .restarting
             statusMessage = String(localized: "Display reset. It is restarting…")
+        case "error" where isSavingScreenMode:
+            screenModeTimeoutTask?.cancel()
+            screenModeRequest = nil
+            isSavingScreenMode = false
+            screenModeError = object["message"] as? String ?? String(localized: "Could not save screen mode.")
+            screenModeNeedsReadback = true
+            requestDiagnostics()
         case "error" where refreshSpeedSetting.isSaving || refreshSpeedSetting.needsReadback:
             refreshSpeedTimeoutTask?.cancel()
             refreshSpeedTimeoutTask = nil
@@ -637,6 +777,12 @@ final class NearbyDeviceManager: NSObject {
 
     private func fail(_ message: String) {
         resetRefreshSpeedSetting()
+        photoTimeoutTask?.cancel()
+        screenModeTimeoutTask?.cancel()
+        isSavingScreenMode = false
+        photoCharacteristic = nil
+        photoTransfer = nil
+        pendingPhotoMessage = nil
         trace("failed state=\(String(describing: connectionState)) message=\(message)")
         let peripheral = connectedPeripheral
         connectedPeripheral = nil
@@ -659,6 +805,94 @@ final class NearbyDeviceManager: NSObject {
         if appIsActive { startScanning() }
     }
 
+    private var activeServiceUUID: String {
+        activeDevice?.mode == .photo ? BLESetupProtocol.photoServiceUUID : BLESetupProtocol.serviceUUID
+    }
+
+    func setScreenMode(_ mode: BLEScreenMode) {
+        guard activeDevice?.mode == .maintenance, activeDevice?.hardware == .picPak42,
+              screenMode != nil, connectionState == .ready,
+              !isSavingScreenMode, !screenModeNeedsReadback, !refreshSpeedSetting.isSaving,
+              !refreshSpeedSetting.needsReadback else { return }
+        let request = UInt32.random(in: 1...UInt32.max)
+        screenModeRequest = request
+        isSavingScreenMode = true
+        screenModeError = nil
+        screenModeTimeoutTask?.cancel()
+        screenModeTimeoutTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(10))
+            guard !Task.isCancelled, let self, self.screenModeRequest == request else { return }
+            self.screenModeRequest = nil
+            self.isSavingScreenMode = false
+            self.screenModeNeedsReadback = true
+            self.screenModeError = String(localized: "Save not confirmed. Checking display…")
+            self.requestDiagnostics()
+        }
+        sendCommand(["op": "set_screen_mode", "value": mode.rawValue, "request": request])
+    }
+
+    func sendPhoto(_ data: Data) {
+        guard connectionState == .ready, activeDevice?.mode == .photo,
+              photoState != .sending else { return }
+        do {
+            let transfer = try BLEPhotoTransfer(data: data, id: .random(in: 1...UInt32.max))
+            photoTransfer = transfer
+            photoState = .sending
+            photoProgress = 0
+            sendPhotoControl(["op": "photo_begin", "id": transfer.id,
+                              "bytes": data.count, "format": BLEPhotoTransfer.format,
+                              "sha256": transfer.digest])
+        } catch { fail(error.localizedDescription) }
+    }
+
+    private func sendPhotoControl(_ object: [String: Any]) {
+        do {
+            sendPhotoMessage(try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]), binary: false)
+        } catch { fail(error.localizedDescription) }
+    }
+
+    private func sendPhotoMessage(_ data: Data, binary: Bool) {
+        pendingPhotoMessage = data
+        pendingPhotoIsBinary = binary
+        photoRetries = 0
+        queueMessage(data, binary: binary)
+        armPhotoTimeout()
+    }
+
+    private func armPhotoTimeout() {
+        photoTimeoutTask?.cancel()
+        photoTimeoutTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(8))
+            guard !Task.isCancelled, let self, let data = self.pendingPhotoMessage,
+                  self.photoTransfer != nil else { return }
+            guard self.photoRetries < 2, !self.isWriteInFlight, self.pendingWrites.isEmpty else {
+                self.fail(String(localized: "Transfer was not confirmed. Press PicPak's button and try again."))
+                return
+            }
+            self.photoRetries += 1
+            // Re-frame with fresh authenticated counters; never replay ciphertext.
+            self.queueMessage(data, binary: self.pendingPhotoIsBinary)
+            self.armPhotoTimeout()
+        }
+    }
+
+    private func resetPhotoSession() {
+        photoTimeoutTask?.cancel()
+        screenModeTimeoutTask?.cancel()
+        screenModeRequest = nil
+        screenMode = nil
+        isSavingScreenMode = false
+        screenModeNeedsReadback = false
+        screenModeError = nil
+        photoAuthorized = false
+        photoCharacteristic = nil
+        photoTransfer = nil
+        pendingPhotoMessage = nil
+        photoState = .idle
+        photoProgress = 0
+        photoDeviceStatus = nil
+    }
+
     private func decodeAdvertisement(
         peripheral: CBPeripheral,
         advertisementData: [String: Any],
@@ -667,9 +901,13 @@ final class NearbyDeviceManager: NSObject {
         guard
             let serviceData = advertisementData[CBAdvertisementDataServiceDataKey]
                 as? [CBUUID: Data],
-            let data = serviceData[CBUUID(string: BLESetupProtocol.serviceUUID)],
+            let data = serviceData[CBUUID(string: BLESetupProtocol.serviceUUID)]
+                ?? serviceData[CBUUID(string: BLESetupProtocol.photoServiceUUID)],
             let advertisement = BLESetupAdvertisement(serviceData: data)
         else { return nil }
+        let photoService = serviceData[CBUUID(string: BLESetupProtocol.photoServiceUUID)] != nil
+        guard (advertisement.mode == .photo) == photoService,
+              !photoService || advertisement.hardware == .picPak42 else { return nil }
         let suffix = advertisement.hardwareSuffix
         let advertisedName = advertisementData[CBAdvertisementDataLocalNameKey] as? String
         let displayName = advertisedName?.hasPrefix("Tes-") == true
@@ -750,7 +988,7 @@ extension NearbyDeviceManager: @preconcurrency CBCentralManagerDelegate {
         }
         trace("connected id=\(peripheral.identifier)")
         statusMessage = String(localized: "Reading display information…")
-        peripheral.discoverServices([CBUUID(string: BLESetupProtocol.serviceUUID)])
+        peripheral.discoverServices([CBUUID(string: activeServiceUUID)])
     }
 
     func centralManager(
@@ -780,6 +1018,7 @@ extension NearbyDeviceManager: @preconcurrency CBCentralManagerDelegate {
         let expectedDisconnect = requestedDisconnect
             || connectionState == .configured
             || connectionState == .restarting
+            || photoState == .received
         if !expectedDisconnect, !alreadyFailed {
             fail(error?.localizedDescription
                  ?? String(localized: "The display disconnected unexpectedly."))
@@ -794,7 +1033,7 @@ extension NearbyDeviceManager: @preconcurrency CBPeripheralDelegate {
         trace("services discovered count=\(peripheral.services?.count ?? 0) error=\(describe(error))")
         if let error { fail(error.localizedDescription); return }
         guard let service = peripheral.services?.first(where: {
-            $0.uuid == CBUUID(string: BLESetupProtocol.serviceUUID)
+            $0.uuid == CBUUID(string: activeServiceUUID)
         }) else {
             fail(String(localized: "This display does not support nearby setup."))
             return
@@ -804,6 +1043,7 @@ extension NearbyDeviceManager: @preconcurrency CBPeripheralDelegate {
             CBUUID(string: BLESetupProtocol.qrControlUUID),
             CBUUID(string: BLESetupProtocol.passkeyControlUUID),
             CBUUID(string: BLESetupProtocol.eventsUUID),
+            CBUUID(string: BLESetupProtocol.photoDataUUID),
         ], for: service)
     }
 
@@ -822,6 +1062,7 @@ extension NearbyDeviceManager: @preconcurrency CBPeripheralDelegate {
             case BLESetupProtocol.qrControlUUID: qrControlCharacteristic = characteristic
             case BLESetupProtocol.passkeyControlUUID: passkeyControlCharacteristic = characteristic
             case BLESetupProtocol.eventsUUID: eventsCharacteristic = characteristic
+            case BLESetupProtocol.photoDataUUID: photoCharacteristic = characteristic
             default: break
             }
         }
@@ -860,6 +1101,16 @@ extension NearbyDeviceManager: @preconcurrency CBPeripheralDelegate {
         if characteristic.uuid == CBUUID(string: BLESetupProtocol.infoUUID) {
             do {
                 let info = try JSONDecoder().decode(BLESetupDeviceInfo.self, from: value)
+                if activeDevice?.mode == .photo {
+                    guard info.protocol == 2, info.mode == "photo", info.hardware == 11,
+                          info.model == "picpak_4_2", photoCharacteristic != nil,
+                          let device = activeDevice, info.sid == device.sessionID.hexString,
+                          let key = BLEPhotoKeyStore.read(info.id) else {
+                        fail(String(localized: "Authorize this iPhone in PicPak Maintenance first, then choose Manual (Bluetooth)."))
+                        return
+                    }
+                    qrCode = BLESetupQRCode(deviceID: info.id, sessionID: device.sessionID, secret: key)
+                }
                 if let qrCode {
                     let connectionNonce = try info.validate(qrCode: qrCode)
                     crypto = try BLESetupCrypto(
@@ -876,7 +1127,9 @@ extension NearbyDeviceManager: @preconcurrency CBPeripheralDelegate {
                 }
                 connectionState = .authenticating
                 statusMessage = String(localized: "Verifying secure access…")
-                if activeDevice?.mode == .maintenance {
+                if activeDevice?.mode == .photo {
+                    sendCommand(["op": "photo_info"])
+                } else if activeDevice?.mode == .maintenance {
                     requestDiagnostics()
                 } else {
                     scanWiFi()

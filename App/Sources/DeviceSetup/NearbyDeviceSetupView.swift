@@ -85,7 +85,7 @@ struct NearbyDeviceSetupView: View {
                             Label("Close", systemImage: "xmark")
                                 .labelStyle(.iconOnly)
                         }
-                        .disabled(isSubmitting)
+                        .disabled(isSubmitting || nearby.isSavingScreenMode)
                     }
                 }
             }
@@ -96,7 +96,7 @@ struct NearbyDeviceSetupView: View {
         )
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(32)
-        .interactiveDismissDisabled(isSubmitting)
+        .interactiveDismissDisabled(isSubmitting || nearby.isSavingScreenMode)
         .fullScreenCover(isPresented: $scannerPresented) {
             NavigationStack {
                 DeviceSetupQRScanner { value in
@@ -399,7 +399,8 @@ struct NearbyDeviceSetupView: View {
                             }
                         }
                         .disabled(
-                            nearby.refreshSpeedSetting.isSaving
+                            nearby.isSavingScreenMode
+                                || nearby.refreshSpeedSetting.isSaving
                                 || nearby.refreshSpeedSetting.needsReadback
                                 || nearby.connectionState != .ready
                         )
@@ -421,6 +422,39 @@ struct NearbyDeviceSetupView: View {
                     if isPicPakMaintenance,
                        nearby.refreshSpeedSetting.confirmedValue != nil {
                         Text("Faster refresh may leave ghosting. Applies next refresh.")
+                    }
+                }
+                if isPicPakMaintenance, let mode = nearby.screenMode {
+                    Section {
+                        Picker("Screen Mode", selection: Binding(
+                            get: { nearby.screenMode ?? mode },
+                            set: { nearby.setScreenMode($0) }
+                        )) {
+                            ForEach(BLEScreenMode.allCases, id: \.self) { mode in
+                                Text(mode.title).tag(mode)
+                            }
+                        }
+                        .accessibilityIdentifier("nearby-screen-mode")
+                        .accessibilityValue((nearby.screenMode ?? mode).title)
+                        .disabled(nearby.isSavingScreenMode || nearby.screenModeNeedsReadback
+                                  || nearby.refreshSpeedSetting.isSaving || nearby.refreshSpeedSetting.needsReadback
+                                  || nearby.connectionState != .ready)
+                        if nearby.isSavingScreenMode {
+                            HStack { ProgressView(); Text("Saving screen mode…") }
+                        } else if mode == .bluetooth, !nearby.photoAuthorized {
+                            Button("Allow This iPhone") { nearby.setScreenMode(.bluetooth) }
+                                .disabled(nearby.screenModeNeedsReadback || nearby.connectionState != .ready)
+                        }
+                        if let message = nearby.screenModeError {
+                            Text(message).font(.footnote).foregroundStyle(.secondary)
+                        }
+                        if nearby.screenModeNeedsReadback {
+                            Button("Check Again") { nearby.requestDiagnostics() }
+                        }
+                    } footer: {
+                        Text(mode == .bluetooth
+                             ? "After leaving Maintenance, press PicPak's button once with this app open to send a photo. Automatic updates and Wi-Fi heartbeats are paused."
+                             : "PicPak gets updates from your server over Wi-Fi.")
                     }
                 }
                 Section("Current Network") {
@@ -465,7 +499,7 @@ struct NearbyDeviceSetupView: View {
                     nearby.reboot()
                 }
             }
-            .disabled(nearby.refreshSpeedSetting.isSaving || nearby.refreshSpeedSetting.needsReadback)
+            .disabled(nearby.isSavingScreenMode || nearby.screenModeNeedsReadback || nearby.refreshSpeedSetting.isSaving || nearby.refreshSpeedSetting.needsReadback)
 
             Section("Reset") {
                 Button(role: .destructive) {
@@ -506,7 +540,7 @@ struct NearbyDeviceSetupView: View {
                     Text("Erases Wi-Fi, server, and display settings, then restarts as a new display.")
                 }
             }
-            .disabled(nearby.refreshSpeedSetting.isSaving || nearby.refreshSpeedSetting.needsReadback)
+            .disabled(nearby.isSavingScreenMode || nearby.screenModeNeedsReadback || nearby.refreshSpeedSetting.isSaving || nearby.refreshSpeedSetting.needsReadback)
 
             if let status = nearby.statusMessage {
                 Section { Text(status).foregroundStyle(.secondary) }
@@ -708,7 +742,7 @@ struct NearbyDeviceSetupView: View {
     }
 }
 
-private struct TesseraeEInkDisplayArtwork: View {
+struct TesseraeEInkDisplayArtwork: View {
     let isMaintenance: Bool
 
     var body: some View {
@@ -853,7 +887,7 @@ struct NearbyDisplaysView: View {
 
                             HStack(spacing: 13) {
                                 Image(
-                                    systemName: device.mode == .setup
+                                    systemName: device.mode == .photo ? "photo" : device.mode == .setup
                                         ? "display.badge.checkmark"
                                         : "wrench.and.screwdriver"
                                 )
@@ -880,10 +914,10 @@ struct NearbyDisplaysView: View {
                                         .lineLimit(1)
 
                                     Label(
-                                        device.mode == .setup
+                                        device.mode == .photo ? "Ready to receive a photo" : device.mode == .setup
                                             ? "Ready to set up"
                                             : "Maintenance mode",
-                                        systemImage: device.mode == .setup
+                                        systemImage: device.mode == .photo ? "photo" : device.mode == .setup
                                             ? "sparkles"
                                             : "wrench.fill"
                                     )
@@ -926,7 +960,7 @@ struct NearbyDisplaysView: View {
                 selectedDevice = newDevice
             }
         )) { device in
-            NearbyDeviceSetupView(device: device)
+            NearbyDeviceSheet(device: device)
         }
     }
 
