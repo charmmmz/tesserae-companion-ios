@@ -75,10 +75,12 @@ jobs:
           print(candidates[0])
           '
           )"
+          # Ad hoc signing lets the simulator exercise real Keychain authorization.
           xcodebuild \
             -project TesseraeCompanion.xcodeproj \
             -scheme TesseraeCompanion \
             -destination "platform=iOS Simulator,id=${destination_id}" \
             -only-testing:TesseraeCompanionTests \
-            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGN_IDENTITY=- \
             test
