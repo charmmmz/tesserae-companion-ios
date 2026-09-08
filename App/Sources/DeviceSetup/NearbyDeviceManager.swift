@@ -1106,7 +1106,7 @@ extension NearbyDeviceManager: @preconcurrency CBPeripheralDelegate {
                           info.model == "picpak_4_2", photoCharacteristic != nil,
                           let device = activeDevice, info.sid == device.sessionID.hexString,
                           let key = BLEPhotoKeyStore.read(info.id) else {
-                        fail(String(localized: "Authorize this iPhone in PicPak Maintenance first, then choose Manual (Bluetooth)."))
+                        fail(String(localized: "Authorize this iPhone in PicPak Maintenance first: hold the button for 10 seconds, release before 20, then choose Manual (Bluetooth)."))
                         return
                     }
                     qrCode = BLESetupQRCode(deviceID: info.id, sessionID: device.sessionID, secret: key)

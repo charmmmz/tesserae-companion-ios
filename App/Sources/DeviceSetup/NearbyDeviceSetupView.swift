@@ -864,10 +864,10 @@ struct NearbyDisplaysView: View {
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.primary)
 
-                            Text("For maintenance, hold Refresh for 3 seconds, then release.")
+                            Text("Other displays: hold Refresh for 3 seconds, then release.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                            Text("PicPak: hold its button for 3 seconds and release before 5. Hold 5 seconds to refresh, or 20 for Wi-Fi setup.")
+                            Text("PicPak: hold for 10 seconds, then release before 20 to enter Bluetooth maintenance.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

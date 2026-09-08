@@ -85,6 +85,8 @@ capabilities.
 
 ### Fixed
 
+- PicPak discovery and photo authorization instructions consistently use
+  firmware 0.9.4's 10-second maintenance hold, releasing before 20 seconds.
 - PicPak's Bluetooth photo editor now responds to short crop drags without
   first moving the sheet or scrolling the page.
 - Offline Displays keeps its large title directly below the connection controls,
