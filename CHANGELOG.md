@@ -11,6 +11,8 @@ capabilities.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-05
+
 ### Added
 
 - Cycle Lineups now offer a daily start time. Each day starts with the first
@@ -1026,7 +1028,8 @@ capabilities.
 - Required Keychain storage, scoped credentials, revocation, redacted
   diagnostics, direct-to-instance photo transfer, and idempotent writes.
 
-[Unreleased]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.6.1...v0.6.2

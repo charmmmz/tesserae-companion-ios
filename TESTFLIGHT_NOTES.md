@@ -10,6 +10,23 @@ sharing, and Shortcuts.
 Dashboard editing and server administration remain in Tesserae's web
 interface.
 
+## Version 0.8.0 (build 14)
+
+- Simpler Lineup editors, Cycle daily start times, Daily and Keep Fresh display
+  targets, and confirmation before discarding an unsaved draft.
+- Dashboard and Lineup search, web editor shortcuts, more hardware brands and
+  logos, and compact, expandable Device Details.
+- On-device Auto Frame in Send and Share, plus direct Bluetooth photo sending
+  and additional maintenance controls for compatible PicPak firmware.
+- Per-server Health and Reminders retention, safer server switching, smoother
+  Library previews, and more reliable Bluetooth reconnection.
+
+Focus testing on saving each Lineup type, Back/Cancel/swipe-down draft protection
+(including open pickers), server-time-zone schedules, and long Dashboard durations.
+Check hardware labels in light/dark mode and with larger text. For compatible
+PicPak firmware, verify photo transfer, cancellation, screen mode, refresh speed,
+and recovery after reconnecting on physical hardware.
+
 ## What to test
 
 1. If you paired with an earlier build, pair again when prompted so the app can
@@ -19,10 +36,10 @@ interface.
    compact rows open the preview and Push sheet, and preview cards retain Push.
    In the Push sheet, confirm the Dashboard name and target resolution appear
    centered beneath the preview image.
-3. Open Lineups from Displays. Check that Manual, Daily, Interval, and Cycle
+3. Open Lineups from Displays. Check that Manual, Daily, Keep Fresh, and Cycle
    Lineups are grouped under the correct display and show clear status,
    Dashboard count, and current playback information. Include a Daily or
-   Interval Lineup created on the web with no explicit Lineup display binding;
+   Keep Fresh Lineup created on the web with no explicit Lineup display binding;
    it should still use the server-resolved Dashboard display and current state.
 4. In Tesserae Settings → Companion, grant Create and edit Lineups to this
    iPhone. Create each available Lineup type in the app, select and reorder
@@ -41,8 +58,8 @@ interface.
 7. Turn a Lineup off and on. Confirm its status updates immediately; turning it
    off should pause its automation while explicit manual controls remain
    available.
-8. Review Daily, Interval, and Cycle details. Check that times, days, frequency,
-   reset, Home Dashboard, and return-home information appear only when relevant.
+8. Review Daily, Keep Fresh, and Cycle details. Check that times, days, frequency,
+   daily start, Home Dashboard, and return-home information appear only when relevant.
 9. Use Open in Tesserae from a Lineup and confirm it opens that Lineup's editor.
 10. Send a photo from both Send and the Share Sheet using Fill. Test dragging,
    pinching, Reset, and switching the preview display; queued retries should
