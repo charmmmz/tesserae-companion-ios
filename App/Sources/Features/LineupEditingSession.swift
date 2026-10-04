@@ -39,7 +39,11 @@ struct LineupExitProtection: ViewModifier {
             }
             .alert(
                 "Discard Changes?",
-                item: $session.pendingExit
+                isPresented: Binding(
+                    get: { session.pendingExit != nil },
+                    set: { if !$0 { session.pendingExit = nil } }
+                ),
+                presenting: session.pendingExit
             ) { destination in
                 Button("Discard Changes", role: .destructive) {
                     session.hasChanges = false
