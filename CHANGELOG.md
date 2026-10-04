@@ -85,6 +85,13 @@ capabilities.
 
 ### Fixed
 
+- Switching or re-pairing servers now discards results and authentication errors
+  from the previous connection, including Gallery, Lineups, sends and job updates.
+  Server-specific navigation and open editors reset with the connection.
+- Reminders and Health sync remain bound to the server where they started; changing
+  or disconnecting servers stops old work from uploading or changing the new
+  server's settings. Opening the same server's settings preserves a running sync.
+
 - PicPak discovery and photo authorization instructions consistently use
   firmware 0.9.4's 10-second maintenance hold, releasing before 20 seconds.
 - PicPak's Bluetooth photo editor now responds to short crop drags without

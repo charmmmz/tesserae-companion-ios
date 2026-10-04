@@ -1770,6 +1770,57 @@ final class TesseraeCompanionUITests: XCTestCase {
     }
 
     func testManualConnectionAgainstFixtureServer() throws {
+        let app = try launchFixtureConnectedApp()
+        XCTAssertFalse(app.staticTexts["Connected through Companion API"].exists)
+    }
+
+    func testRepairingSameFixtureServerResetsLibraryNavigation() throws {
+        let app = try launchFixtureConnectedApp()
+        let tabBar = app.tabBars.firstMatch
+        let libraryTab = tabBar.buttons["Library"]
+        XCTAssertTrue(libraryTab.waitForExistence(timeout: 5))
+        libraryTab.tap()
+
+        let family = app.buttons["gallery-folder-folder_family"]
+        XCTAssertTrue(family.waitForExistence(timeout: 5))
+        family.tap()
+        let photo = app.buttons["gallery-image-image_family_01"]
+        XCTAssertTrue(photo.waitForExistence(timeout: 5))
+        photo.tap()
+        let photoPager = app.descendants(matching: .any)["gallery-photo-pager"]
+        XCTAssertTrue(photoPager.waitForExistence(timeout: 5))
+
+        let displaysTab = tabBar.buttons["Displays"]
+        displaysTab.tap()
+        let settings = app.buttons["root-settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 3))
+        settings.tap()
+        let otherServers = app.buttons["Other Servers"]
+        XCTAssertTrue(otherServers.waitForExistence(timeout: 3))
+        otherServers.tap()
+        XCTAssertTrue(app.navigationBars["Tesserae Servers"].waitForExistence(timeout: 3))
+
+        // The same fixture returns the same instance ID. Only a fresh session
+        // identity can reset the old Library path and the Settings presentation.
+        connectUsingPrefilledFixtureAddress(in: app)
+        let navigationReset = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in
+                displaysTab.isSelected && displaysTab.isHittable
+                    && !app.navigationBars["Settings"].exists
+                    && !app.navigationBars["Connect Manually"].exists
+            },
+            object: nil
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [navigationReset], timeout: 8), .completed)
+
+        libraryTab.tap()
+        XCTAssertTrue(family.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["gallery-create-folder"].exists)
+        XCTAssertFalse(photoPager.exists)
+        XCTAssertFalse(app.buttons["gallery-add-photos"].exists)
+    }
+
+    private func launchFixtureConnectedApp() throws -> XCUIApplication {
         let baseURL = "http://127.0.0.1:18765"
         guard
             let probeURL = URL(string: "\(baseURL)/api/app/v1"),
@@ -1784,20 +1835,29 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launch()
 
-        XCTAssertTrue(app.buttons["Enter Server Address"].waitForExistence(timeout: 3))
-        app.buttons["Enter Server Address"].tap()
-        XCTAssertTrue(app.textFields["Pairing code"].waitForExistence(timeout: 2))
-        app.buttons["Connect"].tap()
+        connectUsingPrefilledFixtureAddress(in: app)
 
-        let kitchen = app.staticTexts["Kitchen"]
+        let kitchen = app.buttons["display-card-picpak-kitchen"]
         if !kitchen.waitForExistence(timeout: 5) {
+            let hierarchy = XCTAttachment(string: app.debugDescription)
+            hierarchy.name = "Fixture connection hierarchy"
+            hierarchy.lifetime = .keepAlways
+            add(hierarchy)
             let alert = app.alerts["Something Went Wrong"]
             let details = alert.staticTexts.allElementsBoundByIndex
                 .map { element in element.label }
                 .joined(separator: " ")
             XCTFail(details.isEmpty ? "Live connection did not complete." : details)
         }
-        XCTAssertFalse(app.staticTexts["Connected through Companion API"].exists)
+        return app
+    }
+
+    private func connectUsingPrefilledFixtureAddress(in app: XCUIApplication) {
+        let enterAddress = app.buttons["Enter Server Address"]
+        XCTAssertTrue(enterAddress.waitForExistence(timeout: 3))
+        enterAddress.tap()
+        XCTAssertTrue(app.textFields["Pairing code"].waitForExistence(timeout: 3))
+        app.buttons["Connect"].tap()
     }
 
     func testLivePreviewsAgainstPairedServer() throws {

@@ -1,5 +1,10 @@
 import SwiftUI
 
+private struct RootConnectionContext: Hashable {
+    let revision: UUID
+    let instanceID: String?
+}
+
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @Environment(RemindersBridgeModel.self) private var remindersBridgeModel
@@ -10,6 +15,10 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var serversPresented = false
     @State private var nearbyPresented = false
+
+    private var connectionContext: RootConnectionContext {
+        RootConnectionContext(revision: model.connectionRevision, instanceID: model.activeInstance?.id)
+    }
 
     var body: some View {
         Group {
@@ -31,6 +40,7 @@ struct RootView: View {
                         connectionRecovery
                     }
                     MainTabView()
+                        .id(model.connectionRevision)
                 }
             }
         }
@@ -54,13 +64,15 @@ struct RootView: View {
             model.openWebIfRequested()
             synchronizeConnectionMessage()
         }
-        .task(id: model.activeInstance?.id) {
+        .task(id: connectionContext) {
             await remindersBridgeModel.load(using: model)
+            guard !Task.isCancelled else { return }
             remindersBridgeModel.startChangeMonitoring(
                 using: model,
                 applicationIsActive: scenePhase == .active
             )
             await healthBridgeModel.load(using: model)
+            guard !Task.isCancelled else { return }
             if scenePhase == .active {
                 await healthBridgeModel.foregroundCatchUp(using: model)
             }
@@ -94,11 +106,10 @@ struct RootView: View {
         )) { device in
             NearbyDeviceSheet(device: device)
         }
-        .onChange(of: model.activeInstance?.id) { previousID, currentID in
-            if previousID != nil, previousID != currentID {
-                galleryUploads.cancelAndClear()
-                messageCenter.dismiss(id: "gallery.uploads")
-            }
+        .onChange(of: connectionContext) { previous, _ in
+            guard previous.instanceID != nil else { return }
+            galleryUploads.cancelAndClear()
+            messageCenter.dismiss(id: "gallery.uploads")
         }
         .onChange(of: connectionMessageRevision) { _, _ in
             synchronizeConnectionMessage()

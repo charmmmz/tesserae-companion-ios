@@ -18,6 +18,11 @@ private struct DashboardPreviewKey: Hashable {
     let deviceID: String?
 }
 
+struct CompanionConnectionSession: Equatable, Sendable {
+    let instanceID: String
+    let revision: UUID
+}
+
 @MainActor
 @Observable
 final class AppModel {
@@ -81,13 +86,26 @@ final class AppModel {
     private let activityThumbnails: any ActivityThumbnailStoring
     private let discovery: any TesseraeDiscovering
     private let connectionTimeout: Duration
-    private var connectionRevision = UUID()
+    private(set) var connectionRevision = UUID()
     private var didAttemptRestore = false
+    private var isDisconnecting = false
     private var isSynchronizingSharedState = false
     private var activityRefreshTask: Task<Void, Never>?
     private var displayPreviewRequestIDs: [String: UUID] = [:]
     private var pendingDisplayPreviewRequestIDs: [String: UUID] = [:]
     private var dashboardPreviewRequestIDs: [DashboardPreviewKey: UUID] = [:]
+
+    var connectionSession: CompanionConnectionSession? {
+        guard !isDisconnecting else { return nil }
+        return activeInstance.map {
+            CompanionConnectionSession(instanceID: $0.id, revision: connectionRevision)
+        }
+    }
+
+    func checkConnectionSession(_ session: CompanionConnectionSession) throws {
+        try Task.checkCancellation()
+        guard connectionSession == session else { throw CancellationError() }
+    }
 
     var activeInstance: TesseraeInstance?
     var connectionMode: ConnectionMode?
@@ -366,11 +384,17 @@ final class AppModel {
                     for: session.instance.id
                 )
             }
+            isDisconnecting = false
             connectionRevision = UUID()
             isRestoringConnection = false
             isRefreshing = false
             isRefreshingDashboards = false
             isRefreshingLineups = false
+            isRefreshingGallery = false
+            isLoadingMoreHistory = false
+            loadingGalleryFolderIDs = []
+            loadingOfflineAlbumFolderIDs = []
+            activeOperationIDs = ["pair"]
             connectionNotice = nil
             activeClient = candidate
             connectionMode = mode
@@ -1052,6 +1076,8 @@ final class AppModel {
     func refreshLineupAuthoringPermission(
         showErrors: Bool = false
     ) async {
+        let revision = connectionRevision
+        let client = activeClient
         guard supportsLineupAuthoring, let currentInstance = activeInstance else {
             lineupAuthoringPermission = .unavailable
             lineupAuthoringSettingsURL = nil
@@ -1068,10 +1094,10 @@ final class AppModel {
 
         lineupAuthoringPermission = .checking
         do {
-            let authorization = try await activeClient.fetchSessionAuthorization(
+            let authorization = try await client.fetchSessionAuthorization(
                 instance: currentInstance
             )
-            guard activeInstance?.id == currentInstance.id else { return }
+            try checkConnectionRevision(revision)
             if let authorization {
                 lineupAuthoringPermission = authorization.canAuthorLineups
                     ? .granted
@@ -1084,15 +1110,18 @@ final class AppModel {
                 lineupAuthoringSettingsURL = nil
             }
         } catch is CancellationError {
+            guard connectionRevision == revision else { return }
             lineupAuthoringPermission = .unknown
             lineupAuthoringSettingsURL = nil
         } catch let error as TesseraeClientError {
+            guard connectionRevision == revision, !Task.isCancelled else { return }
             lineupAuthoringPermission = .unknown
             lineupAuthoringSettingsURL = nil
             if showErrors {
                 await presentOperationError(error)
             }
         } catch {
+            guard connectionRevision == revision, !Task.isCancelled else { return }
             lineupAuthoringPermission = .unknown
             lineupAuthoringSettingsURL = nil
             if showErrors {
@@ -1102,6 +1131,8 @@ final class AppModel {
     }
 
     func refreshGallery(showErrors: Bool = true) async {
+        let revision = connectionRevision
+        let client = activeClient
         guard
             supportsGallery,
             let currentInstance = activeInstance,
@@ -1110,13 +1141,15 @@ final class AppModel {
             return
         }
         isRefreshingGallery = true
-        defer { isRefreshingGallery = false }
+        defer {
+            if connectionRevision == revision { isRefreshingGallery = false }
+        }
 
         do {
-            let folders = try await activeClient.fetchGalleryFolders(
+            let folders = try await client.fetchGalleryFolders(
                 instance: currentInstance
             )
-            guard activeInstance?.id == currentInstance.id else { return }
+            try checkConnectionRevision(revision)
             galleryFolders = folders
             let folderIDs = Set(folders.map(\.id))
             galleryFolderDetails = galleryFolderDetails.filter {
@@ -1143,10 +1176,12 @@ final class AppModel {
         } catch is CancellationError {
             return
         } catch let error as TesseraeClientError {
+            guard connectionRevision == revision, !Task.isCancelled else { return }
             if showErrors || error == .unauthorized || error == .missingCredential {
                 await presentOperationError(error)
             }
         } catch {
+            guard connectionRevision == revision, !Task.isCancelled else { return }
             if showErrors {
                 lastError = error.localizedDescription
             }
@@ -1157,6 +1192,8 @@ final class AppModel {
         id: String,
         showErrors: Bool = true
     ) async {
+        let revision = connectionRevision
+        let client = activeClient
         guard
             supportsGallery,
             let currentInstance = activeInstance,
@@ -1165,14 +1202,16 @@ final class AppModel {
             return
         }
         loadingGalleryFolderIDs.insert(id)
-        defer { loadingGalleryFolderIDs.remove(id) }
+        defer {
+            if connectionRevision == revision { loadingGalleryFolderIDs.remove(id) }
+        }
 
         do {
-            let detail = try await activeClient.fetchGalleryFolder(
+            let detail = try await client.fetchGalleryFolder(
                 id: id,
                 instance: currentInstance
             )
-            guard activeInstance?.id == currentInstance.id else { return }
+            try checkConnectionRevision(revision)
             galleryFolderDetails[id] = detail
             replaceGalleryFolder(detail.folder)
             connectionHealth = .connected
@@ -1180,10 +1219,12 @@ final class AppModel {
         } catch is CancellationError {
             return
         } catch let error as TesseraeClientError {
+            guard connectionRevision == revision, !Task.isCancelled else { return }
             if showErrors || error == .unauthorized || error == .missingCredential {
                 await presentOperationError(error)
             }
         } catch {
+            guard connectionRevision == revision, !Task.isCancelled else { return }
             if showErrors {
                 lastError = error.localizedDescription
             }
@@ -1191,6 +1232,8 @@ final class AppModel {
     }
 
     func refreshGalleryWritePermission(showErrors: Bool = false) async {
+        let revision = connectionRevision
+        let client = activeClient
         guard supportsGallery, let currentInstance = activeInstance else {
             galleryWritePermission = .unavailable
             galleryWriteSettingsURL = nil
@@ -1214,10 +1257,10 @@ final class AppModel {
             offlineAlbumAuthoringPermission = .checking
         }
         do {
-            let authorization = try await activeClient.fetchSessionAuthorization(
+            let authorization = try await client.fetchSessionAuthorization(
                 instance: currentInstance
             )
-            guard activeInstance?.id == currentInstance.id else { return }
+            try checkConnectionRevision(revision)
             if let authorization {
                 galleryWritePermission = authorization.canWriteGallery
                     ? .granted
@@ -1238,6 +1281,7 @@ final class AppModel {
                 offlineAlbumSettingsURL = nil
             }
         } catch is CancellationError {
+            guard connectionRevision == revision else { return }
             galleryWritePermission = .unknown
             galleryWriteSettingsURL = nil
             offlineAlbumAuthoringPermission = supportsOfflineAlbums
@@ -1245,6 +1289,7 @@ final class AppModel {
                 : .unavailable
             offlineAlbumSettingsURL = nil
         } catch {
+            guard connectionRevision == revision, !Task.isCancelled else { return }
             galleryWritePermission = .unknown
             galleryWriteSettingsURL = nil
             offlineAlbumAuthoringPermission = supportsOfflineAlbums
@@ -1258,24 +1303,25 @@ final class AppModel {
     }
 
     func createGalleryFolder(name: String) async throws -> GalleryFolderDetail {
+        let revision = connectionRevision
+        let client = activeClient
         guard supportsGallery, let currentInstance = activeInstance else {
             throw TesseraeClientError.unavailable
         }
         let detail: GalleryFolderDetail
         do {
-            detail = try await activeClient.createGalleryFolder(
+            detail = try await client.createGalleryFolder(
                 name: name,
                 instance: currentInstance
             )
         } catch let error as TesseraeClientError {
+            try checkConnectionRevision(revision)
             if case .forbidden = error {
                 galleryWritePermission = .denied
             }
             throw error
         }
-        guard activeInstance?.id == currentInstance.id else {
-            throw CancellationError()
-        }
+        try checkConnectionRevision(revision)
         galleryFolderDetails[detail.folder.id] = detail
         replaceGalleryFolder(detail.folder)
         return detail
@@ -1288,12 +1334,14 @@ final class AppModel {
         contentType: String,
         idempotencyKey: String
     ) async throws -> GalleryImage {
+        let revision = connectionRevision
+        let client = activeClient
         guard supportsGallery, let currentInstance = activeInstance else {
             throw TesseraeClientError.unavailable
         }
         let image: GalleryImage
         do {
-            image = try await activeClient.uploadGalleryImage(
+            image = try await client.uploadGalleryImage(
                 folderID: folderID,
                 data: data,
                 fileName: fileName,
@@ -1302,14 +1350,13 @@ final class AppModel {
                 instance: currentInstance
             )
         } catch let error as TesseraeClientError {
+            try checkConnectionRevision(revision)
             if case .forbidden = error {
                 galleryWritePermission = .denied
             }
             throw error
         }
-        guard activeInstance?.id == currentInstance.id else {
-            throw CancellationError()
-        }
+        try checkConnectionRevision(revision)
         if var detail = galleryFolderDetails[folderID],
            !detail.images.contains(where: { $0.id == image.id })
         {
@@ -1333,6 +1380,7 @@ final class AppModel {
     func fetchGalleryImageContent(
         _ image: GalleryImage
     ) async throws -> Data {
+        let revision = connectionRevision
         guard supportsGallery, let currentInstance = activeInstance else {
             throw TesseraeClientError.unavailable
         }
@@ -1341,6 +1389,7 @@ final class AppModel {
             ifNoneMatch: nil,
             instance: currentInstance
         )
+        try checkConnectionRevision(revision)
         guard case let .image(data, _) = result else {
             throw TesseraeClientError.invalidResponse
         }
@@ -1348,6 +1397,8 @@ final class AppModel {
     }
 
     func loadGalleryThumbnail(path: String) async {
+        let revision = connectionRevision
+        let client = activeClient
         guard supportsGallery, let currentInstance = activeInstance else { return }
         let current = galleryThumbnailStates[path] ?? .idle
         guard current.phase != .loading, current.phase != .ready else { return }
@@ -1357,12 +1408,12 @@ final class AppModel {
             phase: .loading
         )
         do {
-            let result = try await activeClient.fetchGalleryResource(
+            let result = try await client.fetchGalleryResource(
                 path: path,
                 ifNoneMatch: current.eTag,
                 instance: currentInstance
             )
-            guard activeInstance?.id == currentInstance.id else { return }
+            try checkConnectionRevision(revision)
             switch result {
             case let .image(data, eTag):
                 galleryThumbnailStates[path] = PreviewImageState(
@@ -1384,8 +1435,10 @@ final class AppModel {
                 )
             }
         } catch is CancellationError {
+            guard connectionRevision == revision else { return }
             galleryThumbnailStates[path] = current
         } catch {
+            guard connectionRevision == revision, !Task.isCancelled else { return }
             galleryThumbnailStates[path] = PreviewImageState(
                 data: current.data,
                 eTag: current.eTag,
@@ -1398,6 +1451,8 @@ final class AppModel {
         folderID: String,
         showErrors: Bool = false
     ) async {
+        let revision = connectionRevision
+        let client = activeClient
         guard
             supportsOfflineAlbums,
             let currentInstance = activeInstance,
@@ -1406,19 +1461,22 @@ final class AppModel {
             return
         }
         loadingOfflineAlbumFolderIDs.insert(folderID)
-        defer { loadingOfflineAlbumFolderIDs.remove(folderID) }
+        defer {
+            if connectionRevision == revision { loadingOfflineAlbumFolderIDs.remove(folderID) }
+        }
 
         do {
-            let versioned = try await activeClient.fetchOfflineAlbum(
+            let versioned = try await client.fetchOfflineAlbum(
                 folderID: folderID,
                 instance: currentInstance
             )
-            guard activeInstance?.id == currentInstance.id else { return }
+            try checkConnectionRevision(revision)
             offlineAlbumsByFolderID[folderID] = versioned.response
             offlineAlbumETagsByFolderID[folderID] = versioned.eTag
         } catch is CancellationError {
             return
         } catch let error as TesseraeClientError {
+            guard connectionRevision == revision, !Task.isCancelled else { return }
             if case let .server(code, _, _) = error, code == "not_found" {
                 offlineAlbumsByFolderID.removeValue(forKey: folderID)
                 offlineAlbumETagsByFolderID.removeValue(forKey: folderID)
@@ -1428,6 +1486,7 @@ final class AppModel {
                 await presentOperationError(error)
             }
         } catch {
+            guard connectionRevision == revision, !Task.isCancelled else { return }
             if showErrors {
                 lastError = error.localizedDescription
             }
@@ -1438,16 +1497,21 @@ final class AppModel {
         folderID: String,
         draft: OfflineAlbumDraft
     ) async throws -> OfflineAlbumPreflightResponse {
+        let revision = connectionRevision
+        let client = activeClient
         guard supportsOfflineAlbums, let currentInstance = activeInstance else {
             throw TesseraeClientError.unavailable
         }
         do {
-            return try await activeClient.preflightOfflineAlbum(
+            let result = try await client.preflightOfflineAlbum(
                 folderID: folderID,
                 draft: draft,
                 instance: currentInstance
             )
+            try checkConnectionRevision(revision)
+            return result
         } catch let error as TesseraeClientError {
+            try checkConnectionRevision(revision)
             if case .forbidden = error {
                 offlineAlbumAuthoringPermission = .denied
             }
@@ -1461,11 +1525,13 @@ final class AppModel {
         draft: OfflineAlbumDraft,
         replaceConflicts: Bool
     ) async throws -> OfflineAlbumResponse {
+        let revision = connectionRevision
+        let client = activeClient
         guard supportsOfflineAlbums, let currentInstance = activeInstance else {
             throw TesseraeClientError.unavailable
         }
         do {
-            let versioned = try await activeClient.putOfflineAlbum(
+            let versioned = try await client.putOfflineAlbum(
                 folderID: folderID,
                 request: OfflineAlbumWriteRequest(
                     album: draft,
@@ -1474,13 +1540,12 @@ final class AppModel {
                 eTag: offlineAlbumETagsByFolderID[folderID],
                 instance: currentInstance
             )
-            guard activeInstance?.id == currentInstance.id else {
-                throw CancellationError()
-            }
+            try checkConnectionRevision(revision)
             offlineAlbumsByFolderID[folderID] = versioned.response
             offlineAlbumETagsByFolderID[folderID] = versioned.eTag
             return versioned.response
         } catch let error as TesseraeClientError {
+            try checkConnectionRevision(revision)
             if case .forbidden = error {
                 offlineAlbumAuthoringPermission = .denied
             }
@@ -1494,20 +1559,21 @@ final class AppModel {
     }
 
     func deleteOfflineAlbum(folderID: String) async throws {
+        let revision = connectionRevision
+        let client = activeClient
         guard supportsOfflineAlbums, let currentInstance = activeInstance else {
             throw TesseraeClientError.unavailable
         }
         do {
-            try await activeClient.deleteOfflineAlbum(
+            try await client.deleteOfflineAlbum(
                 folderID: folderID,
                 instance: currentInstance
             )
-            guard activeInstance?.id == currentInstance.id else {
-                throw CancellationError()
-            }
+            try checkConnectionRevision(revision)
             offlineAlbumsByFolderID.removeValue(forKey: folderID)
             offlineAlbumETagsByFolderID.removeValue(forKey: folderID)
         } catch let error as TesseraeClientError {
+            try checkConnectionRevision(revision)
             if case .forbidden = error {
                 offlineAlbumAuthoringPermission = .denied
             }
@@ -1524,18 +1590,23 @@ final class AppModel {
     }
 
     func fetchLineupForEditing(_ lineupID: String) async throws -> VersionedLineup {
+        let revision = connectionRevision
         guard supportsLineupAuthoring, let activeInstance else {
             throw TesseraeClientError.unavailable
         }
-        return try await activeClient.fetchVersionedLineup(
+        let result = try await activeClient.fetchVersionedLineup(
             id: lineupID,
             instance: activeInstance
         )
+        try checkConnectionRevision(revision)
+        return result
     }
 
     func createLineup(
         _ request: LineupCreateRequest
     ) async -> LineupSaveOutcome {
+        let revision = connectionRevision
+        let client = activeClient
         guard supportsLineupAuthoring, let activeInstance else {
             return .failed(
                 String(localized: "This Tesserae server does not support Lineup authoring.")
@@ -1543,20 +1614,27 @@ final class AppModel {
         }
         let operationID = "lineup-create"
         activeOperationIDs.insert(operationID)
-        defer { activeOperationIDs.remove(operationID) }
+        defer {
+            if connectionRevision == revision { activeOperationIDs.remove(operationID) }
+        }
 
         do {
-            let versioned = try await activeClient.createLineup(
+            let versioned = try await client.createLineup(
                 request,
                 instance: activeInstance
             )
+            try checkConnectionRevision(revision)
             lineupAuthoringPermission = .granted
             replaceLineup(versioned.lineup)
             if connectionMode == .live {
                 await persistSnapshot(showErrors: false)
             }
+            try checkConnectionRevision(revision)
             return .saved(versioned.lineup)
         } catch let error as TesseraeClientError {
+            guard connectionRevision == revision, !Task.isCancelled else {
+                return .failed(CancellationError().localizedDescription)
+            }
             if case .forbidden = error {
                 lineupAuthoringPermission = .denied
                 return .permissionRequired
@@ -1564,6 +1642,10 @@ final class AppModel {
             await presentOperationError(error)
             return .failed(error.localizedDescription)
         } catch {
+            guard connectionRevision == revision, !Task.isCancelled,
+                  !(error is CancellationError) else {
+                return .failed(CancellationError().localizedDescription)
+            }
             lastError = error.localizedDescription
             return .failed(error.localizedDescription)
         }
@@ -1574,6 +1656,8 @@ final class AppModel {
         eTag: String,
         patch: LineupPatchRequest
     ) async -> LineupSaveOutcome {
+        let revision = connectionRevision
+        let client = activeClient
         guard supportsLineupAuthoring, let activeInstance else {
             return .failed(
                 String(localized: "This Tesserae server does not support Lineup authoring.")
@@ -1587,22 +1671,29 @@ final class AppModel {
         }
         let operationID = "lineup-edit:\(id)"
         activeOperationIDs.insert(operationID)
-        defer { activeOperationIDs.remove(operationID) }
+        defer {
+            if connectionRevision == revision { activeOperationIDs.remove(operationID) }
+        }
 
         do {
-            let versioned = try await activeClient.updateLineup(
+            let versioned = try await client.updateLineup(
                 id: id,
                 eTag: eTag,
                 patch: patch,
                 instance: activeInstance
             )
+            try checkConnectionRevision(revision)
             lineupAuthoringPermission = .granted
             replaceLineup(versioned.lineup)
             if connectionMode == .live {
                 await persistSnapshot(showErrors: false)
             }
+            try checkConnectionRevision(revision)
             return .saved(versioned.lineup)
         } catch let error as TesseraeClientError {
+            guard connectionRevision == revision, !Task.isCancelled else {
+                return .failed(CancellationError().localizedDescription)
+            }
             if case .forbidden = error {
                 lineupAuthoringPermission = .denied
                 return .permissionRequired
@@ -1615,6 +1706,10 @@ final class AppModel {
             await presentOperationError(error)
             return .failed(error.localizedDescription)
         } catch {
+            guard connectionRevision == revision, !Task.isCancelled,
+                  !(error is CancellationError) else {
+                return .failed(CancellationError().localizedDescription)
+            }
             lastError = error.localizedDescription
             return .failed(error.localizedDescription)
         }
@@ -1687,24 +1782,33 @@ final class AppModel {
         _ dashboard: DashboardSummary,
         deviceIDs: [String]
     ) async -> Bool {
+        let revision = connectionRevision
+        let client = activeClient
         guard let activeInstance, !deviceIDs.isEmpty else { return false }
         activeOperationIDs.insert(dashboard.id)
-        defer { activeOperationIDs.remove(dashboard.id) }
+        defer {
+            if connectionRevision == revision { activeOperationIDs.remove(dashboard.id) }
+        }
 
         do {
-            let job = try await activeClient.pushDashboard(
+            let job = try await client.pushDashboard(
                 id: dashboard.id,
                 deviceIDs: deviceIDs,
                 overrideQuietHours: ManualSendPolicy.overridesQuietHours,
                 idempotencyKey: UUID().uuidString,
                 instance: activeInstance
             )
+            try checkConnectionRevision(revision)
             jobs.insert(job, at: 0)
             await persistSnapshot()
+            try checkConnectionRevision(revision)
             await updateUntilTerminal(job, instance: activeInstance)
+            try checkConnectionRevision(revision)
             await refreshDeviceUpcomingIfSupported(deviceIDs: deviceIDs)
+            try checkConnectionRevision(revision)
             return true
         } catch {
+            guard connectionRevision == revision, !Task.isCancelled, !(error is CancellationError) else { return false }
             await presentOperationError(error)
             return false
         }
@@ -1720,21 +1824,28 @@ final class AppModel {
         _ lineup: Lineup,
         enabled: Bool
     ) async -> Bool {
+        let revision = connectionRevision
+        let client = activeClient
         guard supportsLineupControl, let activeInstance else { return false }
         let operationID = lineupStateOperationID(lineup.id)
         activeOperationIDs.insert(operationID)
-        defer { activeOperationIDs.remove(operationID) }
+        defer {
+            if connectionRevision == revision { activeOperationIDs.remove(operationID) }
+        }
 
         do {
-            let updated = try await activeClient.setLineupEnabled(
+            let updated = try await client.setLineupEnabled(
                 id: lineup.id,
                 enabled: enabled,
                 instance: activeInstance
             )
+            try checkConnectionRevision(revision)
             replaceLineup(updated)
             await persistSnapshot()
+            try checkConnectionRevision(revision)
             return true
         } catch {
+            guard connectionRevision == revision, !Task.isCancelled, !(error is CancellationError) else { return false }
             if let error = error as? TesseraeClientError,
                case .forbidden = error
             {
@@ -1753,6 +1864,8 @@ final class AppModel {
         pageID: String? = nil,
         deviceIDs: [String]
     ) async -> Bool {
+        let revision = connectionRevision
+        let client = activeClient
         guard
             supportsLineupControl,
             let activeInstance,
@@ -1762,10 +1875,12 @@ final class AppModel {
         }
         let operationID = lineupControlOperationID(lineup.id)
         activeOperationIDs.insert(operationID)
-        defer { activeOperationIDs.remove(operationID) }
+        defer {
+            if connectionRevision == revision { activeOperationIDs.remove(operationID) }
+        }
 
         do {
-            let job = try await activeClient.controlLineup(
+            let job = try await client.controlLineup(
                 id: lineup.id,
                 action: action,
                 pageID: pageID,
@@ -1774,13 +1889,19 @@ final class AppModel {
                 idempotencyKey: UUID().uuidString,
                 instance: activeInstance
             )
+            try checkConnectionRevision(revision)
             jobs.insert(job, at: 0)
             await persistSnapshot()
+            try checkConnectionRevision(revision)
             await updateUntilTerminal(job, instance: activeInstance)
+            try checkConnectionRevision(revision)
             await refreshLineups(showErrors: false)
+            try checkConnectionRevision(revision)
             await refreshDeviceUpcomingIfSupported(deviceIDs: deviceIDs)
+            try checkConnectionRevision(revision)
             return true
         } catch {
+            guard connectionRevision == revision, !Task.isCancelled, !(error is CancellationError) else { return false }
             if let error = error as? TesseraeClientError,
                case .forbidden = error
             {
@@ -1822,28 +1943,36 @@ final class AppModel {
         }
     }
 
-    func remindersPersonalDataStatus() async throws -> PersonalDataSourceStatus? {
+    func remindersPersonalDataStatus(session: CompanionConnectionSession) async throws -> PersonalDataSourceStatus? {
+        try checkConnectionSession(session)
         guard let activeInstance else {
             throw RemindersBridgeError.unavailable
         }
-        return try await activeClient.fetchPersonalDataStatus(
+        let result = try await activeClient.fetchPersonalDataStatus(
             instance: activeInstance
         ).sources.first { $0.sourceID == .reminders }
+        try checkConnectionSession(session)
+        return result
     }
 
     func putRemindersSnapshot(
-        _ snapshot: RemindersSnapshot
+        _ snapshot: RemindersSnapshot,
+        session: CompanionConnectionSession
     ) async throws -> PersonalDataSourceStatus {
+        try checkConnectionSession(session)
         guard let activeInstance else {
             throw RemindersBridgeError.unavailable
         }
-        return try await activeClient.putRemindersSnapshot(
+        let result = try await activeClient.putRemindersSnapshot(
             snapshot,
             instance: activeInstance
         )
+        try checkConnectionSession(session)
+        return result
     }
 
-    func deleteRemindersPersonalData() async throws {
+    func deleteRemindersPersonalData(session: CompanionConnectionSession) async throws {
+        try checkConnectionSession(session)
         guard let activeInstance else {
             throw RemindersBridgeError.unavailable
         }
@@ -1851,32 +1980,41 @@ final class AppModel {
             sourceID: .reminders,
             instance: activeInstance
         )
+        try checkConnectionSession(session)
     }
 
-    func healthSummaryPersonalDataStatus() async throws
+    func healthSummaryPersonalDataStatus(session: CompanionConnectionSession) async throws
         -> PersonalDataSourceStatus?
     {
+        try checkConnectionSession(session)
         guard let activeInstance else {
             throw HealthBridgeError.unavailable
         }
-        return try await activeClient.fetchPersonalDataStatus(
+        let result = try await activeClient.fetchPersonalDataStatus(
             instance: activeInstance
         ).sources.first { $0.sourceID == .healthSummary }
+        try checkConnectionSession(session)
+        return result
     }
 
     func putHealthSummarySnapshot(
-        _ snapshot: HealthSummarySnapshot
+        _ snapshot: HealthSummarySnapshot,
+        session: CompanionConnectionSession
     ) async throws -> PersonalDataSourceStatus {
+        try checkConnectionSession(session)
         guard let activeInstance else {
             throw HealthBridgeError.unavailable
         }
-        return try await activeClient.putHealthSummarySnapshot(
+        let result = try await activeClient.putHealthSummarySnapshot(
             snapshot,
             instance: activeInstance
         )
+        try checkConnectionSession(session)
+        return result
     }
 
-    func deleteHealthSummaryPersonalData() async throws {
+    func deleteHealthSummaryPersonalData(session: CompanionConnectionSession) async throws {
+        try checkConnectionSession(session)
         guard let activeInstance else {
             throw HealthBridgeError.unavailable
         }
@@ -1884,6 +2022,7 @@ final class AppModel {
             sourceID: .healthSummary,
             instance: activeInstance
         )
+        try checkConnectionSession(session)
     }
 
     func sendImage(
@@ -1893,15 +2032,20 @@ final class AppModel {
         idempotencyKeys: [String: String],
         contentType: String
     ) async -> Bool {
+        let revision = connectionRevision
+        let client = activeClient
         guard let activeInstance, !targetGroups.isEmpty else { return false }
         activeOperationIDs.insert("image")
-        defer { activeOperationIDs.remove("image") }
+        defer {
+            if connectionRevision == revision { activeOperationIDs.remove("image") }
+        }
 
         var acceptedJobs: [PushJob] = []
         var firstError: (any Error)?
         for group in targetGroups {
+            guard connectionRevision == revision, !Task.isCancelled else { return false }
             do {
-                let job = try await activeClient.sendImage(
+                let job = try await client.sendImage(
                     data: data,
                     fileName: imageFileName(for: contentType),
                     contentType: contentType,
@@ -1913,17 +2057,20 @@ final class AppModel {
                         ?? UUID().uuidString,
                     instance: activeInstance
                 )
+                try checkConnectionRevision(revision)
                 await rememberActivityThumbnail(
                     imageData: data,
                     for: job,
                     instanceID: activeInstance.id
                 )
+                try checkConnectionRevision(revision)
                 if !jobs.contains(where: { $0.id == job.id }) {
                     jobs.insert(job, at: 0)
                 }
                 acceptedJobs.append(job)
                 await persistSnapshot(showErrors: false)
             } catch {
+                guard connectionRevision == revision, !Task.isCancelled else { return false }
                 if firstError == nil {
                     firstError = error
                 }
@@ -1931,11 +2078,14 @@ final class AppModel {
         }
 
         for job in acceptedJobs {
+            guard connectionRevision == revision, !Task.isCancelled else { return false }
             await updateUntilTerminal(job, instance: activeInstance)
         }
+        guard connectionRevision == revision, !Task.isCancelled else { return false }
         await refreshDeviceUpcomingIfSupported(
             deviceIDs: targetGroups.flatMap(\.deviceIDs)
         )
+        guard connectionRevision == revision, !Task.isCancelled else { return false }
         if let firstError {
             await presentOperationError(firstError)
             return false
@@ -1950,12 +2100,16 @@ final class AppModel {
         deviceIDs: [String],
         contentType: String
     ) async -> Bool {
+        let revision = connectionRevision
+        let client = activeClient
         guard let activeInstance else { return false }
         activeOperationIDs.insert("image")
-        defer { activeOperationIDs.remove("image") }
+        defer {
+            if connectionRevision == revision { activeOperationIDs.remove("image") }
+        }
 
         do {
-            let job = try await activeClient.sendImage(
+            let job = try await client.sendImage(
                 data: data,
                 fileName: imageFileName(for: contentType),
                 contentType: contentType,
@@ -1966,17 +2120,23 @@ final class AppModel {
                 idempotencyKey: UUID().uuidString,
                 instance: activeInstance
             )
+            try checkConnectionRevision(revision)
             await rememberActivityThumbnail(
                 imageData: data,
                 for: job,
                 instanceID: activeInstance.id
             )
+            try checkConnectionRevision(revision)
             jobs.insert(job, at: 0)
             await persistSnapshot()
+            try checkConnectionRevision(revision)
             await updateUntilTerminal(job, instance: activeInstance)
+            try checkConnectionRevision(revision)
             await refreshDeviceUpcomingIfSupported(deviceIDs: deviceIDs)
+            try checkConnectionRevision(revision)
             return true
         } catch {
+            guard connectionRevision == revision, !Task.isCancelled else { return false }
             await presentOperationError(error)
             return false
         }
@@ -1988,6 +2148,8 @@ final class AppModel {
         fit: ImageFitMode,
         deviceIDs: [String]
     ) async -> Bool {
+        let revision = connectionRevision
+        let client = activeClient
         guard let activeInstance else { return false }
         guard supportedLinkPushKinds.contains(kind) else {
             lastError = String(
@@ -1996,14 +2158,16 @@ final class AppModel {
             return false
         }
         activeOperationIDs.insert("link")
-        defer { activeOperationIDs.remove("link") }
+        defer {
+            if connectionRevision == revision { activeOperationIDs.remove("link") }
+        }
 
         do {
             let idempotencyKey = UUID().uuidString
             let job: PushJob
             switch kind {
             case .imageURL:
-                job = try await activeClient.sendImageURL(
+                job = try await client.sendImageURL(
                     url: url,
                     fit: fit,
                     deviceIDs: deviceIDs,
@@ -2012,7 +2176,7 @@ final class AppModel {
                     instance: activeInstance
                 )
             case .webpage:
-                job = try await activeClient.sendWebpage(
+                job = try await client.sendWebpage(
                     url: url,
                     fit: fit,
                     viewportW: nil,
@@ -2022,18 +2186,25 @@ final class AppModel {
                     instance: activeInstance
                 )
             }
+            try checkConnectionRevision(revision)
             jobs.insert(job, at: 0)
             await persistSnapshot()
+            try checkConnectionRevision(revision)
             await updateUntilTerminal(job, instance: activeInstance)
+            try checkConnectionRevision(revision)
             await refreshDeviceUpcomingIfSupported(deviceIDs: deviceIDs)
+            try checkConnectionRevision(revision)
             return true
         } catch {
+            guard connectionRevision == revision, !Task.isCancelled else { return false }
             await presentOperationError(error)
             return false
         }
     }
 
     func loadMoreHistory() async {
+        let revision = connectionRevision
+        let client = activeClient
         guard
             supportsHistory,
             !isLoadingMoreHistory,
@@ -2043,14 +2214,17 @@ final class AppModel {
             return
         }
         isLoadingMoreHistory = true
-        defer { isLoadingMoreHistory = false }
+        defer {
+            if connectionRevision == revision { isLoadingMoreHistory = false }
+        }
 
         do {
-            let page = try await activeClient.fetchHistory(
+            let page = try await client.fetchHistory(
                 beforeID: beforeID,
                 limit: 30,
                 instance: activeInstance
             )
+            try checkConnectionRevision(revision)
             let retainedPage = retainedHistoryPage(page)
             let existingIDs = Set(historyItems.map(\.id))
             historyItems.append(
@@ -2060,30 +2234,39 @@ final class AppModel {
             )
             historyNextBeforeID = retainedPage.nextBeforeID
         } catch {
+            guard connectionRevision == revision, !Task.isCancelled else { return }
             await presentOperationError(error)
         }
     }
 
     func resend(_ item: HistoryItem) async {
+        let revision = connectionRevision
+        let client = activeClient
         guard supportsHistory, item.resendable, let activeInstance else {
             return
         }
         let operationID = "history-\(item.id)"
         activeOperationIDs.insert(operationID)
-        defer { activeOperationIDs.remove(operationID) }
+        defer {
+            if connectionRevision == revision { activeOperationIDs.remove(operationID) }
+        }
 
         do {
-            let job = try await activeClient.resendHistory(
+            let job = try await client.resendHistory(
                 id: item.id,
                 overrideQuietHours: ManualSendPolicy.overridesQuietHours,
                 idempotencyKey: UUID().uuidString,
                 instance: activeInstance
             )
+            try checkConnectionRevision(revision)
             jobs.insert(job, at: 0)
             await persistSnapshot()
+            try checkConnectionRevision(revision)
             await updateUntilTerminal(job, instance: activeInstance)
+            try checkConnectionRevision(revision)
             await refreshDeviceUpcomingIfSupported(deviceIDs: item.deviceIDs)
         } catch {
+            guard connectionRevision == revision, !Task.isCancelled else { return }
             await presentOperationError(error)
         }
     }
@@ -2299,6 +2482,8 @@ final class AppModel {
         _ request: SharedImageRequest,
         instance: TesseraeInstance
     ) async -> Bool {
+        let revision = connectionRevision
+        guard activeInstance?.id == instance.id else { return false }
         guard
             request.instanceID == instance.id,
             !activeQueuedImageRequestIDs.contains(request.id)
@@ -2316,9 +2501,11 @@ final class AppModel {
 
         do {
             try await shareQueue.update(submitting)
+            try checkConnectionRevision(revision)
             upsertQueuedImage(submitting)
 
             let data = try await shareQueue.imageData(for: submitting)
+            try checkConnectionRevision(revision)
             let job = try await liveClient.sendImage(
                 data: data,
                 fileName: submitting.fileName,
@@ -2331,12 +2518,13 @@ final class AppModel {
                 instance: instance
             )
             try await shareQueue.remove(submitting)
-            if activeInstance?.id == instance.id {
+            if connectionRevision == revision, !Task.isCancelled {
                 await rememberActivityThumbnail(
                     imageData: data,
                     for: job,
                     instanceID: instance.id
                 )
+                try checkConnectionRevision(revision)
                 if !jobs.contains(where: { $0.id == job.id }) {
                     jobs.insert(job, at: 0)
                 }
@@ -2346,7 +2534,8 @@ final class AppModel {
                 await persistSnapshot(showErrors: false)
 
                 Task { [weak self] in
-                    await self?.updateUntilTerminal(job, instance: instance)
+                    guard let self, self.connectionRevision == revision else { return }
+                    await self.updateUntilTerminal(job, instance: instance)
                 }
             }
             return true
@@ -2356,6 +2545,7 @@ final class AppModel {
                 error: error.localizedDescription
             )
             try? await shareQueue.update(failed)
+            guard connectionRevision == revision, !Task.isCancelled else { return false }
             upsertQueuedImage(failed)
 
             if let clientError = error as? TesseraeClientError,
@@ -2373,6 +2563,8 @@ final class AppModel {
         _ request: SharedLinkRequest,
         instance: TesseraeInstance
     ) async -> Bool {
+        let revision = connectionRevision
+        guard activeInstance?.id == instance.id else { return false }
         guard
             request.instanceID == instance.id,
             !activeQueuedLinkRequestIDs.contains(request.id)
@@ -2390,6 +2582,7 @@ final class AppModel {
 
         do {
             try await linkShareQueue.update(submitting)
+            try checkConnectionRevision(revision)
             upsertQueuedLink(submitting)
 
             guard capabilities?.supports(submitting.kind) == true else {
@@ -2419,7 +2612,8 @@ final class AppModel {
                 )
             }
             try await linkShareQueue.remove(submitting)
-            if activeInstance?.id == instance.id {
+            if connectionRevision == revision, !Task.isCancelled {
+                try checkConnectionRevision(revision)
                 if !jobs.contains(where: { $0.id == job.id }) {
                     jobs.insert(job, at: 0)
                 }
@@ -2429,7 +2623,8 @@ final class AppModel {
                 await persistSnapshot(showErrors: false)
 
                 Task { [weak self] in
-                    await self?.updateUntilTerminal(job, instance: instance)
+                    guard let self, self.connectionRevision == revision else { return }
+                    await self.updateUntilTerminal(job, instance: instance)
                 }
             }
             return true
@@ -2439,6 +2634,7 @@ final class AppModel {
                 error: error.localizedDescription
             )
             try? await linkShareQueue.update(failed)
+            guard connectionRevision == revision, !Task.isCancelled else { return false }
             upsertQueuedLink(failed)
 
             if let clientError = error as? TesseraeClientError,
@@ -2901,23 +3097,27 @@ final class AppModel {
     }
 
     private func updateUntilTerminal(_ acceptedJob: PushJob, instance: TesseraeInstance) async {
+        let revision = connectionRevision
+        let client = activeClient
+        guard activeInstance?.id == instance.id else { return }
         var current = acceptedJob
         for _ in 0..<60 where !current.isTerminal {
             do {
-                current = try await activeClient.fetchJob(id: current.id, instance: instance)
-                guard activeInstance?.id == instance.id else {
-                    return
-                }
+                try checkConnectionRevision(revision)
+                current = try await client.fetchJob(id: current.id, instance: instance)
+                try checkConnectionRevision(revision)
                 if let index = jobs.firstIndex(where: { $0.id == current.id }) {
                     jobs[index] = current
                 }
                 await persistSnapshot(showErrors: false)
+                try checkConnectionRevision(revision)
                 if !current.isTerminal {
                     try await Task.sleep(for: .milliseconds(500))
                 }
             } catch is CancellationError {
                 return
             } catch let error as TesseraeClientError {
+                guard connectionRevision == revision, !Task.isCancelled else { return }
                 if case .server("not_found", _, _) = error {
                     // The server swept this job after its advertised
                     // retention window (24 h), usually because the app never
@@ -2931,15 +3131,18 @@ final class AppModel {
                 await presentOperationError(error)
                 return
             } catch {
+                guard connectionRevision == revision, !Task.isCancelled else { return }
                 await presentOperationError(error)
                 return
             }
         }
+        guard connectionRevision == revision, !Task.isCancelled else { return }
         if current.isTerminal {
             await refreshDisplays(
                 showErrors: false,
                 saveSnapshot: false
             )
+            guard connectionRevision == revision, !Task.isCancelled else { return }
             previewGeneration &+= 1
             if supportsHistory {
                 await refreshHistoryAfterWrite(instance: instance)
@@ -2948,19 +3151,21 @@ final class AppModel {
     }
 
     private func refreshTrackedJobs(instance: TesseraeInstance) async {
+        let revision = connectionRevision
+        let client = activeClient
+        guard activeInstance?.id == instance.id else { return }
         let nonterminalJobIDs = jobs
             .filter { !$0.isTerminal }
             .map(\.id)
 
         for jobID in nonterminalJobIDs {
             do {
-                let refreshed = try await activeClient.fetchJob(
+                try checkConnectionRevision(revision)
+                let refreshed = try await client.fetchJob(
                     id: jobID,
                     instance: instance
                 )
-                guard activeInstance?.id == instance.id else {
-                    return
-                }
+                try checkConnectionRevision(revision)
                 if let index = jobs.firstIndex(where: { $0.id == jobID }),
                    jobs[index].updatedAt <= refreshed.updatedAt
                 {
@@ -2969,6 +3174,7 @@ final class AppModel {
             } catch is CancellationError {
                 return
             } catch {
+                guard connectionRevision == revision, !Task.isCancelled else { return }
                 // Keep the existing local progress card. A later refresh can
                 // retry without turning an otherwise healthy list refresh
                 // into a connection error.
@@ -2977,7 +3183,9 @@ final class AppModel {
     }
 
     func disconnect() async {
+        isDisconnecting = true
         connectionRevision = UUID()
+        let revision = connectionRevision
         var disconnectError: Error?
         let disconnectedInstanceID = activeInstance?.id
         if let activeInstance, connectionMode == .live {
@@ -2986,22 +3194,30 @@ final class AppModel {
             } catch {
                 disconnectError = error
             }
+            guard connectionRevision == revision else { return }
             do {
                 try await credentials.removeToken(for: activeInstance.id)
             } catch {
                 disconnectError = disconnectError ?? error
             }
+            guard connectionRevision == revision else { return }
             do {
                 try await stateStore.clear()
             } catch {
                 disconnectError = disconnectError ?? error
             }
         }
+        guard connectionRevision == revision else { return }
         if let disconnectedInstanceID {
             try? await activityThumbnails.clear(
                 instanceID: disconnectedInstanceID
             )
         }
+        guard connectionRevision == revision else { return }
+        activeOperationIDs = []
+        isRefreshingGallery = false
+        loadingGalleryFolderIDs = []
+        loadingOfflineAlbumFolderIDs = []
         activeInstance = nil
         connectionMode = nil
         connectionHealth = .idle
@@ -3062,16 +3278,27 @@ final class AppModel {
         // both the banner and a blocking alert.
         lastError = nil
         if error == .unauthorized || error == .missingCredential {
+            isDisconnecting = true
+            connectionRevision = UUID()
+            let revision = connectionRevision
             let disconnectedInstanceID = activeInstance?.id
             if let activeInstance {
                 try? await credentials.removeToken(for: activeInstance.id)
             }
+            guard connectionRevision == revision else { return }
             try? await stateStore.clear()
+            guard connectionRevision == revision else { return }
             if let disconnectedInstanceID {
                 try? await activityThumbnails.clear(
                     instanceID: disconnectedInstanceID
                 )
             }
+            guard connectionRevision == revision else { return }
+            activeOperationIDs = []
+            isRefreshingGallery = false
+            isLoadingMoreHistory = false
+            loadingGalleryFolderIDs = []
+            loadingOfflineAlbumFolderIDs = []
             activeInstance = nil
             connectionMode = nil
             capabilities = nil
@@ -3277,6 +3504,7 @@ final class AppModel {
 
     @discardableResult
     private func persistSnapshot(showErrors: Bool = true) async -> Bool {
+        let revision = connectionRevision
         guard
             connectionMode == .live,
             let activeInstance
@@ -3297,6 +3525,7 @@ final class AppModel {
             )
             return true
         } catch {
+            guard connectionRevision == revision, !Task.isCancelled else { return false }
             if showErrors {
                 lastError = error.localizedDescription
             }
@@ -3305,15 +3534,16 @@ final class AppModel {
     }
 
     private func refreshHistoryAfterWrite(instance: TesseraeInstance) async {
+        let revision = connectionRevision
+        let client = activeClient
+        guard activeInstance?.id == instance.id else { return }
         do {
-            let history = try await activeClient.fetchHistory(
+            let history = try await client.fetchHistory(
                 beforeID: nil,
                 limit: 30,
                 instance: instance
             )
-            guard activeInstance?.id == instance.id else {
-                return
-            }
+            try checkConnectionRevision(revision)
             let retainedHistory = retainedHistoryPage(history)
             historyItems = retainedHistory.items
             historyNextBeforeID = retainedHistory.nextBeforeID
@@ -3322,6 +3552,7 @@ final class AppModel {
                 historyIDs.contains($0.key)
             }
         } catch {
+            guard connectionRevision == revision, !Task.isCancelled else { return }
             // The Job remains visible as the immediate activity record. A
             // later pull-to-refresh can reconcile eventually consistent
             // server History without turning a successful send into an error.
@@ -3333,6 +3564,7 @@ final class AppModel {
         for job: PushJob,
         instanceID: String
     ) async {
+        let revision = connectionRevision
         guard job.kind == .imagePush else { return }
         if let thumbnail = try? await activityThumbnails.save(
             imageData: imageData,
@@ -3340,6 +3572,7 @@ final class AppModel {
             instanceID: instanceID,
             createdAt: job.createdAt
         ) {
+            guard connectionRevision == revision, activeInstance?.id == instanceID else { return }
             activityThumbnailData[job.id] = thumbnail
         }
     }

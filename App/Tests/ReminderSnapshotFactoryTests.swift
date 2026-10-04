@@ -566,6 +566,66 @@ final class ReminderSnapshotFactoryTests: XCTestCase {
     }
 
     @MainActor
+    func testServerSwitchDuringReminderReadDoesNotUploadOrSaveNewServerPreferences() async throws {
+        let suite = "RemindersSession.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let preferences = RemindersBridgePreferencesStore(defaults: defaults, keyPrefix: "Reminders")
+        preferences.save(RemindersBridgePreferences(instanceID: "home", selectedListIDs: ["private-list"], isEnabled: true))
+        let before = preferences.preferences(for: "other")
+        let reminders = TestRemindersStore(lists: [.init(id: "private-list", title: "Private")], authorizationState: .fullAccess)
+        let gate = SessionTestGate()
+        reminders.itemsGate = gate
+        let app = makeRemindersAppModel()
+        let model = RemindersBridgeModel(reminders: reminders, preferencesStore: preferences,
+                                         notificationCenter: NotificationCenter(), changeDebounceDuration: .zero)
+        await model.load(using: app)
+        let sync = Task { await model.syncNow(using: app) }
+        await gate.waitUntilStarted()
+        app.activeInstance = TesseraeInstance(id: "other", name: "Other", baseURL: URL(string: "http://other.test")!,
+                                             serverVersion: "0.441.5", timezone: "UTC", webURL: "/")
+        await model.load(using: app)
+        await gate.release()
+        await sync.value
+        XCTAssertFalse(model.isEnabled)
+        XCTAssertFalse(model.isBusy)
+        XCTAssertNil(model.errorMessage)
+        XCTAssertNil(model.confirmationMessage)
+        XCTAssertEqual(preferences.preferences(for: "other").selectedListIDs, before.selectedListIDs)
+        XCTAssertFalse(preferences.preferences(for: "other").isEnabled)
+        let session = try XCTUnwrap(app.connectionSession)
+        let status = try await app.remindersPersonalDataStatus(session: session)
+        XCTAssertNil(status)
+        XCTAssertNil(model.itemCount)
+    }
+
+    @MainActor
+    func testReloadingSameServerPreservesReminderSyncInProgress() async throws {
+        let suite = "RemindersReload.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let preferences = RemindersBridgePreferencesStore(defaults: defaults, keyPrefix: "Reminders")
+        preferences.save(RemindersBridgePreferences(instanceID: "home", selectedListIDs: ["list"], isEnabled: true))
+        let reminders = TestRemindersStore(lists: [.init(id: "list", title: "List")], authorizationState: .fullAccess)
+        let gate = SessionTestGate()
+        reminders.itemsGate = gate
+        let app = makeRemindersAppModel()
+        let model = RemindersBridgeModel(reminders: reminders, preferencesStore: preferences)
+        await model.load(using: app)
+        let sync = Task { await model.syncNow(using: app) }
+        await gate.waitUntilStarted()
+        await model.load(using: app)
+        XCTAssertTrue(model.isBusy)
+        await gate.release()
+        await sync.value
+        XCTAssertEqual(model.sourceStatus?.state, .fresh)
+        XCTAssertTrue(model.isEnabled)
+        XCTAssertFalse(model.isBusy)
+        XCTAssertEqual(model.includedListCount, 1)
+        XCTAssertNil(model.errorMessage)
+    }
+
+    @MainActor
     private func makeRemindersAppModel() -> AppModel {
         let client = MockTesseraeClient(latency: .milliseconds(0))
         let model = AppModel(
@@ -759,6 +819,7 @@ final class AppModelDashboardPreviewTests: XCTestCase {
 private final class TestRemindersStore: RemindersAccessing {
     private(set) var authorizationState: RemindersAuthorizationState = .notDetermined
     private(set) var incompleteItemsFetchCount = 0
+    var itemsGate: SessionTestGate?
     private let availableLists: [RemindersListDescriptor]
 
     var changeNotificationObject: AnyObject {
@@ -784,6 +845,7 @@ private final class TestRemindersStore: RemindersAccessing {
 
     func incompleteItems(in listID: String) async throws -> [ReminderSourceItem] {
         incompleteItemsFetchCount += 1
+        if let itemsGate { await itemsGate.pause() }
         return []
     }
 }

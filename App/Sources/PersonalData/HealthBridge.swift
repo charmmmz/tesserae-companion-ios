@@ -1287,14 +1287,15 @@ protocol HealthBridgeServing: AnyObject {
     var personalDataMaximumTTLSeconds: Int? { get }
     var supportsPersonalDataRetention: Bool { get }
     var activeHealthInstanceID: String? { get }
+    var connectionSession: CompanionConnectionSession? { get }
     var activeHealthTimeZone: String? { get }
 
-    func healthSummaryPersonalDataStatus() async throws
+    func healthSummaryPersonalDataStatus(session: CompanionConnectionSession) async throws
         -> PersonalDataSourceStatus?
     func putHealthSummarySnapshot(
-        _ snapshot: HealthSummarySnapshot
+        _ snapshot: HealthSummarySnapshot, session: CompanionConnectionSession
     ) async throws -> PersonalDataSourceStatus
-    func deleteHealthSummaryPersonalData() async throws
+    func deleteHealthSummaryPersonalData(session: CompanionConnectionSession) async throws
 }
 
 extension HealthBridgeServing {
@@ -1307,6 +1308,9 @@ final class HealthBridgeModel {
     private let health: any HealthDataAccessing
     private let preferencesStore: HealthBridgePreferencesStore
     private var instanceID: String?
+    private var loadedSession: CompanionConnectionSession?
+    private var loadGeneration = UUID()
+    private var statusRequestID: UUID?
     private var publicationSalt = Data()
     private var lastSuccessfulContentDigest: String?
     private var lastSuccessfulSections: Set<HealthSummarySection> = []
@@ -1339,11 +1343,25 @@ final class HealthBridgeModel {
     }
 
     func load(using server: any HealthBridgeServing) async {
+        let nextSession = server.connectionSession
+        let sessionChanged = loadedSession != nextSession
+        guard sessionChanged || !isBusy else { return }
+        if sessionChanged {
+            loadGeneration = UUID()
+            loadedSession = nextSession
+            isBusy = false
+            sourceStatus = nil
+            confirmationMessage = nil
+        }
+        let generation = loadGeneration
+        let requestID = UUID()
+        statusRequestID = requestID
         errorMessage = nil
-        guard let currentInstanceID = instanceIdentifier(from: server) else {
+        guard let session = loadedSession else {
             errorMessage = HealthBridgeError.unavailable.localizedDescription
             return
         }
+        let currentInstanceID = session.instanceID
         instanceID = currentInstanceID
         let preferences = preferencesStore.preferences(for: currentInstanceID)
         selectedSections = Set(preferences.selectedSections)
@@ -1359,8 +1377,13 @@ final class HealthBridgeModel {
         updateAuthorizationState()
         guard server.supportsHealthSummaryPersonalData else { return }
         do {
-            sourceStatus = try await server.healthSummaryPersonalDataStatus()
+            let status = try await server.healthSummaryPersonalDataStatus(session: session)
+            try checkSession(session, generation: generation, using: server)
+            guard statusRequestID == requestID else { return }
+            sourceStatus = status
         } catch {
+            guard statusRequestID == requestID else { return }
+            guard sessionIsCurrent(session, generation: generation, using: server) else { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -1380,6 +1403,7 @@ final class HealthBridgeModel {
     }
 
     func toggleSection(_ section: HealthSummarySection) {
+        guard !isBusy else { return }
         if selectedSections.contains(section) {
             selectedSections.remove(section)
         } else {
@@ -1392,22 +1416,27 @@ final class HealthBridgeModel {
     }
 
     func requestAccess() async {
+        let generation = loadGeneration
         guard !selectedSections.isEmpty else {
             errorMessage = HealthBridgeError.sectionRequired.localizedDescription
             return
         }
+        let sections = selectedSections
+        statusRequestID = nil
         isBusy = true
         errorMessage = nil
         confirmationMessage = nil
-        defer { isBusy = false }
+        defer { if loadGeneration == generation { isBusy = false } }
         do {
-            try await health.requestAuthorization(for: selectedSections)
-            preferencesStore.markAuthorizationReviewed(for: selectedSections)
+            try await health.requestAuthorization(for: sections)
+            preferencesStore.markAuthorizationReviewed(for: sections)
+            guard loadGeneration == generation, !Task.isCancelled else { return }
             updateAuthorizationState()
             confirmationMessage = String(
                 localized: "Apple Health access was reviewed. Tesserae cannot see which individual read types you allowed."
             )
         } catch {
+            guard loadGeneration == generation, !Task.isCancelled else { return }
             updateAuthorizationState()
             errorMessage = error.localizedDescription
         }
@@ -1422,16 +1451,25 @@ final class HealthBridgeModel {
     }
 
     func disableAndDelete(using server: any HealthBridgeServing) async {
+        guard let session = server.connectionSession, session == loadedSession else { return }
+        let generation = loadGeneration
+
         guard server.supportsHealthSummaryPersonalData else {
             errorMessage = HealthBridgeError.serverUnsupported.localizedDescription
             return
         }
+        statusRequestID = nil
         isBusy = true
         errorMessage = nil
         confirmationMessage = nil
-        defer { isBusy = false }
+        defer {
+            if sessionIsCurrent(session, generation: generation, using: server, checkCancellation: false) {
+                isBusy = false
+            }
+        }
         do {
-            try await server.deleteHealthSummaryPersonalData()
+            try await server.deleteHealthSummaryPersonalData(session: session)
+            try checkSession(session, generation: generation, using: server)
             isEnabled = false
             sourceStatus = nil
             activityDayCount = nil
@@ -1444,6 +1482,8 @@ final class HealthBridgeModel {
                 localized: "Apple Health sync is off and the raw server snapshot was deleted."
             )
         } catch {
+            guard sessionIsCurrent(session, generation: generation, using: server) else { return }
+            guard !(error is CancellationError) else { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -1453,6 +1493,9 @@ final class HealthBridgeModel {
         enabling: Bool,
         forceUpload: Bool
     ) async {
+        guard let session = server.connectionSession, session == loadedSession else { return }
+        let generation = loadGeneration
+
         guard !isBusy else { return }
         guard server.supportsHealthSummaryPersonalData else {
             errorMessage = HealthBridgeError.serverUnsupported.localizedDescription
@@ -1482,10 +1525,15 @@ final class HealthBridgeModel {
             errorMessage = String(localized: "Update the server or choose a supported retention period.")
             return
         }
+        statusRequestID = nil
         isBusy = true
         errorMessage = nil
         if forceUpload { confirmationMessage = nil }
-        defer { isBusy = false }
+        defer {
+            if sessionIsCurrent(session, generation: generation, using: server, checkCancellation: false) {
+                isBusy = false
+            }
+        }
 
         do {
             let window = try HealthDateWindow.sevenDays(
@@ -1495,12 +1543,15 @@ final class HealthBridgeModel {
             let activity = selectedSections.contains(.activity)
                 ? try await health.activityDays(in: window)
                 : []
+            try checkSession(session, generation: generation, using: server)
             let sleep = selectedSections.contains(.sleep)
                 ? try await health.sleepSamples(in: window)
                 : []
+            try checkSession(session, generation: generation, using: server)
             let workouts = selectedSections.contains(.workouts)
                 ? try await health.workouts(in: window)
                 : []
+            try checkSession(session, generation: generation, using: server)
             let snapshot = try HealthSnapshotFactory.makeSnapshot(
                 window: window,
                 selectedSections: selectedSections,
@@ -1517,7 +1568,9 @@ final class HealthBridgeModel {
                 || digest != lastSuccessfulContentDigest
                 || retention != lastSuccessfulRetention
             if !uploadRequired {
-                sourceStatus = try await server.healthSummaryPersonalDataStatus()
+                let status = try await server.healthSummaryPersonalDataStatus(session: session)
+                try checkSession(session, generation: generation, using: server)
+                sourceStatus = status
                 uploadRequired = sourceStatus?.state != .fresh
             }
             guard uploadRequired else {
@@ -1526,7 +1579,10 @@ final class HealthBridgeModel {
                 return
             }
 
-            sourceStatus = try await server.putHealthSummarySnapshot(snapshot)
+            try checkSession(session, generation: generation, using: server)
+            let status = try await server.putHealthSummarySnapshot(snapshot, session: session)
+            try checkSession(session, generation: generation, using: server)
+            sourceStatus = status
             recordSuccessfulSnapshot(snapshot, digest: digest)
             if enabling { isEnabled = true }
             savePreferences()
@@ -1534,6 +1590,8 @@ final class HealthBridgeModel {
                 confirmationMessage = uploadConfirmation
             }
         } catch {
+            guard sessionIsCurrent(session, generation: generation, using: server) else { return }
+            guard !(error is CancellationError) else { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -1599,6 +1657,28 @@ final class HealthBridgeModel {
             && reviewed.isSuperset(of: selectedSections)
             ? .reviewed
             : .reviewRequired
+    }
+
+    private func sessionIsCurrent(
+        _ session: CompanionConnectionSession,
+        generation: UUID,
+        using server: any HealthBridgeServing,
+        checkCancellation: Bool = true
+    ) -> Bool {
+        (!checkCancellation || !Task.isCancelled)
+            && loadGeneration == generation
+            && loadedSession == session
+            && server.connectionSession == session
+    }
+
+    private func checkSession(
+        _ session: CompanionConnectionSession,
+        generation: UUID,
+        using server: any HealthBridgeServing
+    ) throws {
+        guard sessionIsCurrent(session, generation: generation, using: server) else {
+            throw CancellationError()
+        }
     }
 
     private func savePreferences() {

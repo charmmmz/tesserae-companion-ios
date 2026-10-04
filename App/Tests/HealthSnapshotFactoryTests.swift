@@ -429,6 +429,61 @@ final class HealthSnapshotFactoryTests: XCTestCase {
         XCTAssertEqual(restored.retention, .twoDays)
     }
 
+    func testServerSwitchDuringHealthReadDoesNotUploadOrSaveNewServerPreferences() async throws {
+        let suite = "HealthSession.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let preferences = HealthBridgePreferencesStore(defaults: defaults, keyPrefix: "Health", authorizationKey: "Authorization")
+        preferences.save(HealthBridgePreferences(instanceID: "other", selectedSections: [.activity], isEnabled: false))
+        let before = preferences.preferences(for: "other")
+        let health = TestHealthDataStore()
+        let server = TestHealthServer()
+        let model = HealthBridgeModel(health: health, preferencesStore: preferences)
+        await model.load(using: server)
+        model.toggleSection(.activity)
+        await model.requestAccess()
+        let gate = SessionTestGate()
+        health.activityGate = gate
+        let sync = Task { await model.enableAndSync(using: server) }
+        await gate.waitUntilStarted()
+        server.activeHealthInstanceID = "other"
+        server.revision = UUID()
+        await model.load(using: server)
+        await gate.release()
+        await sync.value
+        XCTAssertTrue(server.snapshots.isEmpty)
+        XCTAssertFalse(model.isEnabled)
+        XCTAssertFalse(model.isBusy)
+        XCTAssertNil(model.errorMessage)
+        XCTAssertNil(model.confirmationMessage)
+        XCTAssertEqual(preferences.preferences(for: "other"), before)
+    }
+
+    func testReloadingSameServerPreservesHealthSyncInProgress() async throws {
+        let suite = "HealthReload.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let preferences = HealthBridgePreferencesStore(defaults: defaults, keyPrefix: "Health", authorizationKey: "Authorization")
+        let health = TestHealthDataStore()
+        let server = TestHealthServer()
+        let model = HealthBridgeModel(health: health, preferencesStore: preferences)
+        await model.load(using: server)
+        model.toggleSection(.activity)
+        await model.requestAccess()
+        let gate = SessionTestGate()
+        health.activityGate = gate
+        let sync = Task { await model.enableAndSync(using: server) }
+        await gate.waitUntilStarted()
+        await model.load(using: server)
+        XCTAssertTrue(model.isBusy)
+        await gate.release()
+        await sync.value
+        XCTAssertEqual(server.snapshots.count, 1)
+        XCTAssertTrue(model.isEnabled)
+        XCTAssertFalse(model.isBusy)
+        XCTAssertNil(model.errorMessage)
+    }
+
     private func window() throws -> HealthDateWindow {
         try HealthDateWindow.sevenDays(
             endingAt: date("2026-08-16T04:00:00Z"),
@@ -481,6 +536,7 @@ final class HealthSnapshotFactoryTests: XCTestCase {
 private final class TestHealthDataStore: HealthDataAccessing {
     var isAvailable = true
     var requestedSections: Set<HealthSummarySection> = []
+    var activityGate: SessionTestGate?
 
     func requestAuthorization(
         for sections: Set<HealthSummarySection>
@@ -491,7 +547,8 @@ private final class TestHealthDataStore: HealthDataAccessing {
     func activityDays(
         in window: HealthDateWindow
     ) async throws -> [HealthActivityDaySource] {
-        window.dateStrings.map {
+        if let activityGate { await activityGate.pause() }
+        return window.dateStrings.map {
             HealthActivityDaySource(
                 date: $0,
                 steps: 1_000,
@@ -516,6 +573,10 @@ private final class TestHealthDataStore: HealthDataAccessing {
 
 @MainActor
 private final class TestHealthServer: HealthBridgeServing {
+    var revision = UUID()
+    var connectionSession: CompanionConnectionSession? {
+        activeHealthInstanceID.map { CompanionConnectionSession(instanceID: $0, revision: revision) }
+    }
     var supportsHealthSummaryPersonalData = true
     var supportsPersonalDataRetention = false
     var personalDataMaximumTTLSeconds: Int? = 48 * 60 * 60
@@ -523,20 +584,20 @@ private final class TestHealthServer: HealthBridgeServing {
     var activeHealthTimeZone: String? = "Asia/Shanghai"
     var snapshots: [HealthSummarySnapshot] = []
 
-    func healthSummaryPersonalDataStatus() async throws
+    func healthSummaryPersonalDataStatus(session: CompanionConnectionSession) async throws
         -> PersonalDataSourceStatus?
     {
         snapshots.last.map(status)
     }
 
     func putHealthSummarySnapshot(
-        _ snapshot: HealthSummarySnapshot
+        _ snapshot: HealthSummarySnapshot, session: CompanionConnectionSession
     ) async throws -> PersonalDataSourceStatus {
         snapshots.append(snapshot)
         return status(snapshot)
     }
 
-    func deleteHealthSummaryPersonalData() async throws {
+    func deleteHealthSummaryPersonalData(session: CompanionConnectionSession) async throws {
         snapshots = []
     }
 

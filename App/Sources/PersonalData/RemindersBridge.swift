@@ -391,9 +391,13 @@ final class RemindersBridgeModel {
     private let notificationCenter: NotificationCenter
     private let changeDebounceDuration: Duration
     private var instanceID: String?
+    private var loadedSession: CompanionConnectionSession?
+    private var loadGeneration = UUID()
+    private var statusRequestID: UUID?
     private weak var monitoringAppModel: AppModel?
     private var eventStoreObserver: NSObjectProtocol?
     private var changeDebounceTask: Task<Void, Never>?
+    private var changeTaskID: UUID?
     private var applicationIsActive = false
     private var hasPendingAutomaticRefresh = false
 
@@ -485,12 +489,14 @@ final class RemindersBridgeModel {
         } else {
             changeDebounceTask?.cancel()
             changeDebounceTask = nil
+            changeTaskID = nil
         }
     }
 
     func stopChangeMonitoring() {
         changeDebounceTask?.cancel()
         changeDebounceTask = nil
+        changeTaskID = nil
         if let eventStoreObserver {
             notificationCenter.removeObserver(eventStoreObserver)
             self.eventStoreObserver = nil
@@ -512,11 +518,16 @@ final class RemindersBridgeModel {
         guard
             hasPendingAutomaticRefresh,
             applicationIsActive,
-            monitoringAppModel != nil
+            isEnabled,
+            authorizationState == .fullAccess,
+            monitoringAppModel?.supportsRemindersPersonalData == true
         else {
             return
         }
+        guard !isBusy || changeDebounceTask == nil else { return }
         changeDebounceTask?.cancel()
+        let taskID = UUID()
+        changeTaskID = taskID
         changeDebounceTask = Task { @MainActor [weak self] in
             guard let self else { return }
             do {
@@ -524,8 +535,12 @@ final class RemindersBridgeModel {
             } catch {
                 return
             }
-            changeDebounceTask = nil
+            guard changeTaskID == taskID else { return }
             await synchronizePendingAutomaticRefresh()
+            guard changeTaskID == taskID else { return }
+            changeDebounceTask = nil
+            changeTaskID = nil
+            schedulePendingRefreshIfPossible()
         }
     }
 
@@ -541,7 +556,6 @@ final class RemindersBridgeModel {
             return
         }
         if isBusy {
-            schedulePendingRefreshIfPossible()
             return
         }
 
@@ -552,15 +566,32 @@ final class RemindersBridgeModel {
             enabling: false,
             forceUpload: false
         )
-        schedulePendingRefreshIfPossible()
     }
 
     func load(using appModel: AppModel) async {
+        let nextSession = appModel.connectionSession
+        let sessionChanged = loadedSession != nextSession
+        guard sessionChanged || !isBusy else { return }
+        if sessionChanged {
+            loadGeneration = UUID()
+            loadedSession = nextSession
+            isBusy = false
+            sourceStatus = nil
+            confirmationMessage = nil
+            changeDebounceTask?.cancel()
+            changeDebounceTask = nil
+            changeTaskID = nil
+            hasPendingAutomaticRefresh = false
+        }
+        let generation = loadGeneration
+        let requestID = UUID()
+        statusRequestID = requestID
         errorMessage = nil
-        guard let currentInstanceID = appModel.activeInstance?.id else {
+        guard let session = loadedSession else {
             errorMessage = RemindersBridgeError.unavailable.localizedDescription
             return
         }
+        let currentInstanceID = session.instanceID
         instanceID = currentInstanceID
         let preferences = preferencesStore.preferences(for: currentInstanceID)
         selectedListIDs = Set(preferences.selectedListIDs)
@@ -584,25 +615,34 @@ final class RemindersBridgeModel {
         }
         guard appModel.supportsRemindersPersonalData else { return }
         do {
-            sourceStatus = try await appModel.remindersPersonalDataStatus()
+            let status = try await appModel.remindersPersonalDataStatus(session: session)
+            try checkSession(session, generation: generation, using: appModel)
+            guard statusRequestID == requestID else { return }
+            sourceStatus = status
         } catch {
+            guard statusRequestID == requestID else { return }
+            guard sessionIsCurrent(session, generation: generation, using: appModel) else { return }
             errorMessage = error.localizedDescription
         }
     }
 
     func requestAccess() async {
+        let generation = loadGeneration
+        statusRequestID = nil
         isBusy = true
         errorMessage = nil
         confirmationMessage = nil
-        defer { isBusy = false }
+        defer { if loadGeneration == generation { isBusy = false } }
 
         do {
             guard try await reminders.requestFullAccess() else {
                 throw RemindersBridgeError.accessDenied
             }
+            guard loadGeneration == generation, !Task.isCancelled else { return }
             authorizationState = reminders.authorizationState
             reloadLists()
         } catch {
+            guard loadGeneration == generation, !Task.isCancelled else { return }
             authorizationState = reminders.authorizationState
             errorMessage = error.localizedDescription
         }
@@ -617,6 +657,7 @@ final class RemindersBridgeModel {
     }
 
     func toggleList(_ listID: String) {
+        guard !isBusy else { return }
         if selectedListIDs.contains(listID) {
             selectedListIDs.remove(listID)
         } else {
@@ -635,6 +676,7 @@ final class RemindersBridgeModel {
     }
 
     func removeUnavailableList(_ listID: String) {
+        guard !isBusy else { return }
         let availableIDs = Set(lists.map(\.id))
         guard
             !availableIDs.contains(listID),
@@ -664,17 +706,26 @@ final class RemindersBridgeModel {
     }
 
     func disableAndDelete(using appModel: AppModel) async {
+        guard let session = appModel.connectionSession, session == loadedSession else { return }
+        let generation = loadGeneration
+
         guard appModel.supportsRemindersPersonalData else {
             errorMessage = RemindersBridgeError.serverUnsupported.localizedDescription
             return
         }
+        statusRequestID = nil
         isBusy = true
         errorMessage = nil
         confirmationMessage = nil
-        defer { isBusy = false }
+        defer {
+            if sessionIsCurrent(session, generation: generation, using: appModel, checkCancellation: false) {
+                isBusy = false
+            }
+        }
 
         do {
-            try await appModel.deleteRemindersPersonalData()
+            try await appModel.deleteRemindersPersonalData(session: session)
+            try checkSession(session, generation: generation, using: appModel)
             isEnabled = false
             sourceStatus = nil
             itemCount = nil
@@ -686,6 +737,8 @@ final class RemindersBridgeModel {
                 localized: "Reminders sync is off and the server snapshot was deleted."
             )
         } catch {
+            guard sessionIsCurrent(session, generation: generation, using: appModel) else { return }
+            guard !(error is CancellationError) else { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -695,6 +748,10 @@ final class RemindersBridgeModel {
         enabling: Bool,
         forceUpload: Bool
     ) async {
+        guard let session = appModel.connectionSession, session == loadedSession else { return }
+        let generation = loadGeneration
+
+        guard !isBusy else { return }
         guard appModel.supportsRemindersPersonalData else {
             errorMessage = RemindersBridgeError.serverUnsupported.localizedDescription
             return
@@ -719,17 +776,23 @@ final class RemindersBridgeModel {
             errorMessage = String(localized: "Update the server or choose a supported retention period.")
             return
         }
+        statusRequestID = nil
         isBusy = true
         errorMessage = nil
         if forceUpload {
             confirmationMessage = nil
         }
-        defer { isBusy = false }
+        defer {
+            if sessionIsCurrent(session, generation: generation, using: appModel, checkCancellation: false) {
+                isBusy = false
+            }
+        }
 
         do {
             var sourceLists: [ReminderSnapshotFactory.SourceList] = []
             for list in selectedLists {
                 let sourceItems = try await reminders.incompleteItems(in: list.id)
+                try checkSession(session, generation: generation, using: appModel)
                 sourceLists.append(
                     ReminderSnapshotFactory.SourceList(
                         id: publicationID(for: list.id),
@@ -749,7 +812,9 @@ final class RemindersBridgeModel {
                 || contentDigest != lastSuccessfulContentDigest
                 || retention != lastSuccessfulRetention
             if !uploadIsRequired {
-                sourceStatus = try await appModel.remindersPersonalDataStatus()
+                let status = try await appModel.remindersPersonalDataStatus(session: session)
+                try checkSession(session, generation: generation, using: appModel)
+                sourceStatus = status
                 uploadIsRequired = Self.automaticUploadIsRequired(
                     contentDigest: contentDigest,
                     lastSuccessfulContentDigest: lastSuccessfulContentDigest,
@@ -766,7 +831,10 @@ final class RemindersBridgeModel {
                 savePreferences()
                 return
             }
-            sourceStatus = try await appModel.putRemindersSnapshot(snapshot)
+            try checkSession(session, generation: generation, using: appModel)
+            let status = try await appModel.putRemindersSnapshot(snapshot, session: session)
+            try checkSession(session, generation: generation, using: appModel)
+            sourceStatus = status
             recordSuccessfulSnapshot(
                 snapshot,
                 selectedLists: selectedLists,
@@ -782,6 +850,8 @@ final class RemindersBridgeModel {
                 )
             }
         } catch {
+            guard sessionIsCurrent(session, generation: generation, using: appModel) else { return }
+            guard !(error is CancellationError) else { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -843,6 +913,28 @@ final class RemindersBridgeModel {
         let newID = UUID().uuidString.lowercased()
         publicationIDs[eventKitListID] = newID
         return newID
+    }
+
+    private func sessionIsCurrent(
+        _ session: CompanionConnectionSession,
+        generation: UUID,
+        using appModel: AppModel,
+        checkCancellation: Bool = true
+    ) -> Bool {
+        (!checkCancellation || !Task.isCancelled)
+            && loadGeneration == generation
+            && loadedSession == session
+            && appModel.connectionSession == session
+    }
+
+    private func checkSession(
+        _ session: CompanionConnectionSession,
+        generation: UUID,
+        using appModel: AppModel
+    ) throws {
+        guard sessionIsCurrent(session, generation: generation, using: appModel) else {
+            throw CancellationError()
+        }
     }
 
     private func savePreferences() {
