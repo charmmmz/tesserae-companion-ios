@@ -343,6 +343,68 @@ final class LineupsAppModelTests: XCTestCase {
 }
 
 
+@Suite("Lineup target editing")
+@MainActor
+struct LineupTargetEditingTests {
+    @Test("Scheduled Lineups accept inherited or explicit targets", arguments: [LineupIntent.daily, .interval], [[], ["e1004-desk", "picpak-kitchen"]])
+    func createTargets(intent: LineupIntent, targets: [String]) throws {
+        var draft = LineupEditorDraft(intent: intent)
+        draft.name = "Weather"
+        draft.pageIDs = ["pantry"]
+        draft.deviceIDs = targets
+        #expect(draft.isValid)
+        #expect(!draft.requiresDisplaySelection)
+        #expect(!draft.createRequest.bindUnassignedDashboards)
+        let body = try #require(JSONSerialization.jsonObject(
+            with: TesseraeJSON.encoder().encode(draft.createRequest)
+        ) as? [String: Any])
+        #expect((body["device_ids"] as? [String] ?? []) == targets)
+        #expect(body["page_ids"] as? [String] == ["pantry"])
+    }
+
+    @Test("Scheduled target overrides can be preserved, replaced, and explicitly cleared", arguments: [LineupIntent.daily, .interval])
+    func editTargets(intent: LineupIntent) async throws {
+        let client = MockTesseraeClient(latency: .milliseconds(0))
+        let instance = TesseraeInstance(
+            id: "test", name: "Test", baseURL: try #require(URL(string: "https://tesserae.example")),
+            serverVersion: "0.441.5", timezone: "UTC", webURL: "/"
+        )
+        let original = try await client.createLineup(
+            .init(intent: intent, name: "Weather", pageIDs: ["pantry"], deviceIDs: ["e1004-desk", "picpak-kitchen"]),
+            instance: instance
+        ).lineup
+        var draft = LineupEditorDraft(lineup: original)
+        #expect(draft.deviceIDs == ["e1004-desk", "picpak-kitchen"])
+        draft.name = "Weather renamed"
+        #expect(draft.patch(comparedTo: original).deviceIDs == nil)
+        draft.deviceIDs.reverse()
+        #expect(draft.patch(comparedTo: original).deviceIDs == nil)
+        draft.deviceIDs = ["e1004-desk"]
+        #expect(draft.patch(comparedTo: original).deviceIDs == ["e1004-desk"])
+        #expect(draft.pageIDs == ["pantry"])
+        draft.deviceIDs = []
+        let patch = draft.patch(comparedTo: original)
+        let body = try #require(JSONSerialization.jsonObject(
+            with: TesseraeJSON.encoder().encode(patch)
+        ) as? [String: Any])
+        #expect(body["device_ids"] as? [String] == [])
+        #expect(body["page_ids"] == nil)
+        #expect(draft.isValid)
+    }
+
+    @Test("Cycle and Manual still require a display", arguments: [LineupIntent.cycle, .manual])
+    func requiredTargets(intent: LineupIntent) {
+        var draft = LineupEditorDraft(intent: intent)
+        draft.name = "Rotation"
+        draft.pageIDs = ["pantry", "morning"]
+        #expect(!draft.isValid)
+        #expect(draft.requiresDisplaySelection)
+        draft.deviceIDs = ["picpak-kitchen"]
+        #expect(draft.isValid)
+    }
+}
+
+
 @Suite("Dashboard web links")
 struct DashboardWebLinkTests {
     @Test(arguments: [

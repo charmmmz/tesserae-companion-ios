@@ -3,6 +3,7 @@ import TesseraeKit
 
 struct LineupEditorDraft: Equatable {
     let intent: LineupIntent
+    let minimumDashboardCount: Int
     var name: String
     var deviceIDs: [String]
     var pageIDs: [String]
@@ -14,6 +15,7 @@ struct LineupEditorDraft: Equatable {
 
     init(intent: LineupIntent) {
         self.intent = intent
+        minimumDashboardCount = intent == .daily || intent == .interval ? 1 : 2
         name = ""
         deviceIDs = []
         pageIDs = []
@@ -26,6 +28,7 @@ struct LineupEditorDraft: Equatable {
 
     init(lineup: Lineup) {
         intent = lineup.intent ?? .manual
+        minimumDashboardCount = 1
         name = lineup.name
         deviceIDs = lineup.deviceIDs
         pageIDs = lineup.dashboards.map(\.pageID)
@@ -51,7 +54,7 @@ struct LineupEditorDraft: Equatable {
     var isValid: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && (!requiresDisplaySelection || !deviceIDs.isEmpty)
-            && (takesSingleDashboard ? pageIDs.count == 1 : pageIDs.count >= 2)
+            && (takesSingleDashboard ? pageIDs.count == 1 : pageIDs.count >= minimumDashboardCount)
     }
 
     var validationMessage: String? {
@@ -67,10 +70,33 @@ struct LineupEditorDraft: Equatable {
         if takesSingleDashboard && pageIDs.count != 1 {
             return String(localized: "This Lineup type uses exactly one Dashboard.")
         }
-        if !takesSingleDashboard && pageIDs.count < 2 {
+        if !takesSingleDashboard && pageIDs.count < minimumDashboardCount {
             return String(localized: "Choose at least two Dashboards.")
         }
         return nil
+    }
+
+    func hasChanges(comparedTo original: Self) -> Bool {
+        if name.trimmingCharacters(in: .whitespacesAndNewlines)
+            != original.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            || Set(deviceIDs) != Set(original.deviceIDs)
+            || pageIDs != original.pageIDs
+        {
+            return true
+        }
+        switch intent {
+        case .daily:
+            return firesAtMinutes != original.firesAtMinutes
+        case .interval:
+            return intervalMinutes != original.intervalMinutes
+        case .cycle:
+            return anchorMinutes != original.anchorMinutes || pageIDs.contains {
+                (dwellMinutes[$0] ?? intervalMinutes)
+                    != (original.dwellMinutes[$0] ?? original.intervalMinutes)
+            }
+        case .manual:
+            return false
+        }
     }
 
     var createRequest: LineupCreateRequest {
@@ -144,9 +170,29 @@ struct LineupEditorDraft: Equatable {
     }
 }
 
+// DatePicker needs a Date, but the API takes server wall-clock HH:mm. A fixed UTC
+// reference avoids shifting the chosen hour on the phone's DST transition days.
+enum LineupEditorClock {
+    static var calendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .gmt
+        return calendar
+    }
+
+    static func date(for minutes: Int) -> Date {
+        Date(timeIntervalSince1970: Double(((minutes % 1_440) + 1_440) % 1_440) * 60)
+    }
+
+    static func minutes(from date: Date) -> Int {
+        let parts = calendar.dateComponents([.hour, .minute], from: date)
+        return (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+    }
+}
+
 struct LineupCreateFlow: View {
     @Environment(\.dismiss) private var dismiss
     @State private var path: [LineupIntent] = []
+    @State private var session = LineupEditingSession()
 
     let onSaved: (Lineup) -> Void
 
@@ -156,38 +202,52 @@ struct LineupCreateFlow: View {
                 path.append(intent)
             }
             .navigationDestination(for: LineupIntent.self) { intent in
-                LineupEditorView(intent: intent) { lineup in
+                LineupEditorView(intent: intent, session: session, onExit: {
+                    if session.canExit(to: .back) { exit(.back) }
+                }) { lineup in
                     onSaved(lineup)
                     dismiss()
                 }
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") {
+                        if session.canExit(to: .close) { exit(.close) }
+                    }
+                    .disabled(session.isSaving)
                 }
             }
+        }
+        .modifier(LineupExitProtection(session: session, onExit: exit))
+    }
+
+    private func exit(_ destination: LineupEditingSession.ExitDestination) {
+        switch destination {
+        case .back:
+            if !path.isEmpty { path.removeLast() }
+        case .close:
+            dismiss()
         }
     }
 }
 
 struct LineupEditFlow: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var session = LineupEditingSession()
 
     let lineupID: String
     let onSaved: (Lineup) -> Void
 
     var body: some View {
         NavigationStack {
-            LineupEditorView(lineupID: lineupID) { lineup in
+            LineupEditorView(lineupID: lineupID, session: session, onExit: {
+                if session.canExit(to: .close) { dismiss() }
+            }) { lineup in
                 onSaved(lineup)
                 dismiss()
             }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-            }
         }
+        .modifier(LineupExitProtection(session: session) { _ in dismiss() })
     }
 }
 
@@ -279,23 +339,31 @@ private struct LineupEditorView: View {
     @Environment(\.openURL) private var openURL
     @State private var draft: LineupEditorDraft
     @State private var baseline: VersionedLineup?
+    @State private var originalDraft: LineupEditorDraft?
     @State private var isLoading: Bool
-    @State private var isSaving = false
     @State private var loadError: String?
     @State private var presentedAlert: PresentedAlert?
 
     private let purpose: Purpose
+    private let session: LineupEditingSession
+    private let onExit: () -> Void
     private let onSaved: (Lineup) -> Void
 
-    init(intent: LineupIntent, onSaved: @escaping (Lineup) -> Void) {
+    private var isSaving: Bool { session.isSaving }
+
+    init(intent: LineupIntent, session: LineupEditingSession, onExit: @escaping () -> Void, onSaved: @escaping (Lineup) -> Void) {
         purpose = .create(intent)
+        self.session = session
+        self.onExit = onExit
         self.onSaved = onSaved
         _draft = State(initialValue: LineupEditorDraft(intent: intent))
         _isLoading = State(initialValue: false)
     }
 
-    init(lineupID: String, onSaved: @escaping (Lineup) -> Void) {
+    init(lineupID: String, session: LineupEditingSession, onExit: @escaping () -> Void, onSaved: @escaping (Lineup) -> Void) {
         purpose = .edit(lineupID)
+        self.session = session
+        self.onExit = onExit
         self.onSaved = onSaved
         _draft = State(initialValue: LineupEditorDraft(intent: .manual))
         _isLoading = State(initialValue: true)
@@ -339,19 +407,33 @@ private struct LineupEditorView: View {
                     dashboards: model.sortedDashboards,
                     isCreating: baseline == nil
                 )
+                .disabled(isSaving)
             }
         }
         .navigationTitle(navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
         .tesseraeScreenBackground()
-        .interactiveDismissDisabled(isSaving)
         .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button(action: onExit) {
+                    if case .create = purpose {
+                        Label("Back", systemImage: "chevron.left")
+                            .labelStyle(.iconOnly)
+                    } else {
+                        Text("Cancel")
+                    }
+                }
+                .disabled(isSaving)
+                .accessibilityIdentifier("lineup-editor-exit")
+            }
             ToolbarItem(placement: .confirmationAction) {
                 Button(saveTitle) {
                     Task { await save() }
                 }
                 .fontWeight(.semibold)
                 .disabled(isLoading || isSaving || !draft.isValid)
+                .accessibilityHint(draft.validationMessage ?? "")
                 .accessibilityIdentifier("lineup-editor-save")
             }
         }
@@ -366,8 +448,17 @@ private struct LineupEditorView: View {
         .task(id: purpose.lineupID) {
             if purpose.lineupID != nil, baseline == nil {
                 await loadForEditing()
+            } else if originalDraft == nil {
+                if draft.requiresDisplaySelection,
+                   model.sortedDisplays.count == 1,
+                   let display = model.sortedDisplays.first {
+                    draft.deviceIDs = [display.id]
+                }
+                originalDraft = draft
             }
         }
+        .onChange(of: draft) { _, _ in updateDirtyState() }
+        .onChange(of: originalDraft) { _, _ in updateDirtyState() }
         .alert(item: $presentedAlert) { alert in
             switch alert {
             case .conflict:
@@ -404,6 +495,10 @@ private struct LineupEditorView: View {
         }
     }
 
+    private func updateDirtyState() {
+        session.hasChanges = originalDraft.map { draft.hasChanges(comparedTo: $0) } ?? false
+    }
+
     private func loadForEditing() async {
         guard let lineupID = purpose.lineupID else { return }
         isLoading = true
@@ -413,6 +508,7 @@ private struct LineupEditorView: View {
             guard !Task.isCancelled else { return }
             baseline = versioned
             draft = LineupEditorDraft(lineup: versioned.lineup)
+            originalDraft = draft
         } catch {
             loadError = error.localizedDescription
         }
@@ -421,8 +517,8 @@ private struct LineupEditorView: View {
 
     private func save() async {
         guard draft.isValid, !isSaving else { return }
-        isSaving = true
-        defer { isSaving = false }
+        session.isSaving = true
+        defer { session.isSaving = false }
 
         let outcome: AppModel.LineupSaveOutcome
         if let baseline {
@@ -437,6 +533,7 @@ private struct LineupEditorView: View {
 
         switch outcome {
         case let .saved(lineup):
+            session.hasChanges = false
             onSaved(lineup)
         case .conflict:
             presentedAlert = .conflict
@@ -456,6 +553,7 @@ private struct LineupEditorForm: View {
     @Binding var draft: LineupEditorDraft
 
     @State private var durationDashboard: DashboardSummary?
+    @State private var showsTiming = false
     @FocusState private var focusedField: FocusedField?
 
     let displays: [DisplaySummary]
@@ -470,7 +568,9 @@ private struct LineupEditorForm: View {
     private var displaySummary: String {
         switch draft.deviceIDs.count {
         case 0:
-            String(localized: "Choose")
+            draft.requiresDisplaySelection
+                ? String(localized: "Choose")
+                : String(localized: "Follow Dashboard")
         case 1:
             displays.first { $0.id == draft.deviceIDs[0] }?.name
                 ?? draft.deviceIDs[0]
@@ -483,9 +583,11 @@ private struct LineupEditorForm: View {
         if let first = selectedDashboards.first, draft.takesSingleDashboard {
             return first.name
         }
-        return draft.pageIDs.isEmpty
-            ? String(localized: "Choose")
-            : String(localized: "\(draft.pageIDs.count) dashboards")
+        switch draft.pageIDs.count {
+        case 0: return String(localized: "Choose")
+        case 1: return String(localized: "1 dashboard")
+        default: return String(localized: "\(draft.pageIDs.count) dashboards")
+        }
     }
 
     private var hasUnassignedDashboard: Bool {
@@ -496,181 +598,58 @@ private struct LineupEditorForm: View {
     }
 
     private var canChooseDashboards: Bool {
-        !draft.requiresDisplaySelection || !draft.deviceIDs.isEmpty || displays.isEmpty
+        !draft.requiresDisplaySelection || !draft.deviceIDs.isEmpty
     }
 
     var body: some View {
         Form {
-            Section("Lineup") {
+            Section {
                 TextField("Name", text: $draft.name)
                     .textInputAutocapitalization(.words)
                     .focused($focusedField, equals: .name)
                     .accessibilityIdentifier("lineup-editor-name")
 
-                LabeledContent("Type", value: draft.intent.editorName)
+                if draft.takesSingleDashboard {
+                    dashboardSelectionLink
+                }
+
+                displaySelectionLink
+            } header: {
+                Text(draft.intent.editorName)
+            } footer: {
+                if draft.requiresDisplaySelection && displays.isEmpty {
+                    Text("Add a display in Tesserae to continue.")
+                } else if draft.takesSingleDashboard && hasUnassignedDashboard && draft.deviceIDs.isEmpty {
+                    Text("This Dashboard is not assigned to a display yet.")
+                }
             }
 
-            if draft.requiresDisplaySelection {
+            if !draft.takesSingleDashboard && canChooseDashboards {
                 Section {
-                    NavigationLink {
-                        LineupDisplayPicker(
-                            displays: displays,
-                            selection: $draft.deviceIDs
-                        )
-                    } label: {
-                        LabeledContent("Display", value: displaySummary)
-                    }
-                    .accessibilityIdentifier("lineup-editor-displays")
+                    dashboardSelectionLink
+                    orderedDashboards
                 } header: {
-                    Text("Target")
+                    Text("Dashboards")
                 } footer: {
-                    Text(
-                        "This Lineup plays as one ordered set on a single display."
-                    )
-                }
-            }
-
-            Section("Dashboards") {
-                NavigationLink {
-                    LineupDashboardPicker(
-                        intent: draft.intent,
-                        targetDeviceIDs: draft.deviceIDs,
-                        isCreating: isCreating,
-                        displays: displays,
-                        dashboards: dashboards,
-                        selection: $draft.pageIDs
-                    )
-                } label: {
-                    LabeledContent("Selection", value: dashboardSummary)
-                }
-                .accessibilityIdentifier("lineup-editor-dashboards")
-                .disabled(!canChooseDashboards)
-
-                ForEach(Array(selectedDashboards.enumerated()), id: \.element.id) { index, dashboard in
-                    if draft.intent == .cycle {
-                        Button {
-                            durationDashboard = dashboard
-                        } label: {
-                            HStack(spacing: 12) {
-                                Text(index + 1, format: .number)
-                                    .font(.caption.monospacedDigit().weight(.semibold))
-                                    .foregroundStyle(.white)
-                                    .frame(width: 28, height: 28)
-                                    .background(TesseraeTheme.accent, in: Circle())
-
-                                PhosphorIcon(
-                                    name: dashboard.iconName,
-                                    size: 17,
-                                    color: TesseraeTheme.accent,
-                                    fallbackSystemName: "rectangle.grid.2x2"
-                                )
-
-                                Text(dashboard.name)
-                                    .foregroundStyle(.primary)
-
-                                Spacer()
-
-                                Text(
-                                    durationLabel(
-                                        draft.dwellMinutes[dashboard.id]
-                                            ?? draft.intervalMinutes
-                                    )
-                                )
-                                .font(.subheadline.monospacedDigit())
-                                .foregroundStyle(TesseraeTheme.accent)
-
-                                Image(systemName: "chevron.right")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.tertiary)
-                            }
+                    VStack(alignment: .leading, spacing: 6) {
+                        if draft.pageIDs.count < draft.minimumDashboardCount {
+                            Text("Choose at least two Dashboards.")
+                        } else if draft.intent == .cycle {
+                            Text("Tap a Dashboard to change its time on screen.")
                         }
-                        .accessibilityLabel(
-                            String(
-                                localized: "\(dashboard.name), \(draft.dwellMinutes[dashboard.id] ?? draft.intervalMinutes) minutes"
+
+                        if hasUnassignedDashboard {
+                            Text(
+                                isCreating
+                                    ? "Unassigned Dashboards will be linked to the selected display when this Lineup is created."
+                                    : "This Dashboard is not assigned to a display yet."
                             )
-                        )
-                    } else if !draft.takesSingleDashboard {
-                        HStack(spacing: 12) {
-                            Text(index + 1, format: .number)
-                                .font(.caption.monospacedDigit().weight(.semibold))
-                                .foregroundStyle(.white)
-                                .frame(width: 28, height: 28)
-                                .background(TesseraeTheme.accent, in: Circle())
-                            Label {
-                                Text(dashboard.name)
-                            } icon: {
-                                PhosphorIcon(
-                                    name: dashboard.iconName,
-                                    size: 17,
-                                    color: TesseraeTheme.accent,
-                                    fallbackSystemName: "rectangle.grid.2x2"
-                                )
-                            }
                         }
                     }
                 }
-
-                if draft.requiresDisplaySelection && !canChooseDashboards {
-                    Label("Choose a display first.", systemImage: "arrow.up")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
             }
 
-            switch draft.intent {
-            case .daily:
-                Section("Show every day at") {
-                    DatePicker(
-                        "Time",
-                        selection: timeBinding(for: \.firesAtMinutes),
-                        displayedComponents: .hourAndMinute
-                    )
-                    .labelsHidden()
-                    .datePickerStyle(.wheel)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .sensoryFeedback(
-                        .selection,
-                        trigger: draft.firesAtMinutes
-                    ) { _, _ in
-                        TesseraeHapticSettings.isEnabled
-                    }
-                }
-            case .interval:
-                Section {
-                    LineupDurationWheel(minutes: $draft.intervalMinutes)
-                        .accessibilityIdentifier("lineup-editor-interval")
-                } header: {
-                    Text("Refresh interval")
-                } footer: {
-                    Text("Tesserae re-renders this Dashboard throughout the day.")
-                }
-            case .cycle, .manual:
-                EmptyView()
-            }
-
-            if hasUnassignedDashboard {
-                Section {
-                    Label(
-                        isCreating && draft.requiresDisplaySelection
-                            ? "Unassigned Dashboards will be linked to the selected display when this Lineup is created."
-                            : "This Dashboard is not assigned to a display yet.",
-                        systemImage: "info.circle"
-                    )
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                } footer: {
-                    Text(
-                        "Dashboards already assigned elsewhere are never moved."
-                    )
-                }
-            }
-
-            if let validationMessage = draft.validationMessage {
-                Section {
-                    Label(validationMessage, systemImage: "info.circle")
-                        .foregroundStyle(.secondary)
-                }
-            }
+            scheduleSection
         }
         .scrollContentBackground(.hidden)
         .scrollDismissesKeyboard(.interactively)
@@ -684,14 +663,6 @@ private struct LineupEditorForm: View {
                 }
         )
         .task {
-            if isCreating,
-               draft.requiresDisplaySelection,
-               draft.deviceIDs.isEmpty,
-               displays.count == 1,
-               let display = displays.first
-            {
-                draft.deviceIDs = [display.id]
-            }
             updateAutomaticBinding()
         }
         .onChange(of: draft.deviceIDs) { oldValue, newValue in
@@ -717,14 +688,178 @@ private struct LineupEditorForm: View {
             updateAutomaticBinding()
         }
         .sheet(item: $durationDashboard) { dashboard in
-            NavigationStack {
-                LineupDwellEditor(
-                    dashboardName: dashboard.name,
-                    minutes: dwellBinding(for: dashboard.id)
-                )
-            }
-            .presentationDetents([.medium])
+            LineupDwellEditor(
+                dashboardName: dashboard.name,
+                minutes: dwellBinding(for: dashboard.id)
+            )
             .presentationDragIndicator(.visible)
+        }
+    }
+
+    private var displaySelectionLink: some View {
+        NavigationLink {
+            LineupDisplayPicker(
+                displays: displays,
+                allowsDashboardBindings: !draft.requiresDisplaySelection,
+                selection: $draft.deviceIDs
+            )
+        } label: {
+            LabeledContent {
+                Text(displaySummary)
+            } label: {
+                Text(draft.requiresDisplaySelection ? "Display" : "Displays")
+            }
+        }
+        .accessibilityIdentifier("lineup-editor-displays")
+    }
+
+    private var dashboardSelectionLink: some View {
+        NavigationLink {
+            LineupDashboardPicker(
+                intent: draft.intent,
+                targetDeviceIDs: draft.deviceIDs,
+                isCreating: isCreating,
+                displays: displays,
+                dashboards: dashboards,
+                selection: $draft.pageIDs
+            )
+        } label: {
+            LabeledContent {
+                Text(dashboardSummary)
+            } label: {
+                Text(draft.takesSingleDashboard ? "Dashboard" : "Selection")
+            }
+        }
+        .accessibilityIdentifier("lineup-editor-dashboards")
+    }
+
+    private var orderedDashboards: some View {
+        ForEach(Array(selectedDashboards.enumerated()), id: \.element.id) { index, dashboard in
+            if draft.intent == .cycle {
+                Button {
+                    durationDashboard = dashboard
+                } label: {
+                    HStack(spacing: 12) {
+                        dashboardOrder(index)
+
+                        PhosphorIcon(
+                            name: dashboard.iconName,
+                            size: 17,
+                            color: TesseraeTheme.accent,
+                            fallbackSystemName: "rectangle.grid.2x2"
+                        )
+
+                        Text(dashboard.name)
+                            .foregroundStyle(.primary)
+
+                        Spacer()
+
+                        Text(
+                            durationLabel(
+                                draft.dwellMinutes[dashboard.id]
+                                    ?? draft.intervalMinutes
+                            )
+                        )
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(TesseraeTheme.accent)
+                        .fixedSize()
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(
+                    String(
+                        localized: "\(dashboard.name), \(draft.dwellMinutes[dashboard.id] ?? draft.intervalMinutes) minutes"
+                    )
+                )
+                .accessibilityHint("Change time on screen")
+                .accessibilityIdentifier("lineup-editor-duration-\(dashboard.id)")
+            } else if !draft.takesSingleDashboard {
+                HStack(spacing: 12) {
+                    dashboardOrder(index)
+                    Label {
+                        Text(dashboard.name)
+                    } icon: {
+                        PhosphorIcon(
+                            name: dashboard.iconName,
+                            size: 17,
+                            color: TesseraeTheme.accent,
+                            fallbackSystemName: "rectangle.grid.2x2"
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private func dashboardOrder(_ index: Int) -> some View {
+        Text("\(index + 1).")
+            .font(.subheadline.monospacedDigit())
+            .foregroundStyle(.secondary)
+            .frame(minWidth: 20, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var scheduleSection: some View {
+        switch draft.intent {
+        case .daily:
+            Section("Show every day at") {
+                DatePicker(
+                    "Time",
+                    selection: timeBinding(for: \.firesAtMinutes),
+                    displayedComponents: .hourAndMinute
+                )
+                .labelsHidden()
+                .datePickerStyle(.wheel)
+                .environment(\.calendar, LineupEditorClock.calendar)
+                .environment(\.timeZone, .gmt)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .sensoryFeedback(
+                    .selection,
+                    trigger: draft.firesAtMinutes
+                ) { _, _ in
+                    TesseraeHapticSettings.isEnabled
+                }
+            }
+        case .interval:
+            Section {
+                LineupDurationWheel(minutes: $draft.intervalMinutes)
+                    .accessibilityIdentifier("lineup-editor-interval")
+            } header: {
+                Text("Refresh interval")
+            } footer: {
+                Text("Tesserae re-renders this Dashboard throughout the day.")
+            }
+        case .cycle:
+            Section {
+                DisclosureGroup(isExpanded: $showsTiming) {
+                    Text("Starts each day at")
+                        .font(.subheadline)
+                    DatePicker(
+                        "Starts each day at",
+                        selection: timeBinding(for: \.anchorMinutes),
+                        displayedComponents: .hourAndMinute
+                    )
+                    .labelsHidden()
+                    .datePickerStyle(.wheel)
+                    .environment(\.calendar, LineupEditorClock.calendar)
+                    .environment(\.timeZone, .gmt)
+                    .accessibilityIdentifier("lineup-editor-anchor")
+
+                    Text("Starts with the first Dashboard at this time. The cycle pauses before then each day. Times use the Tesserae server’s time zone.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } label: {
+                    LabeledContent("Timing", value: LineupEditorDraft.time(from: draft.anchorMinutes))
+                }
+                .accessibilityIdentifier("lineup-editor-timing")
+            }
+        case .manual:
+            EmptyView()
         }
     }
 
@@ -759,23 +894,8 @@ private struct LineupEditorForm: View {
         for keyPath: WritableKeyPath<LineupEditorDraft, Int>
     ) -> Binding<Date> {
         Binding(
-            get: {
-                let calendar = Calendar.current
-                let start = calendar.startOfDay(for: .now)
-                return calendar.date(
-                    byAdding: .minute,
-                    value: draft[keyPath: keyPath],
-                    to: start
-                ) ?? start
-            },
-            set: { date in
-                let parts = Calendar.current.dateComponents(
-                    [.hour, .minute],
-                    from: date
-                )
-                draft[keyPath: keyPath] = (parts.hour ?? 0) * 60
-                    + (parts.minute ?? 0)
-            }
+            get: { LineupEditorClock.date(for: draft[keyPath: keyPath]) },
+            set: { draft[keyPath: keyPath] = LineupEditorClock.minutes(from: $0) }
         )
     }
 }
@@ -784,15 +904,47 @@ private struct LineupDisplayPicker: View {
     @Environment(\.dismiss) private var dismiss
 
     let displays: [DisplaySummary]
+    let allowsDashboardBindings: Bool
     @Binding var selection: [String]
 
     var body: some View {
         List {
+            if allowsDashboardBindings {
+                Section {
+                    Button {
+                        selection = []
+                        dismiss()
+                    } label: {
+                        HStack {
+                            Text("Follow Dashboard")
+                                .foregroundStyle(Color.primary)
+                            Spacer()
+                            if selection.isEmpty {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(TesseraeTheme.accent)
+                            }
+                        }
+                    }
+                    .accessibilityAddTraits(selection.isEmpty ? .isSelected : [])
+                    .accessibilityIdentifier("lineup-editor-inherit-displays")
+                } footer: {
+                    Text("Other displays apply only to this Lineup.")
+                }
+            }
+
             Section("Displays") {
                 ForEach(displays) { display in
                     Button {
-                        selection = [display.id]
-                        dismiss()
+                        if allowsDashboardBindings {
+                            if selection.contains(display.id) {
+                                selection.removeAll { $0 == display.id }
+                            } else {
+                                selection.append(display.id)
+                            }
+                        } else {
+                            selection = [display.id]
+                            dismiss()
+                        }
                     } label: {
                         HStack(spacing: 12) {
                             PhosphorIcon(
@@ -807,14 +959,8 @@ private struct LineupDisplayPicker: View {
                                 in: RoundedRectangle(cornerRadius: 12, style: .continuous)
                             )
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(display.name)
-                                    .font(.headline)
-                                    .foregroundStyle(.primary)
-                                Text("Display")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
+                            Text(display.name)
+                                .foregroundStyle(Color.primary)
                             Spacer()
                             if selection.contains(display.id) {
                                 Image(systemName: "checkmark")
@@ -822,6 +968,7 @@ private struct LineupDisplayPicker: View {
                             }
                         }
                     }
+                    .accessibilityAddTraits(selection.contains(display.id) ? .isSelected : [])
                     .accessibilityIdentifier("lineup-editor-display-\(display.id)")
                 }
             }
@@ -836,6 +983,14 @@ private struct LineupDisplayPicker: View {
         }
         .navigationTitle("Displays")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if allowsDashboardBindings {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                        .accessibilityIdentifier("lineup-editor-displays-done")
+                }
+            }
+        }
     }
 }
 
@@ -861,10 +1016,6 @@ private struct LineupDashboardPicker: View {
         return selection.compactMap { byID[$0] }
     }
 
-    private var incompatibleCount: Int {
-        dashboards.filter { !selection.contains($0.id) && !isCompatible($0) }.count
-    }
-
     private var sections: [LineupDashboardPickerSection] {
         let compatible = dashboards.filter(isCompatible).filter(matchesSearch)
         let pool = isSingleSelection
@@ -881,7 +1032,7 @@ private struct LineupDashboardPicker: View {
                         .init(
                             id: "display-\(targetID)",
                             title: display.name,
-                            subtitle: "Assigned to this display",
+                            subtitle: nil,
                             iconName: display.canonicalIconName,
                             dashboards: bound
                         )
@@ -916,7 +1067,7 @@ private struct LineupDashboardPicker: View {
             return .init(
                 id: "display-\(display.id)",
                 title: display.name,
-                subtitle: "Dashboards on this display",
+                subtitle: nil,
                 iconName: display.canonicalIconName,
                 dashboards: items
             )
@@ -929,7 +1080,7 @@ private struct LineupDashboardPicker: View {
                 .init(
                     id: "shared",
                     title: "Shared",
-                    subtitle: "Available on multiple displays",
+                    subtitle: nil,
                     iconName: "rectangle.on.rectangle",
                     dashboards: shared
                 )
@@ -957,17 +1108,49 @@ private struct LineupDashboardPicker: View {
             if !isSingleSelection, !selectedDashboards.isEmpty {
                 Section {
                     ForEach(selectedDashboards) { dashboard in
-                        dashboardRow(
-                            dashboard,
-                            selected: true,
-                            order: selection.firstIndex(of: dashboard.id).map { $0 + 1 }
+                        Menu {
+                            Button("Move Up", systemImage: "arrow.up") {
+                                move(dashboard.id, by: -1)
+                            }
+                            .disabled(selection.first == dashboard.id)
+                            Button("Move Down", systemImage: "arrow.down") {
+                                move(dashboard.id, by: 1)
+                            }
+                            .disabled(selection.last == dashboard.id)
+                            Button("Remove", systemImage: "trash", role: .destructive) {
+                                selection.removeAll { $0 == dashboard.id }
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                dashboardRow(
+                                    dashboard,
+                                    selected: true,
+                                    order: selection.firstIndex(of: dashboard.id).map { $0 + 1 }
+                                )
+                                Image(systemName: "ellipsis")
+                                    .frame(minWidth: 44, minHeight: 44)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .accessibilityLabel(dashboard.name)
+                        .accessibilityValue(
+                            Text("Dashboard \((selection.firstIndex(of: dashboard.id) ?? 0) + 1) of \(selection.count)")
                         )
                         .accessibilityIdentifier(
                             "lineup-editor-selected-dashboard-\(dashboard.id)"
                         )
                         .accessibilityHint(
-                            "Touch and hold to reorder, or swipe left to remove."
+                            "Drag to reorder, or use the menu to move or remove."
                         )
+                        .accessibilityActions {
+                            if selection.first != dashboard.id {
+                                Button("Move Up") { move(dashboard.id, by: -1) }
+                            }
+                            if selection.last != dashboard.id {
+                                Button("Move Down") { move(dashboard.id, by: 1) }
+                            }
+                            Button("Remove") { selection.removeAll { $0 == dashboard.id } }
+                        }
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button("Remove", systemImage: "trash", role: .destructive) {
                                 selection.removeAll { $0 == dashboard.id }
@@ -1005,14 +1188,17 @@ private struct LineupDashboardPicker: View {
                             )
                         }
                         .accessibilityIdentifier("lineup-editor-dashboard-\(dashboard.id)")
+                        .accessibilityAddTraits(selection.contains(dashboard.id) ? .isSelected : [])
                     }
                 } header: {
                     Label {
                         VStack(alignment: .leading, spacing: 1) {
                             Text(section.title)
-                            Text(section.subtitle)
-                                .font(.caption2)
-                                .textCase(nil)
+                            if let subtitle = section.subtitle {
+                                Text(subtitle)
+                                    .font(.caption2)
+                                    .textCase(nil)
+                            }
                         }
                     } icon: {
                         PhosphorIcon(
@@ -1043,23 +1229,27 @@ private struct LineupDashboardPicker: View {
                 }
             }
 
-            if incompatibleCount > 0, intent != .manual {
-                Section {
-                    Label(
-                        String(
-                            localized: "\(incompatibleCount) Dashboards assigned only to other displays are hidden."
-                        ),
-                        systemImage: "info.circle"
-                    )
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                }
-            }
         }
         .navigationTitle("Dashboards")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if !isSingleSelection {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                        .accessibilityIdentifier("lineup-editor-dashboards-done")
+                }
+            }
+        }
         .searchable(text: $query, prompt: "Search Dashboards")
         .tesseraeHapticFeedback(trigger: hapticEvent)
+    }
+
+    private func move(_ id: String, by offset: Int) {
+        guard let source = selection.firstIndex(of: id) else { return }
+        let destination = source + offset
+        guard selection.indices.contains(destination) else { return }
+        selection.swapAt(source, destination)
+        hapticEvent.trigger(.rigidImpact)
     }
 
     private func isCompatible(_ dashboard: DashboardSummary) -> Bool {
@@ -1086,40 +1276,37 @@ private struct LineupDashboardPicker: View {
         order: Int?
     ) -> some View {
         HStack(spacing: 12) {
+            if let order, !isSingleSelection {
+                Text("\(order).")
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(Color.secondary)
+                    .frame(minWidth: 20, alignment: .leading)
+            }
             PhosphorIcon(
                 name: dashboard.iconName,
                 size: 19,
                 color: TesseraeTheme.accent,
                 fallbackSystemName: "rectangle.grid.2x2"
             )
-            .frame(width: 42, height: 42)
-            .background(
-                TesseraeTheme.accent.opacity(0.10),
-                in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-            )
+            .frame(width: 24)
             VStack(alignment: .leading, spacing: 2) {
                 Text(dashboard.name)
-                    .font(.headline)
-                    .foregroundStyle(.primary)
+                    .font(.body)
+                    .foregroundStyle(Color.primary)
                 Text(dashboard.kind == .canvas ? "Canvas" : "Grid")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondary)
             }
             Spacer()
-            if let order, !isSingleSelection {
-                Text(order, format: .number)
-                    .font(.caption.monospacedDigit().weight(.bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 25, height: 25)
-                    .background(TesseraeTheme.accent, in: Circle())
-            } else if selected {
+            if selected, isSingleSelection {
                 Image(systemName: "checkmark")
                     .foregroundStyle(TesseraeTheme.accent)
-            } else if !isSingleSelection {
-                Image(systemName: "plus.circle.fill")
+            } else if !isSingleSelection, !selected {
+                Image(systemName: "plus")
                     .foregroundStyle(TesseraeTheme.accent)
             }
         }
+        .frame(minHeight: 44)
         .contentShape(Rectangle())
     }
 }
@@ -1127,35 +1314,48 @@ private struct LineupDashboardPicker: View {
 private struct LineupDashboardPickerSection: Identifiable {
     let id: String
     let title: String
-    let subtitle: String
+    let subtitle: String?
     let iconName: String?
     let dashboards: [DashboardSummary]
 }
 
 private struct LineupDwellEditor: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var contentHeight: CGFloat = 300
 
     let dashboardName: String
     @Binding var minutes: Int
 
     var body: some View {
-        Form {
-            Section {
-                LineupDurationWheel(minutes: $minutes)
-            } header: {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 16) {
+                    Text(dashboardName)
+                        .font(.headline)
+                        .accessibilityAddTraits(.isHeader)
+                    Spacer(minLength: 0)
+                    Button("Done") { dismiss() }
+                        .fontWeight(.semibold)
+                        .tesseraeModalChromeButtonStyle()
+                }
+
                 Text("Time on screen")
-            } footer: {
-                Text("How long \(dashboardName) stays visible before the rotation advances.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                LineupDurationWheel(minutes: $minutes)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 24)
+            .padding(.bottom, 16)
+            .onGeometryChange(for: CGFloat.self) { geometry in
+                geometry.size.height
+            } action: { height in
+                if abs(contentHeight - height) > 0.5 { contentHeight = height }
             }
         }
-        .navigationTitle(dashboardName)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Done") { dismiss() }
-                    .fontWeight(.semibold)
-            }
-        }
+        .scrollBounceBehavior(.basedOnSize)
+        .presentationDetents([.height(contentHeight)])
+        .accessibilityIdentifier("lineup-duration-sheet")
     }
 }
 
@@ -1164,10 +1364,10 @@ private struct LineupDurationWheel: View {
 
     private var hourBinding: Binding<Int> {
         Binding(
-            get: { min(minutes / 60, 24) },
+            get: { min(minutes / 60, 168) },
             set: { hours in
-                if hours == 24 {
-                    minutes = 1_440
+                if hours == 168 {
+                    minutes = 10_080
                 } else {
                     minutes = max(1, hours * 60 + min(minutes % 60, 59))
                 }
@@ -1177,11 +1377,11 @@ private struct LineupDurationWheel: View {
 
     private var minuteBinding: Binding<Int> {
         Binding(
-            get: { minutes == 1_440 ? 0 : minutes % 60 },
+            get: { minutes == 10_080 ? 0 : minutes % 60 },
             set: { minute in
-                let hours = min(minutes / 60, 24)
-                minutes = hours == 24
-                    ? 1_440
+                let hours = min(minutes / 60, 168)
+                minutes = hours == 168
+                    ? 10_080
                     : max(1, hours * 60 + minute)
             }
         )
@@ -1190,7 +1390,7 @@ private struct LineupDurationWheel: View {
     var body: some View {
         HStack(spacing: 0) {
             Picker("Hours", selection: hourBinding) {
-                ForEach(0...24, id: \.self) { value in
+                ForEach(0...168, id: \.self) { value in
                     Text("\(value) hr").tag(value)
                 }
             }

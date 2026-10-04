@@ -470,14 +470,42 @@
 "PicPak: hold for 10 seconds, then release before 20 to enter Bluetooth maintenance." = "PicPak：长按 10 秒，在 20 秒前松开，即可进入蓝牙维护。";
 "Authorize this iPhone in PicPak Maintenance first: hold the button for 10 seconds, release before 20, then choose Manual (Bluetooth)." = "请先在 PicPak 蓝牙维护中授权这部 iPhone：长按按键 10 秒，在 20 秒前松开，然后选择手动（蓝牙）模式。";
 
-"Photo unavailable" = "照片不可用";
-
 "Move Up" = "上移";
 "Move Down" = "下移";
 "Display %lld of %lld" = "第 %lld 个显示屏，共 %lld 个";
 "%@, display %lld of %lld" = "%@，第 %lld 个显示屏，共 %lld 个";
-"Device Details" = "设备详情";
+"Photo unavailable" = "照片不可用";
 
+/* Lineup target overrides */
+"Follow Dashboard" = "跟随仪表盘";
+"Other displays apply only to this Lineup." = "另选的显示屏仅用于此播放队列。";
+"Add a display in Tesserae to continue." = "请先在 Tesserae 中添加显示屏。";
+"Tap a Dashboard to change its time on screen." = "轻点仪表盘可调整其显示时长。";
+"Change time on screen" = "调整显示时长";
+"Choose at least two Dashboards." = "请选择至少两个仪表盘。";
+"Selection" = "选择";
+"Choose" = "选择";
+"This Dashboard is not assigned to a display yet." = "此仪表盘尚未关联显示屏。";
+"Unassigned Dashboards will be linked to the selected display when this Lineup is created." = "创建播放队列时，尚未关联的仪表盘将关联到所选显示屏。";
+"Use Dashboard Bindings" = "沿用仪表盘绑定";
+"Use the Dashboard’s display bindings, or choose displays just for this Lineup. The Dashboard’s bindings stay unchanged." = "沿用仪表盘的显示屏绑定，或为此播放队列单独选择显示屏。仪表盘的绑定不会改变。";
+"Choose one or more displays below to override the Dashboard’s bindings for this Lineup." = "在下方选择一个或多个显示屏，仅覆盖此播放队列的投放目标。";
+
+/* Dashboard and Lineup discovery */
 "Search Dashboards" = "搜索仪表盘";
 "Search Lineups" = "搜索播放队列";
 "Open in Tesserae" = "在 Tesserae 中打开";
+
+/* Lineup editing and display details */
+"Device Details" = "设备详情";
+"Discard Changes?" = "放弃修改？";
+"Discard Changes" = "放弃修改";
+"Keep Editing" = "继续编辑";
+"Your changes haven’t been saved." = "你的修改尚未保存。";
+"Timing" = "时间设置";
+"Starts each day at" = "每天开始于";
+"Starts at %@" = "%@ 开始";
+"Starts with the first Dashboard at this time. The cycle pauses before then each day. Times use the Tesserae server’s time zone." = "每天在此时间从第一个仪表盘开始，在此之前暂停循环。时间以 Tesserae 服务器时区为准。";
+"Dashboard %lld of %lld" = "第 %lld 个仪表盘，共 %lld 个";
+"Drag to reorder, or use the menu to move or remove." = "拖动排序，或使用菜单移动和移除。";
+"1 dashboard" = "1 个仪表盘";

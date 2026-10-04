@@ -13,12 +13,20 @@ capabilities.
 
 ### Added
 
+- Cycle Lineups now offer a daily start time. Each day starts with the first
+  Dashboard at that time, with the cycle paused beforehand; times use the
+  Tesserae server’s time zone.
+- Lineup editors ask before discarding unsaved changes when going back, cancelling,
+  or swiping down, including while a display or Dashboard picker is open.
+
 - Device cards and hardware details now recognize M5Stack, Soldered, paperlesspaper,
   Amazon Kindle, Kobo, and reMarkable hardware, with matching manufacturer logos.
   The catalog includes Kobo's Clara Colour and Libra Colour, plus readable names
   for additional Seeed, Pimoroni, Waveshare, and Xteink models. Generic protocols
   keep a neutral identity rather than claiming a manufacturer.
 
+- Daily and Keep Fresh Lineups can now target selected displays or follow their
+  Dashboard's display bindings. Existing target choices are preserved when editing.
 - Search Dashboards and Lineups by name. Dashboard search reveals matching items
   in collapsed groups and preserves the original grouping and order when cleared.
   Reordering is unavailable while filtering.
@@ -62,10 +70,15 @@ capabilities.
 
 ### Changed
 
+- Dashboard selection uses lighter rows with clear ordering and accessible move
+  and remove actions. Per-Dashboard duration sheets fit their content.
 - Display details keep the current screen, update queue, connection and battery
   visible while placing hardware and panel fields in a collapsible Device Details
   card with a matching hardware icon.
 
+- Lineup setup groups related choices together and removes repeated type labels
+  and premature validation notices. Cycle and Manual reveal Dashboard selection
+  after choosing a display; selection and timing guidance stays beside its controls.
 - Hardware badges keep long model names readable by wrapping beneath the logo
   when needed, including with larger accessibility text.
 
@@ -108,6 +121,11 @@ capabilities.
   keeping Settings and detail-page status wording aligned.
 
 ### Fixed
+
+- Existing single-Dashboard Cycle and Manual Lineups remain editable. Duration
+  controls preserve and display intervals longer than 24 hours, up to seven days.
+- Lineup time pickers preserve the server’s wall-clock time across phone time zones
+  and daylight-saving transitions.
 
 - Switching or re-pairing servers now discards results and authentication errors
   from the previous connection, including Gallery, Lineups, sends and job updates.

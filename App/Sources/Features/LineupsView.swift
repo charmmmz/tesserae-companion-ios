@@ -1134,7 +1134,7 @@ private struct LineupDetailView: View {
                 scheduleDaysRow(lineup)
             case .cycle:
                 if let anchor = lineup.anchor {
-                    valueRow("Daily reset", anchor)
+                    valueRow("Starts each day at", anchor)
                 }
                 scheduleDaysRow(lineup)
             case .manual:
@@ -1308,7 +1308,7 @@ private struct LineupDetailView: View {
             return String(localized: "Interval")
         case .cycle:
             if let anchor = lineup.anchor {
-                return String(localized: "Resets at \(anchor)")
+                return String(localized: "Starts at \(anchor)")
             }
             return String(localized: "Timed rotation")
         case .manual:
