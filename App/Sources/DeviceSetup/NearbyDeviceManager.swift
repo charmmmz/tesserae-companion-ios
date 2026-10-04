@@ -74,6 +74,75 @@ enum NearbyDeviceConnectionState: Equatable, Sendable {
     case failed(String)
 }
 
+/// Core Bluetooth's terminal callbacks do not carry an attempt identifier.
+/// Drain the previous connection before starting another, including reconnects
+/// to the same peripheral, and ignore callbacks belonging to other peripherals.
+struct NearbyConnectionLifecycle {
+    enum ConnectAction: Equatable {
+        case connect(UUID)
+        case disconnect(UUID)
+        case wait
+    }
+
+    enum EndAction: Equatable {
+        case ignored
+        case closed
+        case connect(UUID)
+        case unexpected
+    }
+
+    private(set) var activePeripheralID: UUID?
+    private(set) var closingPeripheralID: UUID?
+    private(set) var pendingPeripheralID: UUID?
+
+    mutating func requestConnection(
+        to peripheralID: UUID,
+        isAlreadyConnected: Bool = false
+    ) -> ConnectAction {
+        if closingPeripheralID != nil {
+            pendingPeripheralID = peripheralID
+            return .wait
+        }
+        if let previousID = activePeripheralID {
+            activePeripheralID = nil
+            closingPeripheralID = previousID
+            pendingPeripheralID = peripheralID
+            return .disconnect(previousID)
+        }
+        if isAlreadyConnected {
+            closingPeripheralID = peripheralID
+            pendingPeripheralID = peripheralID
+            return .disconnect(peripheralID)
+        }
+        activePeripheralID = peripheralID
+        return .connect(peripheralID)
+    }
+
+    mutating func requestDisconnect() -> UUID? {
+        pendingPeripheralID = nil
+        guard let activePeripheralID else { return nil }
+        self.activePeripheralID = nil
+        closingPeripheralID = activePeripheralID
+        return activePeripheralID
+    }
+
+    /// Both didDisconnect and didFailToConnect finish a pending cancellation.
+    mutating func connectionEnded(for peripheralID: UUID) -> EndAction {
+        if closingPeripheralID == peripheralID {
+            closingPeripheralID = nil
+            if let pendingPeripheralID {
+                self.pendingPeripheralID = nil
+                activePeripheralID = pendingPeripheralID
+                return .connect(pendingPeripheralID)
+            }
+            return .closed
+        }
+        guard activePeripheralID == peripheralID else { return .ignored }
+        activePeripheralID = nil
+        return .unexpected
+    }
+}
+
 @MainActor
 @Observable
 final class NearbyDeviceManager: NSObject {
@@ -132,7 +201,7 @@ final class NearbyDeviceManager: NSObject {
     private var outgoingMessageID: UInt16 = 0
     private var pendingWrites: [(data: Data, characteristic: CBCharacteristic)] = []
     private var isWriteInFlight = false
-    private var disconnectWasRequested = false
+    private var connectionLifecycle = NearbyConnectionLifecycle()
     private var pendingConnection: PendingConnection?
     private var appIsActive = false
     private var refreshSpeedTimeoutTask: Task<Void, Never>?
@@ -293,25 +362,29 @@ final class NearbyDeviceManager: NSObject {
             fail(String(localized: "That display is no longer nearby."))
             return
         }
-        if connectedPeripheral != nil || peripheral.state != .disconnected {
-            pendingConnection = PendingConnection(
-                device: device,
-                peripheral: peripheral,
-                qrCode: qrCode
-            )
+        pendingConnection = PendingConnection(
+            device: device,
+            peripheral: peripheral,
+            qrCode: qrCode
+        )
+        let action = connectionLifecycle.requestConnection(
+            to: peripheral.identifier,
+            isAlreadyConnected: peripheral.state != .disconnected
+        )
+        switch action {
+        case .connect:
+            beginConnection(to: device, peripheral: peripheral, qrCode: qrCode)
+        case .disconnect, .wait:
+            let peripheralToClose = connectedPeripheral ?? peripheral
+            resetConnectionState()
             activeDevice = device
             connectionState = .connecting
             statusMessage = String(localized: "Closing the previous connection…")
             stopScanning()
-
-            let peripheralToClose = connectedPeripheral ?? peripheral
-            if peripheralToClose.state != .disconnected && !disconnectWasRequested {
-                disconnectWasRequested = true
+            if case .disconnect = action {
                 central.cancelPeripheralConnection(peripheralToClose)
             }
-            return
         }
-        beginConnection(to: device, peripheral: peripheral, qrCode: qrCode)
     }
 
     private func beginConnection(
@@ -320,7 +393,6 @@ final class NearbyDeviceManager: NSObject {
         qrCode: BLESetupQRCode?
     ) {
         resetConnectionState()
-        disconnectWasRequested = false
         pendingConnection = nil
         self.qrCode = qrCode
         activeDevice = device
@@ -340,22 +412,11 @@ final class NearbyDeviceManager: NSObject {
         }
     }
 
-    private func resumePendingConnection() -> Bool {
-        guard let pendingConnection else { return false }
-        self.pendingConnection = nil
-        disconnectWasRequested = false
-        beginConnection(
-            to: pendingConnection.device,
-            peripheral: pendingConnection.peripheral,
-            qrCode: pendingConnection.qrCode
-        )
-        return true
-    }
-
     func disconnect() {
         pendingConnection = nil
-        if let connectedPeripheral {
-            disconnectWasRequested = true
+        if let closingID = connectionLifecycle.requestDisconnect(),
+           let connectedPeripheral,
+           connectedPeripheral.identifier == closingID {
             central.cancelPeripheralConnection(connectedPeripheral)
         }
         resetConnectionState()
@@ -785,6 +846,7 @@ final class NearbyDeviceManager: NSObject {
         pendingPhotoMessage = nil
         trace("failed state=\(String(describing: connectionState)) message=\(message)")
         let peripheral = connectedPeripheral
+        let closingID = connectionLifecycle.requestDisconnect()
         connectedPeripheral = nil
         infoCharacteristic = nil
         qrControlCharacteristic = nil
@@ -799,7 +861,7 @@ final class NearbyDeviceManager: NSObject {
         pendingConnection = nil
         connectionState = .failed(message)
         statusMessage = message
-        if let peripheral, peripheral.state != .disconnected {
+        if let peripheral, peripheral.identifier == closingID {
             central.cancelPeripheralConnection(peripheral)
         }
         if appIsActive { startScanning() }
@@ -983,7 +1045,9 @@ extension NearbyDeviceManager: @preconcurrency CBCentralManagerDelegate {
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         guard connectedPeripheral?.identifier == peripheral.identifier else {
-            central.cancelPeripheralConnection(peripheral)
+            if connectionLifecycle.closingPeripheralID != peripheral.identifier {
+                central.cancelPeripheralConnection(peripheral)
+            }
             return
         }
         trace("connected id=\(peripheral.identifier)")
@@ -996,10 +1060,8 @@ extension NearbyDeviceManager: @preconcurrency CBCentralManagerDelegate {
         didFailToConnect peripheral: CBPeripheral,
         error: Error?
     ) {
-        if resumePendingConnection() { return }
-        guard connectedPeripheral?.identifier == peripheral.identifier else { return }
         trace("connect failed id=\(peripheral.identifier) error=\(describe(error))")
-        fail(error?.localizedDescription ?? String(localized: "Could not connect to the display."))
+        finishConnection(peripheral, error: error, failedToConnect: true)
     }
 
     func centralManager(
@@ -1008,21 +1070,42 @@ extension NearbyDeviceManager: @preconcurrency CBCentralManagerDelegate {
         error: Error?
     ) {
         trace("disconnected id=\(peripheral.identifier) error=\(describe(error))")
+        finishConnection(peripheral, error: error, failedToConnect: false)
+    }
+
+    private func finishConnection(
+        _ peripheral: CBPeripheral,
+        error: Error?,
+        failedToConnect: Bool
+    ) {
+        switch connectionLifecycle.connectionEnded(for: peripheral.identifier) {
+        case .ignored:
+            return
+        case let .connect(peripheralID):
+            guard let pendingConnection,
+                  pendingConnection.peripheral.identifier == peripheralID else { return }
+            beginConnection(
+                to: pendingConnection.device,
+                peripheral: pendingConnection.peripheral,
+                qrCode: pendingConnection.qrCode
+            )
+            return
+        case .closed:
+            break
+        case .unexpected:
+            let expectedDisconnect = connectionState == .configured
+                || connectionState == .restarting
+                || photoState == .received
+            if failedToConnect || !expectedDisconnect {
+                let fallback = failedToConnect
+                    ? String(localized: "Could not connect to the display.")
+                    : String(localized: "The display disconnected unexpectedly.")
+                fail(error?.localizedDescription ?? fallback)
+                return
+            }
+        }
         resetRefreshSpeedSetting()
         connectedPeripheral = nil
-        let requestedDisconnect = disconnectWasRequested
-        disconnectWasRequested = false
-        if resumePendingConnection() { return }
-        let alreadyFailed: Bool
-        if case .failed = connectionState { alreadyFailed = true } else { alreadyFailed = false }
-        let expectedDisconnect = requestedDisconnect
-            || connectionState == .configured
-            || connectionState == .restarting
-            || photoState == .received
-        if !expectedDisconnect, !alreadyFailed {
-            fail(error?.localizedDescription
-                 ?? String(localized: "The display disconnected unexpectedly."))
-        }
         if appIsActive { startScanning() }
     }
 }

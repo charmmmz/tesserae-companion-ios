@@ -91,6 +91,8 @@ capabilities.
 - Reminders and Health sync remain bound to the server where they started; changing
   or disconnecting servers stops old work from uploading or changing the new
   server's settings. Opening the same server's settings preserves a running sync.
+- Nearby display reconnects now wait for the previous Bluetooth connection to
+  close and ignore late callbacks from other displays.
 
 - PicPak discovery and photo authorization instructions consistently use
   firmware 0.9.4's 10-second maintenance hold, releasing before 20 seconds.

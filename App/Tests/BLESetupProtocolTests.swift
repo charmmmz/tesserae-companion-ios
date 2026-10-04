@@ -1,4 +1,5 @@
 import XCTest
+import Testing
 @testable import Tesserae_Companion
 
 final class BLESetupProtocolTests: XCTestCase {
@@ -307,5 +308,99 @@ final class BLESetupProtocolTests: XCTestCase {
         return try BLESetupQRCode(
             string: "tesserae://setup?v=2&id=device-123&sid=12345678&key=\(key)"
         )
+    }
+}
+
+struct NearbyConnectionLifecycleTests {
+    @Test("Switching displays drains A before connecting B and ignores late A callbacks")
+    func switchingDisplaysRejectsOldCallbacks() {
+        let first = UUID()
+        let second = UUID()
+        var lifecycle = NearbyConnectionLifecycle()
+
+        #expect(lifecycle.requestConnection(to: first) == .connect(first))
+        #expect(lifecycle.requestDisconnect() == first)
+        #expect(lifecycle.requestConnection(to: second) == .wait)
+        #expect(lifecycle.activePeripheralID == nil)
+        #expect(lifecycle.connectionEnded(for: first) == .connect(second))
+
+        #expect(lifecycle.connectionEnded(for: first) == .ignored)
+        #expect(lifecycle.activePeripheralID == second)
+        #expect(lifecycle.closingPeripheralID == nil)
+        #expect(lifecycle.pendingPeripheralID == nil)
+    }
+
+    @Test("Reconnecting the same display waits even when its reported state is disconnected")
+    func sameDisplayReconnectWaitsForTerminalCallback() {
+        let peripheralID = UUID()
+        var lifecycle = NearbyConnectionLifecycle()
+
+        #expect(lifecycle.requestConnection(to: peripheralID) == .connect(peripheralID))
+        #expect(lifecycle.requestDisconnect() == peripheralID)
+        #expect(lifecycle.requestConnection(to: peripheralID, isAlreadyConnected: false) == .wait)
+        #expect(lifecycle.activePeripheralID == nil)
+        #expect(lifecycle.connectionEnded(for: peripheralID) == .connect(peripheralID))
+        #expect(lifecycle.activePeripheralID == peripheralID)
+    }
+
+    @Test("A connecting attempt can finish with failure and resume the pending display")
+    func failedConnectingAttemptResumesPendingConnection() {
+        let first = UUID()
+        let second = UUID()
+        let unrelated = UUID()
+        var lifecycle = NearbyConnectionLifecycle()
+
+        #expect(lifecycle.requestConnection(to: first) == .connect(first))
+        #expect(lifecycle.requestConnection(to: second) == .disconnect(first))
+        // didFailToConnect and didDisconnect both feed this terminal event.
+        #expect(lifecycle.connectionEnded(for: unrelated) == .ignored)
+        #expect(lifecycle.closingPeripheralID == first)
+        #expect(lifecycle.pendingPeripheralID == second)
+        #expect(lifecycle.connectionEnded(for: first) == .connect(second))
+        #expect(lifecycle.connectionEnded(for: second) == .unexpected)
+        #expect(lifecycle.activePeripheralID == nil)
+        #expect(lifecycle.connectionEnded(for: second) == .ignored)
+    }
+
+    @Test("Cancelling a queued connection does not reconnect when the old display closes")
+    func cancellationClearsPendingConnection() {
+        let first = UUID()
+        let second = UUID()
+        var lifecycle = NearbyConnectionLifecycle()
+
+        #expect(lifecycle.requestConnection(to: first) == .connect(first))
+        #expect(lifecycle.requestConnection(to: second) == .disconnect(first))
+        #expect(lifecycle.requestDisconnect() == nil)
+        #expect(lifecycle.pendingPeripheralID == nil)
+        #expect(lifecycle.closingPeripheralID == first)
+        #expect(lifecycle.connectionEnded(for: first) == .closed)
+        #expect(lifecycle.activePeripheralID == nil)
+    }
+
+    @Test("The latest pending selection wins without cancelling the old connection twice")
+    func changingPendingSelectionKeepsTheClosingConnection() {
+        let first = UUID()
+        let second = UUID()
+        let third = UUID()
+        var lifecycle = NearbyConnectionLifecycle()
+
+        #expect(lifecycle.requestConnection(to: first) == .connect(first))
+        #expect(lifecycle.requestConnection(to: second) == .disconnect(first))
+        #expect(lifecycle.requestConnection(to: third) == .wait)
+        #expect(lifecycle.connectionEnded(for: second) == .ignored)
+        #expect(lifecycle.connectionEnded(for: first) == .connect(third))
+        #expect(lifecycle.activePeripheralID == third)
+    }
+
+    @Test("An already connected peripheral is closed before a fresh attempt")
+    func existingPeripheralConnectionIsDrained() {
+        let peripheralID = UUID()
+        var lifecycle = NearbyConnectionLifecycle()
+
+        #expect(lifecycle.requestConnection(to: peripheralID, isAlreadyConnected: true)
+            == .disconnect(peripheralID))
+        #expect(lifecycle.activePeripheralID == nil)
+        #expect(lifecycle.connectionEnded(for: peripheralID) == .connect(peripheralID))
+        #expect(lifecycle.activePeripheralID == peripheralID)
     }
 }
