@@ -1,6 +1,7 @@
 import Foundation
 import TesseraeKit
 import XCTest
+import Testing
 @testable import Tesserae_Companion
 
 @MainActor
@@ -338,5 +339,26 @@ final class LineupsAppModelTests: XCTestCase {
             activityThumbnails: InMemoryActivityThumbnailStore(),
             discovery: StaticDiscoveryService(results: [])
         )
+    }
+}
+
+
+@Suite("Dashboard web links")
+struct DashboardWebLinkTests {
+    @Test(arguments: [
+        ("/pages/pantry", "https://tesserae.example/pages/pantry"),
+        ("pages/pantry?edit=1#layout", "https://tesserae.example/server/pages/pantry?edit=1#layout"),
+        ("https://other.example/editor/123", "https://other.example/editor/123"),
+        (" /pages/pantry ", "https://tesserae.example/pages/pantry")
+    ])
+    func resolvesProvidedURL(path: String, expected: String) throws {
+        let base = try #require(URL(string: "https://tesserae.example/server/"))
+        #expect(dashboardWebURL(path, relativeTo: base)?.absoluteString == expected)
+    }
+
+    @Test(arguments: [nil, "", "  ", "javascript:alert(1)", "file:///tmp/page", "mailto:user@example.com"] as [String?])
+    func missingOrNonWebURLIsHidden(path: String?) throws {
+        let base = try #require(URL(string: "https://tesserae.example"))
+        #expect(dashboardWebURL(path, relativeTo: base) == nil)
     }
 }

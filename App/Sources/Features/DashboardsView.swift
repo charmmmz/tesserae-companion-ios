@@ -95,6 +95,7 @@ struct DashboardsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.presentTesseraeSettings) private var presentSettings
+    @State private var query = ""
     @State private var draggedOccurrenceID: DashboardOccurrenceID?
     @State private var dropTargetOccurrenceID: DashboardOccurrenceID?
     @State private var expandedOccurrenceID: DashboardOccurrenceID?
@@ -111,8 +112,14 @@ struct DashboardsView: View {
         isActive && scenePhase == .active
     }
 
+    private var searchQuery: String {
+        query.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private var dashboardSections: [DashboardSection] {
-        let dashboards = model.sortedDashboards
+        let dashboards = model.sortedDashboards.filter {
+            searchQuery.isEmpty || $0.name.localizedStandardContains(searchQuery)
+        }
         let displays = model.sortedDisplays
         let displayIDs = Set(displays.map(\.id))
         var sections = displays.compactMap { display -> DashboardSection? in
@@ -160,7 +167,7 @@ struct DashboardsView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
                 ForEach(sections) { section in
-                    let isCollapsed = model.collapsedDashboardSectionIDs.contains(
+                    let isCollapsed = searchQuery.isEmpty && model.collapsedDashboardSectionIDs.contains(
                         section.id
                     )
 
@@ -178,44 +185,11 @@ struct DashboardsView: View {
                                     in: section
                                 )
 
-                                dashboardCard(
+                                reorderableDashboardCard(
                                     dashboard,
                                     occurrenceID: occurrenceID,
                                     pushContext: pushContext
                                 )
-                                .onDrag {
-                                    draggedOccurrenceID = occurrenceID
-                                    return NSItemProvider(
-                                        object: dashboard.id as NSString
-                                    )
-                                } preview: {
-                                    dashboardDragPreview(dashboard)
-                                }
-                                .dropDestination(
-                                    for: String.self
-                                ) { items, _ in
-                                    defer { endDashboardDrag() }
-                                    return items.first != nil
-                                } isTargeted: { targeted in
-                                    updateDropTarget(
-                                        occurrenceID,
-                                        targeted: targeted
-                                    )
-                                }
-                                .overlay {
-                                    if dropTargetOccurrenceID == occurrenceID {
-                                        RoundedRectangle(
-                                            cornerRadius: 16,
-                                            style: .continuous
-                                        )
-                                        .strokeBorder(
-                                            TesseraeTheme.accent.opacity(0.8),
-                                            lineWidth: 2
-                                        )
-                                        .allowsHitTesting(false)
-                                        .transition(.opacity)
-                                    }
-                                }
                                 .animation(
                                     .spring(
                                         response: 0.28,
@@ -224,7 +198,9 @@ struct DashboardsView: View {
                                     value: dashboardOrder
                                 )
                                 .accessibilityHint(
-                                    "Long press and drag to reorder within this section."
+                                    searchQuery.isEmpty
+                                        ? "Long press and drag to reorder within this section."
+                                        : ""
                                 )
                                 .task(
                                     id: isCollapsed || layoutMode == .list
@@ -253,13 +229,13 @@ struct DashboardsView: View {
                         .onGeometryChange(for: CGFloat.self) { proxy in
                             proxy.size.height
                         } action: { height in
-                            guard height > 0 else { return }
+                            guard searchQuery.isEmpty, height > 0 else { return }
                             sectionContentHeights[section.id] = height
                         }
                         .frame(
                             height: isCollapsed
                                 ? 0
-                                : sectionContentHeights[section.id],
+                                : (searchQuery.isEmpty ? sectionContentHeights[section.id] : nil),
                             alignment: .top
                         )
                         .clipped()
@@ -268,6 +244,17 @@ struct DashboardsView: View {
                 }
             }
             .padding(16)
+        }
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Dashboards")
+        .onChange(of: query) { _, _ in
+            endDashboardDrag()
+            expandedOccurrenceID = nil
+        }
+        .overlay {
+            if !model.dashboards.isEmpty, !searchQuery.isEmpty, sections.isEmpty {
+                ContentUnavailableView.search(text: searchQuery)
+                    .accessibilityIdentifier("dashboard-search-empty")
+            }
         }
         .refreshable {
             await model.refreshDashboards()
@@ -339,7 +326,7 @@ struct DashboardsView: View {
     private func dashboardSectionHeader(
         _ section: DashboardSection
     ) -> some View {
-        let isCollapsed = model.collapsedDashboardSectionIDs.contains(
+        let isCollapsed = searchQuery.isEmpty && model.collapsedDashboardSectionIDs.contains(
             section.id
         )
 
@@ -399,8 +386,11 @@ struct DashboardsView: View {
         .accessibilityLabel(sectionTitle(section))
         .accessibilityValue(isCollapsed ? "Collapsed" : "Expanded")
         .accessibilityHint(
-            isCollapsed ? "Expands this group." : "Collapses this group."
+            searchQuery.isEmpty
+                ? (isCollapsed ? "Expands this group." : "Collapses this group.")
+                : ""
         )
+        .disabled(!searchQuery.isEmpty)
         .accessibilityIdentifier("dashboard-section-toggle-\(section.id)")
     }
 
@@ -423,6 +413,7 @@ struct DashboardsView: View {
     }
 
     private func toggleSection(_ section: DashboardSection) {
+        guard searchQuery.isEmpty else { return }
         let isCollapsing = !model.collapsedDashboardSectionIDs.contains(
             section.id
         )
@@ -512,6 +503,52 @@ struct DashboardsView: View {
                 dashboard: dashboard,
                 scope: .unassigned
             )
+        }
+    }
+
+    @ViewBuilder
+    private func reorderableDashboardCard(
+        _ dashboard: DashboardSummary,
+        occurrenceID: DashboardOccurrenceID,
+        pushContext: DashboardPushContext
+    ) -> some View {
+        if searchQuery.isEmpty {
+            dashboardCard(dashboard, occurrenceID: occurrenceID, pushContext: pushContext)
+                .onDrag {
+                    draggedOccurrenceID = occurrenceID
+                    return NSItemProvider(
+                        object: dashboard.id as NSString
+                    )
+                } preview: {
+                    dashboardDragPreview(dashboard)
+                }
+                .dropDestination(
+                    for: String.self
+                ) { items, _ in
+                    defer { endDashboardDrag() }
+                    return items.first != nil
+                } isTargeted: { targeted in
+                    updateDropTarget(
+                        occurrenceID,
+                        targeted: targeted
+                    )
+                }
+                .overlay {
+                    if dropTargetOccurrenceID == occurrenceID {
+                        RoundedRectangle(
+                            cornerRadius: 16,
+                            style: .continuous
+                        )
+                        .strokeBorder(
+                            TesseraeTheme.accent.opacity(0.8),
+                            lineWidth: 2
+                        )
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                    }
+                }
+        } else {
+            dashboardCard(dashboard, occurrenceID: occurrenceID, pushContext: pushContext)
         }
     }
 
@@ -867,6 +904,7 @@ struct DashboardsView: View {
         _ targetOccurrenceID: DashboardOccurrenceID,
         targeted: Bool
     ) {
+        guard searchQuery.isEmpty else { return }
         guard targeted else {
             if dropTargetOccurrenceID == targetOccurrenceID {
                 withAnimation(.easeOut(duration: 0.12)) {
@@ -976,6 +1014,14 @@ struct DashboardPreviewActionSheet: View {
                     }
                     .tesseraeModalChromeButtonStyle()
                     Spacer()
+                    if let webURL {
+                        Link(destination: webURL) {
+                            Label("Open in Tesserae", systemImage: "safari")
+                                .labelStyle(.iconOnly)
+                        }
+                        .tesseraeModalChromeButtonStyle()
+                        .accessibilityIdentifier("dashboard-open-web")
+                    }
                 }
             }
             .padding(.horizontal, TesseraeComposerLayout.pagePadding)
@@ -1033,6 +1079,13 @@ struct DashboardPreviewActionSheet: View {
         .presentationDetents([.height(sheetHeight)])
         .presentationContentInteraction(.scrolls)
         .presentationDragIndicator(.visible)
+    }
+
+    private var webURL: URL? {
+        guard let baseURL = model.activeInstance?.baseURL,
+              let dashboard = model.dashboards.first(where: { $0.id == dashboardID })
+        else { return nil }
+        return dashboardWebURL(dashboard.webURL, relativeTo: baseURL)
     }
 
     private var dashboardPushContent: some View {
@@ -1401,3 +1454,14 @@ struct DashboardPreviewActionSheet: View {
     }
 }
 #endif
+
+func dashboardWebURL(_ webURL: String?, relativeTo baseURL: URL) -> URL? {
+    guard let path = webURL?.trimmingCharacters(in: .whitespacesAndNewlines),
+          !path.isEmpty,
+          let url = URL(string: path, relativeTo: baseURL)?.absoluteURL,
+          let scheme = url.scheme?.lowercased(),
+          ["http", "https"].contains(scheme),
+          let host = url.host, !host.isEmpty
+    else { return nil }
+    return url
+}

@@ -6,6 +6,48 @@ final class TesseraeCompanionUITests: XCTestCase {
         continueAfterFailure = false
     }
 
+    func testDashboardSearchFindsCollapsedContentAndRestoresGroups() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
+        app.launchArguments += ["-dashboardLayoutMode", "cards"]
+        app.launch()
+        XCTAssertTrue(app.buttons["Explore with Demo Data"].waitForExistence(timeout: 3))
+        app.buttons["Explore with Demo Data"].tap()
+        let dashboardsTab = app.tabBars.firstMatch.buttons["rectangle.grid.2x2"]
+        XCTAssertTrue(dashboardsTab.waitForExistence(timeout: 3))
+        dashboardsTab.tap()
+        let group = app.buttons["dashboard-section-toggle-display-picpak-kitchen"]
+        XCTAssertTrue(group.waitForExistence(timeout: 3))
+        if group.value as? String != "Collapsed" { group.tap() }
+        XCTAssertEqual(group.value as? String, "Collapsed")
+
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 3))
+        search.tap()
+        search.typeText("  PANTRY  ")
+        let pantry = app.staticTexts["dashboard-title-pantry-display-picpak-kitchen"]
+        XCTAssertTrue(pantry.waitForExistence(timeout: 3))
+        XCTAssertTrue(pantry.isHittable)
+        XCTAssertFalse(app.staticTexts["dashboard-title-photo-frame-display-picpak-kitchen"].exists)
+        app.buttons["dashboard-push-pantry-display-picpak-kitchen"].tap()
+        let webLink = app.descendants(matching: .any)["dashboard-open-web"]
+        XCTAssertTrue(webLink.waitForExistence(timeout: 3))
+        XCTAssertTrue(webLink.isHittable)
+        XCTAssertEqual(webLink.label, "Open in Tesserae")
+        let preview = XCTAttachment(screenshot: app.screenshot())
+        preview.name = "Dashboard web shortcut"
+        preview.lifetime = .keepAlways
+        add(preview)
+        app.buttons["Cancel"].firstMatch.tap()
+        search.tap()
+        search.buttons["Clear text"].tap()
+        search.typeText("NoSuchDashboard")
+        XCTAssertTrue(app.descendants(matching: .any)["dashboard-search-empty"].exists)
+        search.buttons["Clear text"].tap()
+        XCTAssertEqual(group.value as? String, "Collapsed")
+    }
+
     func testOnboardingOffersDiscoveryAndManualConnectionWithoutQR() {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"

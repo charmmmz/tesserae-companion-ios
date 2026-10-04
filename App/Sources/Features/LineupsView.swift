@@ -5,6 +5,7 @@ struct LineupsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
+    @State private var query = ""
     @State private var creatingLineup = false
     @State private var permissionAlertPresented = false
 
@@ -14,12 +15,19 @@ struct LineupsView: View {
         isActive && scenePhase == .active
     }
 
+    private var searchQuery: String {
+        query.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private var sections: [LineupListSection] {
+        let matchingLineups = model.lineups.filter {
+            searchQuery.isEmpty || $0.name.localizedStandardContains(searchQuery)
+        }
         let knownDisplayIDs = Set(model.displays.map(\.id))
         var result: [LineupListSection] = []
 
         for display in model.sortedDisplays {
-            let lineups = model.lineups.filter {
+            let lineups = matchingLineups.filter {
                 lineupDisplayGrouping(
                     deviceIDs: displayDeviceIDs(for: $0),
                     knownDisplayIDs: knownDisplayIDs
@@ -36,7 +44,7 @@ struct LineupsView: View {
             }
         }
 
-        let shared = model.lineups.filter {
+        let shared = matchingLineups.filter {
             lineupDisplayGrouping(
                 deviceIDs: displayDeviceIDs(for: $0),
                 knownDisplayIDs: knownDisplayIDs
@@ -52,7 +60,7 @@ struct LineupsView: View {
             )
         }
 
-        let unassigned = model.lineups.filter {
+        let unassigned = matchingLineups.filter {
             lineupDisplayGrouping(
                 deviceIDs: displayDeviceIDs(for: $0),
                 knownDisplayIDs: knownDisplayIDs
@@ -68,7 +76,7 @@ struct LineupsView: View {
             )
         }
 
-        let unavailable = model.lineups.filter {
+        let unavailable = matchingLineups.filter {
             lineupDisplayGrouping(
                 deviceIDs: displayDeviceIDs(for: $0),
                 knownDisplayIDs: knownDisplayIDs
@@ -159,6 +167,13 @@ struct LineupsView: View {
                     }
                     .buttonStyle(.bordered)
                 }
+            }
+        }
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Lineups")
+        .overlay {
+            if !model.lineups.isEmpty, !searchQuery.isEmpty, sections.isEmpty {
+                ContentUnavailableView.search(text: searchQuery)
+                    .accessibilityIdentifier("lineup-search-empty")
             }
         }
         .refreshable {

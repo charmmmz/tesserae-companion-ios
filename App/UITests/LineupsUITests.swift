@@ -248,6 +248,28 @@ final class LineupsUITests: XCTestCase {
         XCTAssertGreaterThanOrEqual(app.pickers.count, 2)
     }
 
+    func testLineupSearchFiltersAndRestoresResults() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
+        app.launch()
+        XCTAssertTrue(app.buttons["Explore with Demo Data"].waitForExistence(timeout: 3))
+        app.buttons["Explore with Demo Data"].tap()
+        XCTAssertTrue(app.buttons["manage-lineups"].waitForExistence(timeout: 3))
+        app.buttons["manage-lineups"].tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 3))
+        search.tap()
+        search.typeText("  KITCHEN  ")
+        XCTAssertTrue(app.buttons["lineup-card-kitchen-deck"].exists)
+        search.buttons["Clear text"].tap()
+        search.typeText("NoSuchLineup")
+        XCTAssertFalse(app.buttons["lineup-card-kitchen-deck"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["lineup-search-empty"].exists)
+        search.buttons["Clear text"].tap()
+        XCTAssertTrue(app.buttons["lineup-card-kitchen-deck"].exists)
+    }
+
     func testDailyLineupUsesFocusedScheduleDetails() {
         assertAutomatedLineupDetails(
             intent: "daily",

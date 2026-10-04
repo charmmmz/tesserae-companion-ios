@@ -477,3 +477,7 @@
 "Display %lld of %lld" = "第 %lld 个显示屏，共 %lld 个";
 "%@, display %lld of %lld" = "%@，第 %lld 个显示屏，共 %lld 个";
 "Device Details" = "设备详情";
+
+"Search Dashboards" = "搜索仪表盘";
+"Search Lineups" = "搜索播放队列";
+"Open in Tesserae" = "在 Tesserae 中打开";

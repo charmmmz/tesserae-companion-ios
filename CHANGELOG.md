@@ -19,6 +19,12 @@ capabilities.
   for additional Seeed, Pimoroni, Waveshare, and Xteink models. Generic protocols
   keep a neutral identity rather than claiming a manufacturer.
 
+- Search Dashboards and Lineups by name. Dashboard search reveals matching items
+  in collapsed groups and preserves the original grouping and order when cleared.
+  Reordering is unavailable while filtering.
+- Dashboard previews now offer an Open in Tesserae shortcut when the server
+  provides a web address, giving quick access to the web editor.
+
 - PicPak's Bluetooth photo editor now shows battery voltage, a low-battery warning
   when reported, and refresh speed. Expand the status row for screen mode and
   firmware version. Requires compatible firmware for the additional status values.
