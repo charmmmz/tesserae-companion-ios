@@ -469,3 +469,5 @@
 "Other displays: hold Refresh for 3 seconds, then release." = "其他显示屏：长按刷新键 3 秒后松开，即可进入维护模式。";
 "PicPak: hold for 10 seconds, then release before 20 to enter Bluetooth maintenance." = "PicPak：长按 10 秒，在 20 秒前松开，即可进入蓝牙维护。";
 "Authorize this iPhone in PicPak Maintenance first: hold the button for 10 seconds, release before 20, then choose Manual (Bluetooth)." = "请先在 PicPak 蓝牙维护中授权这部 iPhone：长按按键 10 秒，在 20 秒前松开，然后选择手动（蓝牙）模式。";
+
+"Photo unavailable" = "照片不可用";

@@ -656,9 +656,77 @@ private struct GalleryPhotoLink: View {
     }
 }
 
-private struct GalleryLoadedPreview {
+struct GalleryLoadedPreview {
     let data: Data
     let image: UIImage
+
+    var estimatedMemoryCost: Int {
+        let decodedBytes = image.cgImage.map { $0.bytesPerRow * $0.height }
+            ?? Int(image.size.width * image.scale * image.size.height * image.scale * 4)
+        return data.count + decodedBytes
+    }
+}
+
+/// Keeps the current original and, within budget, the adjacent originals.
+/// A current image larger than the budget is retained alone so zoom and Send
+/// keep the full-resolution content. This bounds retained cache entries, not
+/// the image decoder's temporary allocations or the application's total memory.
+struct GalleryPreviewCache {
+    let memoryBudget: Int
+    private(set) var previews: [String: GalleryLoadedPreview] = [:]
+
+    init(memoryBudget: Int = 64 * 1_024 * 1_024) {
+        self.memoryBudget = max(0, memoryBudget)
+    }
+
+    subscript(imageID: String) -> GalleryLoadedPreview? {
+        previews[imageID]
+    }
+
+    var estimatedMemoryCost: Int {
+        previews.values.reduce(0) { $0 + $1.estimatedMemoryCost }
+    }
+
+    mutating func insert(
+        _ preview: GalleryLoadedPreview,
+        for imageID: String,
+        selectedImageID: String,
+        orderedImageIDs: [String]
+    ) {
+        previews[imageID] = preview
+        retainWindow(selectedImageID: selectedImageID, orderedImageIDs: orderedImageIDs)
+    }
+
+    mutating func retainWindow(selectedImageID: String, orderedImageIDs: [String]) {
+        guard let index = orderedImageIDs.firstIndex(of: selectedImageID) else {
+            previews.removeAll()
+            return
+        }
+        var retained: [String: GalleryLoadedPreview] = [:]
+        var cost = 0
+        // Prefer the current image, then the next page, then the previous page.
+        for candidateIndex in [index, index + 1, index - 1]
+        where orderedImageIDs.indices.contains(candidateIndex) {
+            let id = orderedImageIDs[candidateIndex]
+            guard let preview = previews[id] else { continue }
+            let candidateCost = preview.estimatedMemoryCost
+            guard id == selectedImageID || candidateCost <= max(0, memoryBudget - cost) else {
+                continue
+            }
+            retained[id] = preview
+            cost += candidateCost
+        }
+        previews = retained
+    }
+}
+
+func galleryImmersivePreview(
+    for image: GalleryImage,
+    previewsByImageID: [String: UIImage],
+    thumbnailsByPath: [String: Data]
+) -> UIImage? {
+    previewsByImageID[image.id]
+        ?? thumbnailsByPath[image.thumbnailURL].flatMap(UIImage.init(data:))
 }
 
 private struct GalleryIndexedImage: Identifiable {
@@ -671,8 +739,8 @@ private struct GalleryIndexedImage: Identifiable {
 private struct GalleryImageView: View {
     @Environment(AppModel.self) private var model
     @State private var selectedImageID: String
-    @State private var loadedPreviews: [String: GalleryLoadedPreview] = [:]
-    @State private var loadingPreviewImageIDs: Set<String> = []
+    @State private var previewCache = GalleryPreviewCache()
+    @State private var previewRequestIDs: [String: UUID] = [:]
     @State private var previewErrorMessages: [String: String] = [:]
     @State private var sendingImageID: String?
     @State private var sendDraft: SendImageDraft?
@@ -708,8 +776,9 @@ private struct GalleryImageView: View {
         .accessibilityIdentifier("gallery-photo-pager")
         .navigationTitle("Photo")
         .navigationBarTitleDisplayMode(.inline)
-        .task(id: selectedImageID) {
-            guard let selectedImage else { return }
+        .task(id: immersivePresented ? nil : selectedImageID) {
+            guard !immersivePresented, let selectedImage else { return }
+            retainPreviewWindow()
             await loadPreview(selectedImage)
         }
         .fullScreenCover(isPresented: $immersivePresented) {
@@ -717,8 +786,18 @@ private struct GalleryImageView: View {
                 selectedImageID: $selectedImageID,
                 images: images,
                 previewImages: previewImages,
-                thumbnailData: thumbnailData
+                thumbnailData: thumbnailData,
+                previewErrorMessages: previewErrorMessages,
+                loadingPreviewImageIDs: Set(previewRequestIDs.keys),
+                retryPreview: { image in
+                    Task { await loadPreview(image, force: true) }
+                }
             )
+            .task(id: selectedImageID) {
+                guard let selectedImage else { return }
+                retainPreviewWindow()
+                await loadPreview(selectedImage)
+            }
         }
         .sheet(item: $sendDraft) { draft in
             NavigationStack {
@@ -734,7 +813,7 @@ private struct GalleryImageView: View {
     }
 
     private var previewImages: [String: UIImage] {
-        loadedPreviews.mapValues(\.image)
+        previewCache.previews.mapValues(\.image)
     }
 
     private var thumbnailData: [String: Data] {
@@ -748,11 +827,11 @@ private struct GalleryImageView: View {
             image: indexedImage.image,
             position: indexedImage.position,
             total: images.count,
-            previewImage: loadedPreviews[indexedImage.id]?.image,
+            previewImage: previewCache[indexedImage.id]?.image,
             thumbnailData: model.galleryThumbnailStates[
                 indexedImage.image.thumbnailURL
             ]?.data,
-            isLoadingPreview: loadingPreviewImageIDs.contains(indexedImage.id),
+            isLoadingPreview: previewRequestIDs[indexedImage.id] != nil,
             previewErrorMessage: previewErrorMessages[indexedImage.id],
             isLoadingForSend: sendingImageID == indexedImage.id,
             openImmersive: {
@@ -773,40 +852,66 @@ private struct GalleryImageView: View {
         _ image: GalleryImage,
         force: Bool = false
     ) async {
-        guard force || loadedPreviews[image.id] == nil else { return }
-        guard !loadingPreviewImageIDs.contains(image.id) else { return }
-        loadingPreviewImageIDs.insert(image.id)
+        guard force || previewCache[image.id] == nil else { return }
+        let requestID = UUID()
+        let connectionRevision = model.connectionRevision
+        previewRequestIDs[image.id] = requestID
         previewErrorMessages[image.id] = nil
-        defer { loadingPreviewImageIDs.remove(image.id) }
+        defer {
+            if previewRequestIDs[image.id] == requestID {
+                previewRequestIDs[image.id] = nil
+            }
+        }
 
         await model.loadGalleryThumbnail(path: image.thumbnailURL)
         do {
+            try Task.checkCancellation()
+            guard model.connectionRevision == connectionRevision else { return }
             let data = try await model.fetchGalleryImageContent(image)
+            try Task.checkCancellation()
+            guard previewRequestIDs[image.id] == requestID,
+                  model.connectionRevision == connectionRevision else { return }
             guard let decoded = UIImage(data: data) else {
                 throw GalleryPreviewError.decoding
             }
-            loadedPreviews[image.id] = GalleryLoadedPreview(
-                data: data,
-                image: decoded
+            previewCache.insert(
+                GalleryLoadedPreview(data: data, image: decoded),
+                for: image.id,
+                selectedImageID: selectedImageID,
+                orderedImageIDs: images.map(\.id)
             )
         } catch is CancellationError {
             return
         } catch {
+            guard !Task.isCancelled,
+                  previewRequestIDs[image.id] == requestID,
+                  model.connectionRevision == connectionRevision else { return }
             previewErrorMessages[image.id] = error.localizedDescription
         }
     }
 
+    private func retainPreviewWindow() {
+        previewCache.retainWindow(
+            selectedImageID: selectedImageID,
+            orderedImageIDs: images.map(\.id)
+        )
+        previewErrorMessages = previewErrorMessages.filter { $0.key == selectedImageID }
+    }
+
     private func prepareForSend(_ image: GalleryImage) async {
         guard sendingImageID == nil else { return }
+        let connectionRevision = model.connectionRevision
         sendingImageID = image.id
         defer { sendingImageID = nil }
         do {
             let data: Data
-            if let loadedPreview = loadedPreviews[image.id] {
+            if let loadedPreview = previewCache[image.id] {
                 data = loadedPreview.data
             } else {
                 data = try await model.fetchGalleryImageContent(image)
             }
+            try Task.checkCancellation()
+            guard model.connectionRevision == connectionRevision else { return }
             let payload = try gallerySendPayload(
                 data: data,
                 image: image,
@@ -819,6 +924,7 @@ private struct GalleryImageView: View {
                 contentType: payload.contentType
             )
         } catch {
+            guard !Task.isCancelled, model.connectionRevision == connectionRevision else { return }
             model.lastError = error.localizedDescription
         }
     }
@@ -981,6 +1087,9 @@ private struct GalleryImmersiveView: View {
     let images: [GalleryImage]
     let previewImages: [String: UIImage]
     let thumbnailData: [String: Data]
+    let previewErrorMessages: [String: String]
+    let loadingPreviewImageIDs: Set<String>
+    let retryPreview: (GalleryImage) -> Void
 
     var body: some View {
         GeometryReader { proxy in
@@ -991,8 +1100,12 @@ private struct GalleryImmersiveView: View {
                     ForEach(images) { image in
                         GalleryZoomablePhoto(
                             imageID: image.id,
-                            image: previewImages[image.id]
-                                ?? thumbnailData[image.id].flatMap(UIImage.init(data:)),
+                            image: galleryImmersivePreview(
+                                for: image,
+                                previewsByImageID: previewImages,
+                                thumbnailsByPath: thumbnailData
+                            ),
+                            hasPreviewError: previewErrorMessages[image.id] != nil,
                             zoomStateChanged: { scale, isMagnifying in
                                 if image.id == selectedImageID {
                                     selectedZoomScale = scale
@@ -1018,6 +1131,24 @@ private struct GalleryImmersiveView: View {
         .ignoresSafeArea()
         .statusBarHidden(true)
         .background(Color.black)
+        .safeAreaInset(edge: .bottom) {
+            if let image = images.first(where: { $0.id == selectedImageID }),
+               previewErrorMessages[image.id] != nil {
+                HStack(spacing: 12) {
+                    Label("Full-resolution preview unavailable.", systemImage: "exclamationmark.triangle")
+                        .font(.footnote)
+                        .foregroundStyle(.white)
+                    Spacer(minLength: 0)
+                    Button("Retry") { retryPreview(image) }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(loadingPreviewImageIDs.contains(image.id))
+                        .accessibilityIdentifier("gallery-immersive-retry")
+                }
+                .padding()
+                .background(.black.opacity(0.8))
+                .accessibilityIdentifier("gallery-immersive-preview-error")
+            }
+        }
         .accessibilityIdentifier("gallery-immersive-view")
         .accessibilityAction(.escape) {
             dismiss()
@@ -1073,6 +1204,7 @@ private struct GalleryZoomablePhoto: View {
 
     let imageID: String
     let image: UIImage?
+    let hasPreviewError: Bool
     let zoomStateChanged: (CGFloat, Bool) -> Void
 
     var body: some View {
@@ -1086,6 +1218,12 @@ private struct GalleryZoomablePhoto: View {
                         .scaledToFit()
                         .scaleEffect(scale)
                         .offset(offset)
+                        .accessibilityLabel("Photo")
+                } else if hasPreviewError {
+                    Image(systemName: "photo")
+                        .font(.largeTitle)
+                        .foregroundStyle(.white)
+                        .accessibilityLabel("Photo unavailable")
                 } else {
                     ProgressView("Loading Photo…")
                         .tint(.white)

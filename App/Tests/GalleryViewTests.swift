@@ -7,6 +7,63 @@ import XCTest
 
 @MainActor
 final class GalleryViewTests: XCTestCase {
+    func testImmersivePreviewUsesThumbnailPathWhenOriginalIsUnavailable() throws {
+        let original = image(id: "photo-1", width: 50, height: 30)
+        let thumbnail = try preview()
+        let displayed = try XCTUnwrap(galleryImmersivePreview(
+            for: original,
+            previewsByImageID: [:],
+            thumbnailsByPath: [original.thumbnailURL: thumbnail.data]
+        ))
+        XCTAssertEqual(displayed.size, thumbnail.image.size)
+
+        let fullResolution = UIImage(cgImage: try XCTUnwrap(thumbnail.image.cgImage), scale: 2, orientation: .up)
+        XCTAssertTrue(galleryImmersivePreview(
+            for: original,
+            previewsByImageID: [original.id: fullResolution],
+            thumbnailsByPath: [original.thumbnailURL: thumbnail.data]
+        ) === fullResolution)
+    }
+
+    func testPreviewCacheDropsDistantPagesWhileKeepingOriginalDataForSend() throws {
+        let original = try preview()
+        var cache = GalleryPreviewCache(memoryBudget: original.estimatedMemoryCost * 10)
+        let ids = (0..<20).map(String.init)
+        for id in ids {
+            cache.insert(original, for: id, selectedImageID: id, orderedImageIDs: ids)
+            XCTAssertLessThanOrEqual(cache.previews.count, 3)
+            XCTAssertEqual(cache[id]?.data, original.data)
+        }
+        XCTAssertEqual(Set(cache.previews.keys), ["18", "19"])
+        cache.retainWindow(selectedImageID: "0", orderedImageIDs: ids)
+        XCTAssertTrue(cache.previews.isEmpty)
+    }
+
+    func testPreviewCacheEnforcesByteBudgetAndPrioritizesCurrentPage() throws {
+        let original = try preview()
+        let ids = ["previous", "current", "next"]
+        var cache = GalleryPreviewCache(memoryBudget: original.estimatedMemoryCost * 2)
+        for id in ids {
+            cache.insert(original, for: id, selectedImageID: "current", orderedImageIDs: ids)
+        }
+        XCTAssertEqual(Set(cache.previews.keys), ["current", "next"])
+        XCTAssertLessThanOrEqual(cache.estimatedMemoryCost, cache.memoryBudget)
+
+        cache.retainWindow(selectedImageID: "missing", orderedImageIDs: ids)
+        XCTAssertTrue(cache.previews.isEmpty)
+    }
+
+    func testOversizedCurrentPreviewIsRetainedAloneWithoutReducingResolution() throws {
+        let original = try preview()
+        let ids = ["current", "next"]
+        var cache = GalleryPreviewCache(memoryBudget: original.estimatedMemoryCost - 1)
+        cache.insert(original, for: "current", selectedImageID: "current", orderedImageIDs: ids)
+        cache.insert(original, for: "next", selectedImageID: "current", orderedImageIDs: ids)
+        XCTAssertEqual(Set(cache.previews.keys), ["current"])
+        XCTAssertEqual(cache["current"]?.data, original.data)
+        XCTAssertTrue(cache["current"]?.image === original.image)
+    }
+
     func testUploadCountsTreatFailuresAsFinishedWithoutCallingThemUploaded() {
         let counts = galleryUploadCounts(
             statuses: [
@@ -375,6 +432,13 @@ final class GalleryViewTests: XCTestCase {
 
         XCTAssertEqual(payload.contentType, "image/jpeg")
         XCTAssertEqual(payload.data.prefix(2), Data([0xFF, 0xD8]))
+    }
+
+    private func preview() throws -> GalleryLoadedPreview {
+        let data = try XCTUnwrap(Data(base64Encoded:
+            "iVBORw0KGgoAAAANSUhEUgAAADIAAAAeCAYAAABuUU38AAAAU0lEQVR42u3PMQ3AIBAAQJxUSxc84KgKagcZWGBiadKViiAkn+aGE3Dpffr8gyQisily3NdcMWoOQURERERERERERGR/pJUzBBERERERERGRgJEPNPv5WtxkAPMAAAAASUVORK5CYII="
+        ))
+        return GalleryLoadedPreview(data: data, image: try XCTUnwrap(UIImage(data: data)))
     }
 
     private func image(

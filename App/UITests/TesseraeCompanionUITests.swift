@@ -352,7 +352,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(secondPreview.waitForExistence(timeout: 3))
         secondPreview.tap()
 
-        let immersive = app.collectionViews["gallery-immersive-view"]
+        let immersive = app.descendants(matching: .any)["gallery-immersive-view"]
         XCTAssertTrue(immersive.waitForExistence(timeout: 3))
         XCTAssertFalse(app.buttons["gallery-immersive-close"].exists)
         XCTAssertFalse(app.staticTexts["gallery-immersive-position"].exists)
@@ -387,6 +387,9 @@ final class TesseraeCompanionUITests: XCTestCase {
         ]
         XCTAssertTrue(thirdImmersivePhoto.waitForExistence(timeout: 3))
         XCTAssertTrue(thirdImmersivePhoto.isHittable)
+        let renderedPhoto = app.images["gallery-immersive-photo-image_family_03"]
+        XCTAssertTrue(renderedPhoto.waitForExistence(timeout: 3))
+        XCTAssertEqual(renderedPhoto.label, "Photo")
 
         let immersiveScreenshot = XCTAttachment(screenshot: app.screenshot())
         immersiveScreenshot.name = "Gallery Immersive Photo"

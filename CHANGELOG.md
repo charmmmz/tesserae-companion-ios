@@ -50,6 +50,9 @@ capabilities.
 
 ### Changed
 
+- Library photo previews retain a small window around the current photo within a
+  cache budget, while preserving the current original for zooming and sending.
+
 - PicPak Bluetooth connection and result messages are centered in compact
   sheets. A successful photo transfer now returns to a small confirmation
   with a single Done button.
@@ -91,6 +94,8 @@ capabilities.
 - Reminders and Health sync remain bound to the server where they started; changing
   or disconnecting servers stops old work from uploading or changing the new
   server's settings. Opening the same server's settings preserves a running sync.
+- Full-screen Library photos now use available thumbnails while originals load and
+  show a retry action when the full-resolution preview fails.
 - Nearby display reconnects now wait for the previous Bluetooth connection to
   close and ignore late callbacks from other displays.
 
