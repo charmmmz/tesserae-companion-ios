@@ -56,11 +56,16 @@ capabilities.
 
 ### Changed
 
+- Display details keep the current screen, update queue, connection and battery
+  visible while placing hardware and panel fields in a collapsible Device Details card.
+
 - Hardware badges keep long model names readable by wrapping beneath the logo
   when needed, including with larger accessibility text.
 
 - Library photo previews retain a small window around the current photo within a
   cache budget, while preserving the current original for zooming and sending.
+- Display ordering now offers VoiceOver Move Up and Move Down actions with position
+  announcements.
 
 - PicPak Bluetooth connection and result messages are centered in compact
   sheets. A successful photo transfer now returns to a small confirmation

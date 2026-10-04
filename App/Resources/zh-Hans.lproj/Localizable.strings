@@ -471,3 +471,9 @@
 "Authorize this iPhone in PicPak Maintenance first: hold the button for 10 seconds, release before 20, then choose Manual (Bluetooth)." = "请先在 PicPak 蓝牙维护中授权这部 iPhone：长按按键 10 秒，在 20 秒前松开，然后选择手动（蓝牙）模式。";
 
 "Photo unavailable" = "照片不可用";
+
+"Move Up" = "上移";
+"Move Down" = "下移";
+"Display %lld of %lld" = "第 %lld 个显示屏，共 %lld 个";
+"%@, display %lld of %lld" = "%@，第 %lld 个显示屏，共 %lld 个";
+"Device Details" = "设备详情";

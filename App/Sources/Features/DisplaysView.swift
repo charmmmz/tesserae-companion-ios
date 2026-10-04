@@ -178,6 +178,24 @@ struct DisplaysView: View {
                     .accessibilityHint(
                         "Tap for details. Long press and drag to reorder."
                     )
+                    .accessibilityLabel(display.name)
+                    .accessibilityValue(
+                        Text("Display \((displayOrder.firstIndex(of: display.id) ?? 0) + 1) of \(displayOrder.count)")
+                    )
+                    .accessibilityActions {
+                        if let index = displayOrder.firstIndex(of: display.id) {
+                            if index > 0 {
+                                Button("Move Up") {
+                                    moveDisplayForAccessibility(display, to: index - 1)
+                                }
+                            }
+                            if index < displayOrder.count - 1 {
+                                Button("Move Down") {
+                                    moveDisplayForAccessibility(display, to: index + 1)
+                                }
+                            }
+                        }
+                    }
                     .task(
                         id: display.previewRefreshID(
                             generation: model.displayPreviewGeneration
@@ -285,6 +303,16 @@ struct DisplaysView: View {
         )
         .tesseraeScreenBackground()
         .tesseraeHapticFeedback(trigger: hapticEvent)
+    }
+
+    private func moveDisplayForAccessibility(_ display: DisplaySummary, to index: Int) {
+        guard draggedDisplayID == nil else { return }
+        model.moveDisplay(display.id, to: index)
+        hapticEvent.trigger(.selection)
+        UIAccessibility.post(
+            notification: .announcement,
+            argument: String(localized: "\(display.name), display \(index + 1) of \(model.displays.count)")
+        )
     }
 
     private func beginDisplayDrag(
@@ -747,57 +775,7 @@ private struct DisplayDetailView: View {
                     }
                 }
 
-                detailCard("Hardware", systemImage: "cpu") {
-                    detailRow("Manufacturer") {
-                        Text(
-                            currentDisplay.hardwarePresentation.brand?.displayName
-                                ?? String(localized: "Not reported")
-                        )
-                    }
-
-                    detailRow("Model") {
-                        Text(
-                            currentDisplay.hardwarePresentation.modelName
-                                ?? String(localized: "Not reported")
-                        )
-                    }
-
-                    detailRow("Firmware") {
-                        Text(
-                            currentDisplay.firmwareVersion
-                                ?? String(localized: "Not reported")
-                        )
-                    }
-
-                    detailRow("Device Type") {
-                        Text(currentDisplay.kind)
-                            .font(.caption.monospaced())
-                            .textSelection(.enabled)
-                    }
-
-                    detailRow("Device ID") {
-                        Text(currentDisplay.id)
-                            .font(.caption.monospaced())
-                            .textSelection(.enabled)
-                    }
-                }
-
-                detailCard("Panel", systemImage: "rectangle.inset.filled") {
-                    detailRow("Resolution") {
-                        Text(
-                            "\(currentDisplay.panel.width) × \(currentDisplay.panel.height)"
-                        )
-                        .monospacedDigit()
-                    }
-
-                    detailRow("Orientation") {
-                        Text(currentDisplay.orientationLabel)
-                    }
-
-                    detailRow("Colour Gamut") {
-                        Text(currentDisplay.gamutLabel)
-                    }
-                }
+                DisplayDeviceDetails(display: currentDisplay)
             }
             .padding(16)
         }
@@ -1356,6 +1334,113 @@ private struct DisplayDetailView: View {
         }
         .font(.subheadline)
         .frame(maxWidth: .infinity)
+    }
+}
+
+private struct DisplayDeviceDetails: View {
+    let display: DisplaySummary
+    @State private var isExpanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            headerButton
+
+            if isExpanded {
+                Divider()
+
+                detailRow("Manufacturer") {
+                    Text(
+                        display.hardwarePresentation.brand?.displayName
+                            ?? String(localized: "Not reported")
+                    )
+                }
+
+                detailRow("Model") {
+                    Text(
+                        display.hardwarePresentation.modelName
+                            ?? String(localized: "Not reported")
+                    )
+                }
+
+                detailRow("Firmware") {
+                    Text(display.firmwareVersion ?? String(localized: "Not reported"))
+                }
+
+                detailRow("Device Type") {
+                    Text(display.kind)
+                        .font(.caption.monospaced())
+                        .textSelection(.enabled)
+                }
+
+                detailRow("Device ID") {
+                    Text(display.id)
+                        .font(.caption.monospaced())
+                        .textSelection(.enabled)
+                }
+
+                Divider()
+
+                detailRow("Resolution") {
+                    Text("\(display.panel.width) × \(display.panel.height)")
+                        .monospacedDigit()
+                }
+
+                detailRow("Orientation") {
+                    Text(display.orientationLabel)
+                }
+
+                detailRow("Colour Gamut") {
+                    Text(display.gamutLabel)
+                }
+            }
+        }
+        .tesseraeCard()
+    }
+
+    private var headerButton: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isExpanded.toggle()
+            }
+        } label: {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Device Details")
+                        .font(.headline)
+                        .foregroundStyle(Color.primary)
+
+                    DisplayHardwareBadge(presentation: display.hardwarePresentation)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.secondary)
+                    .rotationEffect(.degrees(isExpanded ? 0 : -90))
+                    .accessibilityHidden(true)
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(isExpanded ? Text("Expanded") : Text("Collapsed"))
+        .accessibilityIdentifier("display-device-details-\(display.id)")
+    }
+
+    private func detailRow<Value: View>(
+        _ title: LocalizedStringKey,
+        @ViewBuilder value: () -> Value
+    ) -> some View {
+        LabeledContent {
+            value()
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.trailing)
+        } label: {
+            Text(title)
+                .foregroundStyle(.secondary)
+        }
+        .font(.subheadline)
     }
 }
 

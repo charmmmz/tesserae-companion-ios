@@ -810,7 +810,7 @@ final class TesseraeCompanionUITests: XCTestCase {
                 "display-pending-status-picpak-kitchen"
             ].exists
         )
-        XCTAssertTrue(app.staticTexts["800 × 480"].exists)
+        XCTAssertFalse(app.staticTexts["Device ID"].exists)
         assertPreview(
             app.descendants(matching: .any)[
                 "display-detail-preview-picpak-kitchen"
@@ -1168,6 +1168,7 @@ final class TesseraeCompanionUITests: XCTestCase {
     func testDisplayDetailsOpenAsSheet() {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
         app.launch()
 
         XCTAssertTrue(
@@ -1189,8 +1190,44 @@ final class TesseraeCompanionUITests: XCTestCase {
                 "display-screen-page-indicator-picpak-kitchen"
             ].exists
         )
+        XCTAssertTrue(app.staticTexts["Connection & Power"].exists)
+        XCTAssertTrue(app.staticTexts["Battery"].exists)
+        XCTAssertFalse(app.staticTexts["Device ID"].exists)
+        XCTAssertFalse(app.staticTexts["Device Type"].exists)
+        XCTAssertFalse(app.staticTexts["Colour Gamut"].exists)
+
+        let overviewScreenshot = XCTAttachment(screenshot: app.screenshot())
+        overviewScreenshot.name = "Display Details Overview"
+        overviewScreenshot.lifetime = .keepAlways
+        add(overviewScreenshot)
+
+        let details = app.buttons["display-device-details-picpak-kitchen"]
+        XCTAssertTrue(details.exists)
+        for _ in 0..<4 where !details.isHittable { app.swipeUp() }
+        XCTAssertTrue(details.isHittable)
+        details.tap()
+        XCTAssertTrue(app.staticTexts["Device ID"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.staticTexts["Manufacturer"].exists)
+        XCTAssertTrue(app.staticTexts["Model"].exists)
+        XCTAssertTrue(app.staticTexts["Firmware"].exists)
+        XCTAssertTrue(app.staticTexts["Device Type"].exists)
+        XCTAssertTrue(app.staticTexts["800 × 480"].exists)
         XCTAssertTrue(app.staticTexts["Spectra 6 · 6-color"].exists)
         XCTAssertFalse(app.staticTexts["Waveshare E6"].exists)
+        for _ in 0..<3 where !app.staticTexts["Colour Gamut"].isHittable {
+            app.swipeUp()
+        }
+
+        let hardwareScreenshot = XCTAttachment(screenshot: app.screenshot())
+        hardwareScreenshot.name = "Display Details Expanded"
+        hardwareScreenshot.lifetime = .keepAlways
+        add(hardwareScreenshot)
+
+        for _ in 0..<4 where !details.isHittable { app.swipeDown() }
+        XCTAssertTrue(details.isHittable)
+        details.tap()
+        XCTAssertFalse(app.staticTexts["Device ID"].exists)
+        XCTAssertFalse(app.staticTexts["Colour Gamut"].exists)
 
         detailNavigation.buttons["Close"].tap()
         XCTAssertTrue(kitchenCard.waitForExistence(timeout: 2))
@@ -1210,6 +1247,10 @@ final class TesseraeCompanionUITests: XCTestCase {
         let desk = app.buttons["display-card-e1004-desk"]
         XCTAssertTrue(kitchen.waitForExistence(timeout: 3))
         XCTAssertTrue(desk.waitForExistence(timeout: 3))
+        XCTAssertFalse(kitchen.label.isEmpty)
+        XCTAssertFalse(desk.label.isEmpty)
+        XCTAssertTrue((kitchen.value as? String)?.hasPrefix("Display ") == true)
+        XCTAssertTrue((desk.value as? String)?.hasPrefix("Display ") == true)
 
         for _ in 0..<3 where !kitchen.isHittable || !desk.isHittable {
             app.swipeUp()
