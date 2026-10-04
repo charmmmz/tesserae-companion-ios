@@ -90,3 +90,46 @@ date:
   [official shop header asset](https://cdn.shopify.com/s/files/1/0674/8569/6246/files/Vector.svg?v=1774110422)
 - Xteink black-and-orange wordmark, retrieved 2026-08-01:
   [official shop header asset](https://www.xteink.com/cdn/shop/files/logo_pc.png?v=1784536352&width=760)
+- M5Stack horizontal colour and white wordmarks, retrieved 2026-10-04 from
+  `Horizontal Version/SVG/Color logo.svg` and `White logo.svg` in the
+  [official logo archive](https://static-cdn.m5stack.com/resource/public/assets/M5Stack%20Logo.zip),
+  linked by the [brand guidelines](https://m5stack.com/brand-guidelines).
+  The colour artwork is used in light appearance and the supplied white artwork
+  in dark appearance. The official paths and colours are preserved. CSS fills
+  are inlined, exporter metadata is removed, and intrinsic dimensions match the
+  original `1200 × 240.34` view box for static asset-catalog rendering.
+- Soldered purple and white wordmarks, retrieved 2026-10-04 from the
+  [official documentation site](https://docs.soldered.com/):
+  [purple SVG](https://docs.soldered.com/img/soldered_logo_purple.svg) and
+  [white SVG](https://docs.soldered.com/img/soldered_logo_white.svg).
+  These supplied variants are used for light and dark appearance respectively.
+  Paths and colours are preserved; CSS fills are inlined and redundant masks
+  and rectangular clips covering the view box are removed for static rendering.
+  The original view boxes are `288 × 58.9` and `1144 × 234`.
+- paperlesspaper stacked wordmark, retrieved 2026-10-04 from the inline logo
+  SVG in the [official site](https://paperlesspaper.de/en/).
+  The `503.804 × 150.005` view box and paths are preserved. The site's
+  `currentColor` fill is resolved to black in the SVG, and the asset renders as
+  an adaptive monochrome template.
+- Amazon two-colour wordmark, retrieved 2026-10-04 from the header and footer
+  of the [official Trustworthy Shopping site](https://trustworthyshopping.aboutamazon.com/2024-brand-protection-report):
+  [Squid Ink and orange SVG](https://cdn-trustworthyshopping.aboutamazon.com/4f/7c/f30570434070aab77383519e9ee1/style-2-color-squid-smile.svg)
+  and [white and orange SVG](https://cdn-trustworthyshopping.aboutamazon.com/95/a6/63f5f61c459180dd621f50abb5ea/style-2-color-white-smile.svg).
+  These supplied variants are used for light and dark appearance respectively.
+  Paths, colours, and the `239 × 80` view box are preserved; only XML formatting
+  is normalized. Amazon and the Amazon logo are trademarks of Amazon.com, Inc.
+  or its affiliates.
+- Rakuten Kobo red wordmark, retrieved 2026-10-04 from the embedded SVG data
+  URL of the `kobo-logo` image served by the [official Kobo site](https://www.kobo.com/).
+  The original red and all paths are preserved in both appearances. CSS fills
+  are inlined and a `418.36 × 80` view box is added to match the original SVG's
+  intrinsic dimensions.
+- reMarkable wordmark, retrieved 2026-10-04 from the inline logo SVG in the
+  [official site](https://remarkable.com/).
+  The `131 × 17` view box and paths are preserved. The site's `currentColor`
+  fill is resolved to black in the SVG, and the asset renders as an adaptive
+  monochrome template.
+
+These source links document provenance and rendering adaptations. Availability
+on an official site does not itself grant a general trademark licence or imply
+manufacturer approval of this app.

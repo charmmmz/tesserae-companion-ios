@@ -13,6 +13,12 @@ capabilities.
 
 ### Added
 
+- Device cards and hardware details now recognize M5Stack, Soldered, paperlesspaper,
+  Amazon Kindle, Kobo, and reMarkable hardware, with matching manufacturer logos.
+  The catalog includes Kobo's Clara Colour and Libra Colour, plus readable names
+  for additional Seeed, Pimoroni, Waveshare, and Xteink models. Generic protocols
+  keep a neutral identity rather than claiming a manufacturer.
+
 - PicPak's Bluetooth photo editor now shows battery voltage, a low-battery warning
   when reported, and refresh speed. Expand the status row for screen mode and
   firmware version. Requires compatible firmware for the additional status values.
@@ -49,6 +55,9 @@ capabilities.
   alongside the immediate countdown, each row with its dashboard icon.
 
 ### Changed
+
+- Hardware badges keep long model names readable by wrapping beneath the logo
+  when needed, including with larger accessibility text.
 
 - Library photo previews retain a small window around the current photo within a
   cache budget, while preserving the current original for zooming and sending.

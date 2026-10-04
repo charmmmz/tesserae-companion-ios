@@ -34,6 +34,7 @@
 		56C7CF9DC0CBA6DC2FE131BD /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B285D6042818DD9ECF798800 /* AppModel.swift */; };
 		5A01B168EA0272D1154E06BA /* PhotoFramingSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90C9F22206234BD938D1E5B1 /* PhotoFramingSession.swift */; };
 		5A369EE1C0A1B4C46F414077 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E10BE2603FB01EFAAE4419 /* SettingsView.swift */; };
+		5EB4D303FD2F67C98154415C /* DisplayHardwareBadgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 834AF00906D63D9F2A468C94 /* DisplayHardwareBadgeTests.swift */; };
 		5EC9A7DAA43DC020D3D5DE6D /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68D757E72A99A23D9A75B361 /* OnboardingView.swift */; };
 		64D3E04F40AB9CBE6306FBC0 /* RemindersBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CBD8BCA89698A1281940F5D /* RemindersBridge.swift */; };
 		65250F43371291617815D0A0 /* ReminderSnapshotFactoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49B49CB5FE65FF3DC08A0081 /* ReminderSnapshotFactoryTests.swift */; };
@@ -151,6 +152,7 @@
 		6F532D2BC8A0893B35702D88 /* TesseraeShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = TesseraeShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		7F7B082A4F4C920F49545310 /* TesseraeCompanionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TesseraeCompanionUITests.swift; sourceTree = "<group>"; };
 		80F13F36D4E7990EF0B890C3 /* LineupsAppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineupsAppModelTests.swift; sourceTree = "<group>"; };
+		834AF00906D63D9F2A468C94 /* DisplayHardwareBadgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayHardwareBadgeTests.swift; sourceTree = "<group>"; };
 		878F2E4D47D31218D70ED033 /* MessageCenterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCenterTests.swift; sourceTree = "<group>"; };
 		8CBD8BCA89698A1281940F5D /* RemindersBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersBridge.swift; sourceTree = "<group>"; };
 		8FE0A6BC06BC1C26FD5AD93A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -269,6 +271,7 @@
 				5B78EBE8F9EA638D2B8BE520 /* BLEPhotoTests.swift */,
 				BD5EEF99A30C18C07C717772 /* BLESetupProtocolTests.swift */,
 				F6BCE92FAB7DF4093DAAE45D /* ConnectionRecoveryTests.swift */,
+				834AF00906D63D9F2A468C94 /* DisplayHardwareBadgeTests.swift */,
 				E4901B9808092D465184CABA /* GalleryViewTests.swift */,
 				259C8594008E905790574F3A /* HealthSnapshotFactoryTests.swift */,
 				80F13F36D4E7990EF0B890C3 /* LineupsAppModelTests.swift */,
@@ -657,6 +660,7 @@
 				364139BE7274398A4FB6A50C /* BLEPhotoTests.swift in Sources */,
 				EF027BEE001DABA6D3E84627 /* BLESetupProtocolTests.swift in Sources */,
 				E8F9020298F307760D7FA918 /* ConnectionRecoveryTests.swift in Sources */,
+				5EB4D303FD2F67C98154415C /* DisplayHardwareBadgeTests.swift in Sources */,
 				FF4C2B0911D8ED227B8224AD /* GalleryViewTests.swift in Sources */,
 				69E964DA91CB8FFDFC343170 /* HealthSnapshotFactoryTests.swift in Sources */,
 				1E5FF7A01F07A246FF6E813F /* LineupsAppModelTests.swift in Sources */,

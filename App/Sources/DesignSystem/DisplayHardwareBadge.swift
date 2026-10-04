@@ -6,24 +6,37 @@ struct DisplayHardwareBadge: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        HStack(spacing: 4) {
-            if let brand = presentation.brand {
-                brandLogo(brand)
-            } else {
-                genericLogo
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 4) {
+                logo
+                modelLabel.fixedSize()
             }
 
-            Text(presentation.modelName ?? String(localized: "Custom display"))
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
+            VStack(alignment: .leading, spacing: 3) {
+                logo
+                modelLabel.fixedSize(horizontal: false, vertical: true)
+            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityIdentifier(
             "display-hardware-\(presentation.brand?.rawValue ?? "generic")"
         )
+    }
+
+    @ViewBuilder
+    private var logo: some View {
+        if let brand = presentation.brand {
+            brandLogo(brand)
+        } else {
+            genericLogo
+        }
+    }
+
+    private var modelLabel: some View {
+        Text(presentation.modelName ?? String(localized: "Custom display"))
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.secondary)
     }
 
     private func brandLogo(_ brand: DisplayHardwareBrand) -> some View {
@@ -66,7 +79,7 @@ struct DisplayHardwareBadge: View {
     }
 }
 
-private extension DisplayHardwareBrand {
+extension DisplayHardwareBrand {
     var assetName: String {
         switch self {
         case .seeedStudio:
@@ -81,15 +94,28 @@ private extension DisplayHardwareBrand {
             "BrandPicPak"
         case .xteink:
             "BrandXteink"
+        case .m5stack:
+            "BrandM5Stack"
+        case .soldered:
+            "BrandSoldered"
+        case .paperlesspaper:
+            "BrandPaperlesspaper"
+        case .amazon:
+            "BrandAmazon"
+        case .kobo:
+            "BrandKobo"
+        case .remarkable:
+            "BrandRemarkable"
         }
     }
 
     func renderingMode(for colorScheme: ColorScheme) -> Image.TemplateRenderingMode {
         switch (self, colorScheme) {
         case (.seeedStudio, .dark), (.pimoroni, _), (.trmnl, _),
-            (.xteink, .dark):
+            (.xteink, .dark), (.paperlesspaper, _), (.remarkable, _):
             .template
-        case (.seeedStudio, _), (.waveshare, _), (.picPak, _), (.xteink, _):
+        case (.seeedStudio, _), (.waveshare, _), (.picPak, _), (.xteink, _),
+            (.m5stack, _), (.soldered, _), (.kobo, _), (.amazon, _):
             .original
         }
     }
@@ -119,6 +145,14 @@ private extension DisplayHardwareBrand {
             52
         case .xteink:
             68
+        case .m5stack:
+            80
+        case .soldered, .paperlesspaper:
+            68
+        case .amazon, .kobo:
+            72
+        case .remarkable:
+            78
         }
     }
 
@@ -135,7 +169,7 @@ private extension DisplayHardwareBrand {
         case .seeedStudio:
             // The official PNG includes transparent space before the wordmark.
             -4.5
-        case .pimoroni, .trmnl, .waveshare, .picPak, .xteink:
+        default:
             0
         }
     }
