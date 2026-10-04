@@ -63,7 +63,8 @@ capabilities.
 ### Changed
 
 - Display details keep the current screen, update queue, connection and battery
-  visible while placing hardware and panel fields in a collapsible Device Details card.
+  visible while placing hardware and panel fields in a collapsible Device Details
+  card with a matching hardware icon.
 
 - Hardware badges keep long model names readable by wrapping beneath the logo
   when needed, including with larger accessibility text.

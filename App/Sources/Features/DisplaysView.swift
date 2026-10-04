@@ -1405,7 +1405,7 @@ private struct DisplayDeviceDetails: View {
         } label: {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Device Details")
+                    Label("Device Details", systemImage: "cpu")
                         .font(.headline)
                         .foregroundStyle(Color.primary)
 
