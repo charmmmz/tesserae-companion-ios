@@ -474,15 +474,30 @@ final class ReminderSnapshotFactoryTests: XCTestCase {
             using: appModel,
             applicationIsActive: false
         )
+        defer { model.stopChangeMonitoring() }
+
+        // A fetch starts before its upload finishes. Await the observable result
+        // instead of assuming a fixed number of scheduler yields is enough.
+        func waitForSync(fetchCount: Int) async throws {
+            let clock = ContinuousClock()
+            let deadline = clock.now.advanced(by: .seconds(5))
+            while reminders.incompleteItemsFetchCount < fetchCount
+                || model.isBusy || model.sourceStatus == nil {
+                guard clock.now < deadline else {
+                    XCTFail("Timed out waiting for reminder sync \(fetchCount)")
+                    return
+                }
+                try await Task.sleep(for: .milliseconds(10))
+            }
+        }
+
         for _ in 0..<10 {
             await Task.yield()
         }
         XCTAssertEqual(reminders.incompleteItemsFetchCount, 0)
 
         model.updateApplicationActivity(true, using: appModel)
-        for _ in 0..<100 where model.sourceStatus == nil {
-            await Task.yield()
-        }
+        try await waitForSync(fetchCount: 1)
         XCTAssertEqual(reminders.incompleteItemsFetchCount, 1)
 
         model.updateApplicationActivity(false, using: appModel)
@@ -500,14 +515,11 @@ final class ReminderSnapshotFactoryTests: XCTestCase {
         XCTAssertEqual(reminders.incompleteItemsFetchCount, 1)
 
         model.updateApplicationActivity(true, using: appModel)
-        for _ in 0..<100 where reminders.incompleteItemsFetchCount < 2 {
-            await Task.yield()
-        }
+        try await waitForSync(fetchCount: 2)
 
         XCTAssertEqual(reminders.incompleteItemsFetchCount, 2)
         XCTAssertEqual(model.sourceStatus?.state, .fresh)
         XCTAssertNil(model.errorMessage)
-        model.stopChangeMonitoring()
     }
 
     @MainActor
