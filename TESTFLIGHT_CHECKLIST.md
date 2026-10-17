@@ -143,13 +143,15 @@ acceptance of 0.8.1.
 ## iPad and iPhone Duo release gate
 
 - [ ] Run the adaptive UI suite on phone, iPad and Duo; retain screenshots and xcresult.
+- [ ] Turn an ordinary iPhone sideways and confirm the app stays in portrait.
 - [ ] On iPad, resize continuously through narrow, square, wide, short and tall windows;
       verify selection, Lineup drafts, photo framing and sends remain intact.
-- [ ] On Duo, open, close, rotate and partially fold during editing and sending;
+- [ ] On Duo, open, close, resize and partially fold during editing and sending;
       verify controls avoid active fold/camera regions and one tap sends once.
 - [ ] Exercise Photos, Files and Safari sharing on iPad and Duo, including cancel,
       retry, keyboard, host dismissal and returning to the main app.
-- [ ] Verify QR scanning in both orientations and after a window resize on real hardware.
+- [ ] Verify QR scanning with portrait-locked iPhone presentation and after an
+      iPad/Duo window resize on real hardware.
 - [ ] Complete BLE setup and photo delivery on both devices, with background/foreground
       transitions and an interrupted transfer. Simulator fixtures do not certify radio behavior.
 - [ ] Check maximum Dynamic Type, VoiceOver, light/dark appearance and keyboard access.

@@ -84,7 +84,7 @@ final class AdaptiveLayoutUITests: XCTestCase {
         capture("Accessibility composer", app: app)
     }
 
-    func testSelectedDisplaySurvivesRotation() {
+    func testSelectedDisplaySurvivesDeviceTurn() {
         let app = demo()
         let kitchen = app.buttons["display-card-picpak-kitchen"]
         XCTAssertTrue(kitchen.waitForExistence(timeout: 5))
@@ -94,12 +94,12 @@ final class AdaptiveLayoutUITests: XCTestCase {
         XCUIDevice.shared.orientation = .landscapeLeft
         XCTAssertTrue(app.navigationBars["Kitchen"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Current Screen"].exists)
-        capture("Display detail landscape", app: app)
+        capture("Display detail after device turn", app: app)
         XCUIDevice.shared.orientation = .portrait
         XCTAssertTrue(app.navigationBars["Kitchen"].waitForExistence(timeout: 5))
     }
 
-    func testLinkDraftAndSingleSubmissionSurviveRotation() {
+    func testLinkDraftAndSingleSubmissionSurviveDeviceTurn() {
         let app = demo()
         app.buttons["root-send-action"].firstMatch.tap()
         XCTAssertTrue(app.buttons["Link"].waitForExistence(timeout: 5))
@@ -109,7 +109,7 @@ final class AdaptiveLayoutUITests: XCTestCase {
         field.typeText("https://example.com/adaptive-draft\n")
         XCUIDevice.shared.orientation = .landscapeLeft
         XCTAssertEqual(field.value as? String, "https://example.com/adaptive-draft")
-        capture("Link draft landscape", app: app)
+        capture("Link draft after device turn", app: app)
         XCUIDevice.shared.orientation = .portrait
         XCTAssertEqual(field.value as? String, "https://example.com/adaptive-draft")
         let send = app.buttons["send-submit"]
@@ -124,7 +124,7 @@ final class AdaptiveLayoutUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts.matching(identifier: "example.com/adaptive-draft").count, 1)
     }
 
-    func testLineupDraftSurvivesRotationAndProtectsExit() {
+    func testLineupDraftSurvivesDeviceTurnAndProtectsExit() {
         let app = demo()
         app.buttons["manage-lineups"].tap()
         let create = app.buttons["lineup-create"]
@@ -140,7 +140,7 @@ final class AdaptiveLayoutUITests: XCTestCase {
         name.typeText("Adaptive draft")
         XCUIDevice.shared.orientation = .landscapeLeft
         XCTAssertEqual(name.value as? String, "Adaptive draft")
-        capture("Lineup draft landscape", app: app)
+        capture("Lineup draft after device turn", app: app)
         XCUIDevice.shared.orientation = .portrait
         XCTAssertEqual(name.value as? String, "Adaptive draft")
         app.buttons["lineup-editor-exit"].tap()
@@ -149,7 +149,7 @@ final class AdaptiveLayoutUITests: XCTestCase {
         XCTAssertEqual(name.value as? String, "Adaptive draft")
     }
 
-    func testPhotoFramingSurvivesRotation() {
+    func testPhotoFramingSurvivesDeviceTurn() {
         let app = demo()
         app.buttons["root-send-action"].firstMatch.tap()
         let sample = app.buttons["Use Sample"]
@@ -164,7 +164,7 @@ final class AdaptiveLayoutUITests: XCTestCase {
         XCUIDevice.shared.orientation = .landscapeLeft
         XCTAssertEqual(zoom.label, before)
         XCTAssertEqual(app.descendants(matching: .any)["send-preview-display-picker"].label, target)
-        capture("Photo composer landscape", app: app)
+        capture("Photo composer after device turn", app: app)
         XCUIDevice.shared.orientation = .portrait
         XCTAssertEqual(zoom.label, before)
         capture("Photo composer portrait", app: app)

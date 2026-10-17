@@ -1670,12 +1670,12 @@ final class TesseraeCompanionUITests: XCTestCase {
         }
         XCUIDevice.shared.orientation = .landscapeLeft
         defer { XCUIDevice.shared.orientation = .portrait }
-        let landscape = XCTNSPredicateExpectation(
-            predicate: NSPredicate { _, _ in app.frame.width > app.frame.height }, object: nil
+        let portrait = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in app.frame.height > app.frame.width }, object: nil
         )
-        XCTAssertEqual(XCTWaiter.wait(for: [landscape], timeout: 5), .completed)
+        XCTAssertEqual(XCTWaiter.wait(for: [portrait], timeout: 5), .completed)
         XCTAssertTrue(app.buttons["root-send-action"].firstMatch.isHittable)
-        readabilityAttachment(app, "\(prefix) landscape layout")
+        readabilityAttachment(app, "\(prefix) portrait after device turn")
         XCUIDevice.shared.orientation = .portrait
 
         app.buttons["root-send-action"].tap()

@@ -659,10 +659,11 @@ remain available without a drag. Target rows report selection and Lineup
 enablement uses a native switch. Full-screen photos support VoiceOver zoom
 adjustments, and custom movement follows Reduce Motion.
 
-The app supports portrait and landscape on iPhone and all orientations on
-iPad. Boundary checks exercise rotation and preserve selected content and
-drafts. Native search, sheets, keyboards, and navigation retain system
-interaction and appearance.
+Ordinary iPhones stay in portrait. iPad supports all orientations so system
+window resizing remains available, and Duo retains window and fold adaptation.
+Boundary checks preserve selected content and drafts when the device turns or
+the available window changes. Native search, sheets, keyboards, and navigation
+retain system interaction and appearance.
 
 Server-originated names remain as entered by the administrator. Error
 codes are localized in the app; optional server details remain verbatim

@@ -66,6 +66,9 @@ observed result.
 ## Adaptive UI checks
 
 Run `AdaptiveLayoutUITests` on an ordinary iPhone, an iPad, and iPhone Duo.
+Turning an ordinary iPhone must leave the app in portrait; iPad and Duo keep
+their system window adaptation. Run the long-display-name tests on iPhone to
+verify the portrait lock at standard and accessibility text sizes.
 Use the iOS 27.0 runtime for the first two and iOS 27.1 for Duo when validating
 foldable support. The app retains its iOS 18 deployment minimum; older SDKs
 compile the two-column layout without referencing the new ArrangementView API.

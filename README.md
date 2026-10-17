@@ -171,6 +171,7 @@ project.yml
 ```
 
 Use Xcode 16.4 or later (27.1 for iPhone Duo) to build; the minimum deployment target remains iOS 18.
+Ordinary iPhones use portrait; iPad and Duo layouts adapt to the available window.
 Generate and open the Xcode project:
 
 ```sh
