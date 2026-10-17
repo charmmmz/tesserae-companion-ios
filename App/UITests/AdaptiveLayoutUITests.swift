@@ -55,7 +55,11 @@ final class AdaptiveLayoutUITests: XCTestCase {
         let identifier = element.identifier.isEmpty ? element.label : element.identifier
         let region = app.scrollViews.containing(.button, identifier: identifier).firstMatch
         for _ in 0..<6 where !element.isHittable {
-            if region.exists {
+            if region.exists, region.identifier == "dashboard-list" {
+                // Duo can place system navigation on the side; list scrolling
+                // does not need the photo composer's edge-only gesture.
+                region.swipeUp()
+            } else if region.exists {
                 // Scroll at the content edge: dragging the photo itself intentionally
                 // edits framing, especially with accessibility text on a large sheet.
                 let start = region.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.8))
