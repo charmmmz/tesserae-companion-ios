@@ -139,6 +139,16 @@ struct DisplaysView: View {
         }
         .navigationDestination(isPresented: $lineupsPresented) {
             LineupsView(isActive: isActive && lineupsPresented)
+                .toolbar {
+                    if horizontalSizeClass == .regular {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button("Displays", systemImage: "chevron.backward") {
+                                lineupsPresented = false
+                            }
+                            .accessibilityIdentifier("lineups-back-to-displays")
+                        }
+                    }
+                }
         }
         .task(id: shouldAutoRefresh) {
             guard shouldAutoRefresh else { return }
@@ -231,6 +241,7 @@ struct DisplaysView: View {
         displayOrder: [String]
     ) -> some View {
         Button {
+            lineupsPresented = false
             selectedDisplayID = display.id
             preferredColumn = .detail
         } label: {

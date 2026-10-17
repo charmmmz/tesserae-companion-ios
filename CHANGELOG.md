@@ -39,6 +39,8 @@ capabilities.
 
 ### Fixed
 
+- Restored the return from Lineups to Displays in wide windows, including
+  switching directly to a display from the sidebar.
 - Improved Paper text contrast with a brighter dark foreground tint and a
   separate darker fill for white-label actions; the light warning colour
   also meets the normal-text contrast threshold on cards and tinted banners.

@@ -168,8 +168,8 @@ frame identity before the app exposes that editor.
 
 The iOS target and Share Extension support both device families while retaining
 an iOS 18 minimum. Displays use a persistent NavigationSplitView; compact windows
-collapse into native navigation. Dashboards use the full page with adaptive cards
-or a list, opening a
+collapse into native navigation, and Lineups has an explicit return action in wide
+windows. Dashboards use the full page with adaptive cards or a list, opening a
 compact modal for preview and push. Photo composers keep their draft,
 framing, target selection and submission state above adaptive regions. On iOS
 27.1, wide composers use ArrangementView to respect active divisions; older

@@ -136,6 +136,38 @@ final class AdaptiveLayoutUITests: XCTestCase {
         XCTAssertTrue(app.scrollViews["dashboard-list"].isHittable)
     }
 
+    func testLineupsCanReturnToDisplays() {
+        let app = demo()
+        let manage = app.buttons["manage-lineups"]
+        let create = app.buttons["lineup-create"]
+        for _ in 0..<2 {
+            manage.tap()
+            XCTAssertTrue(create.waitForExistence(timeout: 5))
+            let explicitBack = app.buttons["lineups-back-to-displays"]
+            let back = explicitBack.exists
+                ? explicitBack
+                : app.navigationBars["Lineups"].buttons["Displays"]
+            XCTAssertTrue(back.isHittable)
+            if explicitBack.exists { capture("Lineups return action", app: app) }
+            back.tap()
+            let returned = XCTNSPredicateExpectation(
+                predicate: NSPredicate { _, _ in !create.exists && manage.isHittable }, object: nil
+            )
+            XCTAssertEqual(XCTWaiter.wait(for: [returned], timeout: 5), .completed)
+        }
+
+        manage.tap()
+        XCTAssertTrue(create.waitForExistence(timeout: 5))
+        let kitchen = app.buttons["display-card-picpak-kitchen"]
+        if kitchen.isHittable {
+            // A wide window keeps the sidebar visible. Selecting a display must
+            // leave Lineups instead of keeping its old destination over the detail.
+            kitchen.tap()
+            XCTAssertTrue(app.navigationBars["Kitchen"].waitForExistence(timeout: 5))
+            XCTAssertFalse(create.exists)
+        }
+    }
+
     func testSelectedDisplaySurvivesDeviceTurn() {
         let app = demo()
         let kitchen = app.buttons["display-card-picpak-kitchen"]

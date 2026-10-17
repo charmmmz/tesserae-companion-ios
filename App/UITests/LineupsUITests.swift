@@ -28,9 +28,13 @@ final class LineupsUITests: XCTestCase {
         XCTAssertTrue(lineupCard.label.contains("Kitchen deck"))
         XCTAssertTrue(lineupCard.label.contains("enabled"))
         XCTAssertTrue(lineupCard.label.contains("Showing Pantry"))
-        XCTAssertFalse(app.staticTexts["Enabled"].exists)
+        let lineupList = app.scrollViews.containing(
+            .button, identifier: "lineup-card-kitchen-deck"
+        ).firstMatch
+        XCTAssertTrue(lineupList.exists)
+        XCTAssertFalse(lineupList.staticTexts["Enabled"].exists)
         XCTAssertFalse(
-            app.staticTexts["Schedules, decks, and rotations"].exists
+            lineupList.staticTexts["Schedules, decks, and rotations"].exists
         )
 
         let listScreenshot = XCTAttachment(screenshot: app.screenshot())
