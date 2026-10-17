@@ -72,6 +72,28 @@ final class AdaptiveLayoutUITests: XCTestCase {
         XCTAssertTrue(element.isHittable)
     }
 
+    private func waitUntilHittable(_ element: XCUIElement) {
+        // A destination can exist while its tab or sheet transition still blocks
+        // interaction, particularly on older simulator runtimes.
+        let ready = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in element.exists && element.isHittable },
+            object: nil
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 5), .completed)
+    }
+
+    private func expandDashboardSection(_ sectionID: String, app: XCUIApplication) {
+        let list = app.scrollViews["dashboard-list"]
+        waitUntilHittable(list)
+        let group = app.buttons["dashboard-section-toggle-\(sectionID)"]
+        for _ in 0..<6 where !group.exists { list.swipeUp() }
+        XCTAssertTrue(group.waitForExistence(timeout: 5))
+        reveal(group, app: app)
+        // Group preferences survive app launches, including other UI tests.
+        if group.value as? String == "Collapsed" { group.tap() }
+        XCTAssertEqual(group.value as? String, "Expanded")
+    }
+
     func testAccessibilityComposerKeepsSendReachable() {
         let app = demo(accessibilityText: true)
         app.buttons["root-send-action"].firstMatch.tap()
@@ -95,6 +117,7 @@ final class AdaptiveLayoutUITests: XCTestCase {
         XCTAssertGreaterThan(list.frame.width, app.frame.width * 0.8)
         capture("Dashboard overview", app: app)
 
+        expandDashboardSection("shared", app: app)
         let shared = app.buttons["dashboard-push-photo-frame-shared"]
         for _ in 0..<6 where !shared.exists { list.swipeUp() }
         XCTAssertTrue(shared.waitForExistence(timeout: 3))
@@ -113,8 +136,7 @@ final class AdaptiveLayoutUITests: XCTestCase {
         XCUIDevice.shared.orientation = .landscapeLeft
         XCTAssertTrue(push.isEnabled)
         app.buttons["Cancel"].tap()
-        XCTAssertTrue(list.waitForExistence(timeout: 5))
-        XCTAssertTrue(list.isHittable)
+        waitUntilHittable(list)
     }
 
     func testAccessibilityDashboardModalKeepsActionReachable() {
@@ -122,6 +144,7 @@ final class AdaptiveLayoutUITests: XCTestCase {
         app.buttons["Dashboards"].firstMatch.tap()
         let push = app.buttons["dashboard-push-pantry-display-picpak-kitchen"]
         let list = app.scrollViews["dashboard-list"]
+        expandDashboardSection("display-picpak-kitchen", app: app)
         for _ in 0..<6 where !push.exists { list.swipeUp() }
         XCTAssertTrue(push.waitForExistence(timeout: 5))
         reveal(push, app: app)
@@ -137,7 +160,7 @@ final class AdaptiveLayoutUITests: XCTestCase {
         XCTAssertLessThan(cancel.frame.maxY, title.frame.minY)
         capture("Accessibility Dashboard modal", app: app)
         app.buttons["Cancel"].tap()
-        XCTAssertTrue(app.scrollViews["dashboard-list"].isHittable)
+        waitUntilHittable(list)
     }
 
     func testLineupsCanReturnToDisplays() {
