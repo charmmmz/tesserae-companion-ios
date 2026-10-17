@@ -8,7 +8,7 @@ public repository, and contributions are welcome under Apache-2.0.
 
 Requirements:
 
-- macOS with Xcode;
+- macOS with Xcode 16.4 or later (Xcode 27.1 for iPhone Duo);
 - iOS 18 or later SDK support;
 - Swift 6;
 - Python 3.11 or later for contract checks.
@@ -62,3 +62,20 @@ Flask sessions, privileged MCP, or internal web routes.
 All checks must pass before review. Physical-device or display claims must
 record the iPhone/iOS version, Tesserae version, display model, transport, and
 observed result.
+
+## Adaptive UI checks
+
+Run `AdaptiveLayoutUITests` on an ordinary iPhone, an iPad, and iPhone Duo.
+Use the iOS 27.0 runtime for the first two and iOS 27.1 for Duo when validating
+foldable support. The app retains its iOS 18 deployment minimum; older SDKs
+compile the two-column layout without referencing the new ArrangementView API.
+
+CI runs app unit and adaptive UI tests on iPhone and iPad using the existing
+macOS 15 runner. The separate Duo job runs only when repository variable
+`IOS_DUO_RUNNER` identifies a runner with Xcode 27.1 and its Duo runtime. Without
+that configuration it is explicitly skipped, so a green standard CI run does
+not establish Duo coverage. A configured Duo runner missing its SDK or simulator
+fails the job. Local Duo checks and the full release checklist remain required.
+
+Simulator rotation does not prove Duo fold transitions. Follow the physical-device
+and host-share cases in `TESTFLIGHT_CHECKLIST.md` before release.
