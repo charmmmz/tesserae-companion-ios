@@ -225,7 +225,7 @@ struct LineupsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(
-                "Enable Create and edit Lineups for this iPhone in Tesserae Settings → Companion. You do not need to pair again."
+                "Enable Create and edit Lineups for this device in Tesserae Settings → Companion. You do not need to pair again."
             )
         }
         .task(id: model.supportsLineupAuthoring) {
@@ -673,7 +673,7 @@ private struct LineupDetailView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(
-                "Enable Create and edit Lineups for this iPhone in Tesserae Settings → Companion. You do not need to pair again."
+                "Enable Create and edit Lineups for this device in Tesserae Settings → Companion. You do not need to pair again."
             )
         }
         .task(id: model.supportsLineupAuthoring) {

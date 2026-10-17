@@ -759,7 +759,7 @@ final class NearbyDeviceManager: NSObject {
                 screenModeError = nil
             } catch {
                 trace("Photo authorization storage failed: \(describe(error))")
-                screenModeError = String(localized: "Mode saved, but this iPhone could not be authorized. Try Allow This iPhone again.")
+                screenModeError = String(localized: "Mode saved, but this device could not be authorized. Try Allow This Device again.")
             }
         case "photo_info":
             guard activeDevice?.mode == .photo,
@@ -1189,7 +1189,7 @@ extension NearbyDeviceManager: @preconcurrency CBPeripheralDelegate {
                           info.model == "picpak_4_2", photoCharacteristic != nil,
                           let device = activeDevice, info.sid == device.sessionID.hexString,
                           let key = BLEPhotoKeyStore.read(info.id) else {
-                        fail(String(localized: "Authorize this iPhone in PicPak Maintenance first: hold the button for 10 seconds, release before 20, then choose Manual (Bluetooth)."))
+                        fail(String(localized: "Authorize this device in PicPak Maintenance first: hold the button for 10 seconds, release before 20, then choose Manual (Bluetooth)."))
                         return
                     }
                     qrCode = BLESetupQRCode(deviceID: info.id, sessionID: device.sessionID, secret: key)

@@ -25,20 +25,20 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Find, securely configure, and send photos to nearby Tesserae displays.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_tesserae._tcp</string>
 	</array>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Discover and connect to your Tesserae server on the local network.</string>
-	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Find, securely configure, and send photos to nearby Tesserae displays.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Scan the temporary setup code shown on a Tesserae display.</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Read only the Activity, Sleep, and Workout summaries you select and send a minimal seven-day snapshot directly to your paired Tesserae server.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Tesserae does not write data to Health. HealthKit access is read-only and is used only to build the seven-day summaries you choose for your paired Tesserae server.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Discover and connect to your Tesserae server on the local network.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
 	<string>Choose Reminders lists to send a minimal, expiring snapshot to your Tesserae server.</string>
 	<key>TesseraeAppGroupIdentifier</key>
@@ -54,6 +54,15 @@
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 </dict>
 </plist>

@@ -264,7 +264,7 @@ struct NearbyDeviceSetupView: View {
                 .multilineTextAlignment(.center)
                 .lineLimit(nil)
                 .fixedSize(horizontal: false, vertical: true)
-            Text("Keep your iPhone close.")
+            Text("Keep your device close.")
                 .foregroundStyle(.secondary)
         }
         .padding(28)
@@ -314,7 +314,7 @@ struct NearbyDeviceSetupView: View {
                 } header: {
                     Text("Known Networks")
                 } footer: {
-                    Text("Saved by Tesserae on this iPhone.")
+                    Text("Saved by Tesserae on this device.")
                 }
             }
 
@@ -369,7 +369,7 @@ struct NearbyDeviceSetupView: View {
                     SecureField("Wi-Fi password", text: $password)
                         .textContentType(.password)
                     if model.activeInstance != nil {
-                        Toggle("Save on this iPhone", isOn: $savePassword)
+                        Toggle("Save on this device", isOn: $savePassword)
                     }
                 }
             }
@@ -464,7 +464,7 @@ struct NearbyDeviceSetupView: View {
                         if nearby.isSavingScreenMode {
                             HStack { ProgressView(); Text("Saving screen mode…") }
                         } else if mode == .bluetooth, !nearby.photoAuthorized {
-                            Button("Allow This iPhone") { nearby.setScreenMode(.bluetooth) }
+                            Button("Allow This Device") { nearby.setScreenMode(.bluetooth) }
                                 .disabled(nearby.screenModeNeedsReadback || nearby.connectionState != .ready)
                         }
                         if let message = nearby.screenModeError {
@@ -867,7 +867,7 @@ struct NearbyDisplaysView: View {
                 } header: {
                     Text("Known Networks")
                 } footer: {
-                    Text("Saved by Tesserae on this iPhone.")
+                    Text("Saved by Tesserae on this device.")
                 }
             }
             Section {

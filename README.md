@@ -6,7 +6,7 @@
 
 <p align="center">
   The official native iOS companion for <a href="https://github.com/dmellok/tesserae">Tesserae</a>.<br>
-  Control displays, send content, and run everyday actions from your iPhone.
+  Control displays, send content, and run everyday actions from your iPhone or iPad.
 </p>
 
 <p align="center">
@@ -170,6 +170,7 @@ Contracts/
 project.yml
 ```
 
+Use Xcode 16.4 or later (27.1 for iPhone Duo) to build; the minimum deployment target remains iOS 18.
 Generate and open the Xcode project:
 
 ```sh

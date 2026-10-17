@@ -94,12 +94,12 @@ private struct DashboardPushContext: Identifiable {
 struct DashboardsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.presentTesseraeSettings) private var presentSettings
     @State private var query = ""
     @State private var draggedOccurrenceID: DashboardOccurrenceID?
     @State private var dropTargetOccurrenceID: DashboardOccurrenceID?
     @State private var expandedOccurrenceID: DashboardOccurrenceID?
     @State private var dashboardToPush: DashboardPushContext?
+    @State private var preferredColumn: NavigationSplitViewColumn = .sidebar
     @State private var sectionContentHeights: [String: CGFloat] = [:]
     @State private var hapticEvent = TesseraeHapticEvent()
     @AppStorage("dashboardLayoutMode")
@@ -160,7 +160,47 @@ struct DashboardsView: View {
         return sections
     }
 
+    private var selectedContext: DashboardPushContext? {
+        guard let selection = dashboardToPush,
+              let dashboard = model.dashboards.first(where: { $0.id == selection.dashboard.id })
+        else { return nil }
+        let scope: DashboardPushContext.Scope
+        switch selection.scope {
+        case let .display(previous):
+            guard let display = model.displays.first(where: { $0.id == previous.id }) else { return nil }
+            scope = .display(display)
+        case .shared:
+            scope = .shared(model.sortedDisplays.filter { dashboard.deviceIDs.contains($0.id) })
+        case .unassigned:
+            scope = .unassigned
+        }
+        return DashboardPushContext(dashboard: dashboard, scope: scope)
+    }
+
     var body: some View {
+        NavigationSplitView(preferredCompactColumn: $preferredColumn) {
+            dashboardList
+                .navigationTitle("Dashboards")
+                .navigationSplitViewColumnWidth(min: 320, ideal: 400, max: 480)
+        } detail: {
+            NavigationStack {
+                if let context = selectedContext {
+                    DashboardPushSheet(context: context, isPresentedAsSheet: false) {
+                        dashboardToPush = nil
+                        preferredColumn = .sidebar
+                    }
+                    .id(context.id)
+                } else {
+                    ContentUnavailableView("Select a Dashboard", systemImage: "rectangle.grid.2x2")
+                        .tesseraeScreenBackground()
+                }
+            }
+        }
+        .navigationSplitViewStyle(.balanced)
+    }
+
+    @ViewBuilder
+    private var dashboardList: some View {
         let sections = dashboardSections
         let dashboardOrder = sections.flatMap(\.dashboards).map(\.id)
 
@@ -259,9 +299,9 @@ struct DashboardsView: View {
         .refreshable {
             await model.refreshDashboards()
         }
-        .sheet(item: $dashboardToPush) { context in
-            DashboardPushSheet(context: context)
-                .environment(model)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { _ in
+            sectionContentHeights = [:]
+            endDashboardDrag()
         }
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
@@ -279,7 +319,8 @@ struct DashboardsView: View {
                 }
                 .accessibilityIdentifier("dashboard-layout-toggle")
 
-                TesseraeSettingsToolbarButton(openSettings: presentSettings)
+                TesseraeSendToolbarButton()
+                TesseraeSettingsToolbarButton()
             }
         }
         .overlay {
@@ -599,6 +640,7 @@ struct DashboardsView: View {
             } else {
                 Button {
                     dashboardToPush = pushContext
+                    preferredColumn = .detail
                 } label: {
                     HStack(alignment: .center, spacing: 12) {
                         dashboardIdentityIcon(dashboard)
@@ -701,6 +743,7 @@ struct DashboardsView: View {
     ) -> some View {
         Button {
             dashboardToPush = pushContext
+            preferredColumn = .detail
         } label: {
             HStack(spacing: 5) {
                 if model.activeOperationIDs.contains(dashboard.id) {
@@ -965,6 +1008,8 @@ struct DashboardsView: View {
 
 private struct DashboardPushSheet: View {
     let context: DashboardPushContext
+    var isPresentedAsSheet = true
+    var onClose: (() -> Void)? = nil
 
     var body: some View {
         DashboardPreviewActionSheet(
@@ -974,7 +1019,9 @@ private struct DashboardPushSheet: View {
             displays: context.boundDisplays,
             initialDeviceIDs: context.initialDeviceIDs,
             showsDisplayPicker: context.showsDisplayPicker,
-            action: .push(context.dashboard)
+            action: .push(context.dashboard),
+            isPresentedAsSheet: isPresentedAsSheet,
+            onClose: onClose
         )
     }
 }
@@ -995,14 +1042,13 @@ struct DashboardPreviewActionSheet: View {
     let initialDeviceIDs: Set<String>
     let showsDisplayPicker: Bool
     let action: DashboardPreviewAction
+    var isPresentedAsSheet = true
+    var onClose: (() -> Void)? = nil
 
     @State private var selectedDeviceIDs: Set<String> = []
     @State private var didLoadInitialSelection = false
-    @State private var contentHeight: CGFloat = 1
-    @State private var sheetHeight: CGFloat = 400
+    @State private var isSubmitting = false
     @State private var hapticEvent = TesseraeHapticEvent()
-
-    private let maximumContentHeight: CGFloat = 460
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1014,9 +1060,10 @@ struct DashboardPreviewActionSheet: View {
 
                 HStack {
                     Button("Cancel") {
-                        dismiss()
+                        if let onClose { onClose() } else { dismiss() }
                     }
                     .tesseraeModalChromeButtonStyle()
+                    .disabled(isSubmitting)
                     Spacer()
                     if let webURL {
                         Link(destination: webURL) {
@@ -1034,17 +1081,16 @@ struct DashboardPreviewActionSheet: View {
 
             ScrollView {
                 dashboardPushContent
-                    .onGeometryChange(for: CGFloat.self) { geometry in
-                        geometry.size.height
-                    } action: { measuredHeight in
-                        contentHeight = measuredHeight
-                    }
+                    .frame(maxWidth: 760)
+                    .frame(maxWidth: .infinity)
             }
-            .frame(height: min(contentHeight, maximumContentHeight))
-            .scrollDisabled(contentHeight <= maximumContentHeight)
+            .scrollBounceBehavior(.basedOnSize)
 
             Button {
+                guard !isSubmitting else { return }
+                isSubmitting = true
                 Task {
+                    defer { isSubmitting = false }
                     await performAction()
                 }
             } label: {
@@ -1060,12 +1106,15 @@ struct DashboardPreviewActionSheet: View {
             .controlSize(.large)
             .disabled(
                 selectedDeviceIDs.isEmpty
+                    || isSubmitting
                     || isOperating
                     || isPlayingOnAllSelectedDisplays
                     || !canPerformAction
             )
             .padding(.horizontal, TesseraeComposerLayout.pagePadding)
         }
+        .interactiveDismissDisabled(isSubmitting)
+        .onChange(of: boundDeviceIDs) { _, ids in selectedDeviceIDs.formIntersection(ids) }
         .task(id: taskID) {
             loadInitialSelection()
             await model.loadDashboardPreview(
@@ -1075,14 +1124,8 @@ struct DashboardPreviewActionSheet: View {
         }
         .tesseraeScreenBackground()
         .tesseraeHapticFeedback(trigger: hapticEvent)
-        .fixedSize(horizontal: false, vertical: true)
-        .onGeometryChange(for: CGFloat.self) { geometry in
-            geometry.size.height
-        } action: { measuredHeight in
-            guard abs(sheetHeight - measuredHeight) > 0.5 else { return }
-            sheetHeight = measuredHeight
-        }
-        .presentationDetents([.height(sheetHeight)])
+        .padding(.bottom, TesseraeComposerLayout.pagePadding)
+        .presentationDetents([.large])
         .presentationContentInteraction(.scrolls)
         .presentationDragIndicator(.visible)
     }
@@ -1337,7 +1380,7 @@ struct DashboardPreviewActionSheet: View {
             )
         }
 
-        if succeeded {
+        if succeeded && isPresentedAsSheet {
             dismiss()
         }
     }

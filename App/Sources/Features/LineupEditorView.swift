@@ -478,7 +478,7 @@ private struct LineupEditorView: View {
                 Alert(
                     title: Text("Permission Required"),
                     message: Text(
-                        "Enable Create and edit Lineups for this iPhone in Tesserae Settings → Companion, then try again. You do not need to pair again."
+                        "Enable Create and edit Lineups for this device in Tesserae Settings → Companion, then try again. You do not need to pair again."
                     ),
                     primaryButton: .default(Text("Open Tesserae")) {
                         if let url = lineupAuthoringWebURL(model: model) {
@@ -654,6 +654,8 @@ private struct LineupEditorForm: View {
             scheduleSection
         }
         .scrollContentBackground(.hidden)
+        .frame(maxWidth: 820)
+        .frame(maxWidth: .infinity)
         .scrollDismissesKeyboard(.interactively)
         .simultaneousGesture(
             DragGesture(minimumDistance: 8)

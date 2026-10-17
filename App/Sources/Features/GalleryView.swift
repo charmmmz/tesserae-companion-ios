@@ -26,6 +26,15 @@ struct GalleryAspectRow: Identifiable {
     var id: String { items.first?.id ?? "empty-gallery-row" }
 }
 
+// Keep the saved density as a preference, while bounding thumbnail size for the
+// actual window. Resizing never writes back to the user's density preference.
+func galleryAdaptiveColumnCount(preferred: Int, availableWidth: CGFloat) -> Int {
+    guard availableWidth > 0 else { return min(max(preferred, 2), 8) }
+    let minimum = max(2, Int(ceil(availableWidth / 180)))
+    let maximum = max(minimum, Int((availableWidth + 2) / 66))
+    return min(max(preferred, minimum), maximum)
+}
+
 func galleryAspectRows(
     images: [GalleryImage],
     availableWidth: CGFloat,
@@ -34,7 +43,7 @@ func galleryAspectRows(
 ) -> [GalleryAspectRow] {
     guard !images.isEmpty, availableWidth > 0 else { return [] }
 
-    let columns = min(max(preferredColumns, 2), 8)
+    let columns = max(preferredColumns, 2)
     let targetHeight = max(
         44,
         (availableWidth - spacing * CGFloat(columns - 1)) / CGFloat(columns)
@@ -115,7 +124,6 @@ struct GalleryView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(AppModel.self) private var model
     @Environment(\.openURL) private var openURL
-    @Environment(\.presentTesseraeSettings) private var presentSettings
     @State private var creatingFolder = false
     @State private var permissionAlertPresented = false
 
@@ -180,7 +188,8 @@ struct GalleryView: View {
                 }
                 .accessibilityIdentifier("gallery-create-folder")
 
-                TesseraeSettingsToolbarButton(openSettings: presentSettings)
+                TesseraeSendToolbarButton()
+                TesseraeSettingsToolbarButton()
             }
         }
         .sheet(isPresented: $creatingFolder) {
@@ -195,7 +204,7 @@ struct GalleryView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(
-                "Enable Gallery uploads for this iPhone in Tesserae Settings → Companion. You do not need to pair again."
+                "Enable Gallery uploads for this device in Tesserae Settings → Companion. You do not need to pair again."
             )
         }
         .tesseraeScreenBackground()
@@ -469,7 +478,7 @@ private struct GalleryFolderView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(
-                "Enable Gallery uploads for this iPhone in Tesserae Settings → Companion."
+                "Enable Gallery uploads for this device in Tesserae Settings → Companion."
             )
         }
         .alert(
@@ -484,7 +493,7 @@ private struct GalleryFolderView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(
-                "Enable Offline Album management for this iPhone in Tesserae Settings → Companion. You do not need to pair again."
+                "Enable Offline Album management for this device in Tesserae Settings → Companion. You do not need to pair again."
             )
         }
         .tesseraeScreenBackground()
@@ -607,7 +616,7 @@ private struct GalleryPhotoGrid: View {
     private var squareColumns: [GridItem] {
         Array(
             repeating: GridItem(.flexible(), spacing: spacing),
-            count: min(max(columnCount, 2), 8)
+            count: galleryAdaptiveColumnCount(preferred: columnCount, availableWidth: availableWidth)
         )
     }
 
@@ -615,7 +624,7 @@ private struct GalleryPhotoGrid: View {
         galleryAspectRows(
             images: images,
             availableWidth: availableWidth,
-            preferredColumns: columnCount,
+            preferredColumns: galleryAdaptiveColumnCount(preferred: columnCount, availableWidth: availableWidth),
             spacing: spacing
         )
     }
@@ -811,14 +820,7 @@ private struct GalleryImageView: View {
             }
         }
         .sheet(item: $sendDraft) { draft in
-            NavigationStack {
-                SendView(
-                    initialImage: draft,
-                    prioritizesFramingGesture: true
-                )
-                    .navigationTitle("Send")
-            }
-            .tesseraeMessageCenterOverlay()
+            SendComposerSheet(initialImage: draft) { sendDraft = nil }
         }
         .tesseraeScreenBackground()
     }

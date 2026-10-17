@@ -502,6 +502,7 @@ final class TesseraeMessageCenter {
 }
 
 private struct TesseraeMessageCenterHost: View {
+    let topPadding: CGFloat
     @Environment(TesseraeMessageCenter.self) private var center
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hostID = UUID()
@@ -513,6 +514,7 @@ private struct TesseraeMessageCenterHost: View {
                let message = center.currentMessage
             {
                 presentedMessage(message)
+                    .padding(.top, topPadding)
                     .id(message.id)
                     .transition(messageTransition)
             }
@@ -635,21 +637,24 @@ private struct TesseraeMessageCenterHost: View {
     }
 }
 
-private struct TesseraeMessageCenterOverlayModifier: ViewModifier {
+private struct TesseraeMessageCenterInsetModifier: ViewModifier {
     let topPadding: CGFloat
 
     func body(content: Content) -> some View {
-        content.overlay(alignment: .top) {
-            TesseraeMessageCenterHost()
+        // Reserve actual layout space outside navigation containers. A safe-area
+        // inset alone can still overlap their toolbar on compact presentations.
+        VStack(spacing: 0) {
+            TesseraeMessageCenterHost(topPadding: topPadding)
                 .padding(.horizontal, 16)
-                .safeAreaPadding(.top, topPadding)
+            content
         }
+        .tesseraeScreenBackground()
     }
 }
 
 extension View {
-    func tesseraeMessageCenterOverlay(topPadding: CGFloat = 8) -> some View {
-        modifier(TesseraeMessageCenterOverlayModifier(topPadding: topPadding))
+    func tesseraeMessageCenterInset(topPadding: CGFloat = 8) -> some View {
+        modifier(TesseraeMessageCenterInsetModifier(topPadding: topPadding))
     }
 }
 

@@ -139,3 +139,18 @@ acceptance of 0.8.1.
       network topology, and redacted reproduction steps.
 - [ ] Do not create a release tag or move to external testers until the
       physical test matrix and privacy review are complete.
+
+## iPad and iPhone Duo release gate
+
+- [ ] Run the adaptive UI suite on phone, iPad and Duo; retain screenshots and xcresult.
+- [ ] On iPad, resize continuously through narrow, square, wide, short and tall windows;
+      verify selection, Lineup drafts, photo framing and sends remain intact.
+- [ ] On Duo, open, close, rotate and partially fold during editing and sending;
+      verify controls avoid active fold/camera regions and one tap sends once.
+- [ ] Exercise Photos, Files and Safari sharing on iPad and Duo, including cancel,
+      retry, keyboard, host dismissal and returning to the main app.
+- [ ] Verify QR scanning in both orientations and after a window resize on real hardware.
+- [ ] Complete BLE setup and photo delivery on both devices, with background/foreground
+      transitions and an interrupted transfer. Simulator fixtures do not certify radio behavior.
+- [ ] Check maximum Dynamic Type, VoiceOver, light/dark appearance and keyboard access.
+- [ ] Run on an iOS 18 device or runtime to validate the minimum deployment target.

@@ -10,11 +10,16 @@ struct SendImageDraft: Identifiable {
     let contentType: String
 }
 
+@MainActor @Observable
+final class SendSubmissionSession {
+    var isSubmitting = false
+}
+
 struct SendView: View {
     @Environment(AppModel.self) private var model
     @Environment(TesseraeMessageCenter.self) private var messageCenter
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @Environment(\.presentTesseraeSettings) private var presentSettings
+    @State private var previewHeight: CGFloat = 276
     @State private var source: SendSource = .photo
     @State private var pickerItem: PhotosPickerItem?
     @State private var loadedPickerItem: PhotosPickerItem?
@@ -29,7 +34,7 @@ struct SendView: View {
     @State private var framingSession = PhotoFramingSession()
     @State private var imageLoadRevision = UUID()
     @State private var isPreparingImage = false
-    @State private var isSubmitting = false
+    @State private var submission: SendSubmissionSession
     @State private var imageRevision = UUID()
     @State private var imageSendAttempt: ImageSendAttempt?
     @State private var selectedDeviceIDs: Set<String> = []
@@ -42,100 +47,32 @@ struct SendView: View {
 
     init(
         initialImage: SendImageDraft? = nil,
-        prioritizesFramingGesture: Bool = false
+        prioritizesFramingGesture: Bool = false,
+        submission: SendSubmissionSession = SendSubmissionSession()
     ) {
+        _submission = State(initialValue: submission)
         self.prioritizesFramingGesture = prioritizesFramingGesture
         self.initialImage = initialImage
     }
 
     private var previewSlotHeight: CGFloat {
-        276 + 9 + 44
+        previewHeight + 9 + 44
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: TesseraeComposerLayout.sectionSpacing) {
-                if supportsLinks {
-                    sourceCard
-                }
-                targetCard
-                if source == .photo {
-                    imagePickerCard
-                } else {
-                    linkCard
-                }
-                fitCard
-
-                Button {
-                    framingSession.freeze()
-                    isSubmitting = true
-                    let submittedSource = source
-                    let submittedData = imageData
-                    let submittedFit = fitMode
-                    let submittedContentType = imageContentType
-                    let targetGroups = outgoingImageTargetGroups
-                    let keys = imageIdempotencyKeys(for: targetGroups)
-                    let submittedURL = linkURL
-                    let submittedLinkKind = linkKind
-                    let submittedIDs = Array(selectedDeviceIDs)
-                    Task {
-                        defer {
-                            isSubmitting = false
-                            framingSession.resumeEditing()
-                        }
-                        showSendingMessage()
-                        let sent: Bool
-                        switch submittedSource {
-                        case .photo:
-                            guard let submittedData else {
-                                messageCenter.dismiss(id: "send.submission")
-                                return
-                            }
-                            sent = await model.sendImage(
-                                data: submittedData,
-                                fit: submittedFit,
-                                targetGroups: targetGroups,
-                                idempotencyKeys: keys,
-                                contentType: submittedContentType
-                            )
-                        case .link:
-                            guard let submittedURL else {
-                                messageCenter.dismiss(id: "send.submission")
-                                return
-                            }
-                            sent = await model.sendLink(
-                                url: submittedURL,
-                                kind: submittedLinkKind,
-                                fit: submittedFit,
-                                deviceIDs: submittedIDs
-                            )
-                        }
-                        if sent {
-                            linkFieldIsFocused = false
-                            showSentConfirmation(confirmationMessage)
-                            clearSubmittedSource()
-                        } else {
-                            messageCenter.dismiss(id: "send.submission")
-                            hapticEvent.trigger(.error)
-                        }
-                    }
-                } label: {
-                    Label("Send to Displays", systemImage: "paperplane.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(TesseraeTheme.accentFill)
-                .foregroundStyle(.white)
-                .controlSize(.large)
-                .disabled(
-                    !sourceIsReady
-                        || selectedDeviceIDs.isEmpty
-                        || isSending
-                )
-            }
-            .padding(TesseraeComposerLayout.pagePadding)
-            .disabled(isSubmitting)
+        AdaptiveComposerLayout {
+            if supportsLinks { sourceCard }
+            if source == .photo { imagePickerCard } else { linkCard }
+        } controls: {
+            targetCard
+            fitCard
+            submitButton
         }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
+            previewHeight = composerCanvasHeight(in: size)
+        }
+        .disabled(submission.isSubmitting)
+        .interactiveDismissDisabled(submission.isSubmitting)
         .task(id: sendPreferenceContextID) {
             await loadSendPreferences()
         }
@@ -163,11 +100,6 @@ struct SendView: View {
             framingSession.updateAutomaticContext(context, data: imageData)
         }
         .onChange(of: model.activeInstance?.id) { framingSession.discardAnalysis() }
-        .onDisappear {
-            imageLoadRevision = UUID()
-            isPreparingImage = false
-            framingSession.discardAnalysis()
-        }
         .photosPicker(
             isPresented: $isPhotoPickerPresented,
             selection: $pickerItem,
@@ -175,11 +107,82 @@ struct SendView: View {
         )
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                TesseraeSettingsToolbarButton(openSettings: presentSettings)
+                TesseraeSettingsToolbarButton()
             }
         }
         .tesseraeScreenBackground()
         .tesseraeHapticFeedback(trigger: hapticEvent)
+    }
+
+    private var submitButton: some View {
+        Button {
+            guard !submission.isSubmitting else { return }
+            framingSession.freeze()
+            submission.isSubmitting = true
+            let submittedSource = source
+            let submittedData = imageData
+            let submittedFit = fitMode
+            let submittedContentType = imageContentType
+            let targetGroups = outgoingImageTargetGroups
+            let keys = imageIdempotencyKeys(for: targetGroups)
+            let submittedURL = linkURL
+            let submittedLinkKind = linkKind
+            let submittedIDs = Array(selectedDeviceIDs)
+            Task {
+                defer {
+                    submission.isSubmitting = false
+                    framingSession.resumeEditing()
+                }
+                showSendingMessage()
+                let sent: Bool
+                switch submittedSource {
+                case .photo:
+                    guard let submittedData else {
+                        messageCenter.dismiss(id: "send.submission")
+                        return
+                    }
+                    sent = await model.sendImage(
+                        data: submittedData,
+                        fit: submittedFit,
+                        targetGroups: targetGroups,
+                        idempotencyKeys: keys,
+                        contentType: submittedContentType
+                    )
+                case .link:
+                    guard let submittedURL else {
+                        messageCenter.dismiss(id: "send.submission")
+                        return
+                    }
+                    sent = await model.sendLink(
+                        url: submittedURL,
+                        kind: submittedLinkKind,
+                        fit: submittedFit,
+                        deviceIDs: submittedIDs
+                    )
+                }
+                if sent {
+                    linkFieldIsFocused = false
+                    showSentConfirmation(confirmationMessage)
+                    clearSubmittedSource()
+                } else {
+                    messageCenter.dismiss(id: "send.submission")
+                    hapticEvent.trigger(.error)
+                }
+            }
+        } label: {
+            Label("Send to Displays", systemImage: "paperplane.fill")
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(TesseraeTheme.accentFill)
+        .foregroundStyle(.white)
+        .controlSize(.large)
+        .disabled(
+            !sourceIsReady
+                || selectedDeviceIDs.isEmpty
+                || isSending
+        )
+        .accessibilityIdentifier("send-submit")
     }
 
     private var sourceCard: some View {
@@ -213,6 +216,8 @@ struct SendView: View {
                 .focused($linkFieldIsFocused)
                 .textInputAutocapitalization(.never)
                 .keyboardType(.URL)
+                .submitLabel(.done)
+                .onSubmit { linkFieldIsFocused = false }
                 .autocorrectionDisabled()
                 .textFieldStyle(.roundedBorder)
                 .accessibilityIdentifier("send-link-url")
@@ -343,7 +348,7 @@ struct SendView: View {
                     image: previewImage,
                     panel: panel,
                     fit: fitMode,
-                    maximumCanvasHeight: 250,
+                    maximumCanvasHeight: previewHeight,
                     emptyTitle: imageSelectionLabel,
                     accessibilityIdentifier: "send-panel-preview",
                     imageAccessibilityIdentifier: "selected-image-preview",
@@ -374,7 +379,7 @@ struct SendView: View {
                     choosePhotoFromPreview()
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: dynamicTypeSize.isAccessibilitySize ? nil : 276, alignment: .top)
+                .frame(height: dynamicTypeSize.isAccessibilitySize ? nil : previewHeight, alignment: .top)
             } else {
                 ContentUnavailableView {
                     Label("No display selected", systemImage: "rectangle.slash")
@@ -382,7 +387,7 @@ struct SendView: View {
                     Text("Connect a display to preview its panel shape.")
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: 276, alignment: .top)
+                .frame(height: previewHeight, alignment: .top)
             }
 
             previewFooter
@@ -673,7 +678,7 @@ struct SendView: View {
         .init(
             imageID: framingSession.imageID, instanceID: model.activeInstance?.id,
             aspect: previewAspectRatio, targetIDs: selectedDeviceIDs, maximumZoom: maximumFramingZoom,
-            isReady: canAutoFrame && didLoadSendPreferences && !isSubmitting
+            isReady: canAutoFrame && didLoadSendPreferences && !submission.isSubmitting
         )
     }
 

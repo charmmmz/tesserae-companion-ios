@@ -20,9 +20,12 @@ struct NearbyPhotoSendView: View {
     @Environment(NearbyDeviceManager.self) private var nearby
     let device: NearbyTesseraeDevice
     @State private var hasStarted = false
+    @State private var didConnect = false
+    @State private var loadedSelection: PhotosPickerItem?
     @State private var deviceDetailsExpanded = false
     @State private var photoPickerPresented = false
     @State private var selection: PhotosPickerItem?
+    @State private var previewHeight: CGFloat = 250
     @State private var image: UIImage?
     @State private var imageData: Data?
     @State private var fit: ImageFitMode = .fill
@@ -64,6 +67,11 @@ struct NearbyPhotoSendView: View {
                 }
             }
         }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
+            previewHeight = composerCanvasHeight(in: size)
+        }
+        .frame(idealWidth: 960, idealHeight: 760)
+        .presentationSizing(.fitted)
         .presentationDetents([preferredDetent])
         .animation(.snappy, value: phase)
         .presentationDragIndicator(.visible)
@@ -72,7 +80,8 @@ struct NearbyPhotoSendView: View {
         .photosPicker(isPresented: $photoPickerPresented, selection: $selection, matching: .images)
         .task(id: hasStarted) {
             // Discovery only offers the invitation. Connect once the user chooses Send.
-            guard hasStarted else { return }
+            guard hasStarted, !didConnect else { return }
+            didConnect = true
             nearby.connect(to: device, qrCode: nil)
 #if DEBUG
             if ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_PICPAK_PHOTO"] == "1" {
@@ -87,7 +96,7 @@ struct NearbyPhotoSendView: View {
 #endif
         }
         .task(id: selection) { await loadPhoto() }
-        .onDisappear { sendTask?.cancel(); framing.discardAnalysis() }
+
     }
 
     private var introduction: some View {
@@ -114,32 +123,30 @@ struct NearbyPhotoSendView: View {
     }
 
     private var composer: some View {
-        ScrollView {
-            VStack(spacing: TesseraeComposerLayout.sectionSpacing) {
-                previewCard
-                fitCard
-                if nearby.photoState == .sending {
-                    VStack(spacing: 8) {
-                        Text("Sending photo…").font(.subheadline)
-                        ProgressView(value: nearby.photoProgress)
-                            .tint(TesseraeTheme.info)
-                    }
-                    .frame(maxWidth: .infinity)
+        AdaptiveComposerLayout {
+            previewCard
+        } controls: {
+            fitCard
+            if nearby.photoState == .sending {
+                VStack(spacing: 8) {
+                    Text("Sending photo…").font(.subheadline)
+                    ProgressView(value: nearby.photoProgress)
+                        .tint(TesseraeTheme.info)
                 }
-                Button { send() } label: {
-                    Label(preparing ? "Preparing…" : "Send to PicPak", systemImage: "paperplane.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(TesseraeTheme.accentFill).controlSize(.large)
-                .foregroundStyle(.white)
-                .disabled(image == nil || busy)
-                .accessibilityIdentifier("ble-send-photo")
-                if let localError { Text(localError).font(.footnote).foregroundStyle(.secondary) }
-                Text("Keep this app open and your iPhone close to PicPak.")
-                    .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
             }
-            .padding(TesseraeComposerLayout.pagePadding).frame(maxWidth: .infinity)
+            Button { send() } label: {
+                Label(preparing ? "Preparing…" : "Send to PicPak", systemImage: "paperplane.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(TesseraeTheme.accentFill).controlSize(.large)
+            .foregroundStyle(.white)
+            .disabled(image == nil || busy)
+            .accessibilityIdentifier("ble-send-photo")
+            if let localError { Text(localError).font(.footnote).foregroundStyle(.secondary) }
+            Text("Keep this app open and your device close to PicPak.")
+                .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
         }
     }
 
@@ -170,7 +177,7 @@ struct NearbyPhotoSendView: View {
                             .controlSize(.large)
                         Text(nearby.statusMessage ?? "Connecting securely…")
                             .font(.headline)
-                        Text("Keep your iPhone close.").foregroundStyle(.secondary)
+                        Text("Keep your device close.").foregroundStyle(.secondary)
                     }
                 }
                 .multilineTextAlignment(.center)
@@ -193,7 +200,7 @@ struct NearbyPhotoSendView: View {
             }
 
             TesseraePanelImagePreview(
-                image: image, panel: panel, fit: fit, maximumCanvasHeight: 250,
+                image: image, panel: panel, fit: fit, maximumCanvasHeight: previewHeight,
                 emptyTitle: preparing ? "Loading photo…" : "Choose a photo",
                 accessibilityIdentifier: "ble-photo-preview",
                 imageAccessibilityIdentifier: "ble-photo-image",
@@ -302,7 +309,7 @@ struct NearbyPhotoSendView: View {
     }
 
     private func loadPhoto() async {
-        guard let selection else { return }
+        guard let selection, selection != loadedSelection else { return }
         preparing = true
         localError = nil
         image = nil
@@ -316,6 +323,7 @@ struct NearbyPhotoSendView: View {
                 try UploadImagePreparer.prepare(data: data, fallbackContentType: "image/jpeg", maximumPixelSize: 1536)
             }.value
             try Task.checkCancellation()
+            loadedSelection = selection
             imageData = prepared.data
             image = UIImage(data: prepared.data)
             framing.requestAutomatically(data: prepared.data, aspect: aspect, maximumZoom: 4)
@@ -340,5 +348,5 @@ struct NearbyPhotoSendView: View {
             } catch { if !Task.isCancelled { localError = error.localizedDescription } }
         }
     }
-    private func close() { sendTask?.cancel(); nearby.endSession(for: device); dismiss() }
+    private func close() { sendTask?.cancel(); framing.discardAnalysis(); nearby.endSession(for: device); dismiss() }
 }

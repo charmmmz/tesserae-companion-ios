@@ -13,6 +13,14 @@ capabilities.
 
 ### Changed
 
+- Added iPad device support, phone landscape orientations, and iPhone Duo
+  adaptation while retaining iOS 18 compatibility. Displays and Dashboards use
+  collapsible list/detail navigation; root Send uses the system toolbar.
+- Photo, nearby-device and Share Extension composers adapt to the available
+  space while preserving draft, target and framing state. Gallery thumbnails
+  and forms now respect window width; camera previews follow device rotation.
+- Added phone/iPad/Duo UI regression coverage and a physical-device release gate.
+
 - Adopted Tesserae's Paper branding across the app and Share Extension:
   brick-red actions, warm paper surfaces, and matching light/dark colours.
   Native iOS typography, navigation, controls, gestures, and card shapes

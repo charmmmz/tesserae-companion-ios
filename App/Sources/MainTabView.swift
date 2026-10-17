@@ -1,24 +1,36 @@
 import SwiftUI
 
-private struct TesseraeSettingsActionKey: EnvironmentKey {
-    static let defaultValue: @MainActor @Sendable () -> Void = {}
-}
-
-extension EnvironmentValues {
-    var presentTesseraeSettings: @MainActor @Sendable () -> Void {
-        get { self[TesseraeSettingsActionKey.self] }
-        set { self[TesseraeSettingsActionKey.self] = newValue }
+@MainActor
+@Observable
+final class CompanionPresentation {
+    enum Sheet: String, Identifiable {
+        case settings, send, uploads
+        var id: String { rawValue }
     }
+
+    var sheet: Sheet?
 }
 
 struct TesseraeSettingsToolbarButton: View {
-    let openSettings: @MainActor @Sendable () -> Void
+    @Environment(CompanionPresentation.self) private var presentation
 
     var body: some View {
         Button("Settings", systemImage: "gearshape") {
-            openSettings()
+            presentation.sheet = .settings
         }
         .accessibilityIdentifier("root-settings")
+    }
+}
+
+struct TesseraeSendToolbarButton: View {
+    @Environment(CompanionPresentation.self) private var presentation
+
+    var body: some View {
+        Button("Send", systemImage: "paperplane.fill") {
+            presentation.sheet = .send
+        }
+        .accessibilityHint("Opens the Send composer.")
+        .accessibilityIdentifier("root-send-action")
     }
 }
 
@@ -33,35 +45,29 @@ struct MainTabView: View {
     @Environment(AppModel.self) private var model
     @Environment(GalleryUploadCoordinator.self) private var galleryUploads
     @Environment(TesseraeMessageCenter.self) private var messageCenter
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var selection: AppTab = .displays
-    @State private var settingsPresented = false
-    @State private var sendPresented = false
-    @State private var uploadDetailsPresented = false
+    @State private var presentation = CompanionPresentation()
 
     var body: some View {
-        tabsWithSendAction
-            .environment(\.presentTesseraeSettings) {
-                settingsPresented = true
-            }
-            .sheet(isPresented: $settingsPresented) {
-                SettingsView()
-            }
-            .sheet(isPresented: $sendPresented) {
-                RootSendSheet {
-                    sendPresented = false
+        tabs
+            .environment(presentation)
+            .sheet(item: $presentation.sheet) { sheet in
+                switch sheet {
+                case .settings:
+                    SettingsView()
+                case .send:
+                    SendComposerSheet { presentation.sheet = nil }
+                case .uploads:
+                    GalleryUploadDetailView()
                 }
-            }
-            .sheet(isPresented: $uploadDetailsPresented) {
-                GalleryUploadDetailView()
             }
             .onChange(of: galleryUploads.hasUploads) { _, hasUploads in
-                if !hasUploads {
-                    uploadDetailsPresented = false
+                if !hasUploads && presentation.sheet == .uploads {
+                    presentation.sheet = nil
                 }
             }
-            .onChange(of: uploadDetailsPresented) { _, isPresented in
-                galleryUploads.setDetailsPresented(isPresented)
+            .onChange(of: presentation.sheet) { _, sheet in
+                galleryUploads.setDetailsPresented(sheet == .uploads)
             }
             .task {
 #if DEBUG
@@ -78,42 +84,17 @@ struct MainTabView: View {
             }
     }
 
-    private var tabsWithSendAction: some View {
-        tabs
-            .overlay(alignment: .bottomTrailing) {
-                sendActionButton
-                    .padding(.trailing, sendActionTrailingPadding)
-                    .padding(.bottom, sendActionBottomPadding)
-            }
-    }
-
-    private var sendActionBottomPadding: CGFloat {
-        horizontalSizeClass == .compact ? 62 : 20
-    }
-
-    private var sendActionTrailingPadding: CGFloat {
-        horizontalSizeClass == .compact ? 18 : 24
-    }
-
     private var rootContentIsVisible: Bool {
-        !settingsPresented && !sendPresented && !uploadDetailsPresented
+        presentation.sheet == nil
     }
 
     private var tabs: some View {
         TabView(selection: $selection) {
-            tabNavigation(title: "Displays") {
-                DisplaysView(
-                    isActive: selection == .displays && rootContentIsVisible
-                )
-            }
+            DisplaysView(isActive: selection == .displays && rootContentIsVisible)
             .tabItem { Label("Displays", systemImage: "display") }
             .tag(AppTab.displays)
 
-            tabNavigation(title: "Dashboards") {
-                DashboardsView(
-                    isActive: selection == .dashboards && rootContentIsVisible
-                )
-            }
+            DashboardsView(isActive: selection == .dashboards && rootContentIsVisible)
             .tabItem { Label("Dashboards", systemImage: "rectangle.grid.2x2") }
             .tag(AppTab.dashboards)
 
@@ -137,27 +118,6 @@ struct MainTabView: View {
             .tabItem { Label("Activity", systemImage: "clock.arrow.circlepath") }
             .tag(AppTab.activity)
         }
-    }
-
-    private var sendActionButton: some View {
-        Button {
-            sendPresented = true
-        } label: {
-            Image(systemName: "paperplane.fill")
-                .font(.system(size: 21, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 54, height: 54)
-                .background(TesseraeTheme.accentFill, in: Circle())
-                .overlay {
-                    Circle()
-                        .stroke(.white.opacity(0.22), lineWidth: 1)
-                }
-                .shadow(color: .black.opacity(0.24), radius: 12, y: 6)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Send")
-        .accessibilityHint("Opens the Send composer.")
-        .accessibilityIdentifier("root-send-action")
     }
 
     private var galleryUploadMessageRevision: String {
@@ -208,7 +168,7 @@ struct MainTabView: View {
                     ? nil
                     : counts.failed > 0 ? .error : .success,
                 tapAction: {
-                    uploadDetailsPresented = true
+                    presentation.sheet = .uploads
                 }
             )
         )
@@ -225,31 +185,33 @@ struct MainTabView: View {
     }
 }
 
-private struct RootSendSheet: View {
-    @State private var settingsPresented = false
+struct SendComposerSheet: View {
+    @State private var presentation = CompanionPresentation()
+    @State private var submission = SendSubmissionSession()
+    var initialImage: SendImageDraft? = nil
 
     let close: () -> Void
 
     var body: some View {
         NavigationStack {
-            SendView(prioritizesFramingGesture: true)
+            SendView(initialImage: initialImage, prioritizesFramingGesture: true, submission: submission)
                 .navigationTitle("Send")
+                .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Close") {
+                        Button("Close", systemImage: "xmark") {
                             close()
                         }
+                        .disabled(submission.isSubmitting)
                         .accessibilityIdentifier("root-send-close")
                     }
                 }
         }
-        .environment(\.presentTesseraeSettings) {
-            settingsPresented = true
-        }
-        .sheet(isPresented: $settingsPresented) {
-            SettingsView()
-        }
-        .tesseraeMessageCenterOverlay()
+        .environment(presentation)
+        .sheet(item: $presentation.sheet) { _ in SettingsView() }
+        .tesseraeMessageCenterInset()
+        .frame(idealWidth: 960, idealHeight: 760)
+        .presentationSizing(.fitted)
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
     }

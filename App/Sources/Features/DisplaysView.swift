@@ -12,9 +12,9 @@ private struct DisplayPreviewRefreshID: Hashable {
 struct DisplaysView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.presentTesseraeSettings) private var presentSettings
     @State private var draggedDisplayID: String?
     @State private var reorderMotion = DisplayReorderMotion()
     @State private var transientDisplayOrderIDs: [String]?
@@ -22,7 +22,8 @@ struct DisplaysView: View {
     @State private var dragStartFrames: [String: CGRect] = [:]
     @State private var dragStartOrderIDs: [String] = []
     @State private var lastReorderedIndex: Int?
-    @State private var selectedDisplay: DisplaySummary?
+    @State private var selectedDisplayID: String?
+    @State private var preferredColumn: NavigationSplitViewColumn = .sidebar
     @State private var lineupsPresented = false
     @State private var hapticEvent = TesseraeHapticEvent()
     private let displayCardSpacing: CGFloat = 14
@@ -51,17 +52,31 @@ struct DisplaysView: View {
     }
 
     var body: some View {
+        NavigationSplitView(preferredCompactColumn: $preferredColumn) {
+            displayList
+                .navigationTitle("Displays")
+                .navigationSplitViewColumnWidth(min: 300, ideal: 360, max: 440)
+        } detail: {
+            NavigationStack {
+                if let display = model.displays.first(where: { $0.id == selectedDisplayID }) {
+                    DisplayDetailView(display: display)
+                        .id(display.id)
+                } else {
+                    ContentUnavailableView("Select a Display", systemImage: "display")
+                        .tesseraeScreenBackground()
+                }
+            }
+        }
+        .navigationSplitViewStyle(.balanced)
+    }
+
+    @ViewBuilder
+    private var displayList: some View {
         let displays = displayedDisplays
         let displayOrder = displays.map(\.id)
 
         ScrollView {
             LazyVStack(spacing: displayCardSpacing) {
-                if usesCompactOfflineHeader {
-                    Text("Displays")
-                        .font(.largeTitle.bold())
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .accessibilityAddTraits(.isHeader)
-                }
                 if model.supportsLineups {
                     manageLineupsButton
                 }
@@ -72,7 +87,6 @@ struct DisplaysView: View {
             }
             .padding(16)
             .onPreferenceChange(DisplayCardFrameKey.self) { frames in
-                guard draggedDisplayID == nil else { return }
                 displayFrames = frames
             }
             .animation(
@@ -123,13 +137,6 @@ struct DisplaysView: View {
         .refreshable {
             await model.refreshDisplays()
         }
-        .sheet(item: $selectedDisplay) { display in
-            NavigationStack {
-                DisplayDetailView(display: display)
-            }
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-        }
         .navigationDestination(isPresented: $lineupsPresented) {
             LineupsView(isActive: isActive && lineupsPresented)
         }
@@ -153,21 +160,18 @@ struct DisplaysView: View {
                 )
             }
         }
-        .onDisappear {
-            guard draggedDisplayID != nil else { return }
-            endDisplayDrag()
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { _ in
+            cancelDisplayDrag()
         }
+        .onDisappear { cancelDisplayDrag() }
         .toolbar {
-            if !usesCompactOfflineHeader {
-                ToolbarItem(placement: .topBarTrailing) {
-                    TesseraeSettingsToolbarButton(openSettings: presentSettings)
+            if horizontalSizeClass == .compact || selectedDisplayID == nil {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    TesseraeSendToolbarButton()
+                    TesseraeSettingsToolbarButton()
                 }
             }
         }
-        .toolbar(
-            usesCompactOfflineHeader && !lineupsPresented ? .hidden : .visible,
-            for: .navigationBar
-        )
         .tesseraeScreenBackground()
         .tesseraeHapticFeedback(trigger: hapticEvent)
     }
@@ -227,7 +231,8 @@ struct DisplaysView: View {
         displayOrder: [String]
     ) -> some View {
         Button {
-            selectedDisplay = display
+            selectedDisplayID = display.id
+            preferredColumn = .detail
         } label: {
             DisplayCard(
                 display: display,
@@ -459,6 +464,10 @@ struct DisplaysView: View {
                 hapticEvent.trigger(.rigidImpact)
             }
         }
+        cancelDisplayDrag()
+    }
+
+    private func cancelDisplayDrag() {
         draggedDisplayID = nil
         reorderMotion.reset()
         transientDisplayOrderIDs = nil
@@ -835,10 +844,9 @@ private struct DisplayDetailView: View {
         .navigationTitle(currentDisplay.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Close") {
-                    dismiss()
-                }
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                TesseraeSendToolbarButton()
+                TesseraeSettingsToolbarButton()
             }
         }
         .task(

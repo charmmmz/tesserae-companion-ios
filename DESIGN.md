@@ -164,6 +164,21 @@ frame identity before the app exposes that editor.
 | V15-07 | Defaults and favourites | Remember a favourite dashboard and default photo targets per instance; expose them to the share extension and intents. |
 | V15-08 | Multiple instances | Store more than one Tesserae instance and let the user choose an active instance. |
 
+### iPad and iPhone Duo adaptation
+
+The iOS target and Share Extension support both device families while retaining
+an iOS 18 minimum. Displays and Dashboards use a persistent NavigationSplitView;
+compact windows collapse into native navigation. Photo composers keep their draft,
+framing, target selection and submission state above adaptive regions. On iOS
+27.1, wide composers use ArrangementView to respect active divisions; older
+systems use a two-column layout. Compact and accessibility layouts remain scrollable.
+
+Root actions use system toolbars, and message capsules reserve safe-area space so
+they do not cover navigation actions. Gallery density follows the available width
+without overwriting the saved preference. Resizing cancels an unfinished display
+reorder without committing it. BLE connection ownership remains in NearbyDeviceManager;
+window changes do not initiate a new connection. No server API changes are required.
+
 ### Explicitly out of scope for release 1.0
 
 - Canvas or dashboard editing;
@@ -177,7 +192,8 @@ frame identity before the app exposes that editor.
 - background Apple Health, Calendar, or Photos synchronization;
 - exposing the experimental MCP authoring surface to the app;
 - arbitrary server administration;
-- Android, iPad-specific layouts, watchOS, macOS, or visionOS targets.
+- Android, watchOS, macOS, or visionOS targets;
+- independent multiwindow scenes or simultaneous inner/outer-display experiences.
 
 The existing web UI remains accessible from the app for these workflows.
 They may be reconsidered only after release 1.0 usage validates the
@@ -643,10 +659,10 @@ remain available without a drag. Target rows report selection and Lineup
 enablement uses a native switch. Full-screen photos support VoiceOver zoom
 adjustments, and custom movement follows Reduce Motion.
 
-The app currently declares portrait orientation only. Boundary checks rotate
-the device to verify that supported portrait layout remains usable; they do
-not imply landscape support. Native search, sheets, keyboards, and navigation
-retain system interaction and appearance.
+The app supports portrait and landscape on iPhone and all orientations on
+iPad. Boundary checks exercise rotation and preserve selected content and
+drafts. Native search, sheets, keyboards, and navigation retain system
+interaction and appearance.
 
 Server-originated names remain as entered by the administrator. Error
 codes are localized in the app; optional server details remain verbatim

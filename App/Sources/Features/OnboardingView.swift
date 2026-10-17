@@ -25,7 +25,7 @@ struct OnboardingView: View {
                             Text("Tesserae Companion")
                                 .font(.largeTitle.bold())
                             Text(
-                                "The official Tesserae app for quick, everyday display tasks on iPhone."
+                                "The official Tesserae app for quick, everyday display tasks on iPhone and iPad."
                             )
                             .font(.title3)
                             .foregroundStyle(.secondary)
@@ -165,7 +165,9 @@ struct OnboardingView: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                 }
+                .frame(maxWidth: 680)
                 .padding(20)
+                .frame(maxWidth: .infinity)
                 .onGeometryChange(for: CGFloat.self) { geometry in
                     ceil(geometry.size.height)
                 } action: { height in

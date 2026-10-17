@@ -45,7 +45,7 @@ struct RootView: View {
             }
         }
         .animation(.snappy, value: model.activeInstance?.id)
-        .tesseraeMessageCenterOverlay()
+        .tesseraeMessageCenterInset()
         .sheet(isPresented: $serversPresented) {
             OnboardingView(isChoosingServer: true)
         }

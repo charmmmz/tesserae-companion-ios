@@ -104,7 +104,7 @@ struct SettingsView: View {
                         HStack(spacing: 12) {
                             Image(systemName: "trash")
                                 .foregroundStyle(TesseraeTheme.danger)
-                            Text("Clear Activity on This iPhone")
+                            Text("Clear Activity on This Device")
                                 .foregroundStyle(TesseraeTheme.danger)
                         }
                     }
@@ -113,7 +113,7 @@ struct SettingsView: View {
                     Text("Data & Privacy")
                 } footer: {
                     Text(
-                        "Clearing Activity affects only this Tesserae instance on this iPhone. Server History remains available in Tesserae."
+                        "Clearing Activity affects only this Tesserae instance on this device. Server History remains available in Tesserae."
                     )
                 }
 
@@ -133,6 +133,8 @@ struct SettingsView: View {
                 }
             }
             .scrollContentBackground(.hidden)
+            .frame(maxWidth: 820)
+            .frame(maxWidth: .infinity)
             .tesseraeScreenBackground()
             .onChange(of: hapticFeedbackEnabled) { _, isEnabled in
                 TesseraeHapticSettings.isEnabled = isEnabled
@@ -159,7 +161,7 @@ struct SettingsView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text(
-                    "This clears the Activity list for this Tesserae instance and hides existing server History on this iPhone. Server History remains available in Tesserae."
+                    "This clears the Activity list for this Tesserae instance and hides existing server History on this device. Server History remains available in Tesserae."
                 )
             }
         }

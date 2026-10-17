@@ -6,7 +6,6 @@ import UIKit
 struct ActivityView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.presentTesseraeSettings) private var presentSettings
     @State private var expandedQueuedImageID: String?
     @State private var expandedJobID: String?
     @State private var expandedHistoryID: String?
@@ -52,7 +51,9 @@ struct ActivityView: View {
                     .disabled(model.isLoadingMoreHistory)
                 }
             }
+            .frame(maxWidth: 820)
             .padding(16)
+            .frame(maxWidth: .infinity)
         }
         .overlay {
             if model.queuedImageRequests.isEmpty
@@ -92,8 +93,9 @@ struct ActivityView: View {
             }
         }
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                TesseraeSettingsToolbarButton(openSettings: presentSettings)
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                TesseraeSendToolbarButton()
+                TesseraeSettingsToolbarButton()
             }
         }
         .tesseraeScreenBackground()

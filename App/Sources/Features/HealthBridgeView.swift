@@ -279,7 +279,7 @@ struct HealthBridgeView: View {
     private var unavailableSection: some View {
         Section {
             Label(
-                "Health data is unavailable. Use a physical iPhone to configure access.",
+                "Health data is unavailable. Use a physical device to configure access.",
                 systemImage: "heart.slash"
             )
             .foregroundStyle(.secondary)

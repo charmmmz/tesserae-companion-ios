@@ -1,5 +1,5 @@
 "Tesserae Companion" = "Tesserae 伴侣";
-"The official Tesserae app for quick, everyday display tasks on iPhone." = "Tesserae 官方 iOS App，轻松完成显示屏的日常操作。";
+"The official Tesserae app for quick, everyday display tasks on iPhone and iPad." = "Tesserae 官方 iOS App，轻松完成显示屏的日常操作。";
 "Find your server" = "查找服务器";
 "Discover on your local network or enter an address." = "在局域网中发现，或手动输入地址。";
 "Send what matters" = "发送重要内容";
@@ -192,7 +192,7 @@
 "Clearing Local Activity…" = "正在清除本地活动记录…";
 "Clear Local Activity?" = "要清除本地活动记录吗？";
 "Local Activity was cleared." = "本地活动记录已清除。";
-"This clears the Activity list for this Tesserae instance and hides existing server History on this iPhone. Server History remains available in Tesserae." = "这会清空此 Tesserae 实例在本机的活动列表，并在此 iPhone 上隐藏现有的服务器历史记录。服务器历史记录仍可在 Tesserae 中查看。";
+"This clears the Activity list for this Tesserae instance and hides existing server History on this device. Server History remains available in Tesserae." = "这会清空此 Tesserae 实例在本机的活动列表，并在此设备上隐藏现有的服务器历史记录。服务器历史记录仍可在 Tesserae 中查看。";
 "Product" = "产品";
 "Official Tesserae iOS app" = "Tesserae 官方 iOS App";
 "App Version" = "App 版本";
@@ -266,9 +266,9 @@
 "Stale" = "需要刷新";
 "Expired" = "已过期";
 "Activity Actions" = "活动操作";
-"Clear Activity on This iPhone…" = "清除此 iPhone 上的活动记录…";
+"Clear Activity on This Device…" = "清除此设备上的活动记录…";
 "Reminders Access" = "提醒事项权限";
-"Only incomplete reminders from selected lists are shared. Notes, URLs, alarms, and locations stay on this iPhone." = "只共享所选列表中的未完成事项；备注、URL、提醒和位置会留在此 iPhone 上。";
+"Only incomplete reminders from selected lists are shared. Notes, URLs, alarms, and locations stay on this device." = "只共享所选列表中的未完成事项；备注、URL、提醒和位置会留在此设备上。";
 "Lists" = "列表";
 "Choose up to 20 lists." = "最多选择 20 个列表。";
 "Sync" = "同步";
@@ -277,7 +277,7 @@
 "The connected server does not support Apple Reminders yet." = "当前连接的服务器尚不支持 Apple 提醒事项。";
 "Stop Reminders Sync?" = "要停止提醒事项同步吗？";
 "Stop Sync and Delete Snapshot" = "停止同步并删除快照";
-"Selected lists stay on this iPhone. Tesserae deletes the latest snapshot now; rendered History thumbnails expire normally." = "所选列表会保留在此 iPhone 上。Tesserae 会立即删除最新快照；已渲染的历史缩略图仍按正常期限过期。";
+"Selected lists stay on this device. Tesserae deletes the latest snapshot now; rendered History thumbnails expire normally." = "所选列表会保留在此设备上。Tesserae 会立即删除最新快照；已渲染的历史缩略图仍按正常期限过期。";
 "Sync Status" = "同步状态";
 "Snapshot" = "快照";
 "Last Sync" = "上次同步";
@@ -324,8 +324,8 @@
 "Zoom Out" = "缩小";
 "Reset Zoom" = "重置缩放";
 "Grid Options" = "网格选项";
-"Enable Gallery uploads for this iPhone in Tesserae Settings → Companion. You do not need to pair again." = "请在 Tesserae 设置 → Companion 中允许此 iPhone 上传图库，无需重新配对。";
-"Enable Gallery uploads for this iPhone in Tesserae Settings → Companion." = "请在 Tesserae 设置 → Companion 中允许此 iPhone 上传图库。";
+"Enable Gallery uploads for this device in Tesserae Settings → Companion. You do not need to pair again." = "请在 Tesserae 设置 → Companion 中允许此设备上传图库，无需重新配对。";
+"Enable Gallery uploads for this device in Tesserae Settings → Companion." = "请在 Tesserae 设置 → Companion 中允许此设备上传图库。";
 "New Folder" = "新建文件夹";
 "Folder" = "文件夹";
 "Family photos" = "家庭照片";
@@ -469,7 +469,7 @@
 "Wi-Fi settings are saved. The display is restarting." = "Wi-Fi 设置已保存，显示屏正在重启。";
 "Other displays: hold Refresh for 3 seconds, then release." = "其他显示屏：长按刷新键 3 秒后松开，即可进入维护模式。";
 "PicPak: hold for 10 seconds, then release before 20 to enter Bluetooth maintenance." = "PicPak：长按 10 秒，在 20 秒前松开，即可进入蓝牙维护。";
-"Authorize this iPhone in PicPak Maintenance first: hold the button for 10 seconds, release before 20, then choose Manual (Bluetooth)." = "请先在 PicPak 蓝牙维护中授权这部 iPhone：长按按键 10 秒，在 20 秒前松开，然后选择手动（蓝牙）模式。";
+"Authorize this device in PicPak Maintenance first: hold the button for 10 seconds, release before 20, then choose Manual (Bluetooth)." = "请先在 PicPak 蓝牙维护中授权这台设备：长按按键 10 秒，在 20 秒前松开，然后选择手动（蓝牙）模式。";
 
 "Move Up" = "上移";
 "Move Down" = "下移";
@@ -513,7 +513,7 @@
 
 /* Readability review: settings, Lineups, nearby setup */
 "Actions" = "操作";
-"Allow This iPhone" = "允许这部 iPhone";
+"Allow This Device" = "允许这台设备";
 "Clear Wi-Fi Settings" = "清除 Wi-Fi 设置";
 "Continue" = "继续";
 "Current Network" = "当前网络";
@@ -526,7 +526,7 @@
 "Forget" = "忘记";
 "Forgets Wi-Fi and restarts. Tesserae server settings stay saved." = "忘记 Wi-Fi 后重启，保留 Tesserae 服务器设置。";
 "IP Address" = "IP 地址";
-"Keep your iPhone close." = "请将 iPhone 靠近显示屏。";
+"Keep your device close." = "请将设备靠近显示屏。";
 "Known Networks" = "已知网络";
 "Nearby Displays" = "附近的显示屏";
 "No displays found" = "未发现显示屏";
@@ -535,16 +535,16 @@
 "Repair or Change Wi-Fi" = "修复或更换 Wi-Fi";
 "Reset" = "重置";
 "Restart Display" = "重启显示屏";
-"Save on this iPhone" = "保存到这部 iPhone";
-"Saved by Tesserae on this iPhone." = "由 Tesserae 保存在这部 iPhone 上。";
+"Save on this device" = "保存到这台设备";
+"Saved by Tesserae on this device." = "由 Tesserae 保存在这台设备上。";
 "Saving screen mode…" = "正在保存屏幕模式…";
 "Scan Again" = "重新扫描";
 "Scan Code" = "扫描验证码";
 "Scan the temporary code shown on the display." = "扫描显示屏上的临时验证码。";
 "Try Again" = "重试";
 "Update your Tesserae Server to continue." = "请更新 Tesserae 服务器后继续。";
-"Clear Activity on This iPhone" = "清除这部 iPhone 上的活动";
-"Clearing Activity affects only this Tesserae instance on this iPhone. Server History remains available in Tesserae." = "清除活动仅影响这部 iPhone 上的当前 Tesserae 实例。服务器历史记录仍可在 Tesserae 中查看。";
+"Clear Activity on This Device" = "清除这台设备上的活动";
+"Clearing Activity affects only this Tesserae instance on this device. Server History remains available in Tesserae." = "清除活动仅影响这台设备上的当前 Tesserae 实例。服务器历史记录仍可在 Tesserae 中查看。";
 "Data & Privacy" = "数据与隐私";
 "Haptic Feedback" = "触感反馈";
 "Health" = "健康";
@@ -567,7 +567,7 @@
 "Different dashboards showing" = "正在显示不同的仪表盘";
 "Edit" = "编辑";
 "Edit on the web" = "在网页端编辑";
-"Enable Create and edit Lineups for this iPhone in Tesserae Settings → Companion. You do not need to pair again." = "在 Tesserae 设置 → 伴侣中，为这部 iPhone 启用创建和编辑播放队列权限，无需重新配对。";
+"Enable Create and edit Lineups for this device in Tesserae Settings → Companion. You do not need to pair again." = "在 Tesserae 设置 → 伴侣中，为这台设备启用创建和编辑播放队列权限，无需重新配对。";
 "Enabled" = "已启用";
 "Every day" = "每天";
 "Fri" = "周五";
@@ -607,7 +607,7 @@
 "Wed" = "周三";
 "Weekdays" = "工作日";
 "refresh off" = "自动刷新已关闭";
-"Enable Offline Album management for this iPhone in Tesserae Settings → Companion. You do not need to pair again." = "在 Tesserae 设置 → 伴侣中，为这部 iPhone 启用离线相册管理权限，无需重新配对。";
+"Enable Offline Album management for this device in Tesserae Settings → Companion. You do not need to pair again." = "在 Tesserae 设置 → 伴侣中，为这台设备启用离线相册管理权限，无需重新配对。";
 "Nearby Display" = "附近的显示屏";
 "Verify Display" = "验证显示屏";
 "Connecting" = "正在连接";
@@ -654,3 +654,5 @@
 "Opens Lineups and controls." = "打开播放队列和控制。";
 
 "Tap for details. Long press and drag to reorder." = "轻点查看详情。长按拖动可调整顺序。";
+"Select a Display" = "选择一台显示设备";
+"Select a Dashboard" = "选择一个看板";

@@ -27,6 +27,8 @@ final class DeviceSetupQRScannerController: UIViewController {
     private let metadataOutput = AVCaptureMetadataOutput()
     private var previewLayer: AVCaptureVideoPreviewLayer?
     private var didDeliverCode = false
+    private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
+    private var rotationObservation: NSKeyValueObservation?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -38,6 +40,22 @@ final class DeviceSetupQRScannerController: UIViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         previewLayer?.frame = view.bounds
+        if let rotationCoordinator {
+            updatePreviewRotation(rotationCoordinator.videoRotationAngleForHorizonLevelPreview)
+        }
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        if previewLayer != nil && !session.isRunning && !didDeliverCode {
+            session.startRunning()
+        }
+    }
+
+    private func updatePreviewRotation(_ angle: CGFloat) {
+        guard let connection = previewLayer?.connection,
+              connection.isVideoRotationAngleSupported(angle) else { return }
+        connection.videoRotationAngle = angle
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -82,6 +100,14 @@ final class DeviceSetupQRScannerController: UIViewController {
         layer.frame = view.bounds
         view.layer.insertSublayer(layer, at: 0)
         previewLayer = layer
+        let coordinator = AVCaptureDevice.RotationCoordinator(device: camera, previewLayer: layer)
+        rotationCoordinator = coordinator
+        rotationObservation = coordinator.observe(
+            \.videoRotationAngleForHorizonLevelPreview, options: [.initial, .new]
+        ) { [weak self] _, change in
+            guard let angle = change.newValue else { return }
+            Task { @MainActor [weak self] in self?.updatePreviewRotation(angle) }
+        }
         session.startRunning()
     }
 

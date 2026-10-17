@@ -71,7 +71,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         )
         XCTAssertTrue(
             app.staticTexts[
-                "The official Tesserae app for quick, everyday display tasks on iPhone."
+                "The official Tesserae app for quick, everyday display tasks on iPhone and iPad."
             ].exists
         )
         XCTAssertTrue(app.buttons["Enter Server Address"].exists)
@@ -189,7 +189,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "value == %@", "Manual (Bluetooth)"), object: mode
         )], timeout: 3), .completed)
-        XCTAssertFalse(app.buttons["Allow This iPhone"].exists)
+        XCTAssertFalse(app.buttons["Allow This Device"].exists)
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "PicPak Manual Bluetooth Mode"; shot.lifetime = .keepAlways; add(shot)
         mode.tap()
@@ -526,7 +526,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(sendAction.exists)
         XCTAssertLessThan(capsule.frame.midY, app.frame.height * 0.2)
         XCTAssertGreaterThan(sendAction.frame.midX, app.frame.midX)
-        XCTAssertGreaterThan(sendAction.frame.minY, app.frame.height * 0.7)
+        XCTAssertTrue(sendAction.isHittable)
         XCTAssertFalse(capsule.frame.intersects(sendAction.frame))
 
         let capsuleScreenshot = XCTAttachment(screenshot: app.screenshot())
@@ -857,8 +857,8 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(
             app.navigationBars["Kitchen"].waitForExistence(timeout: 2)
         )
-        XCTAssertTrue(app.navigationBars["Kitchen"].buttons["Close"].exists)
-        XCTAssertFalse(app.navigationBars["Kitchen"].buttons["Displays"].exists)
+        XCTAssertTrue(app.navigationBars["Kitchen"].buttons["Displays"].exists)
+        XCTAssertFalse(app.navigationBars["Kitchen"].buttons["Close"].exists)
         XCTAssertTrue(app.staticTexts["Current Screen"].exists)
         XCTAssertFalse(
             app.descendants(matching: .any)[
@@ -886,7 +886,7 @@ final class TesseraeCompanionUITests: XCTestCase {
             ],
             hasAspectRatio: 800.0 / 480.0
         )
-        app.navigationBars["Kitchen"].buttons["Close"].tap()
+        app.navigationBars["Kitchen"].buttons["Displays"].tap()
         XCTAssertTrue(
             app.staticTexts["Kitchen"].waitForExistence(timeout: 2)
         )
@@ -907,6 +907,9 @@ final class TesseraeCompanionUITests: XCTestCase {
             "dashboard-section-toggle-display-picpak-kitchen"
         ]
         XCTAssertTrue(kitchenDashboardGroup.waitForExistence(timeout: 2))
+        if kitchenDashboardGroup.value as? String == "Collapsed" {
+            kitchenDashboardGroup.tap()
+        }
         XCTAssertEqual(kitchenDashboardGroup.value as? String, "Expanded")
         let pantryTitle = app.staticTexts[
             "dashboard-title-pantry-display-picpak-kitchen"
@@ -980,11 +983,7 @@ final class TesseraeCompanionUITests: XCTestCase {
             "dashboard-push-sheet-title"
         ]
         XCTAssertTrue(pushDashboardTitle.waitForExistence(timeout: 2))
-        XCTAssertGreaterThan(
-            pushDashboardTitle.frame.minY,
-            app.frame.height * 0.2,
-            "A short Dashboard Push should fit its content instead of opening full height."
-        )
+        XCTAssertTrue(pushDashboardTitle.isHittable)
         XCTAssertFalse(
             app.staticTexts[
                 "Choose one or more displays already bound to this dashboard."
@@ -1022,7 +1021,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertLessThan(
             pushToSelectedDisplays.frame.maxY,
             app.frame.maxY,
-            "The fitted sheet must keep its primary action fully visible."
+            "The dashboard detail must keep its primary action fully visible."
         )
         let dashboardPushScreenshot = XCTAttachment(
             screenshot: app.screenshot()
@@ -1078,8 +1077,11 @@ final class TesseraeCompanionUITests: XCTestCase {
         add(dashboardScreenshot)
 
         app.buttons["root-send-action"].tap()
-        app.buttons["Use Sample"].tap()
+        let samplePhoto = app.buttons["Use Sample"]
+        scrollToButton(samplePhoto, app: app)
+        samplePhoto.tap()
         let sendButton = app.buttons["Send to Displays"]
+        scrollToButton(sendButton, app: app)
         XCTAssertTrue(sendButton.isEnabled)
         let sendButtonHeight = sendButton.frame.height
         sendButton.tap()
@@ -1220,7 +1222,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         )
     }
 
-    func testDisplayDetailsOpenAsSheet() {
+    func testDisplayDetailsOpenInNavigation() {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
@@ -1237,8 +1239,8 @@ final class TesseraeCompanionUITests: XCTestCase {
 
         let detailNavigation = app.navigationBars["Kitchen"]
         XCTAssertTrue(detailNavigation.waitForExistence(timeout: 2))
-        XCTAssertTrue(detailNavigation.buttons["Close"].exists)
-        XCTAssertFalse(detailNavigation.buttons["Displays"].exists)
+        XCTAssertFalse(detailNavigation.buttons["Close"].exists)
+        XCTAssertTrue(detailNavigation.buttons["Displays"].exists)
         XCTAssertTrue(app.staticTexts["Current Screen"].exists)
         XCTAssertTrue(
             app.descendants(matching: .any)[
@@ -1284,7 +1286,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Device ID"].exists)
         XCTAssertFalse(app.staticTexts["Colour Gamut"].exists)
 
-        detailNavigation.buttons["Close"].tap()
+        detailNavigation.buttons["Displays"].tap()
         XCTAssertTrue(kitchenCard.waitForExistence(timeout: 2))
     }
 
@@ -1481,6 +1483,17 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertLessThan(lower.frame.minY, upper.frame.minY)
     }
 
+    private func scrollToButton(_ button: XCUIElement, app: XCUIApplication) {
+        let identifier = button.identifier.isEmpty ? button.label : button.identifier
+        let region = app.scrollViews.containing(.button, identifier: identifier).firstMatch
+        for _ in 0..<6 where !button.isHittable {
+            let start = region.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.8))
+            let end = region.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.15))
+            start.press(forDuration: 0.05, thenDragTo: end)
+        }
+        XCTAssertTrue(button.isHittable)
+    }
+
     private func assertPreview(
         _ preview: XCUIElement,
         hasAspectRatio expectedRatio: CGFloat,
@@ -1655,12 +1668,14 @@ final class TesseraeCompanionUITests: XCTestCase {
             app.swipeUp()
             readabilityAttachment(app, "\(prefix) display hardware")
         }
-        let portraitFrame = app.frame
         XCUIDevice.shared.orientation = .landscapeLeft
         defer { XCUIDevice.shared.orientation = .portrait }
-        XCTAssertLessThan(app.frame.width, app.frame.height)
-        XCTAssertEqual(app.frame.width, portraitFrame.width, accuracy: 1)
-        readabilityAttachment(app, "\(prefix) rotated portrait-only app")
+        let landscape = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in app.frame.width > app.frame.height }, object: nil
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [landscape], timeout: 5), .completed)
+        XCTAssertTrue(app.buttons["root-send-action"].firstMatch.isHittable)
+        readabilityAttachment(app, "\(prefix) landscape layout")
         XCUIDevice.shared.orientation = .portrait
 
         app.buttons["root-send-action"].tap()

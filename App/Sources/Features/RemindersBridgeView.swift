@@ -33,7 +33,7 @@ struct RemindersBridgeView: View {
                     Text("Reminders Access")
                 } footer: {
                     Text(
-                        "Only incomplete reminders from selected lists are shared. Notes, URLs, alarms, and locations stay on this iPhone."
+                        "Only incomplete reminders from selected lists are shared. Notes, URLs, alarms, and locations stay on this device."
                     )
                 }
 
@@ -296,7 +296,7 @@ struct RemindersBridgeView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(
-                "Selected lists stay on this iPhone. Tesserae deletes the latest snapshot now; rendered History thumbnails expire normally."
+                "Selected lists stay on this device. Tesserae deletes the latest snapshot now; rendered History thumbnails expire normally."
             )
         }
     }

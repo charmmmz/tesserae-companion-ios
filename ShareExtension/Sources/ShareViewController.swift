@@ -7,6 +7,9 @@ import UniformTypeIdentifiers
 final class ShareViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
+        // A preferred size only; the host still constrains this for compact and
+        // folded presentations, which use the same scrollable composer.
+        preferredContentSize = CGSize(width: 960, height: 760)
 
         let model = ShareComposerModel(extensionContext: extensionContext)
         let host = UIHostingController(rootView: ShareComposerView(model: model))
@@ -562,10 +565,12 @@ private final class ShareComposerModel: ObservableObject {
     }
 
     func complete() {
+        framingSession.discardAnalysis()
         extensionContext?.completeRequest(returningItems: nil)
     }
 
     func cancel() {
+        framingSession.discardAnalysis()
         extensionContext?.cancelRequest(
             withError: ShareComposerError.cancelled
         )
@@ -703,6 +708,7 @@ private struct ImageSubmissionOutcome {
 
 private struct ShareComposerView: View {
     @ObservedObject var model: ShareComposerModel
+    @State private var previewHeight: CGFloat = 220
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var hapticEvent = TesseraeHapticEvent()
 
@@ -755,12 +761,14 @@ private struct ShareComposerView: View {
                 }
             }
         }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
+            previewHeight = composerCanvasHeight(in: size)
+        }
         .tint(TesseraeTheme.accent)
         .tesseraeHapticFeedback(trigger: hapticEvent)
         .onChange(of: model.automaticFramingContext, initial: true) { _, context in
             model.updateAutomaticFraming(context)
         }
-        .onDisappear { model.framingSession.discardAnalysis() }
         .onChange(of: model.phase) { oldValue, newValue in
             guard oldValue == .submitting else { return }
             switch newValue {
@@ -783,23 +791,21 @@ private struct ShareComposerView: View {
     }
 
     private var composer: some View {
-        ScrollView {
-            VStack(spacing: TesseraeComposerLayout.sectionSpacing) {
-                displaysCard
-                    .disabled(model.framingSession.isFrozen)
-                contentCard
-                layoutCard
-                    .disabled(model.framingSession.isFrozen)
+        AdaptiveComposerLayout {
+            contentCard
+        } controls: {
+            displaysCard
+                .disabled(model.framingSession.isFrozen)
+            layoutCard
+                .disabled(model.framingSession.isFrozen)
 
-                if let errorMessage = model.errorMessage {
-                    Label(errorMessage, systemImage: "exclamationmark.triangle")
-                        .font(.footnote)
-                        .foregroundStyle(TesseraeTheme.danger)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .tesseraeCard()
-                }
+            if let errorMessage = model.errorMessage {
+                Label(errorMessage, systemImage: "exclamationmark.triangle")
+                    .font(.footnote)
+                    .foregroundStyle(TesseraeTheme.danger)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .tesseraeCard()
             }
-            .padding(TesseraeComposerLayout.pagePadding)
         }
     }
 
@@ -856,7 +862,7 @@ private struct ShareComposerView: View {
                     image: model.previewImage,
                     panel: previewDisplay.panel,
                     fit: model.fit,
-                    maximumCanvasHeight: 220,
+                    maximumCanvasHeight: previewHeight,
                     emptyTitle: String(localized: "Loading shared image…"),
                     accessibilityIdentifier: "share-panel-preview",
                     imageAccessibilityIdentifier: "shared-image-preview",
