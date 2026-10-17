@@ -13,7 +13,9 @@ or approved.
 - [x] Separate branding/contrast, Chinese/Dynamic Type, accessibility, and
   Simulator test-environment changes into reviewable commits.
 - [x] Prepare English and Simplified Chinese test notes in `TESTFLIGHT_NOTES.md`.
-- [ ] Confirm this commit's Xcode Cloud archive result and its actual build number.
+- [x] Confirm application revision `b73521e` passed the Xcode Cloud archive
+  with 0 reported errors and warnings; see the linked acceptance record below.
+- [ ] Confirm the actual Xcode Cloud build number in App Store Connect.
 - [ ] Confirm processing completed and the build is available to the intended
   TestFlight group. A successful archive alone does not establish availability.
 - [ ] Complete physical-iPhone, Share Extension, VoiceOver, Bluetooth, and
@@ -142,7 +144,14 @@ acceptance of 0.8.1.
 
 ## iPad and iPhone Duo release gate
 
-- [ ] Run the adaptive UI suite on phone, iPad and Duo; retain screenshots and xcresult.
+- [x] Run the eight-case adaptive UI suite on phone and iPad at `b73521e`;
+      both CI jobs passed, with local screenshots and result bundles retained.
+- [x] Complete focused local Duo fold acceptance at `b73521e`: display detail,
+      link/photo drafts, Dashboard push dialog and Lineup editor each passed
+      open → partially open → closed → reopened (20 checkpoints total).
+      See the acceptance record for exact assertions and evidence locations.
+- [ ] Run the full adaptive UI suite on the configured Duo CI runner;
+      the current CI job was skipped because `IOS_DUO_RUNNER` is not configured.
 - [ ] Turn an ordinary iPhone sideways and confirm the app stays in portrait.
 - [ ] On iPad, resize continuously through narrow, square, wide, short and tall windows;
       verify selection, Lineup drafts, photo framing and sends remain intact.
