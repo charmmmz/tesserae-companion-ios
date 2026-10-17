@@ -10,6 +10,7 @@ private struct DisplayPreviewRefreshID: Hashable {
 }
 
 struct DisplaysView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
@@ -112,15 +113,17 @@ struct DisplaysView: View {
                 }
 
                 ForEach(displays) { display in
-                    DisplayCard(
-                        display: display,
-                        preview: model.displayPreviews[display.id]
-                    )
-                    .contentShape(Rectangle())
-                    .onTapGesture {
+                    Button {
                         selectedDisplay = display
+                    } label: {
+                        DisplayCard(
+                            display: display,
+                            preview: model.displayPreviews[display.id]
+                        )
+                        .contentShape(Rectangle())
                     }
-                    .accessibilityElement(children: .contain)
+                    .buttonStyle(.plain)
+                    .accessibilityElement(children: .combine)
                     .accessibilityIdentifier("display-card-\(display.id)")
                     .accessibilityAddTraits(.isButton)
                     .background(
@@ -183,9 +186,22 @@ struct DisplaysView: View {
                     .accessibilityHint(
                         "Tap for details. Long press and drag to reorder."
                     )
-                    .accessibilityLabel(display.name)
+                    .accessibilityLabel(Text("\(display.name), \(display.freshnessLabel)"))
                     .accessibilityValue(
                         Text("Display \((displayOrder.firstIndex(of: display.id) ?? 0) + 1) of \(displayOrder.count)")
+                    )
+                    .accessibilityCustomContent(
+                        "Hardware",
+                        Text([display.hardwarePresentation.brand?.displayName,
+                              display.hardwarePresentation.modelName].compactMap { $0 }.joined(separator: ", "))
+                    )
+                    .accessibilityCustomContent("Battery", Text(display.batteryPercent.map { "\($0)%" } ?? "—"))
+                    .accessibilityCustomContent("Wi-Fi", Text(display.rssiDBM.map { "\($0) dBm" } ?? "—"))
+                    .accessibilityCustomContent(
+                        "Status",
+                        Text(display.hasPendingRender == true
+                             ? String(localized: "Waiting for display refresh")
+                             : display.freshnessLabel)
                     )
                     .accessibilityActions {
                         if let index = displayOrder.firstIndex(of: display.id) {
@@ -216,7 +232,7 @@ struct DisplaysView: View {
                 displayFrames = frames
             }
             .animation(
-                .easeInOut(duration: 0.18),
+                reduceMotion ? nil : .easeInOut(duration: 0.18),
                 value: displayOrder
             )
         }
@@ -553,6 +569,7 @@ private struct DisplayReorderLongPressGesture: UIGestureRecognizerRepresentable 
 }
 
 private struct DisplayCard: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let display: DisplaySummary
     let preview: PreviewImageState?
@@ -680,7 +697,7 @@ private struct DisplayCard: View {
             height: previewCanvasSize.height
         )
         .animation(
-            .easeInOut(duration: 0.2),
+            reduceMotion ? nil : .easeInOut(duration: 0.2),
             value: display.hasPendingRender
         )
     }
@@ -708,6 +725,7 @@ private struct PendingRenderGlyph: View {
 }
 
 private struct DisplayDetailView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private enum ScreenPage: Hashable {
         case current
         case next
@@ -1181,7 +1199,7 @@ private struct DisplayDetailView: View {
         }
         .tesseraeCard()
         .animation(
-            .easeInOut(duration: 0.22),
+            reduceMotion ? nil : .easeInOut(duration: 0.22),
             value: visibleScreenPage
         )
     }
@@ -1218,8 +1236,8 @@ private struct DisplayDetailView: View {
             .opacity(visibleScreenPage == .next ? 1 : 0)
             .accessibilityHidden(visibleScreenPage != .next)
         }
-        .frame(maxWidth: .infinity, minHeight: 40, maxHeight: 40, alignment: .leading)
-        .animation(.easeInOut(duration: 0.18), value: visibleScreenPage)
+        .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: visibleScreenPage)
     }
 
     private var currentScreenPreview: some View {
@@ -1266,7 +1284,7 @@ private struct DisplayDetailView: View {
         label: LocalizedStringKey
     ) -> some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
                 selectedScreenPage = page
             }
         } label: {
@@ -1282,15 +1300,16 @@ private struct DisplayDetailView: View {
                         height: 7
                     )
                     .animation(
-                        .easeInOut(duration: 0.2),
+                        reduceMotion ? nil : .easeInOut(duration: 0.2),
                         value: visibleScreenPage
                     )
             }
-            .frame(width: 28, height: 20)
+            .frame(width: 44, height: 44)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(label))
+        .accessibilityAddTraits(visibleScreenPage == page ? .isSelected : [])
     }
 
     private var pendingRefreshExplanation: some View {
@@ -1355,6 +1374,7 @@ private struct DisplayDetailView: View {
 }
 
 private struct DisplayDeviceDetails: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let display: DisplaySummary
     @State private var isExpanded = false
 
@@ -1416,7 +1436,7 @@ private struct DisplayDeviceDetails: View {
 
     private var headerButton: some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
                 isExpanded.toggle()
             }
         } label: {

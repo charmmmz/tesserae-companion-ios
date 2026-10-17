@@ -1027,13 +1027,16 @@ private struct ShareComposerView: View {
 
     private func previewTargetLabel(showsChevron: Bool) -> some View {
         HStack(spacing: 5) {
-            Image(
-                systemName: model.selectedDisplays.isEmpty
-                    ? "rectangle.slash"
-                    : "rectangle.on.rectangle"
-            )
+            if !dynamicTypeSize.isAccessibilitySize {
+                Image(
+                    systemName: model.selectedDisplays.isEmpty
+                        ? "rectangle.slash"
+                        : "rectangle.on.rectangle"
+                )
+                .accessibilityHidden(true)
+            }
             Text(previewTargetSummary)
-                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                 .truncationMode(.middle)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1049,7 +1052,7 @@ private struct ShareComposerView: View {
         .padding(.vertical, 7)
         .frame(
             maxWidth: .infinity,
-            minHeight: previewTargetPickerHeight,
+            minHeight: 44,
             alignment: .center
         )
         .contentShape(Rectangle())
@@ -1064,13 +1067,6 @@ private struct ShareComposerView: View {
         return "\(display.name) · \(display.panel.width) × \(display.panel.height) · \(aspect)"
     }
 
-    private var previewTargetPickerHeight: CGFloat {
-        let lineHeight = UIFont.preferredFont(
-            forTextStyle: .footnote
-        ).lineHeight
-        let lineCount: CGFloat = dynamicTypeSize.isAccessibilitySize ? 2 : 1
-        return max(32, ceil(lineHeight * lineCount + 14))
-    }
 
     private func previewAccessibilityValue(panel: PanelProfile) -> String {
         if model.framingEditorIsActive {

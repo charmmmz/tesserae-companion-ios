@@ -79,6 +79,7 @@ struct TesseraeThemeContrastTests {
             #expect(contrast(TesseraeTheme.accent, background, traits: traits) >= 4.5)
         }
         #expect(contrast(.white, TesseraeTheme.accentFill, traits: traits) >= 4.5)
+        #expect(contrast(TesseraeTheme.accentOnPaper, .white, traits: traits) >= 4.5)
         for status in [TesseraeTheme.success, TesseraeTheme.warning, TesseraeTheme.danger, TesseraeTheme.info] {
             #expect(contrast(status, TesseraeTheme.surface, traits: traits) >= 4.5)
         }

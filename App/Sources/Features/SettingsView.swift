@@ -2,6 +2,7 @@ import SwiftUI
 import TesseraeKit
 
 struct SettingsView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
     @Environment(RemindersBridgeModel.self) private var remindersBridgeModel
@@ -18,15 +19,19 @@ struct SettingsView: View {
                         NavigationLink {
                             ServerDetailsView()
                         } label: {
-                            LabeledContent {
-                                Text(serverSummaryValue)
-                            } label: {
+                            let layout = dynamicTypeSize.isAccessibilitySize
+                                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6))
+                                : AnyLayout(HStackLayout(spacing: 12))
+                            layout {
                                 Label(
                                     serverSummaryTitle(instanceName: instance.name),
-                                    systemImage: model.connectionMode == .demo
-                                        ? "shippingbox"
-                                        : "server.rack"
+                                    systemImage: model.connectionMode == .demo ? "shippingbox" : "server.rack"
                                 )
+                                .fixedSize(horizontal: false, vertical: true)
+                                if !dynamicTypeSize.isAccessibilitySize { Spacer() }
+                                Text(serverSummaryValue)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                         }
 
@@ -98,9 +103,9 @@ struct SettingsView: View {
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "trash")
-                                .foregroundStyle(.red)
+                                .foregroundStyle(TesseraeTheme.danger)
                             Text("Clear Activity on This iPhone")
-                                .foregroundStyle(.red)
+                                .foregroundStyle(TesseraeTheme.danger)
                         }
                     }
                     .accessibilityIdentifier("clear-local-activity")

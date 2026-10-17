@@ -322,6 +322,7 @@
 "Aspect Ratio Grid" = "原始比例网格";
 "Zoom In" = "放大";
 "Zoom Out" = "缩小";
+"Reset Zoom" = "重置缩放";
 "Grid Options" = "网格选项";
 "Enable Gallery uploads for this iPhone in Tesserae Settings → Companion. You do not need to pair again." = "请在 Tesserae 设置 → Companion 中允许此 iPhone 上传图库，无需重新配对。";
 "Enable Gallery uploads for this iPhone in Tesserae Settings → Companion." = "请在 Tesserae 设置 → Companion 中允许此 iPhone 上传图库。";
@@ -649,3 +650,7 @@
 "refresh %@" = "每 %@ 刷新";
 "All %lld displays" = "全部 %lld 个显示屏";
 "%lld of %lld displays" = "%lld 个显示屏，共 %lld 个";
+
+"Opens Lineups and controls." = "打开播放队列和控制。";
+
+"Tap for details. Long press and drag to reorder." = "轻点查看详情。长按拖动可调整顺序。";

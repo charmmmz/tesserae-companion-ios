@@ -40,14 +40,16 @@ final class LineupsUITests: XCTestCase {
 
         lineupCard.tap()
 
-        let enabledControl = app.buttons["lineup-enabled-on"]
+        let enabledControl = app.switches["lineup-enabled-on"]
         XCTAssertTrue(enabledControl.waitForExistence(timeout: 3))
         XCTAssertTrue(enabledControl.isEnabled)
+        XCTAssertEqual(enabledControl.value as? String, "1")
         XCTAssertTrue(enabledControl.isHittable)
         enabledControl.tap()
-        let disabledControl = app.buttons["lineup-enabled-off"]
+        let disabledControl = app.switches["lineup-enabled-off"]
         XCTAssertTrue(disabledControl.waitForExistence(timeout: 3))
         XCTAssertTrue(disabledControl.isEnabled)
+        XCTAssertEqual(disabledControl.value as? String, "0")
 
         disabledControl.tap()
         XCTAssertTrue(enabledControl.waitForExistence(timeout: 3))

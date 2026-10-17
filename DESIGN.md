@@ -636,6 +636,18 @@ Release 1.0 requirements:
 - no information conveyed only by an e-ink preview image;
 - dates, times, and numbers formatted with the user's locale.
 
+Display cards are a single native button in VoiceOver order. The card reads
+its name, freshness, and list position; hardware, battery, Wi-Fi, and pending
+refresh remain available as accessibility custom content. Move Up/Down
+remain available without a drag. Target rows report selection and Lineup
+enablement uses a native switch. Full-screen photos support VoiceOver zoom
+adjustments, and custom movement follows Reduce Motion.
+
+The app currently declares portrait orientation only. Boundary checks rotate
+the device to verify that supported portrait layout remains usable; they do
+not imply landscape support. Native search, sheets, keyboards, and navigation
+retain system interaction and appearance.
+
 Server-originated names remain as entered by the administrator. Error
 codes are localized in the app; optional server details remain verbatim
 in a diagnostics disclosure.

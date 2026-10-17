@@ -66,6 +66,8 @@ struct OnboardingView: View {
                                         Task { await model.discoverNearby() }
                                     } label: {
                                         Image(systemName: "arrow.clockwise")
+                                            .frame(minWidth: 44, minHeight: 44)
+                                            .contentShape(Rectangle())
                                     }
                                     .accessibilityLabel("Refresh nearby Tesserae servers")
                                 }

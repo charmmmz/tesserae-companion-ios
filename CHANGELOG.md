@@ -42,8 +42,22 @@ capabilities.
   Share Extension, including image-fit labels and descriptions previously
   displayed as unlocalized enum strings.
 
+- Grouped display cards into native buttons for one VoiceOver stop per device,
+  retained accessible reorder actions, and exposed selected display targets.
+  Lineup enablement now uses a native switch with its actual on/off state.
+- Expanded refresh, detail, preview paging and framing controls to 44 pt hit
+  targets; kept long server/device names readable with accessibility text.
+  Preview target captions now wrap fully in Send and the Share Extension.
+- Made custom Gallery, display and Bluetooth transitions respect Reduce
+  Motion; full-screen photos expose VoiceOver zoom adjustments.
+- Corrected the empty-photo prompt on its always-white preview canvas and
+  the destructive Settings label on dark grouped backgrounds.
+
 ### Development
 
+- Added small-screen long-name, keyboard, rotation, accessibility semantics
+  and hit-region regressions, plus real VoiceOver traversal/photo-semantics tests when
+  the iOS 27 testing service is available.
 - Updated the existing Simulator-only Vision smoke-test skip to recognize
   the newer missing-inference-context error format. Physical-device runs
   and other Vision errors still follow the normal test path.

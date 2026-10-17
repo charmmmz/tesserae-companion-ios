@@ -2,6 +2,19 @@ import XCTest
 
 @MainActor
 final class TesseraeCompanionUITests: XCTestCase {
+    private var restoreVoiceOverEnabled: Bool?
+
+    override func tearDown() async throws {
+#if compiler(>=6.4)
+        try await MainActor.run {
+            if #available(iOS 27.0, *), let restoreVoiceOverEnabled {
+                let service = XCUIDevice.shared.voiceOverService
+                if restoreVoiceOverEnabled { try service.enable() } else { try service.disable() }
+            }
+        }
+#endif
+    }
+
     override func setUpWithError() throws {
         continueAfterFailure = false
     }
@@ -1489,6 +1502,195 @@ final class TesseraeCompanionUITests: XCTestCase {
         exerciseReadabilityScreens(app: readabilityApp(), largeText: true, prefix: "Chinese AX5 dark")
     }
 
+    func testAccessibilitySemanticsAndHitRegions() throws {
+        let app = readabilityApp(largeText: false)
+        app.launch()
+        func audit(_ name: String) throws {
+            readabilityAttachment(app, "Accessibility audit \(name)")
+            // Font/contrast audits flag native glass, search fields and hidden icon
+            // glyphs. Cover those separately with AX5 screenshots and VoiceOver.
+            try app.performAccessibilityAudit(for: [.hitRegion, .sufficientElementDescription, .trait])
+        }
+        XCTAssertTrue(app.buttons["使用演示数据体验"].waitForExistence(timeout: 5))
+        try audit("onboarding")
+        app.buttons["使用演示数据体验"].tap()
+        XCTAssertTrue(app.buttons["root-settings"].waitForExistence(timeout: 5))
+        try audit("displays")
+        app.buttons["root-settings"].tap()
+        XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 3))
+        try audit("settings")
+        app.buttons["完成"].tap()
+        app.tabBars.firstMatch.buttons["图库"].tap()
+        XCTAssertTrue(app.buttons["gallery-folder-folder_family"].waitForExistence(timeout: 4))
+        try audit("gallery")
+        app.tabBars.firstMatch.buttons["显示屏"].tap()
+        app.buttons["manage-lineups"].tap()
+        XCTAssertTrue(app.buttons["lineup-card-kitchen-deck"].waitForExistence(timeout: 4))
+        try audit("lineups")
+        app.buttons["lineup-card-kitchen-deck"].tap()
+        XCTAssertTrue(app.switches["lineup-enabled-on"].waitForExistence(timeout: 4))
+        try audit("lineup detail")
+        app.buttons["root-send-action"].tap()
+        XCTAssertTrue(app.buttons["root-send-close"].waitForExistence(timeout: 4))
+        try audit("send")
+    }
+
+    func testVoiceOverPrimaryFlow() throws {
+#if compiler(>=6.4)
+        guard #available(iOS 27.0, *) else { throw XCTSkip("VoiceOver service requires iOS 27.") }
+        let voiceOver = XCUIDevice.shared.voiceOverService
+        restoreVoiceOverEnabled = voiceOver.isEnabled
+        try voiceOver.disable()
+        let app = readabilityApp(largeText: false)
+        app.launch()
+        XCTAssertTrue(app.buttons["使用演示数据体验"].waitForExistence(timeout: 5))
+        app.buttons["使用演示数据体验"].tap()
+        XCTAssertTrue(app.buttons["root-settings"].waitForExistence(timeout: 5))
+        try voiceOver.enable()
+        var speech = [try voiceOver.currentSpeech().utterance]
+        for _ in 0..<16 {
+            let next = try voiceOver.moveForward().utterance
+            print("VOICEOVER_NEXT", next)
+            speech.append(next)
+            if next.contains("活动") && next.contains("4 of 4") { break }
+        }
+        XCTAssertEqual(speech.filter { $0.contains("Desk") }.count, 1, speech.joined(separator: "\n"))
+        XCTAssertEqual(speech.filter { $0.contains("Kitchen") }.count, 1, speech.joined(separator: "\n"))
+        XCTAssertTrue(speech.contains { $0.contains("管理播放队列") })
+        XCTAssertTrue(speech.contains { $0.contains("显示屏") && $0.contains("selected") })
+        XCTAssertFalse(speech.joined().unicodeScalars.contains { (0xE000...0xF8FF).contains($0.value) })
+        var settingsFocused = false
+        for _ in 0..<16 {
+            let previous = try voiceOver.moveBackward().utterance
+            if previous.contains("设置") {
+                settingsFocused = true
+                break
+            }
+        }
+        XCTAssertTrue(settingsFocused)
+        app.buttons["root-settings"].doubleTap()
+        XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 4))
+        let modalSpeech = try voiceOver.currentSpeech().utterance
+        print("VOICEOVER_MODAL_FOCUS", modalSpeech)
+        XCTAssertFalse(modalSpeech.contains("Kitchen") || modalSpeech.contains("Desk"))
+#else
+        throw XCTSkip("VoiceOver service requires the iOS 27 SDK.")
+#endif
+    }
+
+    func testVoiceOverGalleryPhotoSemantics() throws {
+#if compiler(>=6.4)
+        guard #available(iOS 27.0, *) else { throw XCTSkip("VoiceOver service requires iOS 27.") }
+        let voiceOver = XCUIDevice.shared.voiceOverService
+        restoreVoiceOverEnabled = voiceOver.isEnabled
+        try voiceOver.disable()
+        let app = readabilityApp(largeText: false)
+        app.launchEnvironment["TESSERAE_UI_TEST_GALLERY_GRID_MODE"] = "square"
+        app.launchEnvironment["TESSERAE_UI_TEST_GALLERY_GRID_COLUMNS"] = "3"
+        app.launch()
+        XCTAssertTrue(app.buttons["使用演示数据体验"].waitForExistence(timeout: 5))
+        app.buttons["使用演示数据体验"].tap()
+        app.tabBars.firstMatch.buttons["图库"].tap()
+        let family = app.buttons["gallery-folder-folder_family"]
+        XCTAssertTrue(family.waitForExistence(timeout: 4))
+        family.tap()
+        let thumbnail = app.buttons["gallery-image-image_family_01"]
+        XCTAssertTrue(thumbnail.waitForExistence(timeout: 4))
+        thumbnail.tap()
+        let preview = app.buttons["gallery-image-preview-image_family_01"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 4))
+        preview.tap()
+        let photo = app.descendants(matching: .any)["gallery-immersive-photo-image_family_01"]
+        XCTAssertTrue(photo.waitForExistence(timeout: 4))
+        try voiceOver.enable()
+        var spoken = try voiceOver.currentSpeech().utterance
+        for _ in 0..<8 where !spoken.contains("1.00") {
+            spoken = try voiceOver.moveForward().utterance
+        }
+        print("VOICEOVER_PHOTO", spoken)
+        XCTAssertTrue(spoken.contains("1.00"))
+        XCTAssertTrue(spoken.contains("照片"))
+        XCTAssertTrue(spoken.localizedCaseInsensitiveContains("adjustable") || spoken.contains("可调整"), spoken)
+#else
+        throw XCTSkip("VoiceOver service requires the iOS 27 SDK.")
+#endif
+    }
+
+    func testLongDisplayNamesAtAccessibilitySize() {
+        exerciseLongDisplayNames(largeText: true)
+    }
+
+    func testLongDisplayNamesAtStandardSize() {
+        exerciseLongDisplayNames(largeText: false)
+    }
+
+    private func exerciseLongDisplayNames(largeText: Bool) {
+        let app = readabilityApp(largeText: largeText)
+        app.launchEnvironment["TESSERAE_UI_TEST_LONG_DISPLAY_NAMES"] = "1"
+        app.launch()
+        let demo = app.buttons["使用演示数据体验"]
+        XCTAssertTrue(demo.waitForExistence(timeout: 5))
+        for _ in 0..<10 where !demo.isHittable { app.swipeUp() }
+        demo.tap()
+        XCTAssertTrue(app.buttons["root-settings"].waitForExistence(timeout: 5))
+        let desk = app.buttons["display-card-e1004-desk"]
+        // A persisted reorder can put the other long card first. LazyVStack
+        // creates the second card only after scrolling near it.
+        for _ in 0..<12 where !desk.exists { app.swipeUp() }
+        XCTAssertTrue(desk.exists)
+        XCTAssertTrue(desk.label.contains("第二工作区"))
+        let prefix = largeText ? "SE AX5 long names" : "SE standard long names"
+        readabilityAttachment(app, "\(prefix) displays")
+        if largeText {
+            app.swipeUp()
+            readabilityAttachment(app, "\(prefix) display name wrapping")
+            app.swipeUp()
+            readabilityAttachment(app, "\(prefix) display hardware")
+        }
+        let portraitFrame = app.frame
+        XCUIDevice.shared.orientation = .landscapeLeft
+        defer { XCUIDevice.shared.orientation = .portrait }
+        XCTAssertLessThan(app.frame.width, app.frame.height)
+        XCTAssertEqual(app.frame.width, portraitFrame.width, accuracy: 1)
+        readabilityAttachment(app, "\(prefix) rotated portrait-only app")
+        XCUIDevice.shared.orientation = .portrait
+
+        app.buttons["root-send-action"].tap()
+        let deskTarget = app.buttons["send-display-e1004-desk"]
+        let kitchenTarget = app.buttons["send-display-picpak-kitchen"]
+        XCTAssertTrue(deskTarget.waitForExistence(timeout: 4))
+        XCTAssertTrue(deskTarget.label.contains("第二工作区"))
+        XCTAssertTrue(deskTarget.isSelected || kitchenTarget.isSelected)
+        for _ in 0..<10 where !kitchenTarget.isHittable { app.swipeUp() }
+        XCTAssertTrue(kitchenTarget.isHittable)
+        XCTAssertTrue(kitchenTarget.label.contains("东侧窗边"))
+        let wasSelected = kitchenTarget.isSelected
+        kitchenTarget.tap()
+        XCTAssertEqual(kitchenTarget.isSelected, !wasSelected)
+        if wasSelected {
+            kitchenTarget.tap()
+            XCTAssertTrue(kitchenTarget.isSelected)
+        }
+        readabilityAttachment(app, "\(prefix) selected targets")
+        app.buttons["root-send-close"].tap()
+
+        let manage = app.buttons["manage-lineups"]
+        for _ in 0..<12 where !manage.isHittable { app.swipeDown() }
+        manage.tap()
+        let lineup = app.buttons["lineup-card-kitchen-deck"]
+        XCTAssertTrue(lineup.waitForExistence(timeout: 4))
+        for _ in 0..<8 where !lineup.isHittable { app.swipeUp() }
+        lineup.tap()
+        app.buttons["lineup-edit"].tap()
+        let name = app.textFields["lineup-editor-name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 4))
+        name.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3))
+        XCTAssertTrue(name.isHittable)
+        readabilityAttachment(app, "\(prefix) editor keyboard")
+        XCTAssertTrue(app.buttons["lineup-editor-exit"].isHittable)
+    }
+
     func testChineseScreensInLightMode() {
         exerciseReadabilityScreens(app: readabilityApp(largeText: false, scheme: "light"), largeText: false, prefix: "Chinese standard light")
     }
@@ -1533,10 +1735,10 @@ final class TesseraeCompanionUITests: XCTestCase {
         if largeText { XCTAssertGreaterThan(lineup.frame.height, 100) }
         readabilityAttachment(app, "\(prefix) Lineups")
         lineup.tap()
-        let enabled = app.buttons["lineup-enabled-on"]
+        let enabled = app.switches["lineup-enabled-on"]
         XCTAssertTrue(enabled.waitForExistence(timeout: 4))
         enabled.tap()
-        XCTAssertTrue(app.buttons["lineup-enabled-off"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.switches["lineup-enabled-off"].waitForExistence(timeout: 3))
         readabilityAttachment(app, "\(prefix) Lineup detail")
         app.buttons["lineup-edit"].tap()
         XCTAssertTrue(app.textFields["lineup-editor-name"].waitForExistence(timeout: 4))
@@ -1886,7 +2088,11 @@ final class TesseraeCompanionUITests: XCTestCase {
         sample.tap()
         let auto = app.buttons["send-auto-framing"]
         XCTAssertTrue(auto.waitForExistence(timeout: 3))
+        XCTAssertGreaterThanOrEqual(auto.frame.width, 44)
+        XCTAssertGreaterThanOrEqual(auto.frame.height, 44)
         let reset = app.buttons["send-framing-reset"]
+        XCTAssertGreaterThanOrEqual(reset.frame.width, 44)
+        XCTAssertGreaterThanOrEqual(reset.frame.height, 44)
         XCTAssertEqual(auto.value as? String, "Adjusted")
         let hint = app.descendants(matching: .any)["send-framing-hint"]
         XCTAssertTrue(hint.exists)
@@ -1976,6 +2182,7 @@ final class TesseraeCompanionUITests: XCTestCase {
                 ))
         }
         XCTAssertTrue(fit.isHittable)
+        readabilityAttachment(app, "Chinese AX5 preview target full text")
         fit.tap()
         XCTAssertTrue(app.buttons["适应"].waitForExistence(timeout: 3))
         readabilityAttachment(app, "Chinese AX5 dark image fit menu")

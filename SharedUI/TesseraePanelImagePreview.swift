@@ -202,7 +202,7 @@ struct TesseraePanelImagePreview: View {
                     Text(emptyTitle)
                         .font(.subheadline.weight(.semibold))
                 }
-                .foregroundStyle(TesseraeTheme.accent)
+                .foregroundStyle(TesseraeTheme.accentOnPaper)
                 .frame(
                     maxWidth: .infinity,
                     maxHeight: .infinity
@@ -248,7 +248,7 @@ struct TesseraePanelImagePreview: View {
     }
 
     private var framingButtonSize: CGFloat {
-        dynamicTypeSize.isAccessibilitySize ? 44 : 32
+        44
     }
 
     private var framingItemPadding: CGFloat {
@@ -258,7 +258,7 @@ struct TesseraePanelImagePreview: View {
     private var framingGestureHint: some View {
         Image(systemName: "hand.draw")
             .padding(.horizontal, framingItemPadding)
-            .frame(minHeight: framingButtonSize)
+            .frame(minWidth: 44, minHeight: framingButtonSize)
             .accessibilityLabel("Drag · Pinch to zoom")
             .accessibilityIdentifier("send-framing-hint")
     }
@@ -275,7 +275,7 @@ struct TesseraePanelImagePreview: View {
                     }
                 }
                 .padding(.horizontal, framingItemPadding)
-                .frame(minHeight: framingButtonSize)
+                .frame(minWidth: 44, minHeight: framingButtonSize)
                 .foregroundStyle(autoFramingIsApplied ? TesseraeTheme.success : Color.primary)
                 .overlay(alignment: .topTrailing) {
                     if !isAutoFraming, !autoFramingIsApplied, autoFramingFeedback != nil {
@@ -326,7 +326,7 @@ struct TesseraePanelImagePreview: View {
             .fontWeight(.semibold)
             .fixedSize()
             .padding(.horizontal, framingItemPadding)
-            .frame(minHeight: framingButtonSize)
+            .frame(minWidth: 44, minHeight: framingButtonSize)
             .accessibilityIdentifier("send-framing-zoom")
 
             Button {
@@ -334,7 +334,7 @@ struct TesseraePanelImagePreview: View {
             } label: {
                 Image(systemName: "arrow.counterclockwise")
                     .padding(.horizontal, framingItemPadding)
-                    .frame(minHeight: framingButtonSize)
+                    .frame(minWidth: 44, minHeight: framingButtonSize)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -350,7 +350,7 @@ struct TesseraePanelImagePreview: View {
         framingControlsRevealTask?.cancel()
         framingControlsRevealTask = nil
         framing.wrappedValue = .centeredFill
-        withAnimation(.easeOut(duration: 0.18)) {
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
             isFramingGestureActive = false
         }
     }
@@ -436,7 +436,7 @@ struct TesseraePanelImagePreview: View {
         framingControlsRevealTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(2))
             guard !Task.isCancelled else { return }
-            withAnimation(.easeOut(duration: 0.18)) {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
                 isFramingGestureActive = false
             }
             framingControlsRevealTask = nil

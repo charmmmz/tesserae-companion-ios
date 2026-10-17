@@ -49,7 +49,7 @@ struct SendView: View {
     }
 
     private var previewSlotHeight: CGFloat {
-        276 + 9 + previewTargetPickerHeight
+        276 + 9 + 44
     }
 
     var body: some View {
@@ -325,6 +325,7 @@ struct SendView: View {
                     .foregroundStyle(TesseraeTheme.accent)
                     .padding(.horizontal, 2)
                     .padding(.vertical, 7)
+                    .frame(minHeight: 44)
             }
             .buttonStyle(.plain)
             .fixedSize(horizontal: true, vertical: false)
@@ -434,13 +435,16 @@ struct SendView: View {
 
     private func previewTargetLabel(showsChevron: Bool) -> some View {
         HStack(spacing: 5) {
-            Image(
-                systemName: selectedDisplays.isEmpty
-                    ? "rectangle.slash"
-                    : "rectangle.on.rectangle"
-            )
+            if !dynamicTypeSize.isAccessibilitySize {
+                Image(
+                    systemName: selectedDisplays.isEmpty
+                        ? "rectangle.slash"
+                        : "rectangle.on.rectangle"
+                )
+                .accessibilityHidden(true)
+            }
             Text(previewTargetSummary)
-                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                 .truncationMode(.middle)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -454,7 +458,8 @@ struct SendView: View {
         .foregroundStyle(TesseraeTheme.accent)
         .padding(.horizontal, 2)
         .padding(.vertical, 7)
-        .frame(height: previewTargetPickerHeight)
+        .frame(height: dynamicTypeSize.isAccessibilitySize ? nil : 44)
+        .frame(minHeight: 44)
         .contentShape(Rectangle())
         .layoutPriority(1)
     }
@@ -474,13 +479,6 @@ struct SendView: View {
         return "\(previewTargetName) · \(panel.width) × \(panel.height) · \(aspect)"
     }
 
-    private var previewTargetPickerHeight: CGFloat {
-        let lineHeight = UIFont.preferredFont(
-            forTextStyle: .footnote
-        ).lineHeight
-        let lineCount: CGFloat = dynamicTypeSize.isAccessibilitySize ? 2 : 1
-        return max(32, ceil(lineHeight * lineCount + 14))
-    }
 
     private var fitCard: some View {
         VStack(

@@ -2,6 +2,7 @@ import SwiftUI
 import TesseraeKit
 
 struct NearbyDeviceSetupView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private enum Screen: Equatable {
         case introduction
         case authentication
@@ -155,7 +156,7 @@ struct NearbyDeviceSetupView: View {
             selectedDetent = preferredDetent(for: screen)
         }
         .onChange(of: screen) { _, newScreen in
-            withAnimation(.snappy) {
+            withAnimation(reduceMotion ? nil : .snappy) {
                 selectedDetent = preferredDetent(for: newScreen)
             }
         }

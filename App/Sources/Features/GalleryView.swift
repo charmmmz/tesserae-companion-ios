@@ -256,6 +256,7 @@ private struct GalleryFolderCard: View {
 }
 
 private struct GalleryFolderView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(AppModel.self) private var model
     @Environment(\.openURL) private var openURL
     @AppStorage("gallery.grid.mode") private var gridModeValue =
@@ -527,7 +528,7 @@ private struct GalleryFolderView: View {
                     magnification: scale
                 )
                 guard nextColumnCount != gridColumnCount else { return }
-                withAnimation(.smooth(duration: 0.24)) {
+                withAnimation(reduceMotion ? nil : .smooth(duration: 0.24)) {
                     gridColumnCount = nextColumnCount
                 }
             }
@@ -543,13 +544,14 @@ private struct GalleryFolderView: View {
     }
 
     private func animateGridColumns(by delta: Int) {
-        withAnimation(.smooth(duration: 0.28)) {
+        withAnimation(reduceMotion ? nil : .smooth(duration: 0.28)) {
             gridColumnCount = min(max(gridColumnCount + delta, 2), 8)
         }
     }
 }
 
 private struct GalleryPhotoGrid: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var availableWidth: CGFloat = 0
 
     let images: [GalleryImage]
@@ -590,7 +592,7 @@ private struct GalleryPhotoGrid: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .animation(.smooth(duration: 0.28), value: columnCount)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.28), value: columnCount)
         .accessibilityIdentifier("gallery-photo-grid")
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.width
@@ -1089,6 +1091,7 @@ private struct GalleryPreviewCanvas: View {
 }
 
 private struct GalleryImmersiveView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dismiss) private var dismiss
     @Binding var selectedImageID: String
     @State private var dismissOffset: CGFloat = 0
@@ -1191,7 +1194,7 @@ private struct GalleryImmersiveView: View {
                 ) {
                     dismiss()
                 } else {
-                    withAnimation(.smooth(duration: 0.22)) {
+                    withAnimation(reduceMotion ? nil : .smooth(duration: 0.22)) {
                         dismissOffset = 0
                     }
                 }
@@ -1210,6 +1213,7 @@ private struct GalleryImmersiveView: View {
 }
 
 private struct GalleryZoomablePhoto: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var scale: CGFloat = 1
     @State private var settledScale: CGFloat = 1
     @State private var offset: CGSize = .zero
@@ -1222,44 +1226,59 @@ private struct GalleryZoomablePhoto: View {
 
     var body: some View {
         GeometryReader { proxy in
-            ZStack {
-                Color.clear
-
-                if let image {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFit()
-                        .scaleEffect(scale)
-                        .offset(offset)
-                        .accessibilityLabel("Photo")
-                } else if hasPreviewError {
-                    Image(systemName: "photo")
-                        .font(.largeTitle)
-                        .foregroundStyle(.white)
-                        .accessibilityLabel("Photo unavailable")
-                } else {
-                    ProgressView("Loading Photo…")
-                        .tint(.white)
-                        .foregroundStyle(.white)
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .contentShape(Rectangle())
-            .simultaneousGesture(magnificationGesture(in: proxy.size))
-            .simultaneousGesture(
-                panGesture(in: proxy.size),
-                including: scale > 1.01 ? .all : .none
-            )
-            .onTapGesture(count: 2) {
-                toggleZoom(in: proxy.size)
-            }
+            photoContent(in: proxy.size)
         }
         .accessibilityIdentifier("gallery-immersive-photo-\(imageID)")
-        .accessibilityValue(
-            Text(verbatim: String(format: "%.2f×", Double(scale)))
-        )
         .onChange(of: imageID) { _, _ in
             resetZoom()
+        }
+    }
+
+    @ViewBuilder
+    private func photoContent(in size: CGSize) -> some View {
+        let content = ZStack {
+            Color.clear
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .scaleEffect(scale)
+                    .offset(offset)
+            } else if hasPreviewError {
+                Image(systemName: "photo")
+                    .font(.largeTitle)
+                    .foregroundStyle(.white)
+            } else {
+                ProgressView("Loading Photo…")
+                    .tint(.white)
+                    .foregroundStyle(.white)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
+        .simultaneousGesture(magnificationGesture(in: size))
+        .simultaneousGesture(panGesture(in: size), including: scale > 1.01 ? .all : .none)
+        .onTapGesture(count: 2) { toggleZoom(in: size) }
+        .accessibilityElement(children: .ignore)
+
+        if image != nil {
+            content
+                .accessibilityLabel("Photo")
+                .accessibilityAddTraits(.isImage)
+                .accessibilityValue(Text(verbatim: String(format: "%.2f×", Double(scale))))
+                .accessibilityAdjustableAction { direction in
+                    switch direction {
+                    case .increment: setAccessibleZoom(scale + 1, in: size)
+                    case .decrement: setAccessibleZoom(scale - 1, in: size)
+                    @unknown default: break
+                    }
+                }
+                .accessibilityAction(named: Text("Zoom In")) { setAccessibleZoom(scale + 1, in: size) }
+                .accessibilityAction(named: Text("Zoom Out")) { setAccessibleZoom(scale - 1, in: size) }
+                .accessibilityAction(named: Text("Reset Zoom")) { resetZoom() }
+        } else {
+            content.accessibilityLabel(hasPreviewError
+                ? String(localized: "Photo unavailable") : String(localized: "Loading Photo…"))
         }
     }
 
@@ -1309,8 +1328,17 @@ private struct GalleryZoomablePhoto: View {
             }
     }
 
+    private func setAccessibleZoom(_ proposedScale: CGFloat, in containerSize: CGSize) {
+        guard image != nil else { return }
+        scale = min(max(proposedScale, 1), 6)
+        settledScale = scale
+        offset = clampedOffset(offset, scale: scale, in: containerSize)
+        settledOffset = offset
+        zoomStateChanged(scale, false)
+    }
+
     private func toggleZoom(in containerSize: CGSize) {
-        withAnimation(.smooth(duration: 0.24)) {
+        withAnimation(reduceMotion ? nil : .smooth(duration: 0.24)) {
             if scale > 1.01 {
                 scale = 1
                 settledScale = 1

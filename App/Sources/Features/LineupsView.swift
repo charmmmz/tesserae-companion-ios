@@ -743,45 +743,23 @@ private struct LineupDetailView: View {
     private func lineupEnabledControl(_ lineup: Lineup) -> some View {
         let displayedEnabled = pendingEnabled ?? lineup.enabled
 
-        return Button {
-            pendingEnabled = !displayedEnabled
-            isUpdatingEnabled = true
-            Task {
-                let succeeded = await model.setLineupEnabled(
-                    lineup,
-                    enabled: !displayedEnabled
-                )
-                if !succeeded {
-                    pendingEnabled = nil
+        return Toggle("Enabled", isOn: Binding(
+            get: { pendingEnabled ?? lineup.enabled },
+            set: { enabled in
+                pendingEnabled = enabled
+                isUpdatingEnabled = true
+                Task {
+                    let succeeded = await model.setLineupEnabled(lineup, enabled: enabled)
+                    if !succeeded { pendingEnabled = nil }
+                    isUpdatingEnabled = false
                 }
-                isUpdatingEnabled = false
             }
-        } label: {
-            Capsule()
-                .fill(
-                    displayedEnabled
-                        ? TesseraeTheme.accent
-                        : Color.secondary.opacity(0.28)
-                )
-                .frame(width: 51, height: 31)
-                .overlay {
-                    Circle()
-                        .fill(Color.white)
-                        .padding(2)
-                        .shadow(color: .black.opacity(0.16), radius: 1, y: 1)
-                        .offset(x: displayedEnabled ? 10 : -10)
-                }
-                .animation(
-                    .easeInOut(duration: 0.18),
-                    value: displayedEnabled
-                )
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
+        ))
+        .labelsHidden()
+        .toggleStyle(.switch)
+        .tint(TesseraeTheme.accentFill)
+        .frame(minWidth: 51, minHeight: 44)
         .disabled(isUpdatingEnabled)
-        .opacity(isUpdatingEnabled ? 0.55 : 1)
-        .accessibilityLabel("Enabled")
-        .accessibilityValue(displayedEnabled ? "On" : "Off")
         .accessibilityIdentifier(
             displayedEnabled ? "lineup-enabled-on" : "lineup-enabled-off"
         )
@@ -950,6 +928,8 @@ private struct LineupDetailView: View {
                                 TesseraeTheme.accent.opacity(0.11),
                                 in: Circle()
                             )
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .disabled(
@@ -1063,6 +1043,7 @@ private struct LineupDetailView: View {
                             .foregroundStyle(.secondary)
                             .rotationEffect(.degrees(detailsExpanded ? 180 : 0))
                     }
+                    .frame(minHeight: 44)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)

@@ -11,6 +11,7 @@ enum TesseraeTheme {
     static let accent = adaptive(light: 0xB03227, dark: 0xE98476)
     // Solid actions keep white labels legible in both appearances.
     static let accentFill = adaptive(light: 0xB8352A, dark: 0xC13C30)
+    static let accentOnPaper = Color(red: 176 / 255, green: 50 / 255, blue: 39 / 255)
     static let accentSoft = adaptive(light: 0xF3DCD6, dark: 0x3B211D)
     static let background = adaptive(light: 0xEEEAE1, dark: 0x151412)
     static let surface = adaptive(light: 0xFFFDF8, dark: 0x22211E)
@@ -234,7 +235,7 @@ struct TesseraeDisplaySelectionRow: View {
     let isSelected: Bool
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: dynamicTypeSize.isAccessibilitySize ? .top : .center, spacing: 12) {
             Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                 .font(.system(size: 24))
                 .foregroundStyle(isSelected ? TesseraeTheme.accent : .secondary)
@@ -256,6 +257,10 @@ struct TesseraeDisplaySelectionRow: View {
         .frame(minHeight: 44)
         .contentShape(Rectangle())
         .padding(.vertical, 6)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(name)
+        .accessibilityValue(resolution)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

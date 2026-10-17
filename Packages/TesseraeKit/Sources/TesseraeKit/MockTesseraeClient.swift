@@ -4,6 +4,7 @@ public actor MockTesseraeClient: TesseraeServing {
     private static let dashboardPreviewData = Data(
         base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAADIAAAAeCAYAAABuUU38AAAAU0lEQVR42u3PMQ3AIBAAQJxUSxc84KgKagcZWGBiadKViiAkn+aGE3Dpffr8gyQisily3NdcMWoOQURERERERERERGR/pJUzBBERERERERGRgJEPNPv5WtxkAPMAAAAASUVORK5CYII="
     )!
+    private let displayNames: [String: String]
     private let latency: Duration
     private var completedJobs: [String: PushJob] = [:]
     private var jobsByIdempotencyKey: [String: PushJob] = [:]
@@ -25,11 +26,13 @@ public actor MockTesseraeClient: TesseraeServing {
     public init(
         latency: Duration = .milliseconds(180),
         lineupIntent: LineupIntent = .manual,
+        displayNames: [String: String] = [:],
         lineupFetchError: TesseraeClientError? = nil,
         jobFetchError: TesseraeClientError? = nil,
         lineupAuthoringGranted: Bool = true,
         offlineAlbumAuthoringGranted: Bool = true
     ) {
+        self.displayNames = displayNames
         self.latency = latency
         self.lineupIntent = lineupIntent
         self.lineupFetchError = lineupFetchError
@@ -274,7 +277,7 @@ public actor MockTesseraeClient: TesseraeServing {
         return [
             DisplaySummary(
                 id: "picpak-kitchen",
-                name: "Kitchen",
+                name: displayNames["picpak-kitchen"] ?? "Kitchen",
                 kind: "picpak",
                 iconName: "device-tablet",
                 panel: PanelProfile(
@@ -304,7 +307,7 @@ public actor MockTesseraeClient: TesseraeServing {
             ),
             DisplaySummary(
                 id: "e1004-desk",
-                name: "Desk",
+                name: displayNames["e1004-desk"] ?? "Desk",
                 kind: "reterminal_e1004",
                 iconName: "monitor",
                 panel: PanelProfile(
