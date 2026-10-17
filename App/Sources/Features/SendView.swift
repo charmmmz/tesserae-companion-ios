@@ -105,11 +105,6 @@ struct SendView: View {
             selection: $pickerItem,
             matching: .images
         )
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                TesseraeSettingsToolbarButton()
-            }
-        }
         .tesseraeScreenBackground()
         .tesseraeHapticFeedback(trigger: hapticEvent)
     }

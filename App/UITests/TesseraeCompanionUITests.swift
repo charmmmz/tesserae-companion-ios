@@ -679,7 +679,6 @@ final class TesseraeCompanionUITests: XCTestCase {
         )
         app.buttons["Explore with Demo Data"].tap()
 
-        let tabBar = app.tabBars.firstMatch
         let settings = app.buttons["root-settings"]
 
         XCTAssertTrue(settings.waitForExistence(timeout: 2))
@@ -688,7 +687,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertFalse(app.buttons["dashboard-layout-toggle"].exists)
         XCTAssertFalse(app.buttons["clear-local-activity"].exists)
 
-        tabBar.buttons["Dashboards"].tap()
+        app.buttons["Dashboards"].firstMatch.tap()
         XCTAssertTrue(settings.waitForExistence(timeout: 2))
         XCTAssertTrue(settings.isHittable)
         XCTAssertLessThanOrEqual(settings.frame.maxX, app.frame.maxX)
@@ -708,24 +707,23 @@ final class TesseraeCompanionUITests: XCTestCase {
         dashboardsToolbarScreenshot.lifetime = .keepAlways
         add(dashboardsToolbarScreenshot)
 
-        XCTAssertFalse(tabBar.buttons["Send"].exists)
+        XCTAssertFalse(app.tabBars.buttons["Send"].exists)
         app.buttons["root-send-action"].tap()
         let sendSettingsQuery = app.buttons.matching(
             identifier: "root-settings"
         )
-        XCTAssertTrue(sendSettingsQuery.firstMatch.waitForExistence(timeout: 2))
-        let sendSettings = sendSettingsQuery.allElementsBoundByIndex.first {
-            $0.isHittable
-        }
-        XCTAssertNotNil(sendSettings)
-        if let sendSettings {
-            XCTAssertLessThanOrEqual(sendSettings.frame.maxX, app.frame.maxX)
-        }
+        XCTAssertTrue(app.buttons["root-send-close"].waitForExistence(timeout: 2))
+        XCTAssertFalse(sendSettingsQuery.allElementsBoundByIndex.contains { $0.isHittable })
         XCTAssertFalse(app.buttons["dashboard-layout-toggle"].isHittable)
         XCTAssertFalse(app.buttons["clear-local-activity"].isHittable)
 
+        let sendScreenshot = XCTAttachment(screenshot: app.screenshot())
+        sendScreenshot.name = "Send without Settings"
+        sendScreenshot.lifetime = .keepAlways
+        add(sendScreenshot)
+
         app.buttons["root-send-close"].tap()
-        tabBar.buttons["Activity"].tap()
+        app.buttons["Activity"].firstMatch.tap()
         XCTAssertTrue(settings.waitForExistence(timeout: 2))
         XCTAssertTrue(settings.isHittable)
         XCTAssertLessThanOrEqual(settings.frame.maxX, app.frame.maxX)

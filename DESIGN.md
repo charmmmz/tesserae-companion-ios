@@ -173,7 +173,8 @@ framing, target selection and submission state above adaptive regions. On iOS
 27.1, wide composers use ArrangementView to respect active divisions; older
 systems use a two-column layout. Compact and accessibility layouts remain scrollable.
 
-Root actions use system toolbars, and message capsules reserve safe-area space so
+Root actions use system toolbars; the Send sheet offers Close without a Settings
+shortcut. Message capsules reserve safe-area space so
 they do not cover navigation actions. Gallery density follows the available width
 without overwriting the saved preference. Resizing cancels an unfinished display
 reorder without committing it. BLE connection ownership remains in NearbyDeviceManager;

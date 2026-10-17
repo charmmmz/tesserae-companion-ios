@@ -186,7 +186,6 @@ struct MainTabView: View {
 }
 
 struct SendComposerSheet: View {
-    @State private var presentation = CompanionPresentation()
     @State private var submission = SendSubmissionSession()
     var initialImage: SendImageDraft? = nil
 
@@ -207,8 +206,6 @@ struct SendComposerSheet: View {
                     }
                 }
         }
-        .environment(presentation)
-        .sheet(item: $presentation.sheet) { _ in SettingsView() }
         .tesseraeMessageCenterInset()
         .frame(idealWidth: 960, idealHeight: 760)
         .presentationSizing(.fitted)
