@@ -1590,7 +1590,15 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["使用演示数据体验"].waitForExistence(timeout: 5))
         app.buttons["使用演示数据体验"].tap()
-        app.tabBars.firstMatch.buttons["图库"].tap()
+        XCTAssertTrue(app.buttons["root-settings"].waitForExistence(timeout: 5))
+        // The native tab bar briefly exposes its outgoing label and final button
+        // during the onboarding transition. Wait for an unambiguous target.
+        let galleryTabs = app.tabBars.firstMatch.buttons.matching(identifier: "图库")
+        let settledTabs = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "count == 1"), object: galleryTabs
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [settledTabs], timeout: 5), .completed)
+        galleryTabs.element.tap()
         let family = app.buttons["gallery-folder-folder_family"]
         XCTAssertTrue(family.waitForExistence(timeout: 4))
         family.tap()
