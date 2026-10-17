@@ -29,7 +29,20 @@ final class AdaptiveLayoutUITests: XCTestCase {
         XCTAssertTrue(demo.waitForExistence(timeout: 8))
         reveal(demo, app: app)
         demo.tap()
-        XCTAssertTrue(app.buttons["root-send-action"].firstMatch.waitForExistence(timeout: 5))
+        // CI can spend several seconds taking a single accessibility snapshot.
+        // Wait for readiness without adding a fixed delay to successful launches.
+        let homeIsReady = app.buttons["root-send-action"].firstMatch.waitForExistence(timeout: 30)
+        if !homeIsReady {
+            let screenshot = XCTAttachment(screenshot: app.screenshot())
+            screenshot.name = "Demo startup failure"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+            let hierarchy = XCTAttachment(string: app.debugDescription)
+            hierarchy.name = "Demo startup accessibility hierarchy"
+            hierarchy.lifetime = .keepAlways
+            add(hierarchy)
+        }
+        XCTAssertTrue(homeIsReady, "Demo did not reach the home screen before the startup deadline")
         return app
     }
 

@@ -89,11 +89,22 @@ jobs:
             -project TesseraeCompanion.xcodeproj \
             -scheme TesseraeCompanion \
             -destination "platform=iOS Simulator,id=${destination_id}" \
+            -parallel-testing-enabled NO \
+            -resultBundlePath "${RUNNER_TEMP}/TesseraeCompanion-${{ matrix.device }}.xcresult" \
             -only-testing:TesseraeCompanionTests \
             -only-testing:TesseraeCompanionUITests/AdaptiveLayoutUITests \
             CODE_SIGNING_ALLOWED=YES \
             CODE_SIGN_IDENTITY=- \
             test
+
+      - name: Upload failed simulator test results
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: simulator-${{ matrix.device }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/TesseraeCompanion-${{ matrix.device }}.xcresult
+          if-no-files-found: ignore
+          retention-days: 7
 
   ios-duo:
     name: iPhone Duo (configured runner)
@@ -134,8 +145,18 @@ jobs:
             -project TesseraeCompanion.xcodeproj \
             -scheme TesseraeCompanion \
             -destination "platform=iOS Simulator,id=${destination_id}" \
+            -parallel-testing-enabled NO \
+            -resultBundlePath "${RUNNER_TEMP}/TesseraeCompanion-Duo.xcresult" \
             -only-testing:TesseraeCompanionTests \
             -only-testing:TesseraeCompanionUITests/AdaptiveLayoutUITests \
             CODE_SIGNING_ALLOWED=YES \
             CODE_SIGN_IDENTITY=- \
             test
+      - name: Upload failed simulator test results
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: simulator-Duo-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/TesseraeCompanion-Duo.xcresult
+          if-no-files-found: ignore
+          retention-days: 7
