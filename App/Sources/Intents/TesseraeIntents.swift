@@ -260,7 +260,7 @@ struct OpenTesseraeWebIntent: AppIntent {
 
 struct TesseraeAppShortcuts: AppShortcutsProvider {
     static var shortcutTileColor: ShortcutTileColor {
-        .teal
+        .red
     }
 
     static var appShortcuts: [AppShortcut] {

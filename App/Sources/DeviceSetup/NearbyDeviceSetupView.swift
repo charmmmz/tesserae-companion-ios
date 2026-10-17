@@ -197,6 +197,8 @@ struct NearbyDeviceSetupView: View {
             }
             Button("Continue") { screen = .authentication }
                 .buttonStyle(.borderedProminent)
+                .tint(TesseraeTheme.accentFill)
+                .foregroundStyle(.white)
                 .controlSize(.large)
                 .disabled(
                     device.mode == .setup
@@ -223,6 +225,8 @@ struct NearbyDeviceSetupView: View {
                 scannerPresented = true
             }
             .buttonStyle(.borderedProminent)
+            .tint(TesseraeTheme.accentFill)
+            .foregroundStyle(.white)
             .controlSize(.large)
             Button("Enter 6-Digit Code") {
                 screen = .connecting
@@ -506,7 +510,7 @@ struct NearbyDeviceSetupView: View {
                     clearWiFiConfirmationPresented = true
                 } label: {
                     Label("Clear Wi-Fi Settings", systemImage: "wifi.slash")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(TesseraeTheme.danger)
                 }
                 .confirmationDialog(
                     "Clear this display's Wi-Fi settings?",
@@ -525,7 +529,7 @@ struct NearbyDeviceSetupView: View {
                     factoryResetConfirmationPresented = true
                 } label: {
                     Label("Factory Reset", systemImage: "trash")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(TesseraeTheme.danger)
                 }
                 .confirmationDialog(
                     "Factory reset this display?",
@@ -554,7 +558,7 @@ struct NearbyDeviceSetupView: View {
             Spacer()
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 68))
-                .foregroundStyle(.green)
+                .foregroundStyle(TesseraeTheme.success)
             Text(isPicPakMaintenance ? "Wi-Fi Saved" : "Display Connected")
                 .font(.title2.bold())
             Text(isPicPakMaintenance
@@ -571,6 +575,8 @@ struct NearbyDeviceSetupView: View {
                 dismiss()
             }
             .buttonStyle(.borderedProminent)
+            .tint(TesseraeTheme.accentFill)
+            .foregroundStyle(.white)
             .controlSize(.large)
         }
         .padding(28)
@@ -582,7 +588,7 @@ struct NearbyDeviceSetupView: View {
             if nearby.connectionState == .restarting {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 68))
-                    .foregroundStyle(.green)
+                    .foregroundStyle(TesseraeTheme.success)
             } else {
                 ProgressView()
                     .controlSize(.large)
@@ -602,6 +608,8 @@ struct NearbyDeviceSetupView: View {
                     closeSheet()
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(TesseraeTheme.accentFill)
+                .foregroundStyle(.white)
                 .controlSize(.large)
             } else {
                 Spacer()
@@ -973,6 +981,6 @@ struct NearbyDisplaysView: View {
     }
 
     private var nearbyAccent: Color {
-        colorScheme == .dark ? TesseraeTheme.darkAccent : TesseraeTheme.accent
+        TesseraeTheme.accent
     }
 }

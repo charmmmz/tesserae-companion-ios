@@ -153,6 +153,8 @@ struct GalleryView: View {
                         beginCreatingFolder()
                     }
                     .buttonStyle(.borderedProminent)
+                    .tint(TesseraeTheme.accentFill)
+                    .foregroundStyle(.white)
                     Button("Refresh") {
                         Task { await model.refreshGallery() }
                     }
@@ -342,6 +344,8 @@ private struct GalleryFolderView: View {
                             beginAddingPhotos()
                         }
                         .buttonStyle(.borderedProminent)
+                        .tint(TesseraeTheme.accentFill)
+                        .foregroundStyle(.white)
                     }
                 }
             }
@@ -1009,6 +1013,8 @@ private struct GalleryImagePage: View {
                         }
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(TesseraeTheme.accentFill)
+                .foregroundStyle(.white)
                 .controlSize(.large)
                 .disabled(isLoadingForSend)
                 .accessibilityIdentifier("gallery-send-image")
@@ -1141,6 +1147,8 @@ private struct GalleryImmersiveView: View {
                     Spacer(minLength: 0)
                     Button("Retry") { retryPreview(image) }
                         .buttonStyle(.borderedProminent)
+                        .tint(TesseraeTheme.accentFill)
+                        .foregroundStyle(.white)
                         .disabled(loadingPreviewImageIDs.contains(image.id))
                         .accessibilityIdentifier("gallery-immersive-retry")
                 }
@@ -1456,7 +1464,7 @@ private struct GalleryCreateFolderView: View {
                 if let errorMessage {
                     Section {
                         Label(errorMessage, systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(TesseraeTheme.terracotta)
+                            .foregroundStyle(TesseraeTheme.danger)
                     }
                 }
             }
@@ -1890,7 +1898,7 @@ private struct GalleryUploadRow: View {
                 if case let .failed(message) = upload.status {
                     Text(message)
                         .font(.caption)
-                        .foregroundStyle(TesseraeTheme.terracotta)
+                        .foregroundStyle(TesseraeTheme.danger)
                         .lineLimit(2)
                 }
             }
@@ -1905,12 +1913,13 @@ private struct GalleryUploadRow: View {
                 .foregroundStyle(.secondary)
         case .preparing, .uploading:
             ProgressView()
+                .tint(TesseraeTheme.info)
         case .uploaded:
             Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(TesseraeTheme.accent)
+                .foregroundStyle(TesseraeTheme.success)
         case .failed:
             Image(systemName: "exclamationmark.circle.fill")
-                .foregroundStyle(TesseraeTheme.terracotta)
+                .foregroundStyle(TesseraeTheme.danger)
         }
     }
 }

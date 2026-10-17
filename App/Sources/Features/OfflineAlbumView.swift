@@ -179,12 +179,21 @@ struct OfflineAlbumSummaryCard: View {
 
     private func statusColor(_ target: OfflineAlbumTarget) -> Color {
         if target.observed?.state == .error || target.support.state == .unsupported {
-            return .red
+            return TesseraeTheme.danger
         }
-        if target.observed?.state == .syncing || target.support.state == .unknown {
-            return .orange
+        if target.support.state == .unknown {
+            return TesseraeTheme.warning
         }
-        return TesseraeTheme.accent
+        switch target.observed?.state {
+        case .syncing:
+            return TesseraeTheme.info
+        case .playing:
+            return TesseraeTheme.success
+        case .paused, .none:
+            return .secondary
+        case .error:
+            return TesseraeTheme.danger
+        }
     }
 }
 
@@ -448,7 +457,7 @@ struct OfflineAlbumEditorView: View {
                         "At least one display has not recently confirmed Offline Album support. Saving may succeed, but fully offline playback is not guaranteed until it reports fresh capabilities.",
                         systemImage: "exclamationmark.triangle.fill"
                     )
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(TesseraeTheme.warning)
                 }
             }
 
@@ -498,7 +507,7 @@ struct OfflineAlbumEditorView: View {
                         .foregroundStyle(interactive ? .primary : .secondary)
                     Text(supportDescription(support))
                         .font(.caption)
-                        .foregroundStyle(support?.state == .unknown ? .orange : .secondary)
+                        .foregroundStyle(support?.state == .unknown ? TesseraeTheme.warning : .secondary)
                 }
 
                 Spacer(minLength: 8)
@@ -530,7 +539,7 @@ struct OfflineAlbumEditorView: View {
                 Spacer()
                 Text(supportDescription(target.support))
                     .font(.caption)
-                    .foregroundStyle(target.support.state == .unknown ? .orange : .secondary)
+                    .foregroundStyle(target.support.state == .unknown ? TesseraeTheme.warning : .secondary)
             }
 
             if let plan = target.plan {
@@ -566,7 +575,7 @@ struct OfflineAlbumEditorView: View {
                     systemImage: "exclamationmark.triangle.fill"
                 )
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(TesseraeTheme.warning)
             }
         }
         .padding(.vertical, 4)

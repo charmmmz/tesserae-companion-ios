@@ -47,10 +47,21 @@ Tesserae Companion is distributed under the Apache License 2.0. See
 repository's original code and documentation; it does not grant rights to
 Tesserae names, logos, or other marks.
 
-The App Icon and Onboarding cover use Tesserae's official tessellated mark
-from `static/brand/icon.svg`. The Onboarding asset preserves its geometry and
-colours exactly; only the App Icon's outer background is extended to the edge
-so iOS can apply its platform mask without transparent pixels.
+The App Icon and Onboarding cover use Tesserae's official Paper-era
+tessellated mark, introduced in
+[Tesserae 0.448.0](https://github.com/dmellok/tesserae/commit/719a7604b44279fc8d31b9b090ccd115a3d3c42d).
+The source snapshot for this update is
+[`e52177f3`](https://github.com/dmellok/tesserae/tree/e52177f335bd47b8e77080d7af06e43a2a482ef2):
+
+- `static/brand/icon.svg` supplies the Onboarding asset, with its geometry
+  and ink/red/paper colours preserved. A thin edge is added by the
+  native view in dark appearance for visibility.
+- `static/brand/square.svg` supplies `Design/AppIconSource.svg`, with only
+  the intrinsic export size increased to 1024 px. The opaque PNG export
+  allows iOS to apply its platform mask without transparent pixels.
+- `static/style/paper-tokens.css` supplies the light/dark brand and semantic
+  palette documented in `DESIGN.md`. Native typography and interactions
+  remain supplied by iOS.
 
 ## Phosphor Icons
 

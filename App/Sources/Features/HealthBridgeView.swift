@@ -516,10 +516,10 @@ enum PersonalDataSyncState: Equatable {
 
     var tint: Color {
         switch self {
-        case .fresh: .green
-        case .needsAccess, .changesPending, .stale: .orange
-        case .expired, .failed: .red
-        case .syncing: TesseraeTheme.accent
+        case .fresh: TesseraeTheme.success
+        case .needsAccess, .changesPending, .stale: TesseraeTheme.warning
+        case .expired, .failed: TesseraeTheme.danger
+        case .syncing: TesseraeTheme.info
         case .unsupported, .unavailable, .off, .waitingForFirstSync: .secondary
         }
     }

@@ -80,7 +80,7 @@ struct RemindersBridgeView: View {
                                     Spacer()
                                     Text("Remove")
                                 }
-                                .foregroundStyle(.orange)
+                                .foregroundStyle(TesseraeTheme.warning)
                             }
                             .buttonStyle(.plain)
                             .disabled(bridgeModel.isBusy)

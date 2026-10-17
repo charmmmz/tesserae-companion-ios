@@ -146,7 +146,7 @@ struct ActivityView: View {
             {
                 Text(lastError)
                     .font(.caption)
-                    .foregroundStyle(TesseraeTheme.terracotta)
+                    .foregroundStyle(TesseraeTheme.danger)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -163,7 +163,8 @@ struct ActivityView: View {
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(TesseraeTheme.accent)
+                .tint(TesseraeTheme.accentFill)
+                .foregroundStyle(.white)
                 .disabled(isActive || model.connectionMode != .live)
 
                 Button(role: .destructive) {
@@ -190,7 +191,7 @@ struct ActivityView: View {
             panel: previewPanel(for: request.deviceIDs),
             fit: request.fit,
             placeholderSystemName: artworkSymbol(request.jobKind),
-            tint: TesseraeTheme.ochre,
+            tint: TesseraeTheme.accent,
             accessibilityLabel: "Queued link preview placeholder",
             accessibilityIdentifier: "queued-link-preview-\(request.id)",
             statusLabel: queuedLinkStatusLabel(request),
@@ -232,9 +233,9 @@ struct ActivityView: View {
     ) -> Color {
         switch request.status {
         case .queued, .submitting:
-            TesseraeTheme.ochre
+            TesseraeTheme.info
         case .failed:
-            TesseraeTheme.terracotta
+            TesseraeTheme.danger
         }
     }
 
@@ -307,7 +308,7 @@ struct ActivityView: View {
             {
                 Text(lastError)
                     .font(.caption)
-                    .foregroundStyle(TesseraeTheme.terracotta)
+                    .foregroundStyle(TesseraeTheme.danger)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -324,7 +325,8 @@ struct ActivityView: View {
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(TesseraeTheme.accent)
+                .tint(TesseraeTheme.accentFill)
+                .foregroundStyle(.white)
                 .disabled(isActive || model.connectionMode != .live)
 
                 Button(role: .destructive) {
@@ -358,7 +360,7 @@ struct ActivityView: View {
             panel: previewPanel(for: request.deviceIDs),
             fit: request.fit,
             placeholderSystemName: "photo.badge.clock",
-            tint: TesseraeTheme.ochre,
+            tint: TesseraeTheme.accent,
             accessibilityLabel: thumbnail == nil
                 ? "Queued photo preview placeholder"
                 : "Queued photo preview",
@@ -402,9 +404,9 @@ struct ActivityView: View {
     ) -> Color {
         switch request.status {
         case .queued, .submitting:
-            TesseraeTheme.ochre
+            TesseraeTheme.info
         case .failed:
-            TesseraeTheme.terracotta
+            TesseraeTheme.danger
         }
     }
 
@@ -503,7 +505,7 @@ struct ActivityView: View {
                     if let failure = job.error {
                         Text(failure.message)
                             .font(.caption)
-                            .foregroundStyle(TesseraeTheme.terracotta)
+                            .foregroundStyle(TesseraeTheme.danger)
                             .lineLimit(isExpanded ? nil : 2)
                     }
 
@@ -569,7 +571,7 @@ struct ActivityView: View {
                     if let error = item.error {
                         Text(error)
                             .font(.caption)
-                            .foregroundStyle(TesseraeTheme.terracotta)
+                            .foregroundStyle(TesseraeTheme.danger)
                             .lineLimit(isExpanded ? nil : 2)
                     }
                     HStack(spacing: 6) {
@@ -612,6 +614,8 @@ struct ActivityView: View {
                             .foregroundStyle(.white)
                         }
                         .buttonStyle(.borderedProminent)
+                        .tint(TesseraeTheme.accentFill)
+                        .foregroundStyle(.white)
                         .controlSize(.small)
                         .fixedSize()
                         .disabled(isResending)
@@ -976,43 +980,43 @@ struct ActivityView: View {
             HistoryStatusPresentation(
                 label: String(localized: "Published"),
                 symbol: "checkmark.circle.fill",
-                color: TesseraeTheme.accent
+                color: TesseraeTheme.success
             )
         case "dispatched":
             HistoryStatusPresentation(
                 label: String(localized: "Dispatched"),
                 symbol: "checkmark.circle.fill",
-                color: TesseraeTheme.accent
+                color: TesseraeTheme.success
             )
         case "webhook_dispatched":
             HistoryStatusPresentation(
                 label: String(localized: "Webhook Triggered"),
                 symbol: "paperplane.fill",
-                color: TesseraeTheme.accent
+                color: TesseraeTheme.success
             )
         case "ha_dispatched":
             HistoryStatusPresentation(
                 label: String(localized: "Home Assistant Triggered"),
                 symbol: "house.fill",
-                color: TesseraeTheme.accent
+                color: TesseraeTheme.success
             )
         case "fetched":
             HistoryStatusPresentation(
                 label: String(localized: "Refresh Requested"),
                 symbol: "arrow.down.circle.fill",
-                color: TesseraeTheme.accent
+                color: TesseraeTheme.success
             )
         case "no_change":
             HistoryStatusPresentation(
                 label: String(localized: "Already Current"),
                 symbol: "checkmark.circle",
-                color: TesseraeTheme.accent
+                color: TesseraeTheme.success
             )
         case "passed":
             HistoryStatusPresentation(
                 label: String(localized: "Passed"),
                 symbol: "checkmark.circle.fill",
-                color: TesseraeTheme.accent
+                color: TesseraeTheme.success
             )
         case "quiet":
             HistoryStatusPresentation(
@@ -1024,13 +1028,13 @@ struct ActivityView: View {
             HistoryStatusPresentation(
                 label: String(localized: "Busy"),
                 symbol: "clock.fill",
-                color: TesseraeTheme.ochre
+                color: TesseraeTheme.warning
             )
         case "held":
             HistoryStatusPresentation(
                 label: String(localized: "Held"),
                 symbol: "pause.circle.fill",
-                color: TesseraeTheme.ochre
+                color: TesseraeTheme.warning
             )
         case "deduped":
             HistoryStatusPresentation(
@@ -1054,43 +1058,43 @@ struct ActivityView: View {
             HistoryStatusPresentation(
                 label: String(localized: "Unmapped"),
                 symbol: "questionmark.circle.fill",
-                color: TesseraeTheme.ochre
+                color: TesseraeTheme.warning
             )
         case "unbound":
             HistoryStatusPresentation(
                 label: String(localized: "No Displays"),
                 symbol: "rectangle.slash",
-                color: TesseraeTheme.ochre
+                color: TesseraeTheme.warning
             )
         case "not_found":
             HistoryStatusPresentation(
                 label: String(localized: "Not Found"),
                 symbol: "magnifyingglass",
-                color: TesseraeTheme.ochre
+                color: TesseraeTheme.warning
             )
         case "no_frame":
             HistoryStatusPresentation(
                 label: String(localized: "No Current Frame"),
                 symbol: "rectangle.slash",
-                color: TesseraeTheme.ochre
+                color: TesseraeTheme.warning
             )
         case "no_target":
             HistoryStatusPresentation(
                 label: String(localized: "No Action Here"),
                 symbol: "scope",
-                color: TesseraeTheme.ochre
+                color: TesseraeTheme.warning
             )
         case "stale":
             HistoryStatusPresentation(
                 label: String(localized: "Outdated Frame"),
                 symbol: "clock.fill",
-                color: TesseraeTheme.ochre
+                color: TesseraeTheme.warning
             )
         case "blocked":
             HistoryStatusPresentation(
                 label: String(localized: "Blocked"),
                 symbol: "hand.raised.fill",
-                color: TesseraeTheme.ochre
+                color: TesseraeTheme.warning
             )
         case "shifted":
             HistoryStatusPresentation(
@@ -1108,13 +1112,13 @@ struct ActivityView: View {
             HistoryStatusPresentation(
                 label: String(localized: "Failed"),
                 symbol: "exclamationmark.triangle.fill",
-                color: TesseraeTheme.terracotta
+                color: TesseraeTheme.danger
             )
         case "ha_failed":
             HistoryStatusPresentation(
                 label: String(localized: "Home Assistant Failed"),
                 symbol: "exclamationmark.triangle.fill",
-                color: TesseraeTheme.terracotta
+                color: TesseraeTheme.danger
             )
         default:
             HistoryStatusPresentation(
@@ -1198,12 +1202,12 @@ struct ActivityView: View {
 
     private func statusColor(_ job: PushJob) -> Color {
         switch job.status {
-        case .accepted, .running: TesseraeTheme.ochre
+        case .accepted, .running: TesseraeTheme.info
         case .succeeded:
             job.result?.status == .quiet
                 ? .indigo
-                : TesseraeTheme.accent
-        case .failed: TesseraeTheme.terracotta
+                : TesseraeTheme.success
+        case .failed: TesseraeTheme.danger
         }
     }
 }

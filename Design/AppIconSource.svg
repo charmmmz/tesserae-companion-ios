@@ -1,18 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <defs>
-    <linearGradient id="tess-bg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#0d8c7e"/>
-      <stop offset="1" stop-color="#0a6f63"/>
-    </linearGradient>
-    <clipPath id="tess-inner">
-      <rect x="220" y="220" width="584" height="584" rx="108" ry="108"/>
-    </clipPath>
-  </defs>
-
-  <!-- Tesserae's official mark, expanded edge-to-edge for the iOS platform mask. -->
-  <rect width="1024" height="1024" fill="url(#tess-bg)"/>
-  <g clip-path="url(#tess-inner)" fill="#ffffff" fill-opacity="0.85">
-    <rect x="512" y="220" width="292" height="292"/>
-    <rect x="220" y="512" width="292" height="292"/>
-  </g>
-</svg>
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Tesserae self-hosted server mark: ink tile, red top right, paper bottom left. Never follows the theme. Full-bleed square for touch and maskable icons.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="1024" height="1024"><defs><clipPath id="t"><rect width="256" height="256" rx="72"/></clipPath></defs><rect width="256" height="256" rx="0" fill="#1C1B19"/><path d="M128 55H174A27 27 0 0 1 201 82V128H128Z" fill="#D0493C"/><path d="M55 128H128V201H82A27 27 0 0 1 55 174Z" fill="#FFFDF8"/></svg>

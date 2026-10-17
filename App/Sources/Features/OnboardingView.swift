@@ -19,11 +19,7 @@ struct OnboardingView: View {
                     if !isChoosingServer {
                         Spacer(minLength: 32)
 
-                        Image("TesseraeLogo")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 88, height: 88)
-                            .accessibilityHidden(true)
+                        TesseraeBrandMark(size: 88)
 
                         VStack(spacing: 10) {
                             Text("Tesserae Companion")

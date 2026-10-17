@@ -2,7 +2,6 @@ import SwiftUI
 import TesseraeKit
 
 struct SettingsView: View {
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
     @Environment(RemindersBridgeModel.self) private var remindersBridgeModel
@@ -199,7 +198,7 @@ struct SettingsView: View {
     }
 
     private var settingsAccent: Color {
-        colorScheme == .dark ? TesseraeTheme.darkAccent : TesseraeTheme.accent
+        TesseraeTheme.accent
     }
 
     private func webURL(for instance: TesseraeInstance) -> URL {

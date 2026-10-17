@@ -703,7 +703,6 @@ private struct ImageSubmissionOutcome {
 
 private struct ShareComposerView: View {
     @ObservedObject var model: ShareComposerModel
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var hapticEvent = TesseraeHapticEvent()
 
@@ -731,7 +730,7 @@ private struct ShareComposerView: View {
             .navigationTitle("Send to Tesserae")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(
-                TesseraeTheme.background(for: colorScheme),
+                TesseraeTheme.background,
                 for: .navigationBar
             )
             .toolbarBackground(.visible, for: .navigationBar)
@@ -743,7 +742,7 @@ private struct ShareComposerView: View {
                 } else if model.phase == .succeeded {
                     ToolbarItem(placement: .confirmationAction) {
                         Image(systemName: "checkmark")
-                            .foregroundStyle(TesseraeTheme.accent)
+                            .foregroundStyle(TesseraeTheme.success)
                             .accessibilityLabel("Sent")
                     }
                 } else {
@@ -795,7 +794,7 @@ private struct ShareComposerView: View {
                 if let errorMessage = model.errorMessage {
                     Label(errorMessage, systemImage: "exclamationmark.triangle")
                         .font(.footnote)
-                        .foregroundStyle(TesseraeTheme.terracotta)
+                        .foregroundStyle(TesseraeTheme.danger)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .tesseraeCard()
                 }
@@ -814,6 +813,7 @@ private struct ShareComposerView: View {
         } label: {
             if model.phase == .submitting {
                 ProgressView()
+                    .tint(.white)
                     .controlSize(.small)
                     .frame(minWidth: 32)
             } else {
@@ -821,6 +821,8 @@ private struct ShareComposerView: View {
             }
         }
         .buttonStyle(.borderedProminent)
+        .tint(TesseraeTheme.accentFill)
+        .foregroundStyle(.white)
         .disabled(model.phase == .submitting || (!model.canSend && model.phase != .failed))
         .accessibilityLabel(
             model.phase == .submitting

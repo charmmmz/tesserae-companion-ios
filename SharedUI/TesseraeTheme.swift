@@ -1,18 +1,63 @@
 import Foundation
 import Observation
 import SwiftUI
+import UIKit
 
 enum TesseraeTheme {
-    static let accent = Color(red: 13 / 255, green: 140 / 255, blue: 126 / 255)
-    static let darkAccent = Color(red: 45 / 255, green: 212 / 255, blue: 191 / 255)
-    static let accentSoft = Color(red: 230 / 255, green: 243 / 255, blue: 241 / 255)
-    static let paper = Color(red: 241 / 255, green: 240 / 255, blue: 236 / 255)
-    static let darkPaper = Color(red: 14 / 255, green: 16 / 255, blue: 21 / 255)
-    static let ochre = Color(red: 186 / 255, green: 134 / 255, blue: 43 / 255)
-    static let terracotta = Color(red: 180 / 255, green: 91 / 255, blue: 65 / 255)
+    // Paper palette from Tesserae 0.448.0. These dynamic colours also work in
+    // the Share Extension, which does not bundle the main app's asset catalog.
+    // Keep AccentColor.colorset in sync for system surfaces that read it.
+    // Foreground tint needs contrast on paper and soft selection surfaces.
+    static let accent = adaptive(light: 0xB03227, dark: 0xE98476)
+    // Solid actions keep white labels legible in both appearances.
+    static let accentFill = adaptive(light: 0xB8352A, dark: 0xC13C30)
+    static let accentSoft = adaptive(light: 0xF3DCD6, dark: 0x3B211D)
+    static let background = adaptive(light: 0xEEEAE1, dark: 0x151412)
+    static let surface = adaptive(light: 0xFFFDF8, dark: 0x22211E)
+    static let surfaceInset = adaptive(light: 0xF1ECE1, dark: 0x1E1D1B)
 
-    static func background(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? darkPaper : paper
+    // Status is independent of branding, even where the light red matches.
+    // Selection and actions use accent; a completed operation uses success.
+    static let success = adaptive(light: 0x3D7A3A, dark: 0x8DBF7F)
+    static let warning = adaptive(light: 0x805808, dark: 0xD9B45A)
+    static let danger = adaptive(light: 0xB8352A, dark: 0xE58474)
+    static let info = adaptive(light: 0x2B4E9B, dark: 0x7C9BE0)
+
+    private static func adaptive(light: UInt32, dark: UInt32) -> Color {
+        Color(uiColor: UIColor { traits in
+            let hex = traits.userInterfaceStyle == .dark ? dark : light
+            return UIColor(
+                red: CGFloat((hex >> 16) & 0xFF) / 255,
+                green: CGFloat((hex >> 8) & 0xFF) / 255,
+                blue: CGFloat(hex & 0xFF) / 255,
+                alpha: 1
+            )
+        })
+    }
+}
+
+struct TesseraeBrandMark: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let size: CGFloat
+
+    var body: some View {
+        Image("TesseraeLogo")
+            .resizable()
+            .scaledToFit()
+            .frame(width: size, height: size)
+            .overlay {
+                if colorScheme == .dark {
+                    // The mark stays ink/red/paper in both appearances. Only
+                    // its edge changes, using the upstream tile's 72/256 radius.
+                    RoundedRectangle(cornerRadius: size * 72 / 256)
+                        .strokeBorder(
+                            Color(red: 237 / 255, green: 233 / 255, blue: 223 / 255)
+                                .opacity(0.3),
+                            lineWidth: 1
+                        )
+                }
+            }
+            .accessibilityHidden(true)
     }
 }
 
@@ -132,7 +177,7 @@ struct ReorderDragPreview<Icon: View>: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(
-            TesseraeTheme.accent.opacity(0.9),
+            TesseraeTheme.accentFill,
             in: shape
         )
         .clipShape(shape)
@@ -141,98 +186,19 @@ struct ReorderDragPreview<Icon: View>: View {
 }
 
 private struct TesseraeScreenBackdrop: View {
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.displayScale) private var displayScale
-
-    private let gridSpacing: CGFloat = 24
-
     var body: some View {
-        GeometryReader { _ in
-            ZStack(alignment: .top) {
-                TesseraeTheme.background(for: colorScheme)
-
-                ambientGlow
-
-                Canvas { context, size in
-                    let lineWidth = 1 / displayScale
-                    let pixelOffset = lineWidth / 2
-                    var grid = Path()
-
-                    for x in stride(
-                        from: pixelOffset,
-                        through: size.width,
-                        by: gridSpacing
-                    ) {
-                        grid.move(to: CGPoint(x: x, y: 0))
-                        grid.addLine(to: CGPoint(x: x, y: size.height))
-                    }
-
-                    for y in stride(
-                        from: pixelOffset,
-                        through: size.height,
-                        by: gridSpacing
-                    ) {
-                        grid.move(to: CGPoint(x: 0, y: y))
-                        grid.addLine(to: CGPoint(x: size.width, y: y))
-                    }
-
-                    context.stroke(
-                        grid,
-                        with: .color(gridColor),
-                        lineWidth: lineWidth
-                    )
-                }
-            }
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-
-    private var ambientGlow: some View {
-        let accent = colorScheme == .dark
-            ? TesseraeTheme.darkAccent
-            : TesseraeTheme.accent
-        let opacity = colorScheme == .dark ? 0.10 : 0.05
-
-        return Rectangle()
-            .fill(
-                EllipticalGradient(
-                    gradient: Gradient(stops: [
-                        .init(
-                            color: accent.opacity(opacity),
-                            location: 0
-                        ),
-                        .init(
-                            color: accent.opacity(0),
-                            location: 0.55
-                        ),
-                        .init(color: .clear, location: 1)
-                    ]),
-                    center: UnitPoint(x: 0.5, y: -0.2),
-                    startRadiusFraction: 0,
-                    endRadiusFraction: 1
-                )
-            )
-    }
-
-    private var gridColor: Color {
-        colorScheme == .dark
-            ? .white.opacity(0.015)
-            : Color(red: 16 / 255, green: 12 / 255, blue: 8 / 255)
-                .opacity(0.03)
+        TesseraeTheme.background
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 
 private struct TesseraeCardModifier: ViewModifier {
-    @Environment(\.colorScheme) private var colorScheme
-
     func body(content: Content) -> some View {
         content
             .padding(16)
             .background(
-                colorScheme == .dark
-                    ? Color(red: 24 / 255, green: 27 / 255, blue: 34 / 255)
-                    : .white,
+                TesseraeTheme.surface,
                 in: RoundedRectangle(cornerRadius: 16, style: .continuous)
             )
     }
@@ -616,35 +582,39 @@ private struct TesseraeMessageCenterHost: View {
             switch message.kind {
             case .info:
                 Image(systemName: "info.circle.fill")
-                    .foregroundStyle(TesseraeTheme.accent)
+                    .foregroundStyle(TesseraeTheme.info)
             case .success:
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(TesseraeTheme.accent)
+                    .foregroundStyle(TesseraeTheme.success)
             case let .progress(fraction):
                 if let fraction {
                     ProgressView(value: fraction)
                         .progressViewStyle(.circular)
+                        .tint(TesseraeTheme.info)
                 } else {
                     ProgressView()
+                        .tint(TesseraeTheme.info)
                 }
             case .warning:
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(TesseraeTheme.ochre)
+                    .foregroundStyle(TesseraeTheme.warning)
             case .error:
                 Image(systemName: "exclamationmark.circle.fill")
-                    .foregroundStyle(TesseraeTheme.terracotta)
+                    .foregroundStyle(TesseraeTheme.danger)
             }
         }
     }
 
     private func color(for kind: TesseraeMessageKind) -> Color {
         switch kind {
-        case .info, .success, .progress:
-            TesseraeTheme.accent
+        case .info, .progress:
+            TesseraeTheme.info
+        case .success:
+            TesseraeTheme.success
         case .warning:
-            TesseraeTheme.ochre
+            TesseraeTheme.warning
         case .error:
-            TesseraeTheme.terracotta
+            TesseraeTheme.danger
         }
     }
 }

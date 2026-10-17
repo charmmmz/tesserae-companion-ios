@@ -11,6 +11,28 @@ capabilities.
 
 ## [Unreleased]
 
+### Changed
+
+- Adopted Tesserae's Paper branding across the app and Share Extension:
+  brick-red actions, warm paper surfaces, and matching light/dark colours.
+  Native iOS typography, navigation, controls, gestures, and card shapes
+  remain in place; the decorative background grid and glow are removed.
+- Updated the App Icon and Onboarding mark to the official ink/red/paper
+  artwork. The App Icon uses the upstream full-bleed square with an opaque
+  1024 px export; the Onboarding mark gains a subtle edge in dark appearance.
+- Separated brand actions and selection from status: success uses green,
+  warnings ochre, errors a dedicated danger token, and progress/information
+  blue. This includes Activity, display freshness, Bluetooth photo sending,
+  offline albums, and Share Extension completion.
+- Replaced the teal Shortcuts tile and built-in sample image. User photos,
+  Dashboard previews, and manufacturer artwork retain their source colours.
+
+### Fixed
+
+- Improved Paper text contrast with a brighter dark foreground tint and a
+  separate darker fill for white-label actions; the light warning colour
+  also meets the normal-text contrast threshold on cards and tinted banners.
+
 ### Development
 
 - Updated the existing Simulator-only Vision smoke-test skip to recognize

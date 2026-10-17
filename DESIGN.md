@@ -284,42 +284,62 @@ native iOS.
 
 ### 5.2 Core visual tokens
 
-These tokens are derived from Tesserae's current admin system:
+The first Paper branding pass follows Tesserae's palette introduced in
+0.448.0, with Paper made the default server theme in 0.449.0. Values are
+implemented as adaptive colours in `SharedUI/TesseraeTheme.swift` so the app
+and Share Extension use the same light and dark appearances. The app's
+`AccentColor` asset mirrors the accent for system surfaces.
 
 | Role | Light | Dark |
 | --- | --- | --- |
-| Accent | `#0D8C7E` | `#2DD4BF` |
-| Accent pressed | `#0A6F63` | `#14B8A6` |
-| Accent soft | `#E6F3F1` | teal mixed at 18% into the dark surface |
-| App background | `#F1F0EC` | `#0E1015` |
-| Surface | `#FFFFFF` | `#181B22` |
-| Recessed surface | `#F4F4F2` | `#13161C` |
-| Primary text | `#18181B` | `#E7E9EE` |
-| Secondary text | `#52524F` | `#B6BCC7` |
-| Muted text | `#71706C` | `#8B93A1` |
-| Border | `#E6E5E1` | `#2A2F38` |
+| Brand foreground / tint | `#B03227` | `#E98476` |
+| Solid action fill | `#B8352A` | `#C13C30` |
+| Accent soft | `#F3DCD6` | `#3B211D` |
+| App background | `#EEEAE1` | `#151412` |
+| Surface | `#FFFDF8` | `#22211E` |
+| Recessed surface | `#F1ECE1` | `#1E1D1B` |
+| Success | `#3D7A3A` | `#8DBF7F` |
+| Warning | `#805808` | `#D9B45A` |
+| Danger | `#B8352A` | `#E58474` |
+| Information / progress | `#2B4E9B` | `#7C9BE0` |
 
-Additional Tesserae semantic accents may be used by role:
-terracotta, ochre, moss, teal, slate-blue, and plum. Status must always
-include an icon and label, never colour alone.
+Brand foreground is for links, selection, and app identity. It has at least
+4.5:1 contrast against the paper, card, recessed, and soft selection surfaces.
+Native prominent buttons use the separate solid action fill. Completed actions
+and healthy states use success; active operations use information; warnings
+and failures have their own tokens. Danger and brand accent remain separate
+roles. Solid action fills use a darker red so white labels stay readable. Status must include an icon and
+label, never colour alone. Primary/secondary text, separators, control pressed
+states, and native materials continue to use iOS semantic styles.
+
+The mark stays ink `#1C1B19`, red `#D0493C`, and paper `#FFFDF8` in both
+appearances. A thin edge makes the Onboarding mark visible on dark paper;
+its internal tiles do not change. The App Icon uses the official full-bleed
+square artwork and an opaque 1024 px export for the iOS platform mask.
+Photos, server-rendered Dashboard previews, and manufacturer marks preserve
+their original colours. Earlier icon concepts in `Design/` are historical
+references and are not bundled in the app.
 
 ### 5.3 Typography and iconography
 
-- Use bundled Inter when it does not compromise Dynamic Type; fall back to
-  the iOS system font.
-- Use JetBrains Mono only for device identifiers, versions, dimensions,
-  and diagnostic values.
-- Use Phosphor Swift for server-selected Dashboard icons so identifiers match
-  the web UI; keep SF Symbols for native navigation and controls.
+- Use the iOS system font and Dynamic Type, with system monospaced styles
+  for device identifiers, versions, dimensions, and diagnostic values.
+- Use the bundled Phosphor regular icon font for server-selected Dashboard
+  icons so identifiers match the web UI; keep SF Symbols for native
+  navigation and controls.
 - Keep native control behaviour, hit targets, focus, and accessibility
   semantics even when the surface styling follows Tesserae.
 
 ### 5.4 Component language
 
-- Warm paper background with white or charcoal cards.
+- Warm paper background with warm light or charcoal cards, without the
+  previous ambient glow or decorative grid.
 - Restrained 10–16 pt radii; pills only for compact states.
 - Soft paper-like elevation, not glass-heavy layers.
-- Teal focus and primary actions.
+- Brick-red actions and selection; independent semantic status colours.
+- Retain native navigation, tabs, sheets, menus, gestures, and control
+  feedback. Web fonts and the server's 2 px corner treatment are not part
+  of this native branding pass.
 - Dashboard thumbnails preserve the server-rendered image without
   recolouring.
 - Device status cards use generous spacing and one clear primary action.

@@ -399,6 +399,8 @@ private struct LineupEditorView: View {
                         Task { await loadForEditing() }
                     }
                     .buttonStyle(.borderedProminent)
+                    .tint(TesseraeTheme.accentFill)
+                    .foregroundStyle(.white)
                 }
             } else {
                 LineupEditorForm(

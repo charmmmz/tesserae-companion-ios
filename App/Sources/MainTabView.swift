@@ -147,7 +147,7 @@ struct MainTabView: View {
                 .font(.system(size: 21, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 54, height: 54)
-                .background(TesseraeTheme.accent, in: Circle())
+                .background(TesseraeTheme.accentFill, in: Circle())
                 .overlay {
                     Circle()
                         .stroke(.white.opacity(0.22), lineWidth: 1)

@@ -161,6 +161,8 @@ struct LineupsView: View {
                             beginCreatingLineup()
                         }
                         .buttonStyle(.borderedProminent)
+                        .tint(TesseraeTheme.accentFill)
+                        .foregroundStyle(.white)
                     }
                     Button("Refresh") {
                         Task { await model.refreshLineups() }
@@ -470,7 +472,7 @@ private struct LineupListRow: View {
             Circle()
                 .fill(
                     lineup.enabled
-                        ? TesseraeTheme.accent
+                        ? TesseraeTheme.success
                         : Color.secondary.opacity(0.55)
                 )
                 .frame(width: 8, height: 8)
@@ -484,9 +486,7 @@ private struct LineupListRow: View {
     }
 
     private var cardSurfaceColor: Color {
-        colorScheme == .dark
-            ? Color(red: 24 / 255, green: 27 / 255, blue: 34 / 255)
-            : .white
+        TesseraeTheme.surface
     }
 
     private var dashboardCountTitle: String {
@@ -604,6 +604,8 @@ private struct LineupDetailView: View {
                         Task { await model.refreshLineups() }
                     }
                     .buttonStyle(.borderedProminent)
+                    .tint(TesseraeTheme.accentFill)
+                    .foregroundStyle(.white)
                 }
             }
         }
@@ -864,7 +866,7 @@ private struct LineupDetailView: View {
                         .frame(width: 24, height: 24)
                         .background(
                             isCurrent
-                                ? TesseraeTheme.accent
+                                ? TesseraeTheme.accentFill
                                 : Color.primary.opacity(0.055),
                             in: Circle()
                         )
@@ -880,7 +882,7 @@ private struct LineupDetailView: View {
                             if dashboard.missing {
                                 Text("Missing")
                                     .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(TesseraeTheme.terracotta)
+                                    .foregroundStyle(TesseraeTheme.danger)
                             }
                         }
 
@@ -960,7 +962,7 @@ private struct LineupDetailView: View {
     private func webManagedBanner(_ lineup: Lineup) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "info.circle.fill")
-                .foregroundStyle(TesseraeTheme.ochre)
+                .foregroundStyle(TesseraeTheme.warning)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text("Edit on the web")
@@ -973,7 +975,7 @@ private struct LineupDetailView: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            TesseraeTheme.ochre.opacity(0.09),
+            TesseraeTheme.warning.opacity(0.09),
             in: RoundedRectangle(cornerRadius: 12, style: .continuous)
         )
     }

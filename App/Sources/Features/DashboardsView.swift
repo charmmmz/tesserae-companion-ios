@@ -297,6 +297,8 @@ struct DashboardsView: View {
                         Task { await model.refreshDashboards() }
                     }
                     .buttonStyle(.borderedProminent)
+                    .tint(TesseraeTheme.accentFill)
+                    .foregroundStyle(.white)
                 }
             }
         }
@@ -712,6 +714,8 @@ struct DashboardsView: View {
             .font(.caption.weight(.semibold))
         }
         .buttonStyle(.borderedProminent)
+        .tint(TesseraeTheme.accentFill)
+        .foregroundStyle(.white)
         .controlSize(.small)
         .fixedSize()
         .accessibilityIdentifier(
@@ -1051,6 +1055,8 @@ struct DashboardPreviewActionSheet: View {
                 .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
+            .tint(TesseraeTheme.accentFill)
+            .foregroundStyle(.white)
             .controlSize(.large)
             .disabled(
                 selectedDeviceIDs.isEmpty

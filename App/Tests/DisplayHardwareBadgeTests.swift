@@ -68,3 +68,42 @@ final class DisplayHardwareBadgeSnapshotTests: XCTestCase {
         add(attachment)
     }
 }
+
+@Suite("Paper palette readability")
+@MainActor
+struct TesseraeThemeContrastTests {
+    @Test(arguments: [UIUserInterfaceStyle.light, .dark])
+    func foregroundAndFilledActionsHaveReadableContrast(style: UIUserInterfaceStyle) {
+        let traits = UITraitCollection(userInterfaceStyle: style)
+        for background in [TesseraeTheme.background, TesseraeTheme.surface, TesseraeTheme.surfaceInset, TesseraeTheme.accentSoft] {
+            #expect(contrast(TesseraeTheme.accent, background, traits: traits) >= 4.5)
+        }
+        #expect(contrast(.white, TesseraeTheme.accentFill, traits: traits) >= 4.5)
+        for status in [TesseraeTheme.success, TesseraeTheme.warning, TesseraeTheme.danger, TesseraeTheme.info] {
+            #expect(contrast(status, TesseraeTheme.surface, traits: traits) >= 4.5)
+        }
+        for background in [TesseraeTheme.background, TesseraeTheme.surface] {
+            #expect(contrast(TesseraeTheme.warning, background, traits: traits, tintOpacity: 0.09) >= 4.5)
+        }
+    }
+
+    private func contrast(_ foreground: Color, _ background: Color, traits: UITraitCollection, tintOpacity: Double = 0) -> Double {
+        func components(_ color: Color) -> [Double] {
+            var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+            UIColor(color).resolvedColor(with: traits).getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+            return [Double(red), Double(green), Double(blue)]
+        }
+        func luminance(_ rgb: [Double]) -> Double {
+            func linear(_ component: Double) -> Double {
+                return component <= 0.04045 ? component / 12.92 : pow((component + 0.055) / 1.055, 2.4)
+            }
+            return 0.2126 * linear(rgb[0]) + 0.7152 * linear(rgb[1]) + 0.0722 * linear(rgb[2])
+        }
+        let foregroundRGB = components(foreground)
+        let backgroundRGB = zip(foregroundRGB, components(background)).map {
+            $0 * tintOpacity + $1 * (1 - tintOpacity)
+        }
+        let a = luminance(foregroundRGB), b = luminance(backgroundRGB)
+        return (max(a, b) + 0.05) / (min(a, b) + 0.05)
+    }
+}

@@ -124,6 +124,8 @@ struct SendView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(TesseraeTheme.accentFill)
+                .foregroundStyle(.white)
                 .controlSize(.large)
                 .disabled(
                     !sourceIsReady
@@ -244,7 +246,7 @@ struct SendView: View {
                     systemImage: "exclamationmark.triangle"
                 )
                 .font(.footnote)
-                .foregroundStyle(TesseraeTheme.terracotta)
+                .foregroundStyle(TesseraeTheme.danger)
             }
         }
         .tesseraeCard()
@@ -267,9 +269,15 @@ struct SendView: View {
                         size: CGSize(width: 800, height: 600)
                     )
                     let sample = renderer.image { context in
-                        UIColor.systemTeal.setFill()
+                        // Demo artwork is fixed paper/ink, independent of the
+                        // interface appearance, just like a real photo.
+                        UIColor(red: 255 / 255, green: 253 / 255, blue: 248 / 255, alpha: 1)
+                            .setFill()
                         context.fill(
                             CGRect(x: 0, y: 0, width: 800, height: 600)
+                        )
+                        UIImage(named: "TesseraeLogo")?.draw(
+                            in: CGRect(x: 240, y: 140, width: 320, height: 320)
                         )
                     }
                     imageData = sample.jpegData(compressionQuality: 0.9)

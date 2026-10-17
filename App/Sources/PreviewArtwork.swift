@@ -34,11 +34,7 @@ struct PreviewArtwork: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [TesseraeTheme.accentSoft, TesseraeTheme.paper],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+            TesseraeTheme.surfaceInset
 
             if let image {
                 previewImage(image)
@@ -59,6 +55,7 @@ struct PreviewArtwork: View {
 
             if state?.showsProgress == true {
                 ProgressView()
+                    .tint(TesseraeTheme.info)
                     .controlSize(.small)
                     .padding(8)
                     .background(.thinMaterial, in: Circle())

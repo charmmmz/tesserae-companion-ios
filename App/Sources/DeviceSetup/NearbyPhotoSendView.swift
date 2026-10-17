@@ -104,6 +104,8 @@ struct NearbyPhotoSendView: View {
                 withAnimation(.snappy) { hasStarted = true }
             }
             .buttonStyle(.borderedProminent)
+            .tint(TesseraeTheme.accentFill)
+            .foregroundStyle(.white)
             .controlSize(.large)
             .accessibilityIdentifier("ble-photo-start")
         }
@@ -120,6 +122,7 @@ struct NearbyPhotoSendView: View {
                     VStack(spacing: 8) {
                         Text("Sending photo…").font(.subheadline)
                         ProgressView(value: nearby.photoProgress)
+                            .tint(TesseraeTheme.info)
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -127,7 +130,9 @@ struct NearbyPhotoSendView: View {
                     Label(preparing ? "Preparing…" : "Send to PicPak", systemImage: "paperplane.fill")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent).controlSize(.large)
+                .buttonStyle(.borderedProminent)
+                .tint(TesseraeTheme.accentFill).controlSize(.large)
+                .foregroundStyle(.white)
                 .disabled(image == nil || busy)
                 .accessibilityIdentifier("ble-send-photo")
                 if let localError { Text(localError).font(.footnote).foregroundStyle(.secondary) }
@@ -144,21 +149,25 @@ struct NearbyPhotoSendView: View {
                 VStack(spacing: 18) {
                     if phase == .received {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 52)).foregroundStyle(.tint)
+                            .font(.system(size: 52)).foregroundStyle(TesseraeTheme.success)
                         VStack(spacing: 8) {
                             Text("Photo Sent").font(.title2.bold())
                             Text("PicPak received your photo and will now refresh its screen.")
                                 .foregroundStyle(.secondary)
                         }
                         Button("Done") { close() }
-                            .buttonStyle(.borderedProminent).controlSize(.large)
+                            .buttonStyle(.borderedProminent)
+                            .tint(TesseraeTheme.accentFill).controlSize(.large)
+                            .foregroundStyle(.white)
                             .padding(.top, 4)
                     } else if case .failed(let message) = nearby.connectionState {
                         Image(systemName: "exclamationmark.circle")
-                            .font(.system(size: 44)).foregroundStyle(.secondary)
+                            .font(.system(size: 44)).foregroundStyle(TesseraeTheme.danger)
                         Text(message).foregroundStyle(.secondary)
                     } else {
-                        ProgressView().controlSize(.large)
+                        ProgressView()
+                            .tint(TesseraeTheme.info)
+                            .controlSize(.large)
                         Text(nearby.statusMessage ?? "Connecting securely…")
                             .font(.headline)
                         Text("Keep your iPhone close.").foregroundStyle(.secondary)
@@ -250,7 +259,7 @@ struct NearbyPhotoSendView: View {
         }
         if nearby.photoDeviceStatus?.lowBattery == true {
             Label("Low Battery", systemImage: "exclamationmark.battery")
-                .foregroundStyle(.orange)
+                .foregroundStyle(TesseraeTheme.warning)
         }
         if let speed = nearby.photoDeviceStatus?.refreshSpeed {
             Label(speed.displayName, systemImage: "arrow.clockwise")

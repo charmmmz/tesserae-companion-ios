@@ -250,6 +250,8 @@ struct DisplaysView: View {
                         Task { await model.refreshDisplays() }
                     }
                     .buttonStyle(.borderedProminent)
+                    .tint(TesseraeTheme.accentFill)
+                    .foregroundStyle(.white)
                 }
             }
         }
@@ -612,9 +614,7 @@ private struct DisplayCard: View {
     }
 
     private var cardSurfaceColor: Color {
-        colorScheme == .dark
-            ? Color(red: 24 / 255, green: 27 / 255, blue: 34 / 255)
-            : .white
+        TesseraeTheme.surface
     }
 
     private var panelPreview: some View {
@@ -679,12 +679,12 @@ private struct PendingRenderGlyph: View {
     var body: some View {
         Image(systemName: "clock.arrow.circlepath")
             .font(.caption2.weight(.bold))
-            .foregroundStyle(TesseraeTheme.ochre)
+            .foregroundStyle(TesseraeTheme.warning)
             .frame(width: 26, height: 26)
             .background(.regularMaterial, in: Circle())
             .overlay {
                 Circle()
-                    .stroke(TesseraeTheme.ochre.opacity(0.45), lineWidth: 1)
+                    .stroke(TesseraeTheme.warning.opacity(0.45), lineWidth: 1)
             }
             .shadow(color: .black.opacity(0.14), radius: 4, y: 2)
     }
@@ -1115,7 +1115,7 @@ private struct DisplayDetailView: View {
     }
 
     private func upcomingAccent(_ certainty: DeviceUpcomingCertainty) -> Color {
-        certainty == .scheduled ? TesseraeTheme.accent : TesseraeTheme.ochre
+        certainty == .scheduled ? TesseraeTheme.info : TesseraeTheme.warning
     }
 
     private func upcomingSymbol(_ event: DeviceUpcomingEvent) -> String {
@@ -1179,7 +1179,7 @@ private struct DisplayDetailView: View {
             HStack(spacing: 10) {
                 Label("Next Screen", systemImage: "clock.arrow.circlepath")
                     .font(.headline)
-                    .foregroundStyle(TesseraeTheme.ochre)
+                    .foregroundStyle(TesseraeTheme.warning)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
                     .layoutPriority(1)
@@ -1284,7 +1284,7 @@ private struct DisplayDetailView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Waiting for display refresh")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(TesseraeTheme.ochre)
+                    .foregroundStyle(TesseraeTheme.warning)
 
                 Text(
                     "The new frame will appear the next time this display wakes."
@@ -1296,7 +1296,7 @@ private struct DisplayDetailView: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            TesseraeTheme.ochre.opacity(0.09),
+            TesseraeTheme.warning.opacity(0.09),
             in: RoundedRectangle(cornerRadius: 12, style: .continuous)
         )
         .accessibilityElement(children: .combine)
@@ -1471,8 +1471,8 @@ private extension DisplaySummary {
 
     var freshnessColor: Color {
         switch freshness {
-        case .fresh: TesseraeTheme.accent
-        case .stale: TesseraeTheme.ochre
+        case .fresh: TesseraeTheme.success
+        case .stale: TesseraeTheme.warning
         case .unknown: .secondary
         }
     }

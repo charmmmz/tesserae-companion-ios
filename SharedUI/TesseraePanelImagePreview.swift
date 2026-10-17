@@ -276,7 +276,7 @@ struct TesseraePanelImagePreview: View {
                 }
                 .padding(.horizontal, framingItemPadding)
                 .frame(minHeight: framingButtonSize)
-                .foregroundStyle(autoFramingIsApplied ? Color.accentColor : Color.primary)
+                .foregroundStyle(autoFramingIsApplied ? TesseraeTheme.success : Color.primary)
                 .overlay(alignment: .topTrailing) {
                     if !isAutoFraming, !autoFramingIsApplied, autoFramingFeedback != nil {
                         Image(systemName: "exclamationmark.circle.fill")
