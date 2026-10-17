@@ -11,6 +11,12 @@ capabilities.
 
 ## [Unreleased]
 
+### Development
+
+- Updated the existing Simulator-only Vision smoke-test skip to recognize
+  the newer missing-inference-context error format. Physical-device runs
+  and other Vision errors still follow the normal test path.
+
 ## [0.8.0] - 2026-10-05
 
 ### Added

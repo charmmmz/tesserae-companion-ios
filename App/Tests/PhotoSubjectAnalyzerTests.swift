@@ -45,9 +45,12 @@ final class PhotoSubjectAnalyzerTests: XCTestCase {
                 if let visionError = error as? VisionError,
                     case .internalError(let detail) = visionError
                 {
+                    // Newer Simulator runtimes omit the NSError domain/code
+                    // from this same unavailable-inference-context error.
                     missingContext =
-                        detail.contains("com.apple.Vision Code=9")
-                        && detail.contains("Could not create inference context")
+                        detail == "Could not create inference context"
+                        || (detail.contains("com.apple.Vision Code=9")
+                            && detail.contains("Could not create inference context"))
                 }
                 if missingContext {
                     throw XCTSkip(
