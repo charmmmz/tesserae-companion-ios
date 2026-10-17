@@ -3,7 +3,6 @@ import XCTest
 @MainActor
 final class AdaptiveLayoutUITests: XCTestCase {
     override func setUp() async throws {
-        try await super.setUp()
         await MainActor.run {
             continueAfterFailure = false
             XCUIDevice.shared.orientation = .portrait
@@ -14,7 +13,6 @@ final class AdaptiveLayoutUITests: XCTestCase {
         await MainActor.run {
             XCUIDevice.shared.orientation = .portrait
         }
-        try await super.tearDown()
     }
 
     private func demo(accessibilityText: Bool = false) -> XCUIApplication {
