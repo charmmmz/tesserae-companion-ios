@@ -13,7 +13,9 @@ struct AdaptiveComposerLayout<Preview: View, Controls: View>: View {
             let usesColumns = horizontalSizeClass == .regular
                 && geometry.size.width >= 720 && !dynamicTypeSize.isAccessibilitySize
             if usesColumns {
-                #if compiler(>=6.4)
+                // The Swift compiler version does not identify the bundled SDK.
+                // SwiftUICore 8.0.85.29 (iOS 27.1 SDK) contains ArrangementView.
+                #if canImport(SwiftUICore, _version: 8.0.85.29)
                 if #available(iOS 27.1, *) {
                     ArrangementView {
                         region { preview() }

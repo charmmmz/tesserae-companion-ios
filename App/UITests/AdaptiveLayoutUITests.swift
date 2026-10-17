@@ -2,13 +2,19 @@ import XCTest
 
 @MainActor
 final class AdaptiveLayoutUITests: XCTestCase {
-    override func setUpWithError() throws {
-        continueAfterFailure = false
-        XCUIDevice.shared.orientation = .portrait
+    override func setUp() async throws {
+        try await super.setUp()
+        await MainActor.run {
+            continueAfterFailure = false
+            XCUIDevice.shared.orientation = .portrait
+        }
     }
 
-    override func tearDownWithError() throws {
-        XCUIDevice.shared.orientation = .portrait
+    override func tearDown() async throws {
+        await MainActor.run {
+            XCUIDevice.shared.orientation = .portrait
+        }
+        try await super.tearDown()
     }
 
     private func demo(accessibilityText: Bool = false) -> XCUIApplication {
