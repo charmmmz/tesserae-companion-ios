@@ -10,24 +10,44 @@ sharing, and Shortcuts.
 Dashboard editing and server administration remain in Tesserae's web
 interface.
 
-## Version 0.8.0 (build 14)
+## Version 0.8.1 (source build 15)
 
-- Simpler Lineup editors, Cycle daily start times, Daily and Keep Fresh display
-  targets, and confirmation before discarding an unsaved draft.
-- Dashboard and Lineup search, web editor shortcuts, more hardware brands and
-  logos, and compact, expandable Device Details.
-- On-device Auto Frame in Send and Share, plus direct Bluetooth photo sending
-  and additional maintenance controls for compatible PicPak firmware.
-- Per-server Health and Reminders retention, safer server switching, smoother
-  Library previews, and more reliable Bluetooth reconnection.
+- Paper branding: a new ink/red/paper icon, warm surfaces, readable light/dark
+  actions, and distinct success, warning, error, and progress colours.
+- Better Simplified Chinese and larger-text layouts in Displays, Lineups,
+  Gallery, Settings, Bluetooth setup, Send, and the Share Extension.
+- VoiceOver display cards and selected targets, a native Lineup switch,
+  larger touch targets, and custom animations that follow Reduce Motion.
 
-Focus testing on saving each Lineup type, Back/Cancel/swipe-down draft protection
-(including open pickers), server-time-zone schedules, and long Dashboard durations.
-Check hardware labels in light/dark mode and with larger text. For compatible
-PicPak firmware, verify photo transfer, cancellation, screen mode, refresh speed,
-and recovery after reconnecting on physical hardware.
+### Focus for this candidate
 
-## What to test
+1. Check light and dark appearances, including success, error, disabled, and
+   progress states. Photos and Dashboard artwork should keep their original colours.
+2. Use Simplified Chinese, the largest accessibility text size, Bold Text,
+   and Increase Contrast. Check long display/server names and the keyboard
+   while editing a Lineup; preview target names and dimensions should wrap.
+3. With VoiceOver, open a display, select photo targets, turn a Lineup off/on,
+   open Settings, and adjust a full-screen Gallery photo. Check the named
+   reorder and zoom actions on a physical iPhone.
+4. Enable Reduce Motion and verify navigation, long-press reordering,
+   photo pinch/double tap, native menus, and sheet dismissal still work.
+5. Open Send to Tesserae from Photos/Safari, check large-text target/fit
+   controls, then send to a real display and verify the result.
+
+### 简体中文测试重点
+
+本版更新 Paper 品牌、明暗颜色、中文与大字体布局，并完善 VoiceOver、
+系统开关和触摸区域。请重点检查：
+
+- 最大辅助字体、粗体和增强对比度下，长设备名、分辨率、播放队列与设置是否完整显示。
+- VoiceOver 能否清楚读出设备、选中目标和开关状态；弹窗焦点及照片缩放是否正确。
+- 开启“减弱动态效果”后，原生长按排序、捏合、双击、菜单和关闭操作是否正常。
+- 从照片或 Safari 打开分享扩展，以不同适配模式发送到真实显示屏并核对显示结果。
+
+The repository's build number is 15. If Xcode Cloud assigns its own build
+number, use the number shown in App Store Connect when reporting a result.
+
+## Core regression checklist
 
 1. If you paired with an earlier build, pair again when prompted so the app can
    request the new Lineups permissions.
@@ -79,5 +99,6 @@ display names, Dashboard names, photos, and household information.
   per-client `lineups:write` grant in Tesserae Settings.
 - History/resend and richer previews appear only when the paired server
   advertises those optional Companion capabilities.
-- Pairing and a Photos Share Sheet publish have passed on a physical iPhone;
-  the remaining permission, failure-mode, and format matrix is still in progress.
+- Earlier candidates had physical pairing and Photos Share Sheet checks. This
+  0.8.1 candidate has Simulator coverage; physical-device and display acceptance
+  still needs to be completed. These earlier results do not qualify this build.

@@ -3,6 +3,27 @@
 This is a preparation checklist, not evidence that a build has been uploaded
 or approved.
 
+## Current candidate: 0.8.1 (source build 15)
+
+- Delivery: push the reviewed commits to `origin/main`; the existing Xcode
+  Cloud `Default` workflow builds and signs the candidate. Local Apple
+  account setup and local TestFlight upload are not part of this delivery.
+- [x] Set app and Share Extension to 0.8.1 / 15 in `project.yml` and regenerate
+  the checked-in project with XcodeGen.
+- [x] Separate branding/contrast, Chinese/Dynamic Type, accessibility, and
+  Simulator test-environment changes into reviewable commits.
+- [x] Prepare English and Simplified Chinese test notes in `TESTFLIGHT_NOTES.md`.
+- [ ] Confirm this commit's Xcode Cloud archive result and its actual build number.
+- [ ] Confirm processing completed and the build is available to the intended
+  TestFlight group. A successful archive alone does not establish availability.
+- [ ] Complete physical-iPhone, Share Extension, VoiceOver, Bluetooth, and
+  real-display checks for this candidate.
+
+See [the candidate acceptance record](docs/releases/0.8.1-beta.md) for executed
+checks, retained audit findings, and evidence locations. The general checklist
+below includes historical results; checked items are not a new physical-device
+acceptance of 0.8.1.
+
 ## Server compatibility
 
 - [x] Use a Tesserae build that exposes the complete Companion API v1
@@ -55,14 +76,13 @@ or approved.
 
 ## Product metadata
 
-- [ ] Replace placeholder app icons and provide the final 1024 × 1024 App
-      Store icon.
+- [x] Provide the official Paper mark as an opaque 1024 × 1024 App Store icon.
 - [ ] Prepare English and Simplified Chinese descriptions, keywords, release
       notes, support text, and screenshots for each supported iPhone size.
 - [ ] Confirm the official iOS app designation, Tesserae attribution, and
       publisher details in the listing.
-- [ ] Set marketing version and monotonically increasing build number for the
-      beta candidate.
+- [x] Set the source marketing version/build to 0.8.1 / 15; confirm the final
+      Xcode Cloud number in App Store Connect.
 
 ## Archive and validation
 
