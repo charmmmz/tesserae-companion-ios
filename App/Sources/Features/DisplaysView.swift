@@ -63,167 +63,11 @@ struct DisplaysView: View {
                         .accessibilityAddTraits(.isHeader)
                 }
                 if model.supportsLineups {
-                    Button {
-                        lineupsPresented = true
-                    } label: {
-                        HStack(alignment: .center, spacing: 14) {
-                            if !dynamicTypeSize.isAccessibilitySize {
-                                Image(systemName: "rectangle.3.group")
-                                    .font(.title3.weight(.semibold))
-                                    .foregroundStyle(TesseraeTheme.accent)
-                                    .frame(width: 40, height: 40)
-                                    .background(
-                                        TesseraeTheme.accent.opacity(0.11),
-                                        in: RoundedRectangle(
-                                            cornerRadius: 12,
-                                            style: .continuous
-                                        )
-                                    )
-                            }
-
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Manage Lineups")
-                                    .font(.headline)
-                                Text("Schedules, decks, and rotations")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-
-                            Spacer(minLength: 0)
-
-                            if !dynamicTypeSize.isAccessibilitySize, !model.lineups.isEmpty {
-                                Text("\(model.lineups.count)")
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.tertiary)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .tesseraeCard()
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("manage-lineups")
-                    .accessibilityHint("Opens Lineups and controls.")
+                    manageLineupsButton
                 }
 
                 ForEach(displays) { display in
-                    Button {
-                        selectedDisplay = display
-                    } label: {
-                        DisplayCard(
-                            display: display,
-                            preview: model.displayPreviews[display.id]
-                        )
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityIdentifier("display-card-\(display.id)")
-                    .accessibilityAddTraits(.isButton)
-                    .background(
-                        GeometryReader { proxy in
-                            Color.clear.preference(
-                                key: DisplayCardFrameKey.self,
-                                value: [
-                                    display.id: proxy.frame(
-                                        in: .named("displays-scroll")
-                                    )
-                                ]
-                            )
-                        }
-                    )
-                    .opacity(draggedDisplayID == display.id ? 0 : 1)
-                    .overlay {
-                        if draggedDisplayID == display.id {
-                            RoundedRectangle(
-                                cornerRadius: 16,
-                                style: .continuous
-                            )
-                            .fill(TesseraeTheme.accent.opacity(0.07))
-                            .overlay {
-                                RoundedRectangle(
-                                    cornerRadius: 16,
-                                    style: .continuous
-                                )
-                                .stroke(
-                                    TesseraeTheme.accent.opacity(0.4),
-                                    style: StrokeStyle(
-                                        lineWidth: 1.5,
-                                        dash: [6, 5]
-                                    )
-                                )
-                            }
-                            .allowsHitTesting(false)
-                        }
-                    }
-                    .gesture(
-                        DisplayReorderLongPressGesture(
-                            onBegan: { currentOrigin in
-                                beginDisplayDrag(
-                                    displayID: display.id,
-                                    displayOrder: displayOrder,
-                                    currentOrigin: currentOrigin
-                                )
-                            },
-                            onChanged: { translation in
-                                guard draggedDisplayID == display.id else {
-                                    return
-                                }
-                                reorderMotion.translation = translation
-                                reorderMotion.didMove = reorderMotion.didMove
-                                    || abs(translation.height) > 2
-                                updateLiveReorder(translation: translation)
-                            },
-                            onEnded: endDisplayDrag
-                        )
-                    )
-                    .accessibilityHint(
-                        "Tap for details. Long press and drag to reorder."
-                    )
-                    .accessibilityLabel(Text("\(display.name), \(display.freshnessLabel)"))
-                    .accessibilityValue(
-                        Text("Display \((displayOrder.firstIndex(of: display.id) ?? 0) + 1) of \(displayOrder.count)")
-                    )
-                    .accessibilityCustomContent(
-                        "Hardware",
-                        Text([display.hardwarePresentation.brand?.displayName,
-                              display.hardwarePresentation.modelName].compactMap { $0 }.joined(separator: ", "))
-                    )
-                    .accessibilityCustomContent("Battery", Text(display.batteryPercent.map { "\($0)%" } ?? "—"))
-                    .accessibilityCustomContent("Wi-Fi", Text(display.rssiDBM.map { "\($0) dBm" } ?? "—"))
-                    .accessibilityCustomContent(
-                        "Status",
-                        Text(display.hasPendingRender == true
-                             ? String(localized: "Waiting for display refresh")
-                             : display.freshnessLabel)
-                    )
-                    .accessibilityActions {
-                        if let index = displayOrder.firstIndex(of: display.id) {
-                            if index > 0 {
-                                Button("Move Up") {
-                                    moveDisplayForAccessibility(display, to: index - 1)
-                                }
-                            }
-                            if index < displayOrder.count - 1 {
-                                Button("Move Down") {
-                                    moveDisplayForAccessibility(display, to: index + 1)
-                                }
-                            }
-                        }
-                    }
-                    .task(
-                        id: display.previewRefreshID(
-                            generation: model.displayPreviewGeneration
-                        )
-                    ) {
-                        await model.loadDisplayPreview(display)
-                    }
+                    displayRow(display, displayOrder: displayOrder)
                 }
             }
             .padding(16)
@@ -326,6 +170,180 @@ struct DisplaysView: View {
         )
         .tesseraeScreenBackground()
         .tesseraeHapticFeedback(trigger: hapticEvent)
+    }
+
+    private var manageLineupsButton: some View {
+        Button {
+            lineupsPresented = true
+        } label: {
+            HStack(alignment: .center, spacing: 14) {
+                if !dynamicTypeSize.isAccessibilitySize {
+                    Image(systemName: "rectangle.3.group")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(TesseraeTheme.accent)
+                        .frame(width: 40, height: 40)
+                        .background(
+                            TesseraeTheme.accent.opacity(0.11),
+                            in: RoundedRectangle(
+                                cornerRadius: 12,
+                                style: .continuous
+                            )
+                        )
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Manage Lineups")
+                        .font(.headline)
+                    Text("Schedules, decks, and rotations")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Spacer(minLength: 0)
+
+                if !dynamicTypeSize.isAccessibilitySize, !model.lineups.isEmpty {
+                    Text("\(model.lineups.count)")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .tesseraeCard()
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("manage-lineups")
+        .accessibilityHint("Opens Lineups and controls.")
+    }
+
+    private func displayCardButton(
+        _ display: DisplaySummary,
+        displayOrder: [String]
+    ) -> some View {
+        Button {
+            selectedDisplay = display
+        } label: {
+            DisplayCard(
+                display: display,
+                preview: model.displayPreviews[display.id]
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("display-card-\(display.id)")
+        .accessibilityAddTraits(.isButton)
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: DisplayCardFrameKey.self,
+                    value: [
+                        display.id: proxy.frame(
+                            in: .named("displays-scroll")
+                        )
+                    ]
+                )
+            }
+        )
+        .opacity(draggedDisplayID == display.id ? 0 : 1)
+        .overlay {
+            if draggedDisplayID == display.id {
+                RoundedRectangle(
+                    cornerRadius: 16,
+                    style: .continuous
+                )
+                .fill(TesseraeTheme.accent.opacity(0.07))
+                .overlay {
+                    RoundedRectangle(
+                        cornerRadius: 16,
+                        style: .continuous
+                    )
+                    .stroke(
+                        TesseraeTheme.accent.opacity(0.4),
+                        style: StrokeStyle(
+                            lineWidth: 1.5,
+                            dash: [6, 5]
+                        )
+                    )
+                }
+                .allowsHitTesting(false)
+            }
+        }
+        .gesture(
+            DisplayReorderLongPressGesture(
+                onBegan: { currentOrigin in
+                    beginDisplayDrag(
+                        displayID: display.id,
+                        displayOrder: displayOrder,
+                        currentOrigin: currentOrigin
+                    )
+                },
+                onChanged: { translation in
+                    guard draggedDisplayID == display.id else {
+                        return
+                    }
+                    reorderMotion.translation = translation
+                    reorderMotion.didMove = reorderMotion.didMove
+                        || abs(translation.height) > 2
+                    updateLiveReorder(translation: translation)
+                },
+                onEnded: endDisplayDrag
+            )
+        )
+    }
+
+    private func displayRow(
+        _ display: DisplaySummary,
+        displayOrder: [String]
+    ) -> some View {
+        displayCardButton(display, displayOrder: displayOrder)
+            .accessibilityHint(
+                "Tap for details. Long press and drag to reorder."
+            )
+            .accessibilityLabel(Text("\(display.name), \(display.freshnessLabel)"))
+            .accessibilityValue(
+                Text("Display \((displayOrder.firstIndex(of: display.id) ?? 0) + 1) of \(displayOrder.count)")
+            )
+            .accessibilityCustomContent(
+                "Hardware",
+                Text([display.hardwarePresentation.brand?.displayName,
+                      display.hardwarePresentation.modelName].compactMap { $0 }.joined(separator: ", "))
+            )
+            .accessibilityCustomContent("Battery", Text(display.batteryPercent.map { "\($0)%" } ?? "—"))
+            .accessibilityCustomContent("Wi-Fi", Text(display.rssiDBM.map { "\($0) dBm" } ?? "—"))
+            .accessibilityCustomContent(
+                "Status",
+                Text(display.hasPendingRender == true
+                     ? String(localized: "Waiting for display refresh")
+                     : display.freshnessLabel)
+            )
+            .accessibilityActions {
+                if let index = displayOrder.firstIndex(of: display.id) {
+                    if index > 0 {
+                        Button("Move Up") {
+                            moveDisplayForAccessibility(display, to: index - 1)
+                        }
+                    }
+                    if index < displayOrder.count - 1 {
+                        Button("Move Down") {
+                            moveDisplayForAccessibility(display, to: index + 1)
+                        }
+                    }
+                }
+            }
+            .task(
+                id: display.previewRefreshID(
+                    generation: model.displayPreviewGeneration
+                )
+            ) {
+                await model.loadDisplayPreview(display)
+            }
     }
 
     private func moveDisplayForAccessibility(_ display: DisplaySummary, to index: Int) {
