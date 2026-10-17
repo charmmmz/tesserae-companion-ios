@@ -1485,6 +1485,119 @@ final class TesseraeCompanionUITests: XCTestCase {
         )
     }
 
+    func testChineseAccessibilityScreensInDarkMode() {
+        exerciseReadabilityScreens(app: readabilityApp(), largeText: true, prefix: "Chinese AX5 dark")
+    }
+
+    func testChineseScreensInLightMode() {
+        exerciseReadabilityScreens(app: readabilityApp(largeText: false, scheme: "light"), largeText: false, prefix: "Chinese standard light")
+    }
+
+    private func exerciseReadabilityScreens(app: XCUIApplication, largeText: Bool, prefix: String) {
+        app.launch()
+        let demo = app.buttons["使用演示数据体验"]
+        XCTAssertTrue(demo.waitForExistence(timeout: 5))
+        for _ in 0..<10 where !demo.isHittable { app.swipeUp() }
+        readabilityAttachment(app, "\(prefix) onboarding actions")
+        XCTAssertTrue(demo.isHittable)
+        demo.tap()
+        let settings = app.buttons["root-settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+        readabilityAttachment(app, "\(prefix) displays")
+        if largeText {
+            app.swipeUp()
+            readabilityAttachment(app, "\(prefix) display metrics")
+        }
+        settings.tap()
+        XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["触感反馈"].exists)
+        readabilityAttachment(app, "\(prefix) settings")
+        app.swipeUp()
+        readabilityAttachment(app, "\(prefix) settings privacy")
+        app.buttons["完成"].tap()
+
+        app.tabBars.firstMatch.buttons["图库"].tap()
+        let family = app.buttons["gallery-folder-folder_family"]
+        XCTAssertTrue(family.waitForExistence(timeout: 4))
+        if largeText { XCTAssertGreaterThan(family.frame.width, app.frame.width * 0.8) }
+        readabilityAttachment(app, "\(prefix) gallery folders")
+        family.tap()
+        XCTAssertTrue(app.buttons["gallery-add-photos"].waitForExistence(timeout: 4))
+        readabilityAttachment(app, "\(prefix) gallery photos")
+
+        app.tabBars.firstMatch.buttons["显示屏"].tap()
+        app.buttons["manage-lineups"].tap()
+        let lineup = app.buttons["lineup-card-kitchen-deck"]
+        XCTAssertTrue(lineup.waitForExistence(timeout: 4))
+        for _ in 0..<6 where !lineup.isHittable { app.swipeUp() }
+        if largeText { XCTAssertGreaterThan(lineup.frame.height, 100) }
+        readabilityAttachment(app, "\(prefix) Lineups")
+        lineup.tap()
+        let enabled = app.buttons["lineup-enabled-on"]
+        XCTAssertTrue(enabled.waitForExistence(timeout: 4))
+        enabled.tap()
+        XCTAssertTrue(app.buttons["lineup-enabled-off"].waitForExistence(timeout: 3))
+        readabilityAttachment(app, "\(prefix) Lineup detail")
+        app.buttons["lineup-edit"].tap()
+        XCTAssertTrue(app.textFields["lineup-editor-name"].waitForExistence(timeout: 4))
+        readabilityAttachment(app, "\(prefix) Lineup editor")
+        app.buttons["lineup-editor-exit"].tap()
+    }
+
+    func testChineseAccessibilityBluetoothMaintenanceInDarkMode() {
+        let app = readabilityApp()
+        app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_BLE"] = "1"
+        app.launch()
+        let nearby = app.buttons["onboarding-nearby-devices"]
+        XCTAssertTrue(nearby.waitForExistence(timeout: 4))
+        for _ in 0..<10 where !nearby.isHittable { app.swipeUp() }
+        nearby.tap()
+        XCTAssertTrue(app.navigationBars["附近的显示屏"].waitForExistence(timeout: 4))
+        readabilityAttachment(app, "Chinese AX5 dark nearby displays")
+        app.buttons.containing(.staticText, identifier: "Tesserae-A1B2C3").firstMatch.tap()
+        let proceed = app.buttons["继续"]
+        XCTAssertTrue(proceed.waitForExistence(timeout: 4))
+        for _ in 0..<4 where !proceed.isHittable { app.swipeUp() }
+        XCTAssertTrue(proceed.isHittable)
+        readabilityAttachment(app, "Chinese AX5 dark Bluetooth introduction")
+        proceed.tap()
+        let code = app.buttons["输入 6 位验证码"]
+        XCTAssertTrue(code.waitForExistence(timeout: 3))
+        for _ in 0..<4 where !code.isHittable { app.swipeUp() }
+        readabilityAttachment(app, "Chinese AX5 dark Bluetooth verification")
+        code.tap()
+        XCTAssertTrue(app.navigationBars["维护"].waitForExistence(timeout: 4))
+        let speed = app.buttons["nearby-refresh-speed"]
+        for _ in 0..<6 where !speed.isHittable { app.swipeUp() }
+        XCTAssertTrue(speed.isHittable)
+        readabilityAttachment(app, "Chinese AX5 dark Bluetooth maintenance")
+        speed.tap()
+        XCTAssertTrue(app.buttons["10 秒"].waitForExistence(timeout: 3))
+        app.buttons["10 秒"].tap()
+        XCTAssertTrue(app.navigationBars["维护"].exists)
+    }
+
+    private func readabilityApp(largeText: Bool = true, scheme: String = "dark") -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
+        app.launchEnvironment["TESSERAE_UI_TEST_COLOR_SCHEME"] = scheme
+        app.launchArguments += [
+            "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN",
+        ]
+        if largeText {
+            app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        }
+        return app
+    }
+
+    private func readabilityAttachment(_ app: XCUIApplication, _ name: String) {
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = name
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
     func testSimplifiedChineseOnboarding() {
         let app = XCUIApplication()
         app.launchArguments += [
@@ -1811,6 +1924,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_AUTO_FRAMING"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_COLOR_SCHEME"] = "dark"
         app.launchArguments += [
             "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN",
             "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
@@ -1853,6 +1967,20 @@ final class TesseraeCompanionUITests: XCTestCase {
         add(shot)
         XCTAssertFalse(app.buttons["send-framing-hint"].exists)
         XCTAssertTrue(auto.isHittable)
+        let fit = app.buttons["send-image-fit-picker"]
+        for _ in 0..<8 where !fit.isHittable {
+            // Scroll outside the photo, where a drag intentionally edits its crop.
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.96, dy: 0.75))
+                .press(forDuration: 0.05, thenDragTo: app.coordinate(
+                    withNormalizedOffset: CGVector(dx: 0.96, dy: 0.25)
+                ))
+        }
+        XCTAssertTrue(fit.isHittable)
+        fit.tap()
+        XCTAssertTrue(app.buttons["适应"].waitForExistence(timeout: 3))
+        readabilityAttachment(app, "Chinese AX5 dark image fit menu")
+        app.buttons["适应"].tap()
+        XCTAssertFalse(app.buttons["send-auto-framing"].exists)
     }
 
     func testManualConnectionAgainstFixtureServer() throws {

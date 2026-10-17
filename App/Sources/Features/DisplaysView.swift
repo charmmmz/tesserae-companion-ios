@@ -10,6 +10,7 @@ private struct DisplayPreviewRefreshID: Hashable {
 }
 
 struct DisplaysView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.presentTesseraeSettings) private var presentSettings
@@ -64,18 +65,20 @@ struct DisplaysView: View {
                     Button {
                         lineupsPresented = true
                     } label: {
-                        HStack(spacing: 14) {
-                            Image(systemName: "rectangle.3.group")
-                                .font(.title3.weight(.semibold))
-                                .foregroundStyle(TesseraeTheme.accent)
-                                .frame(width: 40, height: 40)
-                                .background(
-                                    TesseraeTheme.accent.opacity(0.11),
-                                    in: RoundedRectangle(
-                                        cornerRadius: 12,
-                                        style: .continuous
+                        HStack(alignment: .center, spacing: 14) {
+                            if !dynamicTypeSize.isAccessibilitySize {
+                                Image(systemName: "rectangle.3.group")
+                                    .font(.title3.weight(.semibold))
+                                    .foregroundStyle(TesseraeTheme.accent)
+                                    .frame(width: 40, height: 40)
+                                    .background(
+                                        TesseraeTheme.accent.opacity(0.11),
+                                        in: RoundedRectangle(
+                                            cornerRadius: 12,
+                                            style: .continuous
+                                        )
                                     )
-                                )
+                            }
 
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Manage Lineups")
@@ -84,17 +87,19 @@ struct DisplaysView: View {
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                             }
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
 
-                            Spacer(minLength: 4)
+                            Spacer(minLength: 0)
 
-                            if !model.lineups.isEmpty {
+                            if !dynamicTypeSize.isAccessibilitySize, !model.lineups.isEmpty {
                                 Text("\(model.lineups.count)")
                                     .font(.subheadline.weight(.semibold))
                                     .foregroundStyle(.secondary)
                             }
 
                             Image(systemName: "chevron.right")
-                                .font(.caption.weight(.semibold))
+                                .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(.tertiary)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -548,22 +553,31 @@ private struct DisplayReorderLongPressGesture: UIGestureRecognizerRepresentable 
 }
 
 private struct DisplayCard: View {
-    @Environment(\.colorScheme) private var colorScheme
-
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let display: DisplaySummary
     let preview: PreviewImageState?
-    private let previewCanvasSize = CGSize(width: 112, height: 118)
+    private var previewCanvasSize: CGSize {
+        dynamicTypeSize.isAccessibilitySize
+            ? CGSize(width: 224, height: 236)
+            : CGSize(width: 112, height: 118)
+    }
+
+    private var cardLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 14))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: 14))
+    }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 14) {
+        cardLayout {
             VStack(alignment: .leading, spacing: 9) {
                 HStack(alignment: .center, spacing: 8) {
                     displayIdentityIcon
 
                     Text(display.name)
                         .font(.headline)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.82)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                        .fixedSize(horizontal: false, vertical: true)
                         .layoutPriority(1)
                 }
 
@@ -571,7 +585,9 @@ private struct DisplayCard: View {
                     presentation: display.hardwarePresentation
                 )
 
-                HStack(spacing: 12) {
+                (dynamicTypeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+                    : AnyLayout(HStackLayout(spacing: 12))) {
                     metric(
                         "battery.75percent",
                         display.batteryPercent.map { "\($0)%" } ?? "—"
@@ -583,6 +599,7 @@ private struct DisplayCard: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .accessibilityIdentifier("display-metrics-\(display.id)")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 

@@ -361,7 +361,7 @@ struct OfflineAlbumEditorView: View {
                     Text("Fill").tag(OfflineAlbumFitMode.fill)
                     Text("Fit").tag(OfflineAlbumFitMode.fit)
                 }
-                .pickerStyle(.segmented)
+                .tesseraeAdaptivePickerStyle()
 
                 Picker("Order", selection: $draft.playbackMode) {
                     Text("In Order").tag(OfflineAlbumPlaybackMode.sequential)

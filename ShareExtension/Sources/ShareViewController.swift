@@ -917,7 +917,7 @@ private struct ShareComposerView: View {
                         Text(linkKindName(kind)).tag(kind)
                     }
                 }
-                .pickerStyle(.segmented)
+                .tesseraeAdaptivePickerStyle()
             } else if let kind = model.supportedLinkKinds.first {
                 Label(
                     linkKindName(kind),
@@ -950,11 +950,12 @@ private struct ShareComposerView: View {
                 .font(.headline)
             Picker("Image Fit", selection: $model.fit) {
                 ForEach(model.fitModes, id: \.self) { mode in
-                    Text(mode.displayName).tag(mode)
+                    Text(LocalizedStringKey(mode.displayName)).tag(mode)
                 }
             }
-            .pickerStyle(.segmented)
-            Text(model.fit.helpText)
+            .tesseraeAdaptivePickerStyle()
+            .accessibilityIdentifier("share-image-fit-picker")
+            Text(LocalizedStringKey(model.fit.helpText))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }

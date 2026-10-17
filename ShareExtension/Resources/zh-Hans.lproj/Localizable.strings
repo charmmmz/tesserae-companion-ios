@@ -71,3 +71,18 @@
 "Drag · Pinch to zoom" = "拖动 · 双指缩放";
 
 "Reset Framing" = "重置构图";
+
+/* Composer controls and status */
+"Image Fit" = "图片适配";
+"None selected" = "未选择";
+"Retry" = "重试";
+"Sending" = "正在发送";
+"Sent" = "已发送";
+"Blur" = "模糊背景";
+"Stretch" = "拉伸";
+"Center" = "居中";
+"Show the whole image with space around it." = "完整显示图片，周围可能留白。";
+"Fill the display and crop the edges." = "铺满显示屏，并裁剪边缘。";
+"Show the whole image over a blurred edge-to-edge background." = "完整显示图片，并使用模糊背景铺满显示屏。";
+"Stretch the image to the display, changing its proportions." = "拉伸图片以铺满显示屏，图片比例会改变。";
+"Keep the image at its prepared pixel size and clip or pad around it." = "保持处理后的像素尺寸，必要时裁剪或在周围留白。";

@@ -195,7 +195,7 @@ struct SendView: View {
                 Label("Link", systemImage: "link")
                     .tag(SendSource.link)
             }
-            .pickerStyle(.segmented)
+            .tesseraeAdaptivePickerStyle()
             .accessibilityIdentifier("send-source-picker")
         }
         .tesseraeCard()
@@ -223,7 +223,7 @@ struct SendView: View {
                         Text(kind.displayName).tag(kind)
                     }
                 }
-                .pickerStyle(.segmented)
+                .tesseraeAdaptivePickerStyle()
                 .accessibilityIdentifier("send-link-action-picker")
             } else if let onlyKind = supportedLinkKinds.first {
                 Label(onlyKind.displayName, systemImage: onlyKind.systemImage)
@@ -491,11 +491,12 @@ struct SendView: View {
                 .font(.headline)
             Picker("Image Fit", selection: $fitMode) {
                 ForEach(availableFitModes, id: \.self) { mode in
-                    Text(mode.displayName).tag(mode)
+                    Text(LocalizedStringKey(mode.displayName)).tag(mode)
                 }
             }
-            .pickerStyle(.segmented)
-            Text(fitDescription)
+            .tesseraeAdaptivePickerStyle()
+            .accessibilityIdentifier("send-image-fit-picker")
+            Text(LocalizedStringKey(fitDescription))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }

@@ -105,13 +105,14 @@ private struct GalleryLoadingView: View {
             ProgressView()
             Text(title)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: true, vertical: false)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
 struct GalleryView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(AppModel.self) private var model
     @Environment(\.openURL) private var openURL
     @Environment(\.presentTesseraeSettings) private var presentSettings
@@ -120,9 +121,11 @@ struct GalleryView: View {
 
     let isActive: Bool
 
-    private let columns = [
-        GridItem(.adaptive(minimum: 148), spacing: 12),
-    ]
+    private var columns: [GridItem] {
+        dynamicTypeSize.isAccessibilitySize
+            ? [GridItem(.flexible())]
+            : [GridItem(.adaptive(minimum: 148), spacing: 12)]
+    }
 
     var body: some View {
         ScrollView {
@@ -208,6 +211,7 @@ struct GalleryView: View {
 }
 
 private struct GalleryFolderCard: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(AppModel.self) private var model
 
     let folder: GalleryFolder
@@ -224,7 +228,8 @@ private struct GalleryFolderCard: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(folder.name)
                     .font(.headline)
-                    .lineLimit(1)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
                 if !folder.writable {
                     Image(systemName: "lock.fill")

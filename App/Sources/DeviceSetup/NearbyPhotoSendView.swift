@@ -295,8 +295,8 @@ struct NearbyPhotoSendView: View {
                 Text("Fill").tag(ImageFitMode.fill)
                 Text("Fit").tag(ImageFitMode.fit)
             }
-            .pickerStyle(.segmented).disabled(busy)
-            Text(fit.helpText).font(.footnote).foregroundStyle(.secondary)
+            .tesseraeAdaptivePickerStyle().disabled(busy)
+            Text(LocalizedStringKey(fit.helpText)).font(.footnote).foregroundStyle(.secondary)
         }
         .tesseraeCard()
     }

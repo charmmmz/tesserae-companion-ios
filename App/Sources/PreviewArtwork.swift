@@ -24,6 +24,7 @@ private final class PreviewImageCache {
 }
 
 struct PreviewArtwork: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let state: PreviewImageState?
     let placeholderSystemName: String
     let placeholderLabel: String
@@ -45,7 +46,8 @@ struct PreviewArtwork: View {
                     if let placeholderDetail {
                         Text(placeholderDetail)
                             .font(.caption2.monospaced())
-                            .lineLimit(1)
+                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                            .multilineTextAlignment(.center)
                             .minimumScaleFactor(0.68)
                     }
                 }

@@ -228,21 +228,32 @@ extension View {
 }
 
 struct TesseraeDisplaySelectionRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let name: String
     let resolution: String
     let isSelected: Bool
 
     var body: some View {
-        HStack {
+        HStack(alignment: .center, spacing: 12) {
             Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 24))
                 .foregroundStyle(isSelected ? TesseraeTheme.accent : .secondary)
-            Text(name)
-                .foregroundStyle(.primary)
-            Spacer()
-            Text(resolution)
-                .font(.caption.monospaced())
-                .foregroundStyle(.secondary)
+            let layout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+                : AnyLayout(HStackLayout())
+            layout {
+                Text(name)
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !dynamicTypeSize.isAccessibilitySize { Spacer() }
+                Text(resolution)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(minHeight: 44)
         .contentShape(Rectangle())
         .padding(.vertical, 6)
     }
@@ -644,5 +655,25 @@ private struct TesseraeScreenBackgroundModifier: ViewModifier {
             TesseraeScreenBackdrop()
                 .ignoresSafeArea()
         }
+    }
+}
+
+// Segmented controls keep a fixed height; menus let accessibility text wrap.
+private struct TesseraeAdaptivePickerStyle: ViewModifier {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            content.pickerStyle(.menu)
+        } else {
+            content.pickerStyle(.segmented)
+        }
+    }
+}
+
+extension View {
+    func tesseraeAdaptivePickerStyle() -> some View {
+        modifier(TesseraeAdaptivePickerStyle())
     }
 }

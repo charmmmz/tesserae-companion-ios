@@ -32,6 +32,15 @@ capabilities.
 - Improved Paper text contrast with a brighter dark foreground tint and a
   separate darker fill for white-label actions; the light warning colour
   also meets the normal-text contrast threshold on cards and tinted banners.
+- Made display metrics and selections, Lineup summaries, and Gallery folder
+  cards reflow at accessibility text sizes. Removed fixed Lineup caption heights and kept
+  decorative symbols inside their badges.
+- Made Bluetooth setup steps scroll in a full-height sheet at accessibility
+  sizes. Photo and link pickers use native menus at those sizes, including
+  the Share Extension, while retaining segmented controls at standard sizes.
+- Filled missing Chinese labels in Settings, Lineups, nearby setup, and the
+  Share Extension, including image-fit labels and descriptions previously
+  displayed as unlocalized enum strings.
 
 ### Development
 

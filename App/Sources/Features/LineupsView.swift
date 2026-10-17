@@ -377,8 +377,7 @@ private struct LineupListSection: Identifiable {
 }
 
 private struct LineupListRow: View {
-    @Environment(\.colorScheme) private var colorScheme
-
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let lineup: Lineup
     let isFirstInCard: Bool
     let isLastInCard: Bool
@@ -390,27 +389,28 @@ private struct LineupListRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(lineup.name)
                     .font(.headline)
-                    .lineLimit(1)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
 
                 HStack(spacing: 5) {
                     Image(systemName: currentPresentation.symbolName)
-                        .font(.caption2.weight(.semibold))
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(
                             currentPresentation.isShowing
                                 ? TesseraeTheme.accent
                                 : Color.secondary
                         )
-                        .frame(width: 14, height: 18)
+                        .frame(width: 14)
 
                     Text(currentPresentation.title)
-                        .lineLimit(1)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .frame(height: 18)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                HStack(spacing: 5) {
+                (dynamicTypeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 3))
+                    : AnyLayout(HStackLayout(spacing: 5))) {
                     Text(
                         lineup.intent?.displayName
                             ?? String(localized: "Advanced")
@@ -418,21 +418,25 @@ private struct LineupListRow: View {
                         .fontWeight(.semibold)
                         .foregroundStyle(TesseraeTheme.accent)
 
-                    Text("·")
-                        .foregroundStyle(.tertiary)
+                    if !dynamicTypeSize.isAccessibilitySize {
+                        Text("·")
+                            .foregroundStyle(.tertiary)
+                    }
 
                     Text(dashboardCountTitle)
                         .foregroundStyle(.secondary)
                 }
                 .font(.caption)
-                .lineLimit(1)
-                .frame(height: 18)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
             }
 
-            Spacer(minLength: 6)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Spacer(minLength: 0)
 
             Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
+                .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(.tertiary)
         }
         .padding(.top, verticalInsets.top)
@@ -461,7 +465,7 @@ private struct LineupListRow: View {
     private var lineupIdentityIcon: some View {
         ZStack(alignment: .bottomTrailing) {
             Image(systemName: lineup.intent?.symbolName ?? "rectangle.stack")
-                .font(.subheadline.weight(.semibold))
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(TesseraeTheme.accent)
                 .frame(width: 32, height: 32)
                 .background(
@@ -550,6 +554,15 @@ private struct LineupDashboardPlayContext: Identifiable {
 }
 
 private struct LineupDetailView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .caption) private var positionBadgeSize = 24
+
+    private var detailLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+            : AnyLayout(HStackLayout(spacing: 10))
+    }
+
     @Environment(AppModel.self) private var model
     @Environment(\.openURL) private var openURL
     @State private var selectedDeviceIDs: Set<String> = []
@@ -863,7 +876,7 @@ private struct LineupDetailView: View {
                         .foregroundStyle(
                             isCurrent ? Color.white : Color.secondary
                         )
-                        .frame(width: 24, height: 24)
+                        .frame(width: positionBadgeSize, height: positionBadgeSize)
                         .background(
                             isCurrent
                                 ? TesseraeTheme.accentFill
@@ -910,7 +923,7 @@ private struct LineupDetailView: View {
             if model.supportsLineupControl {
                 if isCurrent {
                     Image(systemName: "pause.fill")
-                        .font(.subheadline.weight(.semibold))
+                        .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(TesseraeTheme.accent)
                         .frame(width: 38, height: 38)
                         .background(
@@ -930,7 +943,7 @@ private struct LineupDetailView: View {
                         )
                     } label: {
                         Image(systemName: "play.fill")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(TesseraeTheme.accent)
                             .frame(width: 38, height: 38)
                             .background(
@@ -1030,7 +1043,7 @@ private struct LineupDetailView: View {
                 Button {
                     detailsExpanded.toggle()
                 } label: {
-                    HStack(spacing: 10) {
+                    detailLayout {
                         Label(
                             detailsHeading(lineup),
                             systemImage: "slider.horizontal.3"
@@ -1038,15 +1051,15 @@ private struct LineupDetailView: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.primary)
 
-                        Spacer()
+                        if !dynamicTypeSize.isAccessibilitySize { Spacer() }
 
                         Text(behaviorSummary(lineup))
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
 
                         Image(systemName: "chevron.down")
-                            .font(.caption.weight(.semibold))
+                            .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(.secondary)
                             .rotationEffect(.degrees(detailsExpanded ? 180 : 0))
                     }
@@ -1072,19 +1085,19 @@ private struct LineupDetailView: View {
             Button {
                 targetsPresented = true
             } label: {
-                HStack(spacing: 10) {
+                detailLayout {
                     Label("Targets", systemImage: "display.2")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.primary)
 
-                    Spacer()
+                    if !dynamicTypeSize.isAccessibilitySize { Spacer() }
 
                     Text(targetSummary(lineup))
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
                     Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.tertiary)
                 }
                 .contentShape(Rectangle())
@@ -1092,22 +1105,22 @@ private struct LineupDetailView: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("lineup-targets")
         } else if !deviceIDs.isEmpty {
-            HStack(spacing: 10) {
+            detailLayout {
                 Label("Target", systemImage: "display")
                     .font(.subheadline.weight(.semibold))
 
-                Spacer()
+                if !dynamicTypeSize.isAccessibilitySize { Spacer() }
 
                 Text(displayNames(deviceIDs))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         } else {
-            HStack(spacing: 10) {
+            detailLayout {
                 Label("Target", systemImage: "display")
                     .font(.subheadline.weight(.semibold))
 
-                Spacer()
+                if !dynamicTypeSize.isAccessibilitySize { Spacer() }
 
                 Text(
                     String(localized: "No display")

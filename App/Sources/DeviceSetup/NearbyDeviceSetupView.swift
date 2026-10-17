@@ -13,6 +13,7 @@ struct NearbyDeviceSetupView: View {
     }
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(AppModel.self) private var model
     @Environment(NearbyDeviceManager.self) private var nearby
     @Environment(SetupNetworkStore.self) private var setupNetworks
@@ -63,13 +64,13 @@ struct NearbyDeviceSetupView: View {
         NavigationStack {
             Group {
                 switch screen {
-                case .introduction: introduction
-                case .authentication: authentication
-                case .connecting: connecting
+                case .introduction: accessibleStep { introduction }
+                case .authentication: accessibleStep { authentication }
+                case .connecting: accessibleStep { connecting }
                 case .wifi: wifiSetup
                 case .maintenance: maintenance
-                case .maintenanceAction: maintenanceAction
-                case .complete: completion
+                case .maintenanceAction: accessibleStep { maintenanceAction }
+                case .complete: accessibleStep { completion }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -91,7 +92,7 @@ struct NearbyDeviceSetupView: View {
             }
         }
         .presentationDetents(
-            [.height(360), .height(480), .large],
+            dynamicTypeSize.isAccessibilitySize ? [.large] : [.height(360), .height(480), .large],
             selection: $selectedDetent
         )
         .presentationDragIndicator(.visible)
@@ -150,6 +151,9 @@ struct NearbyDeviceSetupView: View {
                 break
             }
         }
+        .onChange(of: dynamicTypeSize, initial: true) { _, _ in
+            selectedDetent = preferredDetent(for: screen)
+        }
         .onChange(of: screen) { _, newScreen in
             withAnimation(.snappy) {
                 selectedDetent = preferredDetent(for: newScreen)
@@ -159,6 +163,19 @@ struct NearbyDeviceSetupView: View {
             if let instanceID = model.activeInstance?.id {
                 setupNetworks.load(instanceID: instanceID)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func accessibleStep<Content: View>(@ViewBuilder content: @escaping () -> Content) -> some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            GeometryReader { geometry in
+                ScrollView {
+                    content().frame(minHeight: geometry.size.height)
+                }
+            }
+        } else {
+            content()
         }
     }
 
@@ -618,7 +635,7 @@ struct NearbyDeviceSetupView: View {
         .padding(28)
     }
 
-    private var navigationTitle: String {
+    private var navigationTitle: LocalizedStringKey {
         switch screen {
         case .introduction: "Nearby Display"
         case .authentication: "Verify Display"
@@ -684,7 +701,8 @@ struct NearbyDeviceSetupView: View {
     }
 
     private func preferredDetent(for screen: Screen) -> PresentationDetent {
-        switch screen {
+        if dynamicTypeSize.isAccessibilitySize { return .large }
+        return switch screen {
         case .authentication:
             .height(480)
         case .wifi, .maintenance:
@@ -800,7 +818,7 @@ struct TesseraeEInkDisplayArtwork: View {
 }
 
 struct NearbyDisplaysView: View {
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(NearbyDeviceManager.self) private var nearby
     @Environment(AppModel.self) private var model
     @Environment(SetupNetworkStore.self) private var setupNetworks
@@ -899,7 +917,7 @@ struct NearbyDisplaysView: View {
                                         ? "display.badge.checkmark"
                                         : "wrench.and.screwdriver"
                                 )
-                                .font(.title3.weight(.semibold))
+                                .font(.system(size: 20, weight: .semibold))
                                 .foregroundStyle(nearbyAccent)
                                 .frame(width: 44, height: 44)
                                 .background(
@@ -914,12 +932,14 @@ struct NearbyDisplaysView: View {
                                     Text(device.name)
                                         .font(.headline)
                                         .foregroundStyle(.primary)
-                                        .lineLimit(1)
+                                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                                        .fixedSize(horizontal: false, vertical: true)
 
                                     Text(hardwareSummary(presentation))
                                         .font(.subheadline)
                                         .foregroundStyle(.secondary)
-                                        .lineLimit(1)
+                                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                                        .fixedSize(horizontal: false, vertical: true)
 
                                     Label(
                                         device.mode == .photo ? "Ready to receive a photo" : device.mode == .setup
@@ -931,12 +951,13 @@ struct NearbyDisplaysView: View {
                                     )
                                     .font(.caption.weight(.medium))
                                     .foregroundStyle(nearbyAccent)
-                                    .lineLimit(1)
+                                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                                    .fixedSize(horizontal: false, vertical: true)
                                 }
 
                                 Spacer()
                                 Image(systemName: "chevron.right")
-                                    .font(.caption.bold())
+                                    .font(.system(size: 12, weight: .bold))
                                     .foregroundStyle(.tertiary)
                             }
                             .padding(.vertical, 4)
