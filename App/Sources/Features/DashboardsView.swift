@@ -94,13 +94,13 @@ private struct DashboardPushContext: Identifiable {
 struct DashboardsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var query = ""
     @State private var draggedOccurrenceID: DashboardOccurrenceID?
     @State private var dropTargetOccurrenceID: DashboardOccurrenceID?
     @State private var expandedOccurrenceID: DashboardOccurrenceID?
     @State private var dashboardToPush: DashboardPushContext?
-    @State private var preferredColumn: NavigationSplitViewColumn = .sidebar
-    @State private var sectionContentHeights: [String: CGFloat] = [:]
     @State private var hapticEvent = TesseraeHapticEvent()
     @AppStorage("dashboardLayoutMode")
     private var layoutMode = DashboardLayoutMode.cards
@@ -109,7 +109,7 @@ struct DashboardsView: View {
     let isActive: Bool
 
     private var shouldAutoRefresh: Bool {
-        isActive && scenePhase == .active
+        isActive && dashboardToPush == nil && scenePhase == .active
     }
 
     private var searchQuery: String {
@@ -178,25 +178,24 @@ struct DashboardsView: View {
     }
 
     var body: some View {
-        NavigationSplitView(preferredCompactColumn: $preferredColumn) {
+        NavigationStack {
             dashboardList
                 .navigationTitle("Dashboards")
-                .navigationSplitViewColumnWidth(min: 320, ideal: 400, max: 480)
-        } detail: {
-            NavigationStack {
-                if let context = selectedContext {
-                    DashboardPushSheet(context: context, isPresentedAsSheet: false) {
-                        dashboardToPush = nil
-                        preferredColumn = .sidebar
-                    }
+        }
+        .sheet(item: $dashboardToPush) { _ in
+            if let context = selectedContext {
+                DashboardPushSheet(context: context)
                     .id(context.id)
-                } else {
-                    ContentUnavailableView("Select a Dashboard", systemImage: "rectangle.grid.2x2")
-                        .tesseraeScreenBackground()
-                }
             }
         }
-        .navigationSplitViewStyle(.balanced)
+    }
+
+    private var dashboardColumns: [GridItem] {
+        if horizontalSizeClass != .regular || layoutMode == .list || dynamicTypeSize.isAccessibilitySize {
+            [GridItem(.flexible())]
+        } else {
+            [GridItem(.adaptive(minimum: 340), spacing: 12)]
+        }
     }
 
     @ViewBuilder
@@ -205,16 +204,14 @@ struct DashboardsView: View {
         let dashboardOrder = sections.flatMap(\.dashboards).map(\.id)
 
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 20) {
+            LazyVGrid(columns: dashboardColumns, alignment: .leading, spacing: 10) {
                 ForEach(sections) { section in
                     let isCollapsed = searchQuery.isEmpty && model.collapsedDashboardSectionIDs.contains(
                         section.id
                     )
 
-                    VStack(alignment: .leading, spacing: 0) {
-                        dashboardSectionHeader(section)
-
-                        VStack(alignment: .leading, spacing: 10) {
+                    Section {
+                        if !isCollapsed {
                             ForEach(section.dashboards) { dashboard in
                                 let occurrenceID = DashboardOccurrenceID(
                                     sectionID: section.id,
@@ -262,33 +259,24 @@ struct DashboardsView: View {
                                         deviceID: pushContext.previewDeviceID
                                     )
                                 }
-                                .allowsHitTesting(!isCollapsed)
                             }
                         }
-                        .padding(.top, 10)
-                        .onGeometryChange(for: CGFloat.self) { proxy in
-                            proxy.size.height
-                        } action: { height in
-                            guard searchQuery.isEmpty, height > 0 else { return }
-                            sectionContentHeights[section.id] = height
-                        }
-                        .frame(
-                            height: isCollapsed
-                                ? 0
-                                : (searchQuery.isEmpty ? sectionContentHeights[section.id] : nil),
-                            alignment: .top
-                        )
-                        .clipped()
-                        .allowsHitTesting(!isCollapsed)
+                    } header: {
+                        dashboardSectionHeader(section)
+                            .padding(.top, 10)
                     }
                 }
             }
             .padding(16)
         }
+        .accessibilityIdentifier("dashboard-list")
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Dashboards")
         .onChange(of: query) { _, _ in
             endDashboardDrag()
             expandedOccurrenceID = nil
+        }
+        .onChange(of: dynamicTypeSize) { _, _ in
+            endDashboardDrag()
         }
         .overlay {
             if !model.dashboards.isEmpty, !searchQuery.isEmpty, sections.isEmpty {
@@ -300,7 +288,6 @@ struct DashboardsView: View {
             await model.refreshDashboards()
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { _ in
-            sectionContentHeights = [:]
             endDashboardDrag()
         }
         .toolbar {
@@ -640,7 +627,6 @@ struct DashboardsView: View {
             } else {
                 Button {
                     dashboardToPush = pushContext
-                    preferredColumn = .detail
                 } label: {
                     HStack(alignment: .center, spacing: 12) {
                         dashboardIdentityIcon(dashboard)
@@ -743,7 +729,6 @@ struct DashboardsView: View {
     ) -> some View {
         Button {
             dashboardToPush = pushContext
-            preferredColumn = .detail
         } label: {
             HStack(spacing: 5) {
                 if model.activeOperationIDs.contains(dashboard.id) {
@@ -1008,8 +993,6 @@ struct DashboardsView: View {
 
 private struct DashboardPushSheet: View {
     let context: DashboardPushContext
-    var isPresentedAsSheet = true
-    var onClose: (() -> Void)? = nil
 
     var body: some View {
         DashboardPreviewActionSheet(
@@ -1019,9 +1002,7 @@ private struct DashboardPushSheet: View {
             displays: context.boundDisplays,
             initialDeviceIDs: context.initialDeviceIDs,
             showsDisplayPicker: context.showsDisplayPicker,
-            action: .push(context.dashboard),
-            isPresentedAsSheet: isPresentedAsSheet,
-            onClose: onClose
+            action: .push(context.dashboard)
         )
     }
 }
@@ -1034,6 +1015,7 @@ enum DashboardPreviewAction {
 struct DashboardPreviewActionSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     let dashboardID: String
     let dashboardName: String
@@ -1042,8 +1024,6 @@ struct DashboardPreviewActionSheet: View {
     let initialDeviceIDs: Set<String>
     let showsDisplayPicker: Bool
     let action: DashboardPreviewAction
-    var isPresentedAsSheet = true
-    var onClose: (() -> Void)? = nil
 
     @State private var selectedDeviceIDs: Set<String> = []
     @State private var didLoadInitialSelection = false
@@ -1052,32 +1032,7 @@ struct DashboardPreviewActionSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ZStack {
-                Text(sheetTitle)
-                    .font(.headline)
-                    .accessibilityAddTraits(.isHeader)
-                    .accessibilityIdentifier("\(identifierPrefix)-sheet-title")
-
-                HStack {
-                    Button("Cancel") {
-                        if let onClose { onClose() } else { dismiss() }
-                    }
-                    .tesseraeModalChromeButtonStyle()
-                    .disabled(isSubmitting)
-                    Spacer()
-                    if let webURL {
-                        Link(destination: webURL) {
-                            Label("Open in Tesserae", systemImage: "safari")
-                                .labelStyle(.iconOnly)
-                        }
-                        .tesseraeModalChromeButtonStyle()
-                        .accessibilityIdentifier("dashboard-open-web")
-                    }
-                }
-            }
-            .padding(.horizontal, TesseraeComposerLayout.pagePadding)
-            .padding(.top, 24)
-            .padding(.bottom, 12)
+            sheetHeader
 
             ScrollView {
                 dashboardPushContent
@@ -1125,9 +1080,62 @@ struct DashboardPreviewActionSheet: View {
         .tesseraeScreenBackground()
         .tesseraeHapticFeedback(trigger: hapticEvent)
         .padding(.bottom, TesseraeComposerLayout.pagePadding)
-        .presentationDetents([.large])
+        .frame(idealWidth: 560, idealHeight: preferredSheetHeight)
+        .presentationSizing(.fitted)
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.height(preferredSheetHeight), .large])
         .presentationContentInteraction(.scrolls)
         .presentationDragIndicator(.visible)
+    }
+
+    private var sheetHeader: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 12) {
+                    sheetActions
+                    sheetTitleLabel
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } else {
+                ZStack {
+                    sheetTitleLabel
+                    sheetActions
+                }
+            }
+        }
+        .padding(.horizontal, TesseraeComposerLayout.pagePadding)
+        .padding(.top, 24)
+        .padding(.bottom, 12)
+    }
+
+    private var sheetTitleLabel: some View {
+        Text(sheetTitle)
+            .font(.headline)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityIdentifier("\(identifierPrefix)-sheet-title")
+    }
+
+    private var sheetActions: some View {
+        HStack {
+            Button("Cancel") {
+                dismiss()
+            }
+            .tesseraeModalChromeButtonStyle()
+            .disabled(isSubmitting)
+            Spacer()
+            if let webURL {
+                Link(destination: webURL) {
+                    Label("Open in Tesserae", systemImage: "safari")
+                        .labelStyle(.iconOnly)
+                }
+                .tesseraeModalChromeButtonStyle()
+                .accessibilityIdentifier("dashboard-open-web")
+            }
+        }
+    }
+
+    private var preferredSheetHeight: CGFloat {
+        if dynamicTypeSize.isAccessibilitySize { return 760 }
+        return showsDisplayPicker ? min(720, 510 + CGFloat(displays.count) * 44) : 440
     }
 
     private var webURL: URL? {
@@ -1380,7 +1388,7 @@ struct DashboardPreviewActionSheet: View {
             )
         }
 
-        if succeeded && isPresentedAsSheet {
+        if succeeded {
             dismiss()
         }
     }

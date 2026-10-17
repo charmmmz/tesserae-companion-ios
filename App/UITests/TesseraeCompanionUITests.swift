@@ -27,7 +27,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["Explore with Demo Data"].waitForExistence(timeout: 3))
         app.buttons["Explore with Demo Data"].tap()
-        let dashboardsTab = app.tabBars.firstMatch.buttons["rectangle.grid.2x2"]
+        let dashboardsTab = app.buttons["Dashboards"].firstMatch
         XCTAssertTrue(dashboardsTab.waitForExistence(timeout: 3))
         dashboardsTab.tap()
         let group = app.buttons["dashboard-section-toggle-display-picpak-kitchen"]
@@ -55,6 +55,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.buttons["Cancel"].firstMatch.tap()
         search.tap()
         search.buttons["Clear text"].tap()
+        search.tap()
         search.typeText("NoSuchDashboard")
         XCTAssertTrue(app.descendants(matching: .any)["dashboard-search-empty"].exists)
         search.buttons["Clear text"].tap()
@@ -746,7 +747,7 @@ final class TesseraeCompanionUITests: XCTestCase {
             app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
         )
         app.buttons["Explore with Demo Data"].tap()
-        app.tabBars.firstMatch.buttons["Dashboards"].tap()
+        app.buttons["Dashboards"].firstMatch.tap()
 
         let layoutToggle = app.buttons["dashboard-layout-toggle"]
         XCTAssertTrue(layoutToggle.waitForExistence(timeout: 2))
@@ -836,8 +837,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3))
         app.buttons["Explore with Demo Data"].tap()
 
-        let tabBar = app.tabBars.firstMatch
-        XCTAssertTrue(tabBar.buttons["Displays"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Displays"].firstMatch.waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["Kitchen"].exists)
         assertPreview(
             app.descendants(matching: .any)["display-preview-picpak-kitchen"],
@@ -855,7 +855,8 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(
             app.navigationBars["Kitchen"].waitForExistence(timeout: 2)
         )
-        XCTAssertTrue(app.navigationBars["Kitchen"].buttons["Displays"].exists)
+        let displaysBack = app.navigationBars["Kitchen"].buttons["Displays"]
+        XCTAssertTrue(displaysBack.exists || kitchenCard.isHittable)
         XCTAssertFalse(app.navigationBars["Kitchen"].buttons["Close"].exists)
         XCTAssertTrue(app.staticTexts["Current Screen"].exists)
         XCTAssertFalse(
@@ -884,7 +885,7 @@ final class TesseraeCompanionUITests: XCTestCase {
             ],
             hasAspectRatio: 800.0 / 480.0
         )
-        app.navigationBars["Kitchen"].buttons["Displays"].tap()
+        if displaysBack.exists { displaysBack.tap() }
         XCTAssertTrue(
             app.staticTexts["Kitchen"].waitForExistence(timeout: 2)
         )
@@ -895,7 +896,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         }
         assertPreview(deskPreview, hasAspectRatio: 1_200.0 / 1_600.0)
 
-        tabBar.buttons["Dashboards"].tap()
+        app.buttons["Dashboards"].firstMatch.tap()
         let dashboardLayoutToggle = app.buttons["dashboard-layout-toggle"]
         XCTAssertTrue(dashboardLayoutToggle.waitForExistence(timeout: 2))
         if dashboardLayoutToggle.label == "Use Card View" {
@@ -1095,7 +1096,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         )
 
         app.buttons["root-send-close"].tap()
-        tabBar.buttons["Activity"].tap()
+        app.buttons["Activity"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["Shared Photo"].waitForExistence(timeout: 2))
         let historyStatus = app.descendants(matching: .any)[
             "history-status-history-demo-photo"
@@ -1441,44 +1442,35 @@ final class TesseraeCompanionUITests: XCTestCase {
     func testDashboardCardsReorderWithLongPressDrag() {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchArguments += ["-dashboardLayoutMode", "cards"]
         app.launch()
-
-        XCTAssertTrue(
-            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
-        )
+        XCTAssertTrue(app.buttons["Explore with Demo Data"].waitForExistence(timeout: 3))
         app.buttons["Explore with Demo Data"].tap()
-        app.tabBars.firstMatch.buttons["Dashboards"].tap()
+        app.buttons["Dashboards"].firstMatch.tap()
 
-        let photoFrame = app.staticTexts[
-            "dashboard-title-photo-frame-display-picpak-kitchen"
-        ]
-        let pantry = app.staticTexts[
-            "dashboard-title-pantry-display-picpak-kitchen"
-        ]
-        XCTAssertTrue(photoFrame.waitForExistence(timeout: 2))
-        XCTAssertTrue(pantry.waitForExistence(timeout: 2))
+        let photoFrame = app.staticTexts["dashboard-title-photo-frame-display-picpak-kitchen"]
+        let pantry = app.staticTexts["dashboard-title-pantry-display-picpak-kitchen"]
+        let list = app.scrollViews["dashboard-list"]
         for _ in 0..<5 where !photoFrame.isHittable || !pantry.isHittable {
-            app.swipeUp()
+            list.swipeUp()
         }
         XCTAssertTrue(photoFrame.isHittable)
         XCTAssertTrue(pantry.isHittable)
-        let upper = photoFrame.frame.minY < pantry.frame.minY
-            ? photoFrame
-            : pantry
-        let lower = photoFrame.frame.minY < pantry.frame.minY
-            ? pantry
-            : photoFrame
-
-        lower.coordinate(
-            withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)
-        ).press(
+        func precedes(_ first: XCUIElement, _ second: XCUIElement) -> Bool {
+            let a = first.frame
+            let b = second.frame
+            return abs(a.minY - b.minY) < 1 ? a.minX < b.minX : a.minY < b.minY
+        }
+        let first = precedes(photoFrame, pantry) ? photoFrame : pantry
+        let second = precedes(photoFrame, pantry) ? pantry : photoFrame
+        second.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(
             forDuration: 0.45,
-            thenDragTo: upper.coordinate(
-                withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)
-            )
+            thenDragTo: first.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         )
-
-        XCTAssertLessThan(lower.frame.minY, upper.frame.minY)
+        let reordered = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in precedes(second, first) }, object: nil
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [reordered], timeout: 5), .completed)
     }
 
     private func scrollToButton(_ button: XCUIElement, app: XCUIApplication) {

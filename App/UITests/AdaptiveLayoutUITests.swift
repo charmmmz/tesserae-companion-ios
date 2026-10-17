@@ -17,6 +17,7 @@ final class AdaptiveLayoutUITests: XCTestCase {
 
     private func demo(accessibilityText: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
+        app.launchArguments += ["-dashboardLayoutMode", "cards"]
         if accessibilityText {
             app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
         }
@@ -80,6 +81,59 @@ final class AdaptiveLayoutUITests: XCTestCase {
         XCTAssertGreaterThan(send.frame.width, 44)
         XCTAssertLessThanOrEqual(send.frame.maxX, app.frame.maxX)
         capture("Accessibility composer", app: app)
+    }
+
+    func testDashboardUsesFullWidthAndModalPush() {
+        let app = demo()
+        app.buttons["Dashboards"].firstMatch.tap()
+        let list = app.scrollViews["dashboard-list"]
+        XCTAssertTrue(list.waitForExistence(timeout: 5))
+        XCTAssertGreaterThan(list.frame.width, app.frame.width * 0.8)
+        capture("Dashboard overview", app: app)
+
+        let shared = app.buttons["dashboard-push-photo-frame-shared"]
+        for _ in 0..<6 where !shared.exists { list.swipeUp() }
+        XCTAssertTrue(shared.waitForExistence(timeout: 3))
+        reveal(shared, app: app)
+        shared.tap()
+        let title = app.staticTexts["dashboard-push-sheet-title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        XCTAssertFalse(list.isHittable)
+        let desk = app.buttons["dashboard-push-device-e1004-desk"]
+        reveal(desk, app: app)
+        desk.tap()
+        let push = app.buttons["Push to Kitchen"]
+        XCTAssertTrue(push.waitForExistence(timeout: 5))
+        XCTAssertTrue(push.isEnabled)
+        capture("Dashboard push modal", app: app)
+        XCUIDevice.shared.orientation = .landscapeLeft
+        XCTAssertTrue(push.isEnabled)
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(list.waitForExistence(timeout: 5))
+        XCTAssertTrue(list.isHittable)
+    }
+
+    func testAccessibilityDashboardModalKeepsActionReachable() {
+        let app = demo(accessibilityText: true)
+        app.buttons["Dashboards"].firstMatch.tap()
+        let push = app.buttons["dashboard-push-pantry-display-picpak-kitchen"]
+        let list = app.scrollViews["dashboard-list"]
+        for _ in 0..<6 where !push.exists { list.swipeUp() }
+        XCTAssertTrue(push.waitForExistence(timeout: 5))
+        reveal(push, app: app)
+        push.tap()
+        let submit = app.buttons["Push to Kitchen"]
+        XCTAssertTrue(submit.waitForExistence(timeout: 5))
+        XCTAssertTrue(submit.isHittable)
+        XCTAssertGreaterThanOrEqual(submit.frame.height, 44)
+        XCTAssertLessThanOrEqual(submit.frame.maxY, app.frame.maxY)
+        let cancel = app.buttons["Cancel"]
+        let title = app.staticTexts["dashboard-push-sheet-title"]
+        XCTAssertTrue(cancel.isHittable)
+        XCTAssertLessThan(cancel.frame.maxY, title.frame.minY)
+        capture("Accessibility Dashboard modal", app: app)
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(app.scrollViews["dashboard-list"].isHittable)
     }
 
     func testSelectedDisplaySurvivesDeviceTurn() {

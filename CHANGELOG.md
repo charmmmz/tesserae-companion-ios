@@ -14,8 +14,9 @@ capabilities.
 ### Changed
 
 - Added iPad device support and iPhone Duo
-  adaptation while retaining iOS 18 compatibility. Displays and Dashboards use
-  collapsible list/detail navigation; root Send uses the system toolbar without a nested Settings action.
+  adaptation while retaining iOS 18 compatibility. Displays use collapsible
+  list/detail navigation; Dashboards use full-width adaptive cards and modal
+  push previews. Root Send uses the system toolbar without a nested Settings action.
   Ordinary iPhones stay in portrait while iPad and Duo retain window adaptation.
 - Photo, nearby-device and Share Extension composers adapt to the available
   space while preserving draft, target and framing state. Gallery thumbnails

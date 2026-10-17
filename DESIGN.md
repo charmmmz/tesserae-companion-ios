@@ -167,8 +167,10 @@ frame identity before the app exposes that editor.
 ### iPad and iPhone Duo adaptation
 
 The iOS target and Share Extension support both device families while retaining
-an iOS 18 minimum. Displays and Dashboards use a persistent NavigationSplitView;
-compact windows collapse into native navigation. Photo composers keep their draft,
+an iOS 18 minimum. Displays use a persistent NavigationSplitView; compact windows
+collapse into native navigation. Dashboards use the full page with adaptive cards
+or a list, opening a
+compact modal for preview and push. Photo composers keep their draft,
 framing, target selection and submission state above adaptive regions. On iOS
 27.1, wide composers use ArrangementView to respect active divisions; older
 systems use a two-column layout. Compact and accessibility layouts remain scrollable.
