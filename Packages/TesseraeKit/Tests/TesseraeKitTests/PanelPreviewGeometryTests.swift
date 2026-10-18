@@ -329,6 +329,30 @@ final class PanelPreviewGeometryTests: XCTestCase {
         XCTAssertEqual(framing.zoom, 4, accuracy: 0.000_001)
     }
 
+    func testDraggingStartsAtTheVisibleCropEvenWhenStoredFocusIsPastAnEdge() {
+        for (focus, movement) in [(0.05, -40.0), (0.95, 40.0)] {
+            let initial = ImageFraming(focusX: focus, focusY: focus, zoom: 2)
+            let before = initial.framedPreviewRect(
+                sourceWidth: 1_600, sourceHeight: 1_200,
+                canvasWidth: 300, canvasHeight: 400,
+                targetWidth: 1_200, targetHeight: 1_600
+            )
+            let moved = initial.applyingPreviewGesture(
+                translationX: movement, translationY: movement, magnification: 1,
+                canvasWidth: 300, canvasHeight: 400,
+                sourceWidth: 1_600, sourceHeight: 1_200,
+                targetWidth: 1_200, targetHeight: 1_600, maximumZoom: 4
+            )
+            let after = moved.framedPreviewRect(
+                sourceWidth: 1_600, sourceHeight: 1_200,
+                canvasWidth: 300, canvasHeight: 400,
+                targetWidth: 1_200, targetHeight: 1_600
+            )
+            XCTAssertEqual(after.x - before.x, movement, accuracy: 0.000_001)
+            XCTAssertEqual(after.y - before.y, movement, accuracy: 0.000_001)
+        }
+    }
+
     private func display(id: String, width: Int, height: Int) -> DisplaySummary {
         DisplaySummary(
             id: id,

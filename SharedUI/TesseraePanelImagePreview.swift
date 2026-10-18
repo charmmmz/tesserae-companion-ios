@@ -24,8 +24,10 @@ struct TesseraePanelImagePreview: View {
     let isAutoFraming: Bool
     let autoFramingFeedback: PhotoFramingSession.Feedback?
     let onFramingInteraction: (() -> Void)?
-    @GestureState private var framingGestureState = FramingGestureState()
-    @State private var isFramingGestureActive = false
+    // GestureState tracks cancellation only; its automatic reset must not move the image.
+    @GestureState private var isFramingGestureActive = false
+    @State private var framingInteraction = PhotoFramingInteraction()
+    @State private var activeFramingContext: FramingPreviewContext?
     @State private var framingControlsRevealTask: Task<Void, Never>?
     @State private var previousGestureFraming: ImageFraming?
     @State private var previousZoomBoundary: FramingZoomBoundary?
@@ -79,8 +81,17 @@ struct TesseraePanelImagePreview: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(accessibilityIdentifier)
         .tesseraeHapticFeedback(trigger: hapticEvent)
+        .onChange(of: isFramingGestureActive) { _, isActive in
+            if !isActive {
+                // A cancelled gesture has no onEnded callback. Keep its last visible crop.
+                finishFramingInteraction()
+            }
+        }
+        .onChange(of: framingContext) { _, _ in
+            discardFramingInteraction()
+        }
         .onDisappear {
-            framingControlsRevealTask?.cancel()
+            discardFramingInteraction()
         }
     }
 
@@ -94,7 +105,8 @@ struct TesseraePanelImagePreview: View {
                 ZStack(alignment: .bottom) {
                     panelCanvas(size: proxy.size)
                         .animation(
-                            !reduceMotion && autoFramingFeedback == .applied
+                            !reduceMotion && !framingInteraction.isActive
+                                && !isFramingGestureActive && autoFramingFeedback == .applied
                                 ? .easeOut(duration: 0.18) : nil,
                             value: framing?.wrappedValue
                         )
@@ -102,9 +114,14 @@ struct TesseraePanelImagePreview: View {
                     if !dynamicTypeSize.isAccessibilitySize, let framing {
                         framingControls(framing: framing)
                             .padding(8)
-                            .opacity(isFramingGestureActive ? 0 : 1)
-                            .allowsHitTesting(!isFramingGestureActive)
-                            .accessibilityHidden(isFramingGestureActive)
+                            .opacity(framingInteraction.controlsHidden ? 0 : 1)
+                            .animation(
+                                reduceMotion || framingInteraction.controlsHidden
+                                    ? nil : .easeOut(duration: 0.18),
+                                value: framingInteraction.controlsHidden
+                            )
+                            .allowsHitTesting(!framingInteraction.controlsHidden)
+                            .accessibilityHidden(framingInteraction.controlsHidden)
                     }
                 }
             }
@@ -126,25 +143,9 @@ struct TesseraePanelImagePreview: View {
                 if let framing {
                     let sourceWidth = image.size.width * image.scale
                     let sourceHeight = image.size.height * image.scale
-                    let previewFraming = framing.wrappedValue
-                        .applyingPreviewGesture(
-                            translationX: Double(
-                                framingGestureState.translation.width
-                            ),
-                            translationY: Double(
-                                framingGestureState.translation.height
-                            ),
-                            magnification: Double(
-                                framingGestureState.magnification
-                            ),
-                            canvasWidth: Double(size.width),
-                            canvasHeight: Double(size.height),
-                            sourceWidth: Double(sourceWidth),
-                            sourceHeight: Double(sourceHeight),
-                            targetWidth: Double(panel.width),
-                            targetHeight: Double(panel.height),
-                            maximumZoom: maximumFramingZoom
-                        )
+                    let previewFraming = activeFramingContext == framingContext
+                        ? framingInteraction.previewFraming ?? framing.wrappedValue
+                        : framing.wrappedValue
                     let rect = previewFraming.framedPreviewRect(
                         sourceWidth: sourceWidth,
                         sourceHeight: sourceHeight,
@@ -347,11 +348,9 @@ struct TesseraePanelImagePreview: View {
 
     private func resetFraming(_ framing: Binding<ImageFraming>) {
         onFramingInteraction?()
-        framingControlsRevealTask?.cancel()
-        framingControlsRevealTask = nil
-        framing.wrappedValue = .centeredFill
-        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
-            isFramingGestureActive = false
+        withoutFramingAnimation {
+            discardFramingInteraction()
+            framing.wrappedValue = .centeredFill
         }
     }
 
@@ -360,64 +359,100 @@ struct TesseraePanelImagePreview: View {
         image: UIImage?
     ) -> some Gesture {
         DragGesture(minimumDistance: prioritizesFramingGesture ? 0 : 1)
-            .simultaneously(with: MagnificationGesture())
-            .updating($framingGestureState) { value, state, _ in
-                state = FramingGestureState(
-                    translation: value.first?.translation ?? .zero,
-                    magnification: value.second ?? 1
-                )
+            .simultaneously(with: MagnifyGesture())
+            .updating($isFramingGestureActive) { _, isActive, transaction in
+                isActive = true
+                transaction.disablesAnimations = true
             }
             .onChanged { value in
                 guard framingEditingEnabled, let image, let framing else { return }
-                let previewFraming = framing.wrappedValue.applyingPreviewGesture(
-                    translationX: Double(value.first?.translation.width ?? 0),
-                    translationY: Double(value.first?.translation.height ?? 0),
-                    magnification: Double(value.second ?? 1),
-                    canvasWidth: Double(size.width),
-                    canvasHeight: Double(size.height),
-                    sourceWidth: Double(image.size.width * image.scale),
-                    sourceHeight: Double(image.size.height * image.scale),
-                    targetWidth: Double(panel.width),
-                    targetHeight: Double(panel.height),
-                    maximumZoom: maximumFramingZoom
-                )
-                if !isFramingGestureActive {
-                    onFramingInteraction?()
-                    framingControlsRevealTask?.cancel()
-                    framingControlsRevealTask = nil
-                    isFramingGestureActive = true
-                    previousGestureFraming = framing.wrappedValue
-                    previousZoomBoundary = zoomBoundary(
-                        for: framing.wrappedValue.zoom
+                withoutFramingAnimation {
+                    if !framingInteraction.isActive {
+                        onFramingInteraction?()
+                        framingControlsRevealTask?.cancel()
+                        framingControlsRevealTask = nil
+                        activeFramingContext = framingContext
+                        framingInteraction.begin(at: framing.wrappedValue)
+                        previousGestureFraming = framing.wrappedValue
+                        previousZoomBoundary = zoomBoundary(for: framing.wrappedValue.zoom)
+                    }
+                    framingInteraction.update(
+                        translation: value.first?.translation,
+                        magnification: value.second?.magnification,
+                        geometry: framingGeometry(size: size, image: image)
                     )
+                    if let previewFraming = framingInteraction.previewFraming {
+                        updateFramingHaptics(with: previewFraming)
+                    }
                 }
-                updateFramingHaptics(with: previewFraming)
             }
             .onEnded { value in
-                guard framingEditingEnabled, let image, let framing else { return }
-                let translation = value.first?.translation ?? .zero
-                let magnification = value.second ?? 1
-                framing.wrappedValue = framing.wrappedValue
-                    .applyingPreviewGesture(
-                        translationX: Double(
-                            translation.width
-                        ),
-                        translationY: Double(
-                            translation.height
-                        ),
-                        magnification: Double(magnification),
-                        canvasWidth: Double(size.width),
-                        canvasHeight: Double(size.height),
-                        sourceWidth: Double(image.size.width * image.scale),
-                        sourceHeight: Double(image.size.height * image.scale),
-                        targetWidth: Double(panel.width),
-                        targetHeight: Double(panel.height),
-                        maximumZoom: maximumFramingZoom
+                guard framingInteraction.isActive else { return }
+                guard activeFramingContext == framingContext, let image else {
+                    discardFramingInteraction()
+                    return
+                }
+                withoutFramingAnimation {
+                    framingInteraction.update(
+                        translation: value.first?.translation,
+                        magnification: value.second?.magnification,
+                        geometry: framingGeometry(size: size, image: image)
                     )
-                previousGestureFraming = nil
-                previousZoomBoundary = nil
-                endFramingInteraction()
+                    finishFramingInteraction()
+                }
             }
+    }
+
+    private var framingContext: FramingPreviewContext {
+        FramingPreviewContext(
+            imageID: image.map(ObjectIdentifier.init),
+            aspect: PanelAspectRatio(panel: panel),
+            fit: fit,
+            maximumZoom: maximumFramingZoom,
+            isEditable: framingEditingEnabled && framing != nil
+        )
+    }
+
+    private func framingGeometry(size: CGSize, image: UIImage) -> PhotoFramingInteraction.Geometry {
+        .init(
+            canvas: size,
+            source: CGSize(width: image.size.width * image.scale, height: image.size.height * image.scale),
+            target: CGSize(width: panel.width, height: panel.height),
+            maximumZoom: maximumFramingZoom
+        )
+    }
+
+    private func withoutFramingAnimation(_ update: () -> Void) {
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction, update)
+    }
+
+    private func finishFramingInteraction() {
+        guard framingInteraction.isActive else { return }
+        guard activeFramingContext == framingContext, framingEditingEnabled, let framing else {
+            discardFramingInteraction()
+            return
+        }
+        withoutFramingAnimation {
+            // Both sides of the handoff contain an absolute crop, never a crop plus an old delta.
+            if let finalFraming = framingInteraction.end() {
+                framing.wrappedValue = finalFraming
+            }
+            activeFramingContext = nil
+            previousGestureFraming = nil
+            previousZoomBoundary = nil
+        }
+        endFramingInteraction()
+    }
+
+    private func discardFramingInteraction() {
+        framingControlsRevealTask?.cancel()
+        framingControlsRevealTask = nil
+        framingInteraction.reset()
+        activeFramingContext = nil
+        previousGestureFraming = nil
+        previousZoomBoundary = nil
     }
 
     private func framingGestureMask(
@@ -433,12 +468,11 @@ struct TesseraePanelImagePreview: View {
 
     private func endFramingInteraction() {
         framingControlsRevealTask?.cancel()
+        let generation = framingInteraction.controlsRevealGeneration
         framingControlsRevealTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(2))
             guard !Task.isCancelled else { return }
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
-                isFramingGestureActive = false
-            }
+            framingInteraction.revealControls(generation: generation)
             framingControlsRevealTask = nil
         }
     }
@@ -483,9 +517,79 @@ struct TesseraePanelImagePreview: View {
     }
 }
 
-private struct FramingGestureState {
-    var translation = CGSize.zero
-    var magnification: CGFloat = 1
+/// Per-gesture state stays local to the preview; the parent receives one crop at completion.
+struct PhotoFramingInteraction {
+    struct Geometry {
+        let canvas: CGSize
+        let source: CGSize
+        let target: CGSize
+        let maximumZoom: Double
+    }
+
+    private var translation = CGSize.zero
+    private var magnification: CGFloat = 1
+    private(set) var previewFraming: ImageFraming?
+    private(set) var controlsHidden = false
+    private(set) var controlsRevealGeneration = 0
+
+    var isActive: Bool { previewFraming != nil }
+
+    mutating func begin(at framing: ImageFraming) {
+        // Local editing starts from the parent's crop, then consumes gesture deltas.
+        previewFraming = framing
+        translation = .zero
+        magnification = 1
+        controlsHidden = true
+        controlsRevealGeneration += 1
+    }
+
+    mutating func update(translation: CGSize?, magnification: CGFloat?, geometry: Geometry) {
+        guard let currentFraming = previewFraming else { return }
+        // The drag and pinch can finish independently. A missing component is not a reset.
+        let previousTranslation = self.translation
+        let previousMagnification = self.magnification
+        if let translation { self.translation = translation }
+        if let magnification { self.magnification = magnification }
+        // Consume overshoot at the edges/zoom limits, so reversing direction moves immediately.
+        previewFraming = currentFraming.applyingPreviewGesture(
+            translationX: Double(self.translation.width - previousTranslation.width),
+            translationY: Double(self.translation.height - previousTranslation.height),
+            magnification: Double(self.magnification / max(previousMagnification, 0.01)),
+            canvasWidth: Double(geometry.canvas.width),
+            canvasHeight: Double(geometry.canvas.height),
+            sourceWidth: Double(geometry.source.width),
+            sourceHeight: Double(geometry.source.height),
+            targetWidth: Double(geometry.target.width),
+            targetHeight: Double(geometry.target.height),
+            maximumZoom: geometry.maximumZoom
+        )
+    }
+
+    @discardableResult
+    mutating func end() -> ImageFraming? {
+        let finalFraming = previewFraming
+        previewFraming = nil
+        return finalFraming
+    }
+
+    mutating func revealControls(generation: Int) {
+        guard !isActive, controlsRevealGeneration == generation else { return }
+        controlsHidden = false
+    }
+
+    mutating func reset() {
+        end()
+        controlsHidden = false
+        controlsRevealGeneration += 1
+    }
+}
+
+private struct FramingPreviewContext: Equatable {
+    let imageID: ObjectIdentifier?
+    let aspect: PanelAspectRatio
+    let fit: ImageFitMode
+    let maximumZoom: Double
+    let isEditable: Bool
 }
 
 private enum FramingZoomBoundary {

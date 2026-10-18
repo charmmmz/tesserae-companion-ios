@@ -287,9 +287,12 @@ public extension ImageFraming {
             return zoomed
         }
 
-        let translatedFocusX = zoomed.focusX
+        // The requested focus can lie beyond the crop's legal center (for example
+        // after Auto Frame). Pan from the crop actually on screen so the first
+        // part of a drag is not spent traversing invisible, clamped-away space.
+        let translatedFocusX = crop.x + crop.width / 2
             - translationX / fullPreviewWidth
-        let translatedFocusY = zoomed.focusY
+        let translatedFocusY = crop.y + crop.height / 2
             - translationY / fullPreviewHeight
         return ImageFraming(
             focusX: min(

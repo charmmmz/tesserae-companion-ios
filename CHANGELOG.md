@@ -50,6 +50,10 @@ capabilities.
 
 ### Fixed
 
+- Photo framing responds immediately when dragging from a cropped edge or
+  reversing direction at a pan/zoom limit. Releasing or interrupting a gesture
+  preserves the visible crop, and repeated drags keep the controls hidden until
+  editing pauses in Send, the Share Sheet, and Bluetooth photo sending.
 - Offline Album editors ask before discarding unsaved changes on Cancel or
   swipe-down, including while changing photo order. Checking and saving an Album
   prevents edits or dismissal until the operation finishes.

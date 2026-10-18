@@ -1,4 +1,5 @@
 import TesseraeKit
+import Testing
 import XCTest
 
 @testable import Tesserae_Companion
@@ -313,6 +314,139 @@ final class PhotoFramingSessionTests: XCTestCase {
 
     private func drain() async {
         for _ in 0..<30 { await Task.yield() }
+    }
+}
+
+@Suite("Manual photo framing continuity")
+struct PhotoFramingInteractionTests {
+    private let geometry = PhotoFramingInteraction.Geometry(
+        canvas: CGSize(width: 300, height: 400),
+        source: CGSize(width: 1_600, height: 1_200),
+        target: CGSize(width: 1_200, height: 1_600),
+        maximumZoom: 4
+    )
+
+    @Test("Reversing a drag at either edge moves immediately", arguments: [-1.0, 1.0])
+    func reversesAtEdge(direction: Double) throws {
+        var interaction = PhotoFramingInteraction()
+        interaction.begin(at: .centeredFill)
+        interaction.update(
+            translation: CGSize(width: direction * 1_000, height: 0),
+            magnification: nil, geometry: geometry
+        )
+        let edge = rect(try #require(interaction.previewFraming))
+        interaction.update(
+            translation: CGSize(width: direction * 990, height: 0),
+            magnification: nil, geometry: geometry
+        )
+        let reversed = rect(try #require(interaction.previewFraming))
+        #expect(abs(reversed.x - edge.x + direction * 10) < 0.000_001)
+    }
+
+    @Test("Pinching back from either zoom limit responds immediately", arguments: [false, true])
+    func reversesAtZoomLimit(maximum: Bool) throws {
+        var interaction = PhotoFramingInteraction()
+        interaction.begin(at: ImageFraming(focusX: 0.5, focusY: 0.5, zoom: 2))
+        interaction.update(
+            translation: nil, magnification: maximum ? 10 : 0.1, geometry: geometry
+        )
+        #expect(interaction.previewFraming?.zoom == (maximum ? 4 : 1))
+        interaction.update(
+            translation: nil, magnification: maximum ? 9 : 0.11, geometry: geometry
+        )
+        let framing = try #require(interaction.previewFraming)
+        #expect(abs(framing.zoom - (maximum ? 3.6 : 1.1)) < 0.000_001)
+    }
+
+    @Test("Release does not apply the final translation twice, and the next drag starts in place")
+    func releaseAndNextDrag() throws {
+        var interaction = PhotoFramingInteraction()
+        interaction.begin(at: .centeredFill)
+        let translation = CGSize(width: 40, height: 0)
+        interaction.update(translation: translation, magnification: nil, geometry: geometry)
+        let visible = try #require(interaction.previewFraming)
+        interaction.update(translation: translation, magnification: nil, geometry: geometry)
+        let result = interaction.end()
+        let committed = try #require(result)
+        #expect(committed == visible)
+        #expect(!interaction.isActive)
+
+        interaction.begin(at: committed)
+        #expect(interaction.previewFraming == visible)
+        interaction.update(
+            translation: CGSize(width: 10, height: 0), magnification: nil, geometry: geometry
+        )
+        let next = rect(try #require(interaction.previewFraming))
+        #expect(abs(next.x - rect(visible).x - 10) < 0.000_001)
+    }
+
+    @Test("A drag ending before the pinch retains its translation")
+    func independentGestureComponents() throws {
+        var interaction = PhotoFramingInteraction()
+        interaction.begin(at: .centeredFill)
+        interaction.update(
+            translation: CGSize(width: 30, height: 20), magnification: 1.5, geometry: geometry
+        )
+        let before = try #require(interaction.previewFraming)
+        interaction.update(translation: nil, magnification: 1.5, geometry: geometry)
+        #expect(interaction.previewFraming == before)
+        interaction.update(translation: nil, magnification: nil, geometry: geometry)
+        let committed = interaction.end()
+        #expect(committed == before)
+    }
+
+    @Test("Cancellation without a final sample preserves the last visible crop")
+    func interruptedGesture() throws {
+        var interaction = PhotoFramingInteraction()
+        interaction.begin(at: .centeredFill)
+        interaction.update(
+            translation: CGSize(width: -50, height: 20), magnification: 2, geometry: geometry
+        )
+        let visible = try #require(interaction.previewFraming)
+        let committed = interaction.end()
+        let duplicateCompletion = interaction.end()
+        #expect(committed == visible)
+        #expect(duplicateCompletion == nil)
+        #expect(!interaction.isActive)
+    }
+
+    @Test("A previous toolbar timer cannot reveal controls during or after a new drag")
+    func staleControlsTimer() {
+        var interaction = PhotoFramingInteraction()
+        interaction.begin(at: .centeredFill)
+        interaction.end()
+        let oldTimer = interaction.controlsRevealGeneration
+
+        interaction.begin(at: .centeredFill)
+        interaction.revealControls(generation: oldTimer)
+        #expect(interaction.controlsHidden)
+        interaction.revealControls(generation: interaction.controlsRevealGeneration)
+        #expect(interaction.controlsHidden)
+        interaction.end()
+        interaction.revealControls(generation: oldTimer)
+        #expect(interaction.controlsHidden)
+        interaction.revealControls(generation: interaction.controlsRevealGeneration)
+        #expect(!interaction.controlsHidden)
+    }
+
+    @Test("Changing the preview clears the gesture and invalidates pending controls timers")
+    func resetPreview() {
+        var interaction = PhotoFramingInteraction()
+        interaction.begin(at: .centeredFill)
+        let previousGeneration = interaction.controlsRevealGeneration
+        interaction.reset()
+        #expect(interaction.previewFraming == nil)
+        #expect(!interaction.isActive)
+        #expect(!interaction.controlsHidden)
+        #expect(interaction.controlsRevealGeneration != previousGeneration)
+    }
+
+    private func rect(_ framing: ImageFraming) -> PanelImagePreviewRect {
+        framing.framedPreviewRect(
+            sourceWidth: geometry.source.width, sourceHeight: geometry.source.height,
+            canvasWidth: geometry.canvas.width, canvasHeight: geometry.canvas.height,
+            targetWidth: geometry.target.width, targetHeight: geometry.target.height
+        )
     }
 }
 
