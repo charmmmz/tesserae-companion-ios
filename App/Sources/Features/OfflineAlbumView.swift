@@ -37,6 +37,18 @@ struct OfflineAlbumEditorDraft: Equatable {
         return nil
     }
 
+    func hasChanges(comparedTo baseline: Self) -> Bool {
+        name.trimmingCharacters(in: .whitespacesAndNewlines)
+            != baseline.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            || enabled != baseline.enabled
+            || Set(deviceIDs) != Set(baseline.deviceIDs)
+            || order != baseline.order
+            || fit != baseline.fit
+            || playbackMode != baseline.playbackMode
+            || intervalSeconds != baseline.intervalSeconds
+            || repeatMode != baseline.repeatMode
+    }
+
     var albumDraft: OfflineAlbumDraft {
         OfflineAlbumDraft(
             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -62,7 +74,7 @@ func offlineAlbumShouldShowReview(
     draft: OfflineAlbumEditorDraft,
     baseline: OfflineAlbumEditorDraft
 ) -> Bool {
-    !isExistingAlbum || draft != baseline
+    !isExistingAlbum || draft.hasChanges(comparedTo: baseline)
 }
 
 func offlineAlbumNormalizedExplicitOrder(
@@ -204,8 +216,8 @@ struct OfflineAlbumEditorView: View {
 
     @State private var draft: OfflineAlbumEditorDraft
     @State private var baselineDraft: OfflineAlbumEditorDraft
+    @State private var session = DraftEditingSession()
     @State private var preflight: OfflineAlbumPreflightResponse?
-    @State private var isWorking = false
     @State private var replaceConflicts = false
     @State private var errorMessage: String?
     @State private var deleting = false
@@ -229,12 +241,17 @@ struct OfflineAlbumEditorView: View {
             imageIDs: images.map(\.id),
             album: current?.album
         )
+        // The editor owns its draft until it saves, discards, or explicitly reloads a conflict.
         _draft = State(initialValue: initialDraft)
         _baselineDraft = State(initialValue: initialDraft)
     }
 
     private var hasConflicts: Bool {
         preflight?.targets.contains { $0.conflict != nil } == true
+    }
+
+    private var isWorking: Bool {
+        session.isSaving
     }
 
     private var hasUnsupportedTarget: Bool {
@@ -258,21 +275,22 @@ struct OfflineAlbumEditorView: View {
                     setupForm
                 }
             }
-            .navigationTitle(current == nil ? "New Offline Album" : "Offline Album")
+            .disabled(isWorking)
+            .navigationTitle(current == nil ? "New Album" : "Offline Album")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(preflight == nil ? "Cancel" : "Back") {
                         if preflight == nil {
-                            dismiss()
+                            updateDirtyState()
+                            if session.canExit(to: .close) { dismiss() }
                         } else {
-                            withAnimation(.smooth(duration: 0.2)) {
-                                self.preflight = nil
-                                replaceConflicts = false
-                            }
+                            self.preflight = nil
+                            replaceConflicts = false
                         }
                     }
                     .disabled(isWorking)
+                    .accessibilityIdentifier("offline-album-exit")
                 }
 
                 if preflight != nil || shouldShowReview {
@@ -293,11 +311,14 @@ struct OfflineAlbumEditorView: View {
                                 || (hasConflicts && !replaceConflicts)
                                 || model.offlineAlbumAuthoringPermission == .denied
                         )
+                        .accessibilityIdentifier("offline-album-review-save")
                     }
                 }
             }
-            .interactiveDismissDisabled(isWorking)
         }
+        .modifier(DraftExitProtection(session: session) { _ in dismiss() })
+        .onChange(of: draft, initial: true) { updateDirtyState() }
+        .onChange(of: baselineDraft) { updateDirtyState() }
         .alert("Couldn’t Continue", isPresented: errorPresented) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -313,7 +334,7 @@ struct OfflineAlbumEditorView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This unbinds the folder from its displays. It does not delete the folder or photos.")
+            Text("Stops this Album on its displays. Your folder and photos are kept.")
         }
     }
 
@@ -335,7 +356,9 @@ struct OfflineAlbumEditorView: View {
             Section("Album") {
                 TextField("Name", text: $draft.name)
                     .textInputAutocapitalization(.words)
+                    .accessibilityIdentifier("offline-album-name")
                 Toggle("Enabled", isOn: $draft.enabled)
+                    .accessibilityIdentifier("offline-album-enabled")
             }
 
             Section {
@@ -353,7 +376,7 @@ struct OfflineAlbumEditorView: View {
             } header: {
                 Text("Displays")
             } footer: {
-                Text("Support is reported by Tesserae. Unknown displays may be selected with a warning; unsupported displays cannot be selected.")
+                Text("Displays without offline playback are unavailable. Review will check the selected displays before saving.")
             }
 
             Section("Presentation") {
@@ -386,10 +409,8 @@ struct OfflineAlbumEditorView: View {
                 NavigationLink {
                     OfflineAlbumPhotoOrderView(
                         images: images,
-                        explicitOrder: draft.order
-                    ) { updatedOrder in
-                        draft.order = updatedOrder
-                    }
+                        explicitOrder: $draft.order
+                    )
                 } label: {
                     LabeledContent(
                         "Photo Order",
@@ -397,10 +418,9 @@ struct OfflineAlbumEditorView: View {
                     )
                 }
                 .disabled(images.count < 2)
-
-                Text("Drag photos into playback order. Photos added to the folder later are appended automatically. Per-photo framing will be added separately after the server includes it in frame identity.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                .accessibilityIdentifier("offline-album-photo-order-link")
+            } footer: {
+                Text("New photos are added at the end. Photo layout applies to the whole Album; individual cropping isn’t available.")
             }
 
             if let validationMessage = draft.validationMessage {
@@ -427,7 +447,7 @@ struct OfflineAlbumEditorView: View {
     private func reviewForm(_ preflight: OfflineAlbumPreflightResponse) -> some View {
         Form {
             Section("Summary") {
-                LabeledContent("Album", value: draft.name)
+                LabeledContent("Album", value: draft.albumDraft.name)
                 LabeledContent("Photos", value: "\(images.count)")
                 LabeledContent("Layout", value: draft.fit == .fill ? "Fill" : "Fit")
                 LabeledContent("Playback", value: playbackSummary)
@@ -438,23 +458,24 @@ struct OfflineAlbumEditorView: View {
                     preflightTargetRow(target)
                 }
             } header: {
-                Text("Preflight")
+                Text("Display Check")
             } footer: {
-                Text("Storage and frame counts are calculated by Tesserae for each target panel. They are not estimated from the source-photo files by Companion.")
+                Text("Tesserae checks offline capacity and storage for each display. Displays need to connect to sync this Album.")
             }
 
             if hasConflicts {
                 Section {
-                    Toggle("Replace Existing Display Bindings", isOn: $replaceConflicts)
+                    Toggle("Use These Displays for This Album", isOn: $replaceConflicts)
+                        .accessibilityIdentifier("offline-album-replace-conflicts")
                 } footer: {
-                    Text("A selected display already belongs to another enabled Offline Album. Replacement only unbinds that display; it does not delete the other Album or its photos.")
+                    Text("These displays will stop playing their other Offline Albums. The other Albums and photos are kept.")
                 }
             }
 
             if preflight.targets.contains(where: { $0.support.state == .unknown }) {
                 Section {
                     Label(
-                        "At least one display has not recently confirmed Offline Album support. Saving may succeed, but fully offline playback is not guaranteed until it reports fresh capabilities.",
+                        "You can save, but offline playback isn’t guaranteed on displays with unconfirmed support.",
                         systemImage: "exclamationmark.triangle.fill"
                     )
                     .foregroundStyle(TesseraeTheme.warning)
@@ -564,7 +585,7 @@ struct OfflineAlbumEditorView: View {
                     .font(.subheadline)
                 }
             } else {
-                Text("Tesserae cannot provide a cache plan for this display yet.")
+                Text("Offline capacity isn’t available for this display yet.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -582,7 +603,8 @@ struct OfflineAlbumEditorView: View {
     }
 
     private var playbackSummary: String {
-        let mode = draft.playbackMode == .shuffle ? "Shuffle" : "In Order"
+        let mode = draft.playbackMode == .shuffle
+            ? String(localized: "Shuffle") : String(localized: "In Order")
         return "\(mode) · \(intervalLabel(draft.intervalSeconds))"
     }
 
@@ -621,32 +643,32 @@ struct OfflineAlbumEditorView: View {
     }
 
     private func runPreflight() async {
-        guard draft.validationMessage == nil, shouldShowReview else { return }
-        isWorking = true
-        defer { isWorking = false }
+        guard !isWorking, draft.validationMessage == nil, shouldShowReview else { return }
+        session.isSaving = true
+        defer { session.isSaving = false }
         do {
             let response = try await model.preflightOfflineAlbum(
                 folderID: folder.id,
                 draft: draft.albumDraft
             )
-            withAnimation(.smooth(duration: 0.2)) {
-                preflight = response
-            }
+            preflight = response
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
     private func save() async {
-        guard preflight != nil else { return }
-        isWorking = true
-        defer { isWorking = false }
+        guard !isWorking, preflight != nil, !hasUnsupportedTarget,
+              !hasConflicts || replaceConflicts else { return }
+        session.isSaving = true
+        defer { session.isSaving = false }
         do {
             try await model.saveOfflineAlbum(
                 folderID: folder.id,
                 draft: draft.albumDraft,
                 replaceConflicts: replaceConflicts
             )
+            session.hasChanges = false
             dismiss()
         } catch let error as TesseraeClientError {
             switch error {
@@ -678,6 +700,7 @@ struct OfflineAlbumEditorView: View {
                 )
                 draft = latestDraft
                 baselineDraft = latestDraft
+                updateDirtyState()
                 preflight = nil
                 replaceConflicts = false
                 errorMessage = String(
@@ -694,14 +717,20 @@ struct OfflineAlbumEditorView: View {
     }
 
     private func deleteAlbum() async {
-        isWorking = true
-        defer { isWorking = false }
+        guard !isWorking else { return }
+        session.isSaving = true
+        defer { session.isSaving = false }
         do {
             try await model.deleteOfflineAlbum(folderID: folder.id)
+            session.hasChanges = false
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func updateDirtyState() {
+        session.hasChanges = draft.hasChanges(comparedTo: baselineDraft)
     }
 
     private func openOfflineAlbumSettings() {
@@ -718,48 +747,21 @@ struct OfflineAlbumEditorView: View {
 }
 
 private struct OfflineAlbumPhotoOrderView: View {
-    @Environment(\.dismiss) private var dismiss
-
     let images: [GalleryImage]
-    let originalExplicitOrder: [String]
-    let apply: ([String]) -> Void
+    @Binding var explicitOrder: [String]
 
-    @State private var orderedIDs: [String]
-    @State private var usesFolderOrder: Bool
     @State private var editMode: EditMode = .active
-
-    init(
-        images: [GalleryImage],
-        explicitOrder: [String],
-        apply: @escaping ([String]) -> Void
-    ) {
-        self.images = images
-        let folderOrder = images.map(\.id)
-        let normalizedExplicitOrder = offlineAlbumNormalizedExplicitOrder(
-            explicitOrder,
-            folderOrder: folderOrder
-        )
-        originalExplicitOrder = normalizedExplicitOrder
-        self.apply = apply
-        _orderedIDs = State(
-            initialValue: offlineAlbumResolvedPhotoOrder(
-                explicitOrder: normalizedExplicitOrder,
-                folderOrder: folderOrder
-            )
-        )
-        _usesFolderOrder = State(initialValue: normalizedExplicitOrder.isEmpty)
-    }
 
     private var folderOrder: [String] {
         images.map(\.id)
     }
 
-    private var candidateExplicitOrder: [String] {
-        usesFolderOrder ? [] : orderedIDs
+    private var orderedIDs: [String] {
+        offlineAlbumResolvedPhotoOrder(explicitOrder: explicitOrder, folderOrder: folderOrder)
     }
 
-    private var hasChanges: Bool {
-        candidateExplicitOrder != originalExplicitOrder
+    private var usesFolderOrder: Bool {
+        explicitOrder.isEmpty
     }
 
     private var imageByID: [String: GalleryImage] {
@@ -799,10 +801,19 @@ private struct OfflineAlbumPhotoOrderView: View {
                     }
                     .accessibilityElement(children: .combine)
                     .accessibilityIdentifier("offline-album-order-\(image.id)")
+                    .accessibilityActions {
+                        if index > 0 {
+                            Button("Move Up") { move(image.id, by: -1) }
+                        }
+                        if index < orderedImages.count - 1 {
+                            Button("Move Down") { move(image.id, by: 1) }
+                        }
+                    }
                 }
                 .onMove { source, destination in
-                    orderedIDs.move(fromOffsets: source, toOffset: destination)
-                    usesFolderOrder = false
+                    var reordered = orderedIDs
+                    reordered.move(fromOffsets: source, toOffset: destination)
+                    if reordered != orderedIDs { explicitOrder = reordered }
                 }
             } header: {
                 Text("Playback Order")
@@ -817,27 +828,27 @@ private struct OfflineAlbumPhotoOrderView: View {
             Section {
                 Button("Use Folder Order", systemImage: "arrow.uturn.backward") {
                     withAnimation {
-                        orderedIDs = folderOrder
-                        usesFolderOrder = true
+                        explicitOrder = []
                     }
                 }
                 .disabled(usesFolderOrder)
+                .accessibilityIdentifier("offline-album-folder-order")
             }
         }
         .environment(\.editMode, $editMode)
         .navigationTitle("Photo Order")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if hasChanges {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Apply") {
-                        apply(candidateExplicitOrder)
-                        dismiss()
-                    }
-                }
-            }
-        }
         .accessibilityIdentifier("offline-album-photo-order")
+    }
+
+    private func move(_ imageID: String, by offset: Int) {
+        var reordered = orderedIDs
+        guard let source = reordered.firstIndex(of: imageID),
+              reordered.indices.contains(source + offset) else { return }
+        withAnimation {
+            reordered.swapAt(source, source + offset)
+            explicitOrder = reordered
+        }
     }
 }
 

@@ -7,10 +7,10 @@ import Testing
 @MainActor
 struct LineupEditingStateTests {
     @Test("Clean exits are immediate, dirty exits require a decision, and saving blocks both", arguments: [
-        LineupEditingSession.ExitDestination.back, .close,
+        DraftEditingSession.ExitDestination.back, .close,
     ])
-    func exitDecision(destination: LineupEditingSession.ExitDestination) {
-        let session = LineupEditingSession()
+    func exitDecision(destination: DraftEditingSession.ExitDestination) {
+        let session = DraftEditingSession()
         #expect(session.canExit(to: destination))
         #expect(session.pendingExit == nil)
         session.hasChanges = true

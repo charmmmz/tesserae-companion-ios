@@ -3,7 +3,7 @@ import UIKit
 
 @MainActor
 @Observable
-final class LineupEditingSession {
+final class DraftEditingSession {
     enum ExitDestination {
         case back
         case close
@@ -21,14 +21,14 @@ final class LineupEditingSession {
     }
 }
 
-struct LineupExitProtection: ViewModifier {
-    @Bindable var session: LineupEditingSession
-    let onExit: (LineupEditingSession.ExitDestination) -> Void
+struct DraftExitProtection: ViewModifier {
+    @Bindable var session: DraftEditingSession
+    let onExit: (DraftEditingSession.ExitDestination) -> Void
 
     func body(content: Content) -> some View {
         content
             .background {
-                LineupSheetDismissalObserver(
+                DraftSheetDismissalObserver(
                     isDisabled: session.hasChanges || session.isSaving
                 ) {
                     if session.canExit(to: .close) {
@@ -58,7 +58,7 @@ struct LineupExitProtection: ViewModifier {
 
 // iOS 18–26 has no SwiftUI callback for an attempted interactive dismissal.
 // Observe the enclosing sheet so a nested picker cannot bypass draft protection.
-private struct LineupSheetDismissalObserver: UIViewControllerRepresentable {
+private struct DraftSheetDismissalObserver: UIViewControllerRepresentable {
     let isDisabled: Bool
     let onAttempt: () -> Void
 

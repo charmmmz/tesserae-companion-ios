@@ -13,6 +13,10 @@ capabilities.
 
 ### Changed
 
+- Offline Album setup and review use shorter explanations focused on playback,
+  display support, and storage. Photo ordering stays in the Album draft when
+  returning from its ordering page, without a separate Apply step.
+
 - Added iPad device support and iPhone Duo
   adaptation while retaining iOS 18 compatibility. Displays use collapsible
   list/detail navigation; Dashboards use full-width adaptive cards and modal
@@ -38,6 +42,10 @@ capabilities.
   Dashboard previews, and manufacturer artwork retain their source colours.
 
 ### Fixed
+
+- Offline Album editors ask before discarding unsaved changes on Cancel or
+  swipe-down, including while changing photo order. Checking and saving an Album
+  prevents edits or dismissal until the operation finishes.
 
 - Restored the return from Lineups to Displays in wide windows, including
   switching directly to a display from the sidebar.

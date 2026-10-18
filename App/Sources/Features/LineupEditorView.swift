@@ -192,7 +192,7 @@ enum LineupEditorClock {
 struct LineupCreateFlow: View {
     @Environment(\.dismiss) private var dismiss
     @State private var path: [LineupIntent] = []
-    @State private var session = LineupEditingSession()
+    @State private var session = DraftEditingSession()
 
     let onSaved: (Lineup) -> Void
 
@@ -218,10 +218,10 @@ struct LineupCreateFlow: View {
                 }
             }
         }
-        .modifier(LineupExitProtection(session: session, onExit: exit))
+        .modifier(DraftExitProtection(session: session, onExit: exit))
     }
 
-    private func exit(_ destination: LineupEditingSession.ExitDestination) {
+    private func exit(_ destination: DraftEditingSession.ExitDestination) {
         switch destination {
         case .back:
             if !path.isEmpty { path.removeLast() }
@@ -233,7 +233,7 @@ struct LineupCreateFlow: View {
 
 struct LineupEditFlow: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var session = LineupEditingSession()
+    @State private var session = DraftEditingSession()
 
     let lineupID: String
     let onSaved: (Lineup) -> Void
@@ -247,7 +247,7 @@ struct LineupEditFlow: View {
                 dismiss()
             }
         }
-        .modifier(LineupExitProtection(session: session) { _ in dismiss() })
+        .modifier(DraftExitProtection(session: session) { _ in dismiss() })
     }
 }
 
@@ -345,13 +345,13 @@ private struct LineupEditorView: View {
     @State private var presentedAlert: PresentedAlert?
 
     private let purpose: Purpose
-    private let session: LineupEditingSession
+    private let session: DraftEditingSession
     private let onExit: () -> Void
     private let onSaved: (Lineup) -> Void
 
     private var isSaving: Bool { session.isSaving }
 
-    init(intent: LineupIntent, session: LineupEditingSession, onExit: @escaping () -> Void, onSaved: @escaping (Lineup) -> Void) {
+    init(intent: LineupIntent, session: DraftEditingSession, onExit: @escaping () -> Void, onSaved: @escaping (Lineup) -> Void) {
         purpose = .create(intent)
         self.session = session
         self.onExit = onExit
@@ -360,7 +360,7 @@ private struct LineupEditorView: View {
         _isLoading = State(initialValue: false)
     }
 
-    init(lineupID: String, session: LineupEditingSession, onExit: @escaping () -> Void, onSaved: @escaping (Lineup) -> Void) {
+    init(lineupID: String, session: DraftEditingSession, onExit: @escaping () -> Void, onSaved: @escaping (Lineup) -> Void) {
         purpose = .edit(lineupID)
         self.session = session
         self.onExit = onExit

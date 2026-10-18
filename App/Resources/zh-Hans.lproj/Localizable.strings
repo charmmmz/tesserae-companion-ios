@@ -655,3 +655,15 @@
 
 "Tap for details. Long press and drag to reorder." = "轻点查看详情。长按拖动可调整顺序。";
 "Select a Display" = "选择一台显示设备";
+
+// Offline Album editing and Activity clarity
+"New Album" = "新建相册";
+"Stops this Album on its displays. Your folder and photos are kept." = "停止在相关显示屏上播放此相册。文件夹和照片会保留。";
+"Displays without offline playback are unavailable. Review will check the selected displays before saving." = "不支持离线播放的显示屏无法选择。保存前会检查所选显示屏。";
+"New photos are added at the end. Photo layout applies to the whole Album; individual cropping isn’t available." = "新照片会追加到末尾。照片布局应用于整个相册，暂不支持单独裁剪。";
+"Display Check" = "显示屏检查";
+"Tesserae checks offline capacity and storage for each display. Displays need to connect to sync this Album." = "Tesserae 会检查每台显示屏的离线容量和所需存储空间。显示屏需要联网才能同步此相册。";
+"Use These Displays for This Album" = "将这些显示屏用于此相册";
+"These displays will stop playing their other Offline Albums. The other Albums and photos are kept." = "这些显示屏将停止播放其他离线相册。其他相册和照片会保留。";
+"You can save, but offline playback isn’t guaranteed on displays with unconfirmed support." = "可以保存，但尚未确认支持情况的显示屏可能无法离线播放。";
+"Offline capacity isn’t available for this display yet." = "暂时无法获取此显示屏的离线容量。";
