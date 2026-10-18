@@ -698,3 +698,21 @@
 "No Matching Activity" = "没有匹配的动态";
 "No items need attention in the activity loaded so far." = "目前已加载的动态中，没有需要处理的项目。";
 "Show All" = "显示全部";
+
+/* Nearby display server changes */
+"Server URL" = "服务器地址";
+"Change Server" = "更改服务器";
+"New Server" = "新服务器";
+"Edit Server" = "编辑服务器";
+"Connected in This App" = "App 当前连接的服务器";
+"Enter Manually" = "手动输入";
+"Device Pairing Code" = "设备配对码";
+"Continue to Wi-Fi" = "继续确认 Wi-Fi";
+"Server Saved" = "服务器已保存";
+"Connect this app to a server that supports display setup, or enter a server and pairing code manually." = "请将 App 连接到支持设备配网的服务器，或手动输入服务器地址和配对码。";
+"A one-time device pairing code will be requested when you submit." = "提交时会自动获取一次性设备配对码。";
+"Enter a six-digit device pairing code from the new server, not the Bluetooth code on the display." = "请输入新服务器提供的六位设备配对码。此处不是屏幕上的蓝牙验证码。";
+"Confirm Wi-Fi next. The display saves the new server after connection checks pass, then restarts to register there." = "下一步确认 Wi-Fi。连接检查通过后，设备会保存新服务器并重启注册。";
+"The display is restarting to register with the new server." = "设备正在重启，并将向新服务器注册。";
+"Enter a valid HTTP or HTTPS server URL and a six-digit device pairing code." = "请输入有效的 HTTP 或 HTTPS 服务器地址，以及六位设备配对码。";
+"The app's server or Bluetooth connection changed. Review the destination and try again." = "App 的服务器或蓝牙连接已变化，请确认目标服务器后重试。";

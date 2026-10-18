@@ -138,6 +138,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.buttons["Continue"].tap()
         app.buttons["Enter 6-Digit Code"].tap()
         XCTAssertTrue(app.navigationBars["Maintenance"].waitForExistence(timeout: 4))
+        XCTAssertFalse(app.buttons["nearby-change-server"].exists)
 
         let speed = app.buttons["nearby-refresh-speed"]
         XCTAssertTrue(speed.waitForExistence(timeout: 3))
@@ -168,6 +169,106 @@ final class TesseraeCompanionUITests: XCTestCase {
         confirmed.name = "PicPak Refresh Speed Confirmed"
         confirmed.lifetime = .keepAlways
         add(confirmed)
+    }
+
+    func testE1003MaintenanceCanChangeServerAndCancelWithoutLosingWiFiRepair() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_E1003_BLE"] = "1"
+        app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let nearby = app.buttons["onboarding-nearby-devices"]
+        XCTAssertTrue(nearby.waitForExistence(timeout: 5))
+        for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
+        nearby.tap()
+        app.buttons.containing(.staticText, identifier: "Tesserae-A1B2C3").firstMatch.tap()
+        app.buttons["Continue"].tap()
+        app.buttons["Enter 6-Digit Code"].tap()
+        XCTAssertTrue(app.navigationBars["Maintenance"].waitForExistence(timeout: 4))
+
+        let changeServer = app.buttons["nearby-change-server"]
+        for _ in 0..<3 where !changeServer.isHittable { app.swipeUp() }
+        changeServer.tap()
+        let next = app.buttons["nearby-server-continue"]
+        XCTAssertTrue(next.waitForExistence(timeout: 3))
+        XCTAssertFalse(next.isEnabled)
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(app.buttons["Repair or Change Wi-Fi"].exists)
+        changeServer.tap()
+
+        let address = app.textFields["nearby-server-url"]
+        XCTAssertTrue(address.waitForExistence(timeout: 3))
+        address.tap()
+        address.typeText("https://new.example.com:8443\n")
+        let pairing = app.secureTextFields["nearby-server-pairing-code"]
+        pairing.tap()
+        pairing.typeText("123456")
+        XCTAssertTrue(next.isEnabled)
+        for _ in 0..<3 where !next.isHittable { app.swipeUp() }
+        let destination = XCTAttachment(screenshot: app.screenshot())
+        destination.name = "E1003 Change Server Destination"
+        destination.lifetime = .keepAlways
+        add(destination)
+        next.tap()
+
+        XCTAssertTrue(app.staticTexts["https://new.example.com:8443"].waitForExistence(timeout: 3))
+        let password = app.secureTextFields["Wi-Fi password"]
+        for _ in 0..<3 where !password.isHittable { app.swipeUp() }
+        password.tap()
+        password.typeText("example-password")
+        let save = app.buttons["Change Server"]
+        for _ in 0..<3 where !save.isHittable { app.swipeUp() }
+        save.tap()
+        XCTAssertTrue(app.staticTexts["Server Saved"].waitForExistence(timeout: 4))
+    }
+
+    func testE1003ServerChangeChineseLargeTextAndWiFiOnlyRepair() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_E1003_BLE"] = "1"
+        app.launchArguments += [
+            "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryXXXL",
+        ]
+        app.launch()
+        let nearby = app.buttons["onboarding-nearby-devices"]
+        XCTAssertTrue(nearby.waitForExistence(timeout: 5))
+        for _ in 0..<4 where !nearby.isHittable { app.swipeUp() }
+        nearby.tap()
+        app.buttons.containing(.staticText, identifier: "Tesserae-A1B2C3").firstMatch.tap()
+        app.buttons["继续"].tap()
+        app.buttons["输入 6 位验证码"].tap()
+        let changeServer = app.buttons["nearby-change-server"]
+        XCTAssertTrue(changeServer.waitForExistence(timeout: 4))
+        for _ in 0..<4 where !changeServer.isHittable { app.swipeUp() }
+        changeServer.tap()
+        XCTAssertTrue(app.navigationBars["更改服务器"].waitForExistence(timeout: 3))
+        XCTAssertEqual(app.textFields["nearby-server-url"].label, "服务器地址")
+        XCTAssertEqual(app.secureTextFields["nearby-server-pairing-code"].label, "设备配对码")
+        let next = app.buttons["nearby-server-continue"]
+        for _ in 0..<4 where !next.isHittable { app.swipeUp() }
+        XCTAssertTrue(next.isHittable)
+        XCTAssertFalse(next.isEnabled)
+        let destination = XCTAttachment(screenshot: app.screenshot())
+        destination.name = "E1003 Change Server Chinese Large Text"
+        destination.lifetime = .keepAlways
+        add(destination)
+        app.buttons["取消"].tap()
+
+        let repair = app.buttons["修复或更换 Wi-Fi"]
+        for _ in 0..<4 where !repair.isHittable { app.swipeUp() }
+        repair.tap()
+        XCTAssertFalse(app.buttons["编辑服务器"].exists)
+        app.buttons["Home Wi-Fi"].tap()
+        let password = app.secureTextFields["Wi-Fi 密码"]
+        for _ in 0..<4 where !password.isHittable { app.swipeUp() }
+        password.tap()
+        password.typeText("example-password")
+        let save = app.buttons["连接显示屏"]
+        for _ in 0..<4 where !save.isHittable { app.swipeUp() }
+        save.tap()
+        XCTAssertTrue(app.staticTexts["Display Connected"].waitForExistence(timeout: 4))
+        XCTAssertFalse(app.staticTexts["服务器已保存"].exists)
     }
 
     func testPicPakScreenModeSavesAndAuthorizesThisPhone() {

@@ -2,6 +2,39 @@ import XCTest
 import Testing
 @testable import Tesserae_Companion
 
+@Suite("Nearby server configuration")
+struct BLEServerConfigurationTests {
+    @Test func wifiRepairPreservesTheStoredServer() {
+        let command = BLESetupConfiguration(ssid: "Home", password: "example", serverURL: nil, pairingCode: "").stageCommand
+        #expect(command["preserve_server"] as? Bool == true)
+        #expect(command["server_url"] as? String == "")
+        #expect(command["pairing_code"] as? String == "")
+    }
+
+    @Test func changingServerCarriesNewPairingWithoutPreserveFlag() throws {
+        let url = try #require(BLESetupConfiguration.serverURL(from: " https://new.example.com:8443/tesserae/ "))
+        let command = BLESetupConfiguration(ssid: "Home", password: "example", serverURL: url, pairingCode: "123456").stageCommand
+        #expect(command["preserve_server"] == nil)
+        #expect(command["server_url"] as? String == "https://new.example.com:8443/tesserae")
+        #expect(command["pairing_code"] as? String == "123456")
+    }
+
+    @Test(arguments: ["", "example.com", "ftp://example.com", "https://user:pass@example.com", "https://example.com?token=x", "https://example.com/#fragment", "http://bad host", "http://example.com:70000", "https://example.com/" + String(repeating: "a", count: 160)])
+    func rejectsInvalidOrCredentialBearingAddresses(_ address: String) {
+        #expect(BLESetupConfiguration.serverURL(from: address) == nil)
+    }
+
+    @Test(arguments: ["http://192.0.2.1:8765", "https://server.example.com", "http://[::1]:8765"])
+    func acceptsSupportedServerAddresses(_ address: String) {
+        #expect(BLESetupConfiguration.serverURL(from: address)?.absoluteString == address)
+    }
+
+    @Test(arguments: ["", "12345", "1234567", "１２３４５６", "12 456", "abc123"])
+    func rejectsInvalidDevicePairingCodes(_ code: String) {
+        #expect(!BLESetupConfiguration.isValidPairingCode(code))
+    }
+}
+
 final class BLESetupProtocolTests: XCTestCase {
     func testQRCodeParsesEphemeralIdentityAndSecret() throws {
         let key = Data(0..<32).base64EncodedString()

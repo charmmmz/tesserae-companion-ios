@@ -7,6 +7,7 @@ struct NearbyDeviceSetupView: View {
         case introduction
         case authentication
         case connecting
+        case server
         case wifi
         case maintenance
         case maintenanceAction
@@ -33,6 +34,10 @@ struct NearbyDeviceSetupView: View {
     @State private var factoryResetConfirmationPresented = false
     @State private var recentEventsExpanded = false
     @State private var selectedDetent: PresentationDetent = .height(360)
+    @State private var changingServer = false
+    @State private var useConnectedServer = true
+    @State private var serverAddress = ""
+    @State private var serverPairingCode = ""
 
     private var isPicPakMaintenance: Bool {
         device.hardware == .picPak42 && device.mode == .maintenance
@@ -68,6 +73,7 @@ struct NearbyDeviceSetupView: View {
                 case .introduction: accessibleStep { introduction }
                 case .authentication: accessibleStep { authentication }
                 case .connecting: accessibleStep { connecting }
+                case .server: serverSetup
                 case .wifi: wifiSetup
                 case .maintenance: maintenance
                 case .maintenanceAction: accessibleStep { maintenanceAction }
@@ -81,11 +87,21 @@ struct NearbyDeviceSetupView: View {
             .toolbar {
                 if showsToolbarCloseButton {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button {
-                            closeSheet()
-                        } label: {
-                            Label("Close", systemImage: "xmark")
-                                .labelStyle(.iconOnly)
+                        Group {
+                            if device.mode == .maintenance && (screen == .wifi || screen == .server) {
+                                Button("Cancel") {
+                                    changingServer = false
+                                    serverPairingCode = ""
+                                    screen = .maintenance
+                                }
+                            } else {
+                                Button {
+                                    closeSheet()
+                                } label: {
+                                    Label("Close", systemImage: "xmark")
+                                        .labelStyle(.iconOnly)
+                                }
+                            }
                         }
                         .disabled(isSubmitting || nearby.isSavingScreenMode)
                     }
@@ -137,6 +153,7 @@ struct NearbyDeviceSetupView: View {
                 screen = device.mode == .maintenance ? .maintenance : .wifi
             case .configured:
                 isSubmitting = false
+                serverPairingCode = ""
                 rememberConfiguredNetwork()
             case .performingMaintenanceAction:
                 isSubmitting = true
@@ -281,6 +298,15 @@ struct NearbyDeviceSetupView: View {
                 displayIdentityRows
             }
 
+            if changingServer {
+                Section("New Server") {
+                    Text(targetServerURL?.absoluteString ?? "")
+                        .font(.callout)
+                        .textSelection(.enabled)
+                    Button("Edit Server") { screen = .server }
+                }
+            }
+
             if !knownNetworks.isEmpty {
                 Section {
                     ForEach(knownNetworks) { knownNetwork in
@@ -377,14 +403,86 @@ struct NearbyDeviceSetupView: View {
             Section {
                 Button(isSubmitting
                        ? "Testing Connection…"
+                       : changingServer ? "Change Server"
                        : isPicPakMaintenance ? "Save Wi-Fi" : "Connect Display") {
                     submitConfiguration()
                 }
-                .disabled(chosenSSID.isEmpty || isSubmitting)
+                .disabled(chosenSSID.isEmpty || isSubmitting || (changingServer && !canContinueServerChange))
             } footer: {
                 Text(isPicPakMaintenance
                      ? "Saved after Wi-Fi connects. Server settings stay unchanged."
                      : "Saved only after Wi-Fi and server checks pass.")
+            }
+        }
+        .disabled(isSubmitting)
+        .scrollContentBackground(.hidden)
+    }
+
+    private var targetServerURL: URL? {
+        if useConnectedServer {
+            return model.activeInstance.flatMap {
+                BLESetupConfiguration.serverURL(from: $0.baseURL.absoluteString)
+            }
+        }
+        return BLESetupConfiguration.serverURL(from: serverAddress)
+    }
+
+    private var canContinueServerChange: Bool {
+        targetServerURL != nil && (useConnectedServer
+            ? model.supportsDeviceSetup
+            : BLESetupConfiguration.isValidPairingCode(serverPairingCode))
+    }
+
+    private var serverSetup: some View {
+        Form {
+            Section {
+                Picker("Server", selection: $useConnectedServer) {
+                    Text("Connected in This App").tag(true)
+                    Text("Enter Manually").tag(false)
+                }
+                if useConnectedServer {
+                    if let instance = model.activeInstance {
+                        Text(instance.name)
+                        Text(instance.baseURL.absoluteString)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+                    if !model.supportsDeviceSetup {
+                        Text("Connect this app to a server that supports display setup, or enter a server and pairing code manually.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    TextField("Server URL", text: $serverAddress, prompt: Text(verbatim: "https://tesserae.example.com"))
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .accessibilityLabel("Server URL")
+                        .accessibilityIdentifier("nearby-server-url")
+                    SecureField("Device Pairing Code", text: $serverPairingCode)
+                        .keyboardType(.numberPad)
+                        .textContentType(.oneTimeCode)
+                        .accessibilityLabel("Device Pairing Code")
+                        .accessibilityIdentifier("nearby-server-pairing-code")
+                }
+            } header: {
+                Text("New Server")
+            } footer: {
+                Text(useConnectedServer
+                     ? "A one-time device pairing code will be requested when you submit."
+                     : "Enter a six-digit device pairing code from the new server, not the Bluetooth code on the display.")
+            }
+            Section {
+                Button("Continue to Wi-Fi") {
+                    screen = .wifi
+                    if let ssid = nearby.diagnostics?.ssid { selectNetwork(ssid) }
+                    nearby.scanWiFi()
+                }
+                .disabled(!canContinueServerChange)
+                .accessibilityIdentifier("nearby-server-continue")
+            } footer: {
+                Text("Confirm Wi-Fi next. The display saves the new server after connection checks pass, then restarts to register there.")
             }
         }
         .scrollContentBackground(.hidden)
@@ -514,8 +612,19 @@ struct NearbyDeviceSetupView: View {
 
             Section("Actions") {
                 Button("Repair or Change Wi-Fi", systemImage: "wifi") {
+                    changingServer = false
                     screen = .wifi
                     nearby.scanWiFi()
+                }
+                if device.hardware != .picPak42 {
+                    Button("Change Server", systemImage: "server.rack") {
+                        changingServer = true
+                        useConnectedServer = model.supportsDeviceSetup
+                        serverAddress = ""
+                        serverPairingCode = ""
+                        screen = .server
+                    }
+                    .accessibilityIdentifier("nearby-change-server")
                 }
                 Button("Restart Display", systemImage: "arrow.clockwise") {
                     nearby.reboot()
@@ -577,9 +686,11 @@ struct NearbyDeviceSetupView: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 68))
                 .foregroundStyle(TesseraeTheme.success)
-            Text(isPicPakMaintenance ? "Wi-Fi Saved" : "Display Connected")
+            Text(changingServer ? "Server Saved" : isPicPakMaintenance ? "Wi-Fi Saved" : "Display Connected")
                 .font(.title2.bold())
-            Text(isPicPakMaintenance
+            Text(changingServer
+                 ? "The display is restarting to register with the new server."
+                 : isPicPakMaintenance
                  ? "Wi-Fi settings are saved. The display is restarting."
                  : "Wi-Fi and Tesserae are connected. The display is restarting.")
                 .foregroundStyle(.secondary)
@@ -641,6 +752,7 @@ struct NearbyDeviceSetupView: View {
         case .introduction: "Nearby Display"
         case .authentication: "Verify Display"
         case .connecting: "Connecting"
+        case .server: "Change Server"
         case .wifi: "Choose Wi-Fi"
         case .maintenance: "Maintenance"
         case .maintenanceAction: "Maintenance"
@@ -673,7 +785,14 @@ struct NearbyDeviceSetupView: View {
             do {
                 let pairingCode: String
                 let serverURL: URL?
-                if device.mode == .maintenance {
+                if changingServer && !useConnectedServer {
+                    guard let target = targetServerURL,
+                          BLESetupConfiguration.isValidPairingCode(serverPairingCode) else {
+                        throw NearbyDeviceSetupError.invalidServerConfiguration
+                    }
+                    serverURL = target
+                    pairingCode = serverPairingCode
+                } else if device.mode == .maintenance && !changingServer {
                     // Maintenance changes Wi-Fi only. Keep the display's exact
                     // saved server URL and token, including any custom port.
                     pairingCode = ""
@@ -683,8 +802,16 @@ struct NearbyDeviceSetupView: View {
                         throw NearbyDeviceSetupError.noServer
                     }
                     let pairing = try await model.createFirmwareDevicePairing()
+                    guard model.activeInstance?.id == instance.id,
+                          model.activeInstance?.baseURL == instance.baseURL,
+                          nearby.activeDevice?.id == device.id else {
+                        throw NearbyDeviceSetupError.serverConnectionChanged
+                    }
                     pairingCode = pairing.code
-                    serverURL = instance.baseURL
+                    guard let target = BLESetupConfiguration.serverURL(from: instance.baseURL.absoluteString) else {
+                        throw NearbyDeviceSetupError.invalidServerConfiguration
+                    }
+                    serverURL = target
                 } else {
                     throw NearbyDeviceSetupError.serverUpdateRequired
                 }
@@ -706,7 +833,7 @@ struct NearbyDeviceSetupView: View {
         return switch screen {
         case .authentication:
             .height(480)
-        case .wifi, .maintenance:
+        case .server, .wifi, .maintenance:
             .large
         case .introduction, .connecting, .maintenanceAction, .complete:
             .height(360)

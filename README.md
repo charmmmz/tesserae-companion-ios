@@ -105,6 +105,14 @@ a Tesserae server. Wi-Fi repair retains the display's saved server URL and token
 the firmware still performs its normal connection checks. Registering a new
 display requires a reachable paired server to issue its registration code.
 
+For supported Tesserae firmware displays, Maintenance also offers **Change
+Server**. Choose the server connected in Companion to request a registration
+code automatically, or enter another server's HTTP(S) address and six-digit
+device pairing code. This code comes from the destination server; it is separate
+from the display's Bluetooth verification code. Confirm Wi-Fi credentials next.
+The firmware saves the destination after its connection checks pass, then
+restarts to register. PicPak maintenance continues to offer Wi-Fi repair only.
+
 ## Your server, your data
 
 The app connects directly to your own Tesserae server. There is no separate

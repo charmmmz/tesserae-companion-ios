@@ -210,6 +210,8 @@ final class NearbyDeviceManager: NSObject {
     private let isPicPakUIFixture = ProcessInfo.processInfo.environment[
         "TESSERAE_UI_TEST_PICPAK_BLE"
     ] == "1"
+    private let isE1003UIFixture = ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_E1003_BLE"] == "1"
+    private var isSetupUIFixture: Bool { isPicPakUIFixture || isE1003UIFixture }
 #endif
 
     private func trace(_ message: String) {
@@ -227,11 +229,11 @@ final class NearbyDeviceManager: NSObject {
     override init() {
         super.init()
 #if DEBUG
-        if isPicPakUIFixture {
+        if isSetupUIFixture {
             nearbyDevices = [NearbyTesseraeDevice(
                 id: UUID(uuidString: "00000000-0000-0000-0000-000000000011")!,
                 name: "Tesserae-A1B2C3", rssi: -45, mode: isPhotoUIFixture ? .photo : .maintenance,
-                hardware: .picPak42, hardwareSuffix: "A1B2C3",
+                hardware: isE1003UIFixture ? .seeedReTerminalE1003 : .picPak42, hardwareSuffix: "A1B2C3",
                 sessionID: Data([1, 2, 3, 4])
             )]
             return
@@ -251,7 +253,7 @@ final class NearbyDeviceManager: NSObject {
 
     func startScanning() {
 #if DEBUG
-        if isPicPakUIFixture {
+        if isSetupUIFixture {
             if ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_PICPAK_AUTO_DISCOVERY"] == "1",
                suggestedDevice == nil, activeDevice == nil,
                let device = nearbyDevices.first,
@@ -335,13 +337,14 @@ final class NearbyDeviceManager: NSObject {
 
     func connect(to device: NearbyTesseraeDevice, qrCode: BLESetupQRCode?) {
 #if DEBUG
-        if isPicPakUIFixture {
+        if isSetupUIFixture {
             resetConnectionState()
             activeDevice = device
             deviceInfo = BLESetupDeviceInfo(
                 protocol: 2, id: "picpak-a1b2c3", sid: "01020304",
                 connectionNonce: "000102030405060708090a0b0c0d0e0f",
-                hardware: 11, model: "picpak_4_2", firmware: "0.9.3",
+                hardware: device.hardware.rawValue, model: device.hardware.catalogKind,
+                firmware: isE1003UIFixture ? "1.47.0" : "0.9.3",
                 mode: device.mode.rawValue
             )
             connectionState = .authenticating
@@ -443,17 +446,10 @@ final class NearbyDeviceManager: NSObject {
         serverURL: URL?,
         pairingCode: String
     ) {
-        var command: [String: Any] = [
-            "op": "stage",
-            "ssid": ssid,
-            "password": password,
-            "server_url": serverURL?.absoluteString ?? "",
-            "pairing_code": pairingCode,
-        ]
-        if activeDevice?.mode == .maintenance {
-            command["preserve_server"] = true
-        }
-        sendCommand(command)
+        sendCommand(BLESetupConfiguration(
+            ssid: ssid, password: password,
+            serverURL: serverURL, pairingCode: pairingCode
+        ).stageCommand)
     }
 
     func requestDiagnostics() {
@@ -528,8 +524,8 @@ final class NearbyDeviceManager: NSObject {
 
     private func sendCommand(_ object: [String: Any]) {
 #if DEBUG
-        if isPicPakUIFixture {
-            receivePicPakFixtureCommand(object)
+        if isSetupUIFixture {
+            receiveSetupFixtureCommand(object)
             return
         }
 #endif
@@ -550,7 +546,7 @@ final class NearbyDeviceManager: NSObject {
                     let offset = message.dropFirst(4).prefix(4).reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
                     self.receiveFixtureEvent(["event": "photo_ack", "id": id, "offset": Int(offset) + message.count - 8])
                 } else if let object = try? JSONSerialization.jsonObject(with: message) as? [String: Any] {
-                    self.receivePicPakFixtureCommand(object)
+                    self.receiveSetupFixtureCommand(object)
                 }
             }
             return
@@ -597,18 +593,35 @@ final class NearbyDeviceManager: NSObject {
     private func receiveFixtureEvent(_ event: [String: Any]) {
         if let data = try? JSONSerialization.data(withJSONObject: event) { try? handleEvent(data) }
     }
-    private func receivePicPakFixtureCommand(_ command: [String: Any]) {
+    private func receiveSetupFixtureCommand(_ command: [String: Any]) {
         switch command["op"] as? String {
         case "diagnostics":
-            let event: [String: Any] = [
-                "event": "diagnostics", "firmware": "0.9.3",
-                "model": "picpak_4_2", "battery_mv": 3900,
+            var event: [String: Any] = [
+                "event": "diagnostics", "firmware": isE1003UIFixture ? "1.47.0" : "0.9.3",
+                "model": activeDevice?.hardware.catalogKind ?? "picpak_4_2", "battery_mv": 3900,
                 "wifi_configured": true, "server_configured": true,
-                "ssid": "Home Wi-Fi", "refresh_speed": "5s", "screen_mode": screenMode?.rawValue ?? "wifi",
+                "ssid": "Home Wi-Fi",
             ]
+            if !isE1003UIFixture {
+                event["refresh_speed"] = "5s"
+                event["screen_mode"] = screenMode?.rawValue ?? "wifi"
+            }
             if let data = try? JSONSerialization.data(withJSONObject: event) {
                 try? handleEvent(data)
             }
+        case "scan":
+            receiveFixtureEvent(["event": "network", "ssid": "Home Wi-Fi", "rssi": -45, "secure": true])
+            receiveFixtureEvent(["event": "scan_complete"])
+        case "stage":
+            guard let server = command["server_url"] as? String else { return }
+            let preservesServer = command["preserve_server"] as? Bool == true
+            let validChange = !preservesServer && BLESetupConfiguration.serverURL(from: server) != nil
+                && BLESetupConfiguration.isValidPairingCode(command["pairing_code"] as? String ?? "")
+            receiveFixtureEvent(validChange || (preservesServer && server.isEmpty)
+                ? ["event": "staged"]
+                : ["event": "error", "message": "Invalid fixture configuration"])
+        case "apply":
+            receiveFixtureEvent(["event": "configured"])
         case "set_screen_mode":
             receiveFixtureEvent(["event": "screen_mode", "value": command["value"] ?? "wifi",
                                  "request": command["request"] ?? 0,

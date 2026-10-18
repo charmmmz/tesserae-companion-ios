@@ -17,6 +17,47 @@ enum BLESetupProtocol {
     static let maximumMessageBytes = 512
 }
 
+struct BLESetupConfiguration {
+    let ssid: String
+    let password: String
+    let serverURL: URL?
+    let pairingCode: String
+
+    var stageCommand: [String: Any] {
+        var command: [String: Any] = [
+            "op": "stage", "ssid": ssid, "password": password,
+            "server_url": serverURL?.absoluteString ?? "",
+            "pairing_code": pairingCode,
+        ]
+        // Preserve intent belongs to the request, not to maintenance mode:
+        // maintenance can either repair Wi-Fi or explicitly replace a server.
+        if serverURL == nil { command["preserve_server"] = true }
+        return command
+    }
+
+    static func serverURL(from address: String) -> URL? {
+        var value = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        while value.hasSuffix("/") { value.removeLast() }
+        guard value.utf8.count < 160,
+              value.rangeOfCharacter(from: .whitespacesAndNewlines) == nil,
+              var components = URLComponents(string: value),
+              let scheme = components.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              let host = components.host, !host.isEmpty,
+              components.user == nil, components.password == nil,
+              components.query == nil, components.fragment == nil,
+              components.port.map({ (1...65535).contains($0) }) ?? true
+        else { return nil }
+        components.scheme = scheme
+        guard let url = components.url, url.absoluteString.utf8.count < 160 else { return nil }
+        return url
+    }
+
+    static func isValidPairingCode(_ code: String) -> Bool {
+        code.utf8.count == 6 && code.utf8.allSatisfy { (48...57).contains($0) }
+    }
+}
+
 enum BLESetupProtocolError: Error, LocalizedError {
     case invalidQRCode
     case unsupportedVersion

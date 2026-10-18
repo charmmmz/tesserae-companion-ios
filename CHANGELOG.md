@@ -13,6 +13,11 @@ capabilities.
 
 ### Added
 
+- Bluetooth maintenance on supported Tesserae displays offers Change Server.
+  Use the server connected in Companion, or enter another server's address and
+  device pairing code, then confirm Wi-Fi before saving. Wi-Fi-only repair
+  continues to preserve the display's existing server registration.
+
 - Activity can show only items that need attention, keeping retryable sends and
   failed updates easy to find while still allowing older history to load.
 
