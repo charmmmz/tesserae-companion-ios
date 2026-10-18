@@ -85,6 +85,50 @@ final class AlbumsAndActivityUITests: XCTestCase {
         XCTAssertTrue(app.buttons["offline-album-summary"].waitForExistence(timeout: 3))
     }
 
+    func testActivityFilterRestoresNormalHistory() {
+        let app = launchDemo()
+        app.tabBars.firstMatch.buttons["Activity"].tap()
+        let history = app.buttons["history-card-history-demo-photo"]
+        XCTAssertTrue(history.waitForExistence(timeout: 3))
+        app.buttons["activity-filter"].tap()
+        app.buttons["activity-filter-needs-attention"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["activity-attention-empty"].waitForExistence(timeout: 3))
+        XCTAssertFalse(history.exists)
+        attach(app, name: "Activity needs attention empty state")
+        app.buttons["activity-filter"].tap()
+        app.buttons["activity-filter-all"].tap()
+        XCTAssertTrue(history.waitForExistence(timeout: 3))
+        attach(app, name: "Activity all records")
+    }
+
+    func testDarkLargeTextAlbumAndActivityLayout() {
+        let app = launchDemo(largeText: true, dark: true)
+        app.tabBars.firstMatch.buttons["Activity"].tap()
+        XCTAssertTrue(app.buttons["activity-filter"].waitForExistence(timeout: 3))
+        attach(app, name: "Activity dark accessibility text")
+        openAlbum(app)
+        attach(app, name: "Album dark accessibility text")
+        let target = app.buttons["offline-album-target-e1004-desk"]
+        reveal(target, in: app)
+        target.tap()
+        app.buttons["offline-album-review-save"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["offline-album-review"].waitForExistence(timeout: 3))
+        for identifier in ["offline-album-exit", "offline-album-review-save"] {
+            let button = app.buttons[identifier]
+            let insideWindow = XCTNSPredicateExpectation(
+                predicate: NSPredicate { element, _ in
+                    guard let element = element as? XCUIElement else { return false }
+                    return element.isHittable && app.frame.contains(element.frame)
+                },
+                object: button
+            )
+            XCTAssertEqual(XCTWaiter.wait(for: [insideWindow], timeout: 3), .completed)
+        }
+        attach(app, name: "Album review dark accessibility text")
+        XCTAssertTrue(app.buttons["offline-album-exit"].isHittable)
+        XCTAssertTrue(app.buttons["offline-album-review-save"].isHittable)
+    }
+
     private func launchDemo(largeText: Bool = false, dark: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"

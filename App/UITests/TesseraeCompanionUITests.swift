@@ -627,12 +627,12 @@ final class TesseraeCompanionUITests: XCTestCase {
             "history-resend-history-demo-photo"
         ]
         XCTAssertTrue(historyStatus.waitForExistence(timeout: 3))
-        XCTAssertEqual(historyStatus.label, "Published")
+        XCTAssertEqual(historyStatus.label, "Ready for Display")
         XCTAssertEqual(
             app.descendants(matching: .any)[
                 "history-status-history-demo-dashboard"
             ].label,
-            "Dispatched"
+            "Action Sent"
         )
         XCTAssertTrue(historyPreview.exists)
         XCTAssertTrue(historyResend.exists)
@@ -1108,7 +1108,7 @@ final class TesseraeCompanionUITests: XCTestCase {
             "history-resend-history-demo-photo"
         ]
         XCTAssertTrue(historyStatus.exists)
-        XCTAssertEqual(historyStatus.label, "Published")
+        XCTAssertEqual(historyStatus.label, "Ready for Display")
         XCTAssertTrue(historyPreview.exists)
         XCTAssertTrue(historyResend.exists)
         let sharedPhotoTitle = app.staticTexts["Shared Photo"].firstMatch

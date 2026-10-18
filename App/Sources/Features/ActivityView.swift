@@ -9,6 +9,7 @@ struct ActivityView: View {
     @State private var expandedQueuedImageID: String?
     @State private var expandedJobID: String?
     @State private var expandedHistoryID: String?
+    @State private var filter: ActivityFilter = .all
     private let previewCanvasSize = CGSize(width: 112, height: 118)
 
     let isActive: Bool
@@ -18,18 +19,40 @@ struct ActivityView: View {
     }
 
     var body: some View {
+        let timeline = ActivityTimeline(
+            jobs: model.jobs,
+            history: model.historyItems,
+            supportsHistory: model.supportsHistory,
+            filter: filter
+        )
+        let queuedImages = model.queuedImageRequests.filter {
+            filter.includesQueuedImage(
+                $0, isActive: model.activeQueuedImageRequestIDs.contains($0.id)
+            )
+        }
+        let queuedLinks = model.queuedLinkRequests.filter {
+            filter.includesQueuedLink(
+                $0, isActive: model.activeQueuedLinkRequestIDs.contains($0.id)
+            )
+        }
+        let isEmpty = queuedImages.isEmpty && queuedLinks.isEmpty
+            && timeline.jobs.isEmpty && timeline.history.isEmpty
+
         ScrollView {
             LazyVStack(spacing: 12) {
-                ForEach(model.queuedImageRequests) { request in
+                if isEmpty {
+                    emptyState
+                }
+                ForEach(queuedImages) { request in
                     queuedImageCard(request)
                 }
-                ForEach(model.queuedLinkRequests) { request in
+                ForEach(queuedLinks) { request in
                     queuedLinkCard(request)
                 }
-                ForEach(visibleJobs) { job in
+                ForEach(timeline.jobs) { job in
                     activityCard(job)
                 }
-                ForEach(visibleHistoryItems) { item in
+                ForEach(timeline.history) { item in
                     historyCard(item)
                 }
                 if model.historyNextBeforeID != nil {
@@ -49,26 +72,12 @@ struct ActivityView: View {
                     }
                     .buttonStyle(.bordered)
                     .disabled(model.isLoadingMoreHistory)
+                    .accessibilityIdentifier("activity-load-older")
                 }
             }
             .frame(maxWidth: 820)
             .padding(16)
             .frame(maxWidth: .infinity)
-        }
-        .overlay {
-            if model.queuedImageRequests.isEmpty
-                && model.queuedLinkRequests.isEmpty
-                && visibleJobs.isEmpty
-                && visibleHistoryItems.isEmpty
-            {
-                ContentUnavailableView(
-                    "No Activity Yet",
-                    systemImage: "clock.arrow.circlepath",
-                    description: Text(
-                        "Dashboard, photo, and link sends will appear here."
-                    )
-                )
-            }
         }
         .refreshable {
             model.startActivityRefresh()
@@ -93,12 +102,54 @@ struct ActivityView: View {
             }
         }
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Picker("Activity Filter", selection: $filter) {
+                        Text("All")
+                            .tag(ActivityFilter.all)
+                            .accessibilityIdentifier("activity-filter-all")
+                        Text("Needs Attention")
+                            .tag(ActivityFilter.needsAttention)
+                            .accessibilityIdentifier("activity-filter-needs-attention")
+                    }
+                } label: {
+                    Label(
+                        "Filter Activity",
+                        systemImage: filter == .all
+                            ? "line.3.horizontal.decrease.circle"
+                            : "line.3.horizontal.decrease.circle.fill"
+                    )
+                }
+                .accessibilityValue(filter.label)
+                .accessibilityIdentifier("activity-filter")
+            }
             ToolbarItemGroup(placement: .topBarTrailing) {
                 TesseraeSendToolbarButton()
                 TesseraeSettingsToolbarButton()
             }
         }
         .tesseraeScreenBackground()
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        if filter == .needsAttention {
+            ContentUnavailableView {
+                Label("No Matching Activity", systemImage: "line.3.horizontal.decrease.circle")
+            } description: {
+                Text("No items need attention in the activity loaded so far.")
+            } actions: {
+                Button("Show All") { filter = .all }
+                    .accessibilityIdentifier("activity-show-all")
+            }
+            .accessibilityIdentifier("activity-attention-empty")
+        } else {
+            ContentUnavailableView(
+                "No Activity Yet",
+                systemImage: "clock.arrow.circlepath",
+                description: Text("Dashboard, photo, and link sends will appear here.")
+            )
+        }
     }
 
     private func queuedLinkCard(
@@ -126,6 +177,10 @@ struct ActivityView: View {
                     }
                     .font(.caption)
                     .foregroundStyle(.tertiary)
+
+                    Text(isActive ? String(localized: "Retrying…") : queuedLinkStatusLabel(request))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(isActive ? TesseraeTheme.info : queuedLinkStatusColor(request))
 
                     Text(
                         request.createdAt,
@@ -281,6 +336,10 @@ struct ActivityView: View {
                         .font(.caption)
                         .foregroundStyle(.tertiary)
 
+                        Text(isActive ? String(localized: "Retrying…") : queuedImageStatusLabel(request))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(isActive ? TesseraeTheme.info : queuedImageStatusColor(request))
+
                         Text(
                             request.createdAt,
                             format: .dateTime
@@ -412,26 +471,6 @@ struct ActivityView: View {
         }
     }
 
-    private var visibleJobs: [PushJob] {
-        guard model.supportsHistory else {
-            return model.jobs
-        }
-        return ActivityReconciliation.visibleJobs(
-            model.jobs,
-            historyItems: model.historyItems
-        )
-    }
-
-    private var visibleHistoryItems: [HistoryItem] {
-        guard model.supportsHistory else {
-            return model.historyItems
-        }
-        return ActivityReconciliation.visibleHistoryItems(
-            model.historyItems,
-            jobs: model.jobs
-        )
-    }
-
     @ViewBuilder
     private func activityCard(_ job: PushJob) -> some View {
         let thumbnail = model.activityThumbnailData[job.id]
@@ -504,12 +543,8 @@ struct ActivityView: View {
                         .foregroundStyle(.tertiary)
                     }
 
-                    if let failure = job.error {
-                        Text(failure.message)
-                            .font(.caption)
-                            .foregroundStyle(TesseraeTheme.danger)
-                            .lineLimit(isExpanded ? nil : 2)
-                    }
+                    statusSummary(ActivityStatusPresentation(job: job), isExpanded: isExpanded)
+                        .accessibilityIdentifier("activity-summary-\(job.id)")
 
                     Text(
                         job.createdAt,
@@ -570,12 +605,8 @@ struct ActivityView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
-                    if let error = item.error {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundStyle(TesseraeTheme.danger)
-                            .lineLimit(isExpanded ? nil : 2)
-                    }
+                    statusSummary(ActivityStatusPresentation(history: item), isExpanded: isExpanded)
+                        .accessibilityIdentifier("history-summary-\(item.id)")
                     HStack(spacing: 6) {
                         Text(item.source.replacingOccurrences(
                             of: "_",
@@ -676,7 +707,7 @@ struct ActivityView: View {
         _ item: HistoryItem,
         preview: UIImage?
     ) -> some View {
-        let status = historyStatusPresentation(item)
+        let status = ActivityStatusPresentation(history: item)
 
         cardPreview(
             image: preview,
@@ -701,7 +732,8 @@ struct ActivityView: View {
         _ job: PushJob,
         thumbnail: UIImage?
     ) -> some View {
-        cardPreview(
+        let status = ActivityStatusPresentation(job: job)
+        return cardPreview(
             image: thumbnail,
             panel: previewPanel(for: job.targetDeviceIDs),
             fit: nil,
@@ -711,9 +743,9 @@ struct ActivityView: View {
                 ? "Activity preview placeholder"
                 : "Sent photo preview",
             accessibilityIdentifier: "activity-preview-\(job.id)",
-            statusLabel: statusLabel(job),
-            statusSymbol: statusSymbol(job),
-            statusColor: statusColor(job),
+            statusLabel: status.label,
+            statusSymbol: status.symbol,
+            statusColor: status.color,
             statusAccessibilityIdentifier: "activity-status-\(job.id)"
         )
     }
@@ -753,18 +785,14 @@ struct ActivityView: View {
                             size: fittedSize
                         )
                     } else {
-                        VStack(spacing: 4) {
-                            Image(systemName: placeholderSystemName)
-                                .font(.title2)
-
-                            if let panel {
-                                Text(
-                                    "\(panel.width) × \(panel.height)"
-                                )
-                                .font(.caption2.monospaced())
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.68)
+                        ViewThatFits(in: .vertical) {
+                            VStack(spacing: 4) {
+                                Image(systemName: placeholderSystemName)
+                                    .font(.title2)
+                                if let panel { previewResolution(panel) }
                             }
+                            .fixedSize(horizontal: false, vertical: true)
+                            if let panel { previewResolution(panel) }
                         }
                         .padding(5)
                         .foregroundStyle(tint)
@@ -815,6 +843,15 @@ struct ActivityView: View {
             width: previewCanvasSize.width,
             height: previewCanvasSize.height
         )
+    }
+
+    private func previewResolution(_ panel: PanelProfile) -> some View {
+        Text("\(panel.width) × \(panel.height)")
+            .font(.caption2.monospaced())
+            .multilineTextAlignment(.center)
+            .lineLimit(2)
+            .minimumScaleFactor(0.68)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     @ViewBuilder
@@ -969,170 +1006,23 @@ struct ActivityView: View {
         return String(localized: "Rendered dashboard composition")
     }
 
-    private func historyStatusPresentation(
-        _ item: HistoryItem
-    ) -> HistoryStatusPresentation {
-        let rawStatus = item.status.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        )
-        let status = rawStatus.lowercased()
-
-        return switch status {
-        case "sent", "published", "succeeded":
-            HistoryStatusPresentation(
-                label: String(localized: "Published"),
-                symbol: "checkmark.circle.fill",
-                color: TesseraeTheme.success
-            )
-        case "dispatched":
-            HistoryStatusPresentation(
-                label: String(localized: "Dispatched"),
-                symbol: "checkmark.circle.fill",
-                color: TesseraeTheme.success
-            )
-        case "webhook_dispatched":
-            HistoryStatusPresentation(
-                label: String(localized: "Webhook Triggered"),
-                symbol: "paperplane.fill",
-                color: TesseraeTheme.success
-            )
-        case "ha_dispatched":
-            HistoryStatusPresentation(
-                label: String(localized: "Home Assistant Triggered"),
-                symbol: "house.fill",
-                color: TesseraeTheme.success
-            )
-        case "fetched":
-            HistoryStatusPresentation(
-                label: String(localized: "Refresh Requested"),
-                symbol: "arrow.down.circle.fill",
-                color: TesseraeTheme.success
-            )
-        case "no_change":
-            HistoryStatusPresentation(
-                label: String(localized: "Already Current"),
-                symbol: "checkmark.circle",
-                color: TesseraeTheme.success
-            )
-        case "passed":
-            HistoryStatusPresentation(
-                label: String(localized: "Passed"),
-                symbol: "checkmark.circle.fill",
-                color: TesseraeTheme.success
-            )
-        case "quiet":
-            HistoryStatusPresentation(
-                label: String(localized: "Quiet"),
-                symbol: "moon.fill",
-                color: .indigo
-            )
-        case "busy":
-            HistoryStatusPresentation(
-                label: String(localized: "Busy"),
-                symbol: "clock.fill",
-                color: TesseraeTheme.warning
-            )
-        case "held":
-            HistoryStatusPresentation(
-                label: String(localized: "Held"),
-                symbol: "pause.circle.fill",
-                color: TesseraeTheme.warning
-            )
-        case "deduped":
-            HistoryStatusPresentation(
-                label: String(localized: "Duplicate Ignored"),
-                symbol: "doc.on.doc.fill",
-                color: .secondary
-            )
-        case "noop":
-            HistoryStatusPresentation(
-                label: String(localized: "No Action"),
-                symbol: "minus.circle.fill",
-                color: .secondary
-            )
-        case "superseded":
-            HistoryStatusPresentation(
-                label: String(localized: "Superseded"),
-                symbol: "arrow.right.circle.fill",
-                color: .secondary
-            )
-        case "unmapped":
-            HistoryStatusPresentation(
-                label: String(localized: "Unmapped"),
-                symbol: "questionmark.circle.fill",
-                color: TesseraeTheme.warning
-            )
-        case "unbound":
-            HistoryStatusPresentation(
-                label: String(localized: "No Displays"),
-                symbol: "rectangle.slash",
-                color: TesseraeTheme.warning
-            )
-        case "not_found":
-            HistoryStatusPresentation(
-                label: String(localized: "Not Found"),
-                symbol: "magnifyingglass",
-                color: TesseraeTheme.warning
-            )
-        case "no_frame":
-            HistoryStatusPresentation(
-                label: String(localized: "No Current Frame"),
-                symbol: "rectangle.slash",
-                color: TesseraeTheme.warning
-            )
-        case "no_target":
-            HistoryStatusPresentation(
-                label: String(localized: "No Action Here"),
-                symbol: "scope",
-                color: TesseraeTheme.warning
-            )
-        case "stale":
-            HistoryStatusPresentation(
-                label: String(localized: "Outdated Frame"),
-                symbol: "clock.fill",
-                color: TesseraeTheme.warning
-            )
-        case "blocked":
-            HistoryStatusPresentation(
-                label: String(localized: "Blocked"),
-                symbol: "hand.raised.fill",
-                color: TesseraeTheme.warning
-            )
-        case "shifted":
-            HistoryStatusPresentation(
-                label: String(localized: "Adjusted"),
-                symbol: "arrow.left.arrow.right.circle.fill",
-                color: .indigo
-            )
-        case "fallback":
-            HistoryStatusPresentation(
-                label: String(localized: "Fallback Used"),
-                symbol: "arrow.turn.down.right",
-                color: .indigo
-            )
-        case "failed", "error":
-            HistoryStatusPresentation(
-                label: String(localized: "Failed"),
-                symbol: "exclamationmark.triangle.fill",
-                color: TesseraeTheme.danger
-            )
-        case "ha_failed":
-            HistoryStatusPresentation(
-                label: String(localized: "Home Assistant Failed"),
-                symbol: "exclamationmark.triangle.fill",
-                color: TesseraeTheme.danger
-            )
-        default:
-            HistoryStatusPresentation(
-                label: rawStatus.isEmpty
-                    ? String(localized: "Unknown")
-                    : rawStatus
-                        .replacingOccurrences(of: "_", with: " ")
-                        .capitalized,
-                symbol: "questionmark.circle.fill",
-                color: .secondary
-            )
+    private func statusSummary(
+        _ status: ActivityStatusPresentation,
+        isExpanded: Bool
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(status.label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(status.color)
+            if let explanation = status.explanation, isExpanded || status.needsAttention {
+                Text(explanation)
+                    .font(.caption)
+                    .foregroundStyle(status.needsAttention ? TesseraeTheme.danger : .secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(status.explanation ?? "")
     }
 
     private func fallbackTitle(_ kind: PushJobKind) -> String {
@@ -1177,47 +1067,20 @@ struct ActivityView: View {
             "rectangle.3.group"
         }
     }
-
-    private func statusLabel(_ job: PushJob) -> String {
-        switch job.status {
-        case .accepted: String(localized: "Queued")
-        case .running: String(localized: "Sending")
-        case .succeeded:
-            job.result?.status == .quiet
-                ? String(localized: "Quiet")
-                : String(localized: "Published")
-        case .failed: String(localized: "Failed")
-        }
-    }
-
-    private func statusSymbol(_ job: PushJob) -> String {
-        switch job.status {
-        case .accepted: "clock"
-        case .running: "arrow.triangle.2.circlepath"
-        case .succeeded:
-            job.result?.status == .quiet
-                ? "moon.fill"
-                : "checkmark.circle.fill"
-        case .failed: "exclamationmark.triangle.fill"
-        }
-    }
-
-    private func statusColor(_ job: PushJob) -> Color {
-        switch job.status {
-        case .accepted, .running: TesseraeTheme.info
-        case .succeeded:
-            job.result?.status == .quiet
-                ? .indigo
-                : TesseraeTheme.success
-        case .failed: TesseraeTheme.danger
-        }
-    }
 }
 
-private struct HistoryStatusPresentation {
-    let label: String
-    let symbol: String
-    let color: Color
+private extension ActivityStatusPresentation {
+    var color: Color {
+        if needsAttention { return TesseraeTheme.danger }
+        return switch kind {
+        case .queued, .sending, .busy, .paused: TesseraeTheme.info
+        case .quiet, .adjusted, .fallback: .indigo
+        case .ready, .partlyReady, .actionSent, .webhookSent,
+             .homeAssistantSent, .refreshRequested, .unchanged, .passed:
+            TesseraeTheme.success
+        default: .secondary
+        }
+    }
 }
 
 @MainActor

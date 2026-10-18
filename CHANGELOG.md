@@ -11,11 +11,18 @@ capabilities.
 
 ## [Unreleased]
 
+### Added
+
+- Activity can show only items that need attention, keeping retryable sends and
+  failed updates easy to find while still allowing older history to load.
+
 ### Changed
 
 - Offline Album setup and review use shorter explanations focused on playback,
   display support, and storage. Photo ordering stays in the Album draft when
   returning from its ordering page, without a separate Apply step.
+- Activity uses clearer status labels and explanations, distinguishing content
+  prepared by the server from a confirmed physical display refresh.
 
 - Added iPad device support and iPhone Duo
   adaptation while retaining iOS 18 compatibility. Displays use collapsible
@@ -46,6 +53,8 @@ capabilities.
 - Offline Album editors ask before discarding unsaved changes on Cancel or
   swipe-down, including while changing photo order. Checking and saving an Album
   prevents edits or dismissal until the operation finishes.
+- Failed Activity history stays visible after its temporary local job card
+  expires, instead of both records disappearing from the list.
 
 - Restored the return from Lineups to Displays in wide windows, including
   switching directly to a display from the sidebar.
