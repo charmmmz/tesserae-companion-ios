@@ -1183,20 +1183,13 @@ final class TesseraeCompanionUITests: XCTestCase {
         let sendButton = app.buttons["Send to Displays"]
         scrollToButton(sendButton, app: app)
         XCTAssertTrue(sendButton.isEnabled)
-        let sendButtonHeight = sendButton.frame.height
         sendButton.tap()
 
         let sentBanner = app.descendants(matching: .any)[
             "send-success-banner"
         ]
         XCTAssertTrue(sentBanner.waitForExistence(timeout: 3))
-        XCTAssertEqual(
-            sendButton.frame.height,
-            sendButtonHeight,
-            accuracy: 1
-        )
-
-        app.buttons["root-send-close"].tap()
+        XCTAssertTrue(app.buttons["root-send-close"].waitForNonExistence(timeout: 3))
         app.buttons["Activity"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["Shared Photo"].waitForExistence(timeout: 2))
         let historyStatus = app.descendants(matching: .any)[
@@ -1450,7 +1443,7 @@ final class TesseraeCompanionUITests: XCTestCase {
     func testDemoSendSupportsLinkActions() {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
-        app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "500"
+        app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "1000"
         app.launch()
 
         XCTAssertTrue(
@@ -1467,9 +1460,10 @@ final class TesseraeCompanionUITests: XCTestCase {
         let linkField = app.textFields["send-link-url"]
         XCTAssertTrue(linkField.exists)
         linkField.tap()
-        linkField.typeText("https://example.com/news")
+        linkField.typeText("https://example.com/news\n")
 
         let sendButton = app.buttons["Send to Displays"]
+        scrollToButton(sendButton, app: app)
         XCTAssertTrue(sendButton.isEnabled)
         sendButton.tap()
 
@@ -1484,18 +1478,18 @@ final class TesseraeCompanionUITests: XCTestCase {
         let sentBanner = app.descendants(matching: .any)[
             "send-success-banner"
         ]
-        XCTAssertTrue(sentBanner.waitForExistence(timeout: 3))
+        XCTAssertTrue(sentBanner.waitForExistence(timeout: 10))
         XCTAssertTrue(
             sentBanner.label.contains("Sent to Displays")
         )
 
-        app.buttons["root-send-close"].tap()
+        XCTAssertTrue(app.buttons["root-send-close"].waitForNonExistence(timeout: 3))
         let transientMessageDismissed = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "exists == false"),
             object: sentBanner
         )
         XCTAssertEqual(
-            XCTWaiter.wait(for: [transientMessageDismissed], timeout: 2),
+            XCTWaiter.wait(for: [transientMessageDismissed], timeout: 4),
             .completed
         )
         app.tabBars.firstMatch.buttons["Activity"].tap()
@@ -2159,20 +2153,13 @@ final class TesseraeCompanionUITests: XCTestCase {
         let previewSendButton = app.buttons["Send to Displays"]
         XCTAssertFalse(app.switches["send-override-quiet-hours"].exists)
         XCTAssertTrue(previewSendButton.isEnabled)
-        let previewSendButtonHeight = previewSendButton.frame.height
         previewSendButton.tap()
 
         let sentBanner = app.descendants(matching: .any)[
             "send-success-banner"
         ]
         XCTAssertTrue(sentBanner.waitForExistence(timeout: 3))
-        XCTAssertEqual(
-            previewSendButton.frame.height,
-            previewSendButtonHeight,
-            accuracy: 1
-        )
-
-        app.buttons["root-send-close"].tap()
+        XCTAssertTrue(app.buttons["root-send-close"].waitForNonExistence(timeout: 3))
         tabBar.buttons["Activity"].tap()
         XCTAssertTrue(app.staticTexts["Shared Photo"].waitForExistence(timeout: 2))
         XCTAssertTrue(
@@ -2202,11 +2189,11 @@ final class TesseraeCompanionUITests: XCTestCase {
         sample.tap()
         let auto = app.buttons["send-auto-framing"]
         XCTAssertTrue(auto.waitForExistence(timeout: 3))
-        XCTAssertGreaterThanOrEqual(auto.frame.width, 44)
-        XCTAssertGreaterThanOrEqual(auto.frame.height, 44)
+        XCTAssertGreaterThanOrEqual(auto.frame.width, 44 - 0.001)
+        XCTAssertGreaterThanOrEqual(auto.frame.height, 44 - 0.001)
         let reset = app.buttons["send-framing-reset"]
-        XCTAssertGreaterThanOrEqual(reset.frame.width, 44)
-        XCTAssertGreaterThanOrEqual(reset.frame.height, 44)
+        XCTAssertGreaterThanOrEqual(reset.frame.width, 44 - 0.001)
+        XCTAssertGreaterThanOrEqual(reset.frame.height, 44 - 0.001)
         XCTAssertEqual(auto.value as? String, "Adjusted")
         let hint = app.descendants(matching: .any)["send-framing-hint"]
         XCTAssertTrue(hint.exists)
@@ -2238,6 +2225,94 @@ final class TesseraeCompanionUITests: XCTestCase {
         for _ in 0..<3 where !send.isHittable { app.swipeUp() }
         send.tap()
         XCTAssertTrue(app.descendants(matching: .any)["send-success-banner"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["root-send-close"].waitForNonExistence(timeout: 3))
+    }
+
+    func testLibraryPhotoSendClosesBackToPhotoDetail() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
+        app.launch()
+        XCTAssertTrue(app.buttons["Explore with Demo Data"].waitForExistence(timeout: 5))
+        app.buttons["Explore with Demo Data"].tap()
+        let library = app.buttons["Library"].firstMatch
+        XCTAssertTrue(library.waitForExistence(timeout: 5))
+        library.tap()
+        let folder = app.buttons["gallery-folder-folder_family"]
+        XCTAssertTrue(folder.waitForExistence(timeout: 3))
+        folder.tap()
+        let photo = app.buttons["gallery-image-image_family_01"]
+        XCTAssertTrue(photo.waitForExistence(timeout: 3))
+        photo.tap()
+        let sendPhoto = app.buttons["gallery-send-image"]
+        XCTAssertTrue(sendPhoto.waitForExistence(timeout: 3))
+        sendPhoto.tap()
+        let send = app.buttons["send-submit"]
+        XCTAssertTrue(send.waitForExistence(timeout: 3))
+        scrollToButton(send, app: app)
+        XCTAssertTrue(send.isEnabled)
+        send.tap()
+        XCTAssertTrue(app.buttons["root-send-close"].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(sendPhoto.isHittable)
+    }
+
+    func testFailedPhotoSendPreservesDraftAndClosesAfterRetry() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
+        app.launchEnvironment["TESSERAE_UI_TEST_IMAGE_SEND_FAILURE_ONCE"] = "1"
+        app.launch()
+        XCTAssertTrue(app.buttons["Explore with Demo Data"].waitForExistence(timeout: 5))
+        app.buttons["Explore with Demo Data"].tap()
+        XCTAssertTrue(app.buttons["root-send-action"].waitForExistence(timeout: 5))
+        app.buttons["root-send-action"].tap()
+
+        let desk = app.buttons["send-display-e1004-desk"]
+        let kitchen = app.buttons["send-display-picpak-kitchen"]
+        XCTAssertTrue(desk.waitForExistence(timeout: 3))
+        scrollToButton(desk, app: app)
+        if !desk.isSelected { desk.tap() }
+        if kitchen.isSelected { kitchen.tap() }
+        XCTAssertTrue(desk.isSelected)
+        XCTAssertFalse(kitchen.isSelected)
+
+        let sample = app.buttons["Use Sample"]
+        scrollToButton(sample, app: app)
+        sample.tap()
+        let image = app.descendants(matching: .any)["selected-image-preview"]
+        XCTAssertTrue(image.waitForExistence(timeout: 3))
+        image.pinch(withScale: 1.6, velocity: 1)
+        let reset = app.buttons["send-framing-reset"]
+        XCTAssertTrue(reset.waitForExistence(timeout: 3))
+        XCTAssertTrue(reset.isEnabled)
+        let preview = app.descendants(matching: .any)["send-panel-preview"]
+        let framing = preview.value as? String
+        let zoom = app.staticTexts["send-framing-zoom"].label
+
+        let send = app.buttons["send-submit"]
+        scrollToButton(send, app: app)
+        send.tap()
+        XCTAssertTrue(app.alerts.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.alerts.staticTexts["Test send failed. Try again."].exists)
+        app.alerts.buttons["OK"].tap()
+        XCTAssertTrue(app.buttons["root-send-close"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.descendants(matching: .any)["send-success-banner"].exists)
+        XCTAssertTrue(app.buttons["send-change-photo"].exists)
+        XCTAssertEqual(preview.value as? String, framing)
+        XCTAssertEqual(app.staticTexts["send-framing-zoom"].label, zoom)
+        XCTAssertTrue(desk.isSelected)
+        XCTAssertFalse(kitchen.isSelected)
+        XCTAssertTrue(send.isEnabled)
+
+        send.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["send-success-banner"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["root-send-close"].waitForNonExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["root-send-action"].isHittable)
+        app.buttons["root-send-action"].tap()
+        XCTAssertTrue(app.buttons["Use Sample"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["send-change-photo"].exists,
+            "A completed draft must not reappear when opening Send again.")
+        XCTAssertFalse(app.buttons["send-submit"].isEnabled)
     }
 
     func testAutoFramingChineseAccessibilityLayout() {

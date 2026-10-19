@@ -9,6 +9,7 @@ final class CompanionPresentation {
     }
 
     var sheet: Sheet?
+    var isSendComposerPresented = false
 }
 
 struct TesseraeSettingsToolbarButton: View {
@@ -46,11 +47,11 @@ struct MainTabView: View {
     @Environment(GalleryUploadCoordinator.self) private var galleryUploads
     @Environment(TesseraeMessageCenter.self) private var messageCenter
     @State private var selection: AppTab = .displays
-    @State private var presentation = CompanionPresentation()
+    @Environment(CompanionPresentation.self) private var presentation
 
     var body: some View {
+        @Bindable var presentation = presentation
         tabs
-            .environment(presentation)
             .sheet(item: $presentation.sheet) { sheet in
                 switch sheet {
                 case .settings:
@@ -186,6 +187,8 @@ struct MainTabView: View {
 }
 
 struct SendComposerSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(CompanionPresentation.self) private var presentation
     @State private var submission = SendSubmissionSession()
     var initialImage: SendImageDraft? = nil
 
@@ -211,5 +214,15 @@ struct SendComposerSheet: View {
         .presentationSizing(.fitted)
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+        .onAppear { presentation.isSendComposerPresented = true }
+        .onDisappear { presentation.isSendComposerPresented = false }
+        .alert("Something Went Wrong", isPresented: Binding(
+            get: { model.lastError != nil },
+            set: { if !$0 { model.lastError = nil } }
+        )) {
+            Button("OK", role: .cancel) { model.lastError = nil }
+        } message: {
+            Text(model.lastError ?? "")
+        }
     }
 }

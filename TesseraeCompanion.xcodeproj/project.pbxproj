@@ -34,6 +34,7 @@
 		4F63438E4356B972B7A4600D /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EA5F074B206DD2FF54C9767 /* RootView.swift */; };
 		50F233622A7FB17CD2295534 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF3B64DA50FECFA7A4514489 /* ShareViewController.swift */; };
 		55164D3148D6678C5CB03FCD /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 216C90508EC6D953751E6523 /* InfoPlist.strings */; };
+		5596E1C8503BD33C89F3ED03 /* SendSubmissionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5E57290EA4C5631004E3156 /* SendSubmissionTests.swift */; };
 		56C7CF9DC0CBA6DC2FE131BD /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B285D6042818DD9ECF798800 /* AppModel.swift */; };
 		59A4C59F6ADE317BF4F66B1A /* DraftEditingSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BA6516AC76BFF5C21FAAE27 /* DraftEditingSession.swift */; };
 		5A01B168EA0272D1154E06BA /* PhotoFramingSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90C9F22206234BD938D1E5B1 /* PhotoFramingSession.swift */; };
@@ -189,6 +190,7 @@
 		AEF28EF26B0AF20FD40F858C /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		B285D6042818DD9ECF798800 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		B2A5670FEC5BD4923C95159E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		B5E57290EA4C5631004E3156 /* SendSubmissionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendSubmissionTests.swift; sourceTree = "<group>"; };
 		B85A93A46B59C02E13F75509 /* Tesserae Companion.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "Tesserae Companion.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BD5EEF99A30C18C07C717772 /* BLESetupProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BLESetupProtocolTests.swift; sourceTree = "<group>"; };
 		CB98E98A7C6727AE8FE4694E /* Phosphor.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Phosphor.ttf; sourceTree = "<group>"; };
@@ -304,6 +306,7 @@
 				E726D6EBD2787B7CEED6CC14 /* PhotoFramingSessionTests.swift */,
 				9024204C8FC942747ED4D797 /* PhotoSubjectAnalyzerTests.swift */,
 				49B49CB5FE65FF3DC08A0081 /* ReminderSnapshotFactoryTests.swift */,
+				B5E57290EA4C5631004E3156 /* SendSubmissionTests.swift */,
 				5333E93CB84BC09DA290748E /* SetupNetworkStoreTests.swift */,
 			);
 			path = Tests;
@@ -706,6 +709,7 @@
 				68F3F911C34454CFAB4148D2 /* PhotoFramingSessionTests.swift in Sources */,
 				BB0805FDC6491F8D39B294A4 /* PhotoSubjectAnalyzerTests.swift in Sources */,
 				65250F43371291617815D0A0 /* ReminderSnapshotFactoryTests.swift in Sources */,
+				5596E1C8503BD33C89F3ED03 /* SendSubmissionTests.swift in Sources */,
 				017B5A46201896EB90D3AF9B /* SetupNetworkStoreTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

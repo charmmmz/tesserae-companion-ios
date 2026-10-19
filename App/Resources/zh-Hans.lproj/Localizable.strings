@@ -216,6 +216,8 @@
 "Sending to Displays…" = "正在发送到显示屏…";
 "Sending…" = "正在发送…";
 "Sent to Displays" = "已发送到显示屏";
+"Sending failed. Your draft is still available to retry." = "发送失败。草稿已保留，可重试。";
+"Could not confirm the send. Check Activity before retrying." = "暂时无法确认发送结果。请先查看“活动”再重试。";
 "Pair again to reconnect" = "请重新配对";
 "Unable to connect to Tesserae" = "无法连接到 Tesserae";
 "Couldn’t update Tesserae data" = "无法更新 Tesserae 数据";

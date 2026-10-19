@@ -325,6 +325,7 @@ struct TesseraeMessage: Identifiable {
     let text: String
     let kind: TesseraeMessageKind
     let lifetime: TesseraeMessageLifetime
+    let survivesPresentationChange: Bool
     let priority: TesseraeMessagePriority
     let systemImage: String?
     let accessibilityIdentifier: String?
@@ -339,6 +340,7 @@ struct TesseraeMessage: Identifiable {
         text: String,
         kind: TesseraeMessageKind = .info,
         lifetime: TesseraeMessageLifetime = .automatic(seconds: 3),
+        survivesPresentationChange: Bool = false,
         priority: TesseraeMessagePriority = .normal,
         systemImage: String? = nil,
         accessibilityIdentifier: String? = nil,
@@ -352,6 +354,7 @@ struct TesseraeMessage: Identifiable {
         self.text = text
         self.kind = kind
         self.lifetime = lifetime
+        self.survivesPresentationChange = survivesPresentationChange
         self.priority = priority
         self.systemImage = systemImage
         self.accessibilityIdentifier = accessibilityIdentifier
@@ -421,6 +424,7 @@ final class TesseraeMessageCenter {
            previousHostID != id,
            automaticMessageHostID == previousHostID,
            let message = currentMessage,
+           !message.survivesPresentationChange,
            case .automatic = message.lifetime
         {
             dismiss(id: message.id)
@@ -434,6 +438,7 @@ final class TesseraeMessageCenter {
 
         if automaticMessageHostID == id,
            let message = currentMessage,
+           !message.survivesPresentationChange,
            case .automatic = message.lifetime
         {
             dismiss(id: message.id)

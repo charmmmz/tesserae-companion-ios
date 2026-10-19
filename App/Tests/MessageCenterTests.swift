@@ -1,4 +1,5 @@
 import XCTest
+import Testing
 @testable import Tesserae_Companion
 
 @MainActor
@@ -182,5 +183,24 @@ final class MessageCenterTests: XCTestCase {
 
         XCTAssertEqual(center.currentMessage?.id, "gallery.uploads")
         XCTAssertTrue(center.isActiveHost(id: rootHost))
+    }
+}
+
+@MainActor
+@Suite("Send confirmation handoff")
+struct SendConfirmationMessageTests {
+    @Test("Success stays visible on the previous screen after Send closes")
+    func handsOffToPreviousScreen() {
+        let center = TesseraeMessageCenter()
+        let root = UUID()
+        let sheet = UUID()
+        center.activateHost(id: root)
+        center.activateHost(id: sheet)
+        center.post(TesseraeMessage(id: "send.submission", text: "Sent",
+            kind: .success, survivesPresentationChange: true))
+        center.deactivateHost(id: sheet)
+        #expect(center.isActiveHost(id: root))
+        #expect(center.currentMessage?.id == "send.submission")
+        center.dismissAll()
     }
 }

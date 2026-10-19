@@ -2077,9 +2077,12 @@ final class AppModel {
             }
         }
 
+        var allSucceeded = true
         for job in acceptedJobs {
             guard connectionRevision == revision, !Task.isCancelled else { return false }
-            await updateUntilTerminal(job, instance: activeInstance)
+            let completedJob = await updateUntilTerminal(job, instance: activeInstance)
+            guard connectionRevision == revision, !Task.isCancelled else { return false }
+            if !confirmSendCompletion(completedJob) { allSucceeded = false }
         }
         guard connectionRevision == revision, !Task.isCancelled else { return false }
         await refreshDeviceUpcomingIfSupported(
@@ -2090,7 +2093,7 @@ final class AppModel {
             await presentOperationError(firstError)
             return false
         }
-        return true
+        return allSucceeded
     }
 
     func sendImage(
@@ -2130,11 +2133,11 @@ final class AppModel {
             jobs.insert(job, at: 0)
             await persistSnapshot()
             try checkConnectionRevision(revision)
-            await updateUntilTerminal(job, instance: activeInstance)
+            let completedJob = await updateUntilTerminal(job, instance: activeInstance)
             try checkConnectionRevision(revision)
             await refreshDeviceUpcomingIfSupported(deviceIDs: deviceIDs)
             try checkConnectionRevision(revision)
-            return true
+            return confirmSendCompletion(completedJob)
         } catch {
             guard connectionRevision == revision, !Task.isCancelled else { return false }
             await presentOperationError(error)
@@ -2190,11 +2193,11 @@ final class AppModel {
             jobs.insert(job, at: 0)
             await persistSnapshot()
             try checkConnectionRevision(revision)
-            await updateUntilTerminal(job, instance: activeInstance)
+            let completedJob = await updateUntilTerminal(job, instance: activeInstance)
             try checkConnectionRevision(revision)
             await refreshDeviceUpcomingIfSupported(deviceIDs: deviceIDs)
             try checkConnectionRevision(revision)
-            return true
+            return confirmSendCompletion(completedJob)
         } catch {
             guard connectionRevision == revision, !Task.isCancelled else { return false }
             await presentOperationError(error)
@@ -3096,10 +3099,22 @@ final class AppModel {
         }
     }
 
-    private func updateUntilTerminal(_ acceptedJob: PushJob, instance: TesseraeInstance) async {
+    private func confirmSendCompletion(_ job: PushJob?) -> Bool {
+        if job?.status == .succeeded { return true }
+        if job?.status == .failed {
+            lastError = job?.error?.message
+                ?? String(localized: "Sending failed. Your draft is still available to retry.")
+        } else if lastError == nil, connectionHealth != .offline {
+            lastError = String(localized: "Could not confirm the send. Check Activity before retrying.")
+        }
+        return false
+    }
+
+    @discardableResult
+    private func updateUntilTerminal(_ acceptedJob: PushJob, instance: TesseraeInstance) async -> PushJob? {
         let revision = connectionRevision
         let client = activeClient
-        guard activeInstance?.id == instance.id else { return }
+        guard activeInstance?.id == instance.id else { return nil }
         var current = acceptedJob
         for _ in 0..<60 where !current.isTerminal {
             do {
@@ -3115,9 +3130,9 @@ final class AppModel {
                     try await Task.sleep(for: .milliseconds(500))
                 }
             } catch is CancellationError {
-                return
+                return nil
             } catch let error as TesseraeClientError {
-                guard connectionRevision == revision, !Task.isCancelled else { return }
+                guard connectionRevision == revision, !Task.isCancelled else { return nil }
                 if case .server("not_found", _, _) = error {
                     // The server swept this job after its advertised
                     // retention window (24 h), usually because the app never
@@ -3126,28 +3141,29 @@ final class AppModel {
                     // published outcome remains in server History.
                     jobs.removeAll { $0.id == current.id }
                     await persistSnapshot(showErrors: false)
-                    return
+                    return nil
                 }
                 await presentOperationError(error)
-                return
+                return nil
             } catch {
-                guard connectionRevision == revision, !Task.isCancelled else { return }
+                guard connectionRevision == revision, !Task.isCancelled else { return nil }
                 await presentOperationError(error)
-                return
+                return nil
             }
         }
-        guard connectionRevision == revision, !Task.isCancelled else { return }
+        guard connectionRevision == revision, !Task.isCancelled else { return nil }
         if current.isTerminal {
             await refreshDisplays(
                 showErrors: false,
                 saveSnapshot: false
             )
-            guard connectionRevision == revision, !Task.isCancelled else { return }
+            guard connectionRevision == revision, !Task.isCancelled else { return nil }
             previewGeneration &+= 1
             if supportsHistory {
                 await refreshHistoryAfterWrite(instance: instance)
             }
         }
+        return current
     }
 
     private func refreshTrackedJobs(instance: TesseraeInstance) async {

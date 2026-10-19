@@ -18,6 +18,7 @@ final class SendSubmissionSession {
 struct SendView: View {
     @Environment(AppModel.self) private var model
     @Environment(TesseraeMessageCenter.self) private var messageCenter
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var previewHeight: CGFloat = 276
     @State private var source: SendSource = .photo
@@ -158,7 +159,7 @@ struct SendView: View {
                 if sent {
                     linkFieldIsFocused = false
                     showSentConfirmation(confirmationMessage)
-                    clearSubmittedSource()
+                    dismiss()
                 } else {
                     messageCenter.dismiss(id: "send.submission")
                     hapticEvent.trigger(.error)
@@ -613,6 +614,7 @@ struct SendView: View {
                 text: message,
                 kind: .success,
                 lifetime: .automatic(seconds: 3),
+                survivesPresentationChange: true,
                 priority: .normal,
                 accessibilityIdentifier: "send-success-banner",
                 haptic: .success
@@ -787,19 +789,6 @@ struct SendView: View {
         }
         if !supportedLinkKinds.contains(linkKind) {
             linkKind = supportedLinkKinds.first ?? .webpage
-        }
-    }
-
-    private func clearSubmittedSource() {
-        switch source {
-        case .photo:
-            imageData = nil
-            previewImage = nil
-            pickerItem = nil
-            loadedPickerItem = nil
-            resetImageFramingState()
-        case .link:
-            linkText = ""
         }
     }
 

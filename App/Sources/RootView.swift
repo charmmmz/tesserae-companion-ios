@@ -15,6 +15,7 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var serversPresented = false
     @State private var nearbyPresented = false
+    @State private var presentation = CompanionPresentation()
 
     private var connectionContext: RootConnectionContext {
         RootConnectionContext(revision: model.connectionRevision, instanceID: model.activeInstance?.id)
@@ -45,6 +46,7 @@ struct RootView: View {
             }
         }
         .animation(.snappy, value: model.activeInstance?.id)
+        .environment(presentation)
         .tesseraeMessageCenterInset()
         .sheet(isPresented: $serversPresented) {
             OnboardingView(isChoosingServer: true)
@@ -107,6 +109,8 @@ struct RootView: View {
             NearbyDeviceSheet(device: device)
         }
         .onChange(of: connectionContext) { previous, _ in
+            presentation.sheet = nil
+            presentation.isSendComposerPresented = false
             guard previous.instanceID != nil else { return }
             galleryUploads.cancelAndClear()
             messageCenter.dismiss(id: "gallery.uploads")
@@ -117,9 +121,9 @@ struct RootView: View {
         .alert(
             "Something Went Wrong",
             isPresented: Binding(
-                get: { model.lastError != nil },
+                get: { model.lastError != nil && !presentation.isSendComposerPresented },
                 set: { isPresented in
-                    if !isPresented {
+                    if !isPresented && !presentation.isSendComposerPresented {
                         model.lastError = nil
                     }
                 }

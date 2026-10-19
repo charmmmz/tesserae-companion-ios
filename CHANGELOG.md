@@ -55,6 +55,10 @@ capabilities.
 
 ### Fixed
 
+- Send closes automatically after a successful photo or link send, returning to
+  the previous screen with a brief confirmation. Failed or unconfirmed sends
+  keep the photo, framing, link and display selection available for retry.
+
 - Photo framing responds immediately when dragging from a cropped edge or
   reversing direction at a pan/zoom limit. Releasing or interrupting a gesture
   preserves the visible crop, and repeated drags keep the controls hidden until

@@ -23,7 +23,11 @@ struct TesseraeCompanionApp: App {
         let demoLatency: Duration
         let demoLineupIntent: LineupIntent
         let demoDisplayNames: [String: String]
+        let demoImageSendErrors: [TesseraeClientError]
 #if DEBUG
+        demoImageSendErrors = ProcessInfo.processInfo.environment[
+            "TESSERAE_UI_TEST_IMAGE_SEND_FAILURE_ONCE"
+        ] == "1" ? [.server(code: "send_failed", message: "Test send failed. Try again.", requestID: nil)] : []
         demoDisplayNames = ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_LONG_DISPLAY_NAMES"] == "1"
             ? ["picpak-kitchen": "厨房里的家庭共享信息显示屏 Kitchen Family Display — 东侧窗边",
                "e1004-desk": "工作书桌旁的日程与待办事项显示屏 Desk Planning Display — 第二工作区"]
@@ -110,6 +114,7 @@ struct TesseraeCompanionApp: App {
         demoLatency = .milliseconds(180)
         demoLineupIntent = .manual
         demoDisplayNames = [:]
+        demoImageSendErrors = []
 #endif
         let liveClient = LiveTesseraeClient(
             credentials: credentials,
@@ -124,7 +129,8 @@ struct TesseraeCompanionApp: App {
                 demoClient: MockTesseraeClient(
                     latency: demoLatency,
                     lineupIntent: demoLineupIntent,
-                    displayNames: demoDisplayNames
+                    displayNames: demoDisplayNames,
+                    imageSendErrors: demoImageSendErrors
                 ),
                 credentials: credentials,
                 stateStore: stateStore,

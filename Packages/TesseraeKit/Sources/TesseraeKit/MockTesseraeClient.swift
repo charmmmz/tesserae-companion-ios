@@ -20,6 +20,8 @@ public actor MockTesseraeClient: TesseraeServing {
     private let lineupIntent: LineupIntent
     private let lineupFetchError: TesseraeClientError?
     private let jobFetchError: TesseraeClientError?
+    private let jobFailure: PushJobFailure?
+    private var imageSendErrors: [TesseraeClientError]
     private let lineupAuthoringGranted: Bool
     private let offlineAlbumAuthoringGranted: Bool
 
@@ -29,6 +31,8 @@ public actor MockTesseraeClient: TesseraeServing {
         displayNames: [String: String] = [:],
         lineupFetchError: TesseraeClientError? = nil,
         jobFetchError: TesseraeClientError? = nil,
+        jobFailure: PushJobFailure? = nil,
+        imageSendErrors: [TesseraeClientError] = [],
         lineupAuthoringGranted: Bool = true,
         offlineAlbumAuthoringGranted: Bool = true
     ) {
@@ -37,6 +41,8 @@ public actor MockTesseraeClient: TesseraeServing {
         self.lineupIntent = lineupIntent
         self.lineupFetchError = lineupFetchError
         self.jobFetchError = jobFetchError
+        self.jobFailure = jobFailure
+        self.imageSendErrors = imageSendErrors
         self.lineupAuthoringGranted = lineupAuthoringGranted
         self.offlineAlbumAuthoringGranted = offlineAlbumAuthoringGranted
         let family = GalleryFolder(
@@ -1105,6 +1111,9 @@ public actor MockTesseraeClient: TesseraeServing {
         idempotencyKey: String,
         instance: TesseraeInstance
     ) async throws -> PushJob {
+        if !imageSendErrors.isEmpty {
+            throw imageSendErrors.removeFirst()
+        }
         guard !deviceIDs.isEmpty else {
             throw TesseraeClientError.noTargets
         }
@@ -1342,17 +1351,18 @@ public actor MockTesseraeClient: TesseraeServing {
         let completed = PushJob(
             id: id,
             kind: kind,
-            status: .succeeded,
+            status: jobFailure == nil ? .succeeded : .failed,
             label: label,
             targetDeviceIDs: deviceIDs,
             createdAt: now,
             updatedAt: now.addingTimeInterval(1),
-            result: PushJobResult(
+            result: jobFailure == nil ? PushJobResult(
                 status: .published,
                 reason: resultReason ?? (overrideQuietHours ? "quiet_hours_overridden" : nil),
                 deviceIDs: deviceIDs,
                 historyEventIDs: historyEventIDs
-            )
+            ) : nil,
+            error: jobFailure
         )
         jobsByIdempotencyKey[idempotencyKey] = accepted
         completedJobs[id] = completed
