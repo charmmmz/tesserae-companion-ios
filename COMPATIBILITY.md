@@ -22,8 +22,8 @@ geometry, packing, byte count and lifecycle. A hardware name or Bluetooth
 chip alone does not enable photo sending. Existing PicPak Photo v1 retains
 its separate protocol and format.
 
-Only opt-in E1004, E1001 and Sticky firmware profiles are implemented in the
-current experiment; physical BLE and panel acceptance is pending. OpenDisplay
+Only opt-in E1004, E1001, E1003 and Sticky firmware profiles are implemented
+in the current experiment; physical BLE and panel acceptance is pending. OpenDisplay
 is a later adapter. See the [implementation and test handoff](docs/plans/2026-10-21-ble-photo-v2-implementation.md).
 
 ## First known upstream implementation

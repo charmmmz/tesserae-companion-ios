@@ -84,14 +84,48 @@ struct BluetoothPhotoTests {
         }
     }
 
-    @Test func e1004FrameHasNativeSizeAndNoImplicitTranspose() throws {
-        let c = try Self.capabilities(width: 1200, height: 1600)
-        let pixels = Data(repeating: 255, count: 1200 * 1600 * 4)
+    @Test(arguments: [
+        (BluetoothPhotoFormat.spectra6, 1200, 1600, 960_000, UInt8(0x11)),
+        (.gray4, 1872, 1404, 1_314_144, UInt8(0xff))
+    ])
+    func nativeFrameHasExpectedSizeAndNoImplicitTranspose(format: BluetoothPhotoFormat,
+        width: Int, height: Int, bytes: Int, white: UInt8) throws {
+        let c = try Self.capabilities(format: format, width: width, height: height)
+        let pixels = Data(repeating: 255, count: width * height * 4)
         let packed = try BluetoothPhotoEncoder.encode(rgba: pixels, capabilities: c, dither: false)
-        #expect(packed.count == 960_000)
-        #expect(packed.allSatisfy { $0 == 0x11 })
-        #expect(c.panel.width == 1200)
-        #expect(c.panel.height == 1600)
+        #expect(packed.count == bytes)
+        #expect(packed.allSatisfy { $0 == white })
+        #expect(c.panel.width == width)
+        #expect(c.panel.height == height)
+    }
+
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["TESSERAE_BLE_PHOTO_INTEROP_DIR"] != nil))
+    func exportsE1003GrayFrameForFirmwareReceiverInteroperability() throws {
+        let folder = try #require(ProcessInfo.processInfo.environment["TESSERAE_BLE_PHOTO_INTEROP_DIR"])
+        let root = URL(fileURLWithPath: folder, isDirectory: true)
+        let c = try JSONDecoder().decode(BluetoothPhotoCapabilities.self,
+            from: Data(contentsOf: root.appendingPathComponent("e1003.capabilities.json")))
+        try c.validate()
+        #expect(c.kind == "seeed_reterminal_e1003")
+        #expect(c.width == 1872 && c.height == 1404)
+        #expect(c.format == .gray4 && c.stride == 936 && c.bytes == 1_314_144)
+        #expect(c.digest == "324dcf85431b812a6c469bd3649552b41533155ddfb2bb5f7561d5d12f7d82f6")
+        var pixels = [UInt8](repeating: 255, count: c.visibleWidth * c.visibleHeight * 4)
+        for y in 0..<c.visibleHeight {
+            for x in 0..<c.visibleWidth {
+                // Odd-width blocks exercise high/low-nibble boundaries; the
+                // vertical shift detects accidental mirroring or row reversal.
+                let gray = UInt8(((x / 117 + y / 78) % 16) * 17)
+                let p = (y * c.visibleWidth + x) * 4
+                pixels[p] = gray; pixels[p + 1] = gray; pixels[p + 2] = gray
+            }
+        }
+        let encoded = try BluetoothPhotoEncoder.encode(rgba: Data(pixels), capabilities: c)
+        #expect(encoded.count == 1_314_144)
+        let sha = SHA256.hash(data: encoded).map { String(format: "%02x", $0) }.joined()
+        #expect(sha == "c1a3309bcaf1663b33c035132dfcf44faf61c154fca304f037b1c2444fb9de1b")
+        try encoded.write(to: root.appendingPathComponent("swift-e1003.bin"))
+        try sha.write(to: root.appendingPathComponent("swift-e1003.sha256"), atomically: true, encoding: .utf8)
     }
 
     @Test(.enabled(if: ProcessInfo.processInfo.environment["TESSERAE_BLE_PHOTO_INTEROP_DIR"] != nil))

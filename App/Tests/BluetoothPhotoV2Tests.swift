@@ -66,4 +66,32 @@ struct BluetoothPhotoV2Tests {
             framing: ImageFraming(focusX: 0.5, focusY: 0.5, zoom: 1), capabilities: caps)
         #expect(try BluetoothPhotoEncoder.encode(rgba: rgba, capabilities: caps, dither: false) == Data([0xaa, 0xff]))
     }
+
+    @Test func e1003GrayFrameEndsWithANinetySixByteChunk() throws {
+        let json = """
+        {"schema":2,"kind":"seeed_reterminal_e1003","width":1872,"height":1404,
+        "visible_width":1872,"visible_height":1404,"x_offset":0,"format":"gray4-msb",
+        "stride":936,"bytes":1314144,"chunk_bytes":384,
+        "digest":"324dcf85431b812a6c469bd3649552b41533155ddfb2bb5f7561d5d12f7d82f6",
+        "row_order":"top_down","lifecycle":"manual"}
+        """
+        let caps = try JSONDecoder().decode(BluetoothPhotoCapabilities.self, from: Data(json.utf8))
+        var transfer = try BLEPhotoTransfer(data: Data(repeating: 0xab, count: 1_314_144),
+                                          id: 0x01020304, capabilities: caps)
+        #expect(try transfer.acknowledge(0))
+        var chunks = 0
+        for offset in stride(from: 0, to: 1_314_144, by: 384) {
+            let nextPacket = transfer.nextPacket()
+            let packet = try #require(nextPacket)
+            if offset == 1_314_048 {
+                #expect(packet.prefix(8) == Data([1, 2, 3, 4, 0, 20, 13, 0]))
+                #expect(packet.count == 104) // 8-byte header + 96 pixel bytes
+            }
+            #expect(try transfer.acknowledge(offset + packet.count - 8))
+            chunks += 1
+        }
+        #expect(chunks == 3423)
+        #expect(transfer.nextPacket() == nil)
+        #expect(transfer.waitingForReceipt)
+    }
 }

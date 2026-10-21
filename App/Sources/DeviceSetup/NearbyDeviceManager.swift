@@ -263,8 +263,8 @@ final class NearbyDeviceManager: NSObject {
             nearbyDevices = [NearbyTesseraeDevice(
                 id: UUID(uuidString: "00000000-0000-0000-0000-000000000011")!,
                 name: "Tesserae-A1B2C3", rssi: -45, mode: isPhotoUIFixture ? .photo : .maintenance,
-                hardware: isUnifiedUIFixture ? .seeedReTerminalE1004
-                    : isE1003UIFixture ? .seeedReTerminalE1003
+                hardware: isE1003UIFixture ? .seeedReTerminalE1003
+                    : isUnifiedUIFixture ? .seeedReTerminalE1004
                     : isPhotoUIFixture ? .picPak42 : .unknown(11), hardwareSuffix: "A1B2C3",
                 sessionID: Data([1, 2, 3, 4]),
                 photoProtocol: isUnifiedUIFixture ? .tesseraeV2 : .picPakV1
@@ -379,12 +379,12 @@ final class NearbyDeviceManager: NSObject {
                 protocol: 2, id: "picpak-a1b2c3", sid: "01020304",
                 connectionNonce: "000102030405060708090a0b0c0d0e0f",
                 hardware: device.hardware.rawValue,
-                model: isUnifiedUIFixture ? "seeed_reterminal_e1004"
-                    : isE1003UIFixture ? "seeed_reterminal_e1003" : "picpak_4_2",
+                model: isE1003UIFixture ? "seeed_reterminal_e1003"
+                    : isUnifiedUIFixture ? "seeed_reterminal_e1004" : "picpak_4_2",
                 firmware: isUnifiedUIFixture ? "1.52.0" : isE1003UIFixture ? "1.47.0" : "0.9.3",
                 mode: device.mode.rawValue, photo: isUnifiedUIFixture ? 2 : nil,
                 family: isUnifiedUIFixture ? "tesserae" : nil,
-                kind: isUnifiedUIFixture ? "seeed_reterminal_e1004" : nil
+                kind: isUnifiedUIFixture ? device.hardware.catalogKind : nil
             )
             connectionState = .authenticating
             if device.mode == .photo {
@@ -644,8 +644,8 @@ final class NearbyDeviceManager: NSObject {
                 "wifi_configured": true, "server_configured": true,
                 "ssid": "Home Wi-Fi",
             ]
-            if !isE1003UIFixture {
-                event["refresh_speed"] = "5s"
+            if isPicPakUIFixture { event["refresh_speed"] = "5s" }
+            if isUnifiedUIFixture || !isE1003UIFixture {
                 event["screen_mode"] = screenMode?.rawValue ?? "wifi"
             }
             if let data = try? JSONSerialization.data(withJSONObject: event) {
@@ -674,10 +674,13 @@ final class NearbyDeviceManager: NSObject {
                                  "battery_mv": 3900, "low_battery": false,
                                  "refresh_speed": "5s", "screen_mode": "bluetooth"])
         case "photo_capabilities" where isUnifiedUIFixture:
+            let width = isE1003UIFixture ? 1872 : 1200
+            let height = isE1003UIFixture ? 1404 : 1600
             receiveFixtureEvent(["event": "photo_capabilities", "schema": 2,
-                "kind": "seeed_reterminal_e1004", "width": 1200, "height": 1600,
-                "visible_width": 1200, "visible_height": 1600, "x_offset": 0,
-                "format": "spectra6-msb", "stride": 600, "bytes": 960000, "chunk_bytes": 384,
+                "kind": deviceInfo?.kind ?? "", "width": width, "height": height,
+                "visible_width": width, "visible_height": height, "x_offset": 0,
+                "format": isE1003UIFixture ? "gray4-msb" : "spectra6-msb",
+                "stride": width / 2, "bytes": width * height / 2, "chunk_bytes": 384,
                 "digest": String(repeating: "a", count: 64), "row_order": "top_down", "lifecycle": "manual"])
         case "photo_begin":
             receiveFixtureEvent(["event": "photo_ack", "id": command["id"] ?? 0, "offset": 0])

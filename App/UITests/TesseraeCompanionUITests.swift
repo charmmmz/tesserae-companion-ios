@@ -347,9 +347,18 @@ final class TesseraeCompanionUITests: XCTestCase {
     }
 
     func testUnifiedMaintenanceOffersModeWithoutPicPakRefreshControls() {
+        assertUnifiedMaintenanceOffersMode(e1003: false)
+    }
+
+    func testE1003PhotoFirmwareOffersModeWithoutPicPakRefreshControls() {
+        assertUnifiedMaintenanceOffersMode(e1003: true)
+    }
+
+    private func assertUnifiedMaintenanceOffersMode(e1003: Bool) {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_UNIFIED_BLE"] = "1"
+        if e1003 { app.launchEnvironment["TESSERAE_UI_TEST_E1003_BLE"] = "1" }
         app.launch()
         let nearby = app.buttons["onboarding-nearby-devices"]
         XCTAssertTrue(nearby.waitForExistence(timeout: 5))
@@ -368,14 +377,24 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [saved], timeout: 4), .completed)
         XCTAssertFalse(app.buttons["Allow This Device"].exists)
         let shot = XCTAttachment(screenshot: app.screenshot())
-        shot.name = "Unified Bluetooth Mode Authorization"; shot.lifetime = .keepAlways; add(shot)
+        shot.name = e1003 ? "E1003 Bluetooth Mode Authorization" : "Unified Bluetooth Mode Authorization"
+        shot.lifetime = .keepAlways; add(shot)
     }
 
     func testUnifiedPhotoSessionUsesNegotiatedPortraitPanelAndReceivesFrame() {
+        assertUnifiedPhotoSessionReceivesFrame(e1003: false)
+    }
+
+    func testE1003PhotoSessionUsesNegotiatedGrayLandscapePanelAndReceivesFrame() {
+        assertUnifiedPhotoSessionReceivesFrame(e1003: true)
+    }
+
+    private func assertUnifiedPhotoSessionReceivesFrame(e1003: Bool) {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_UNIFIED_BLE"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_UNIFIED_PHOTO"] = "1"
+        if e1003 { app.launchEnvironment["TESSERAE_UI_TEST_E1003_BLE"] = "1" }
         app.launch()
         let nearby = app.buttons["onboarding-nearby-devices"]
         XCTAssertTrue(nearby.waitForExistence(timeout: 5))
@@ -388,9 +407,15 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertFalse(app.navigationBars["Send to PicPak"].exists)
         let resolution = app.descendants(matching: .any)["ble-photo-resolution"].firstMatch
         XCTAssertTrue(resolution.waitForExistence(timeout: 3))
-        XCTAssertTrue(resolution.label.contains("1600") || resolution.label.contains("1,600"))
+        if e1003 {
+            XCTAssertTrue(resolution.label.contains("1872") || resolution.label.contains("1,872"))
+            XCTAssertTrue(resolution.label.contains("1404") || resolution.label.contains("1,404"))
+        } else {
+            XCTAssertTrue(resolution.label.contains("1600") || resolution.label.contains("1,600"))
+        }
         let shot = XCTAttachment(screenshot: app.screenshot())
-        shot.name = "E1004 Negotiated Bluetooth Photo Editor"; shot.lifetime = .keepAlways; add(shot)
+        shot.name = e1003 ? "E1003 Negotiated Gray Bluetooth Photo Editor" : "E1004 Negotiated Bluetooth Photo Editor"
+        shot.lifetime = .keepAlways; add(shot)
         app.buttons["ble-send-photo"].tap()
         XCTAssertTrue(app.staticTexts["Photo Sent"].waitForExistence(timeout: 45))
         XCTAssertTrue(app.staticTexts["The display received your photo and will now refresh its screen."].exists)

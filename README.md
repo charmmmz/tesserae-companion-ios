@@ -118,8 +118,8 @@ opted-in display firmware to select resolution and pixel format. Enter
 Maintenance, select Manual (Bluetooth) and authorize this phone, then close
 Maintenance to restart. Press the display's button to open a local photo
 session; automatic server updates stay paused until Automatic is selected
-again. E1004, E1001 and Sticky profiles await hardware acceptance, and existing
-PicPak photo sending keeps its own protocol. See the
+again. E1004, E1001, E1003 and Sticky profiles await hardware acceptance, and
+existing PicPak photo sending keeps its own protocol. See the
 [implementation and hardware test handoff](docs/plans/2026-10-21-ble-photo-v2-implementation.md).
 
 ## Your server, your data
