@@ -716,3 +716,12 @@
 "The display is restarting to register with the new server." = "设备正在重启，并将向新服务器注册。";
 "Enter a valid HTTP or HTTPS server URL and a six-digit device pairing code." = "请输入有效的 HTTP 或 HTTPS 服务器地址，以及六位设备配对码。";
 "The app's server or Bluetooth connection changed. Review the destination and try again." = "App 的服务器或蓝牙连接已变化，请确认目标服务器后重试。";
+
+"Send Photo over Bluetooth" = "通过蓝牙发送照片";
+"Keep this app open and close to the display. Automatic updates stay paused in Bluetooth mode." = "请保持 App 开启并靠近屏幕。蓝牙模式下，自动更新保持暂停。";
+"The display received your photo and will now refresh its screen." = "屏幕已收到照片，即将刷新显示。";
+"Automatic updates use the saved Wi-Fi and server settings." = "自动更新使用已保存的 Wi-Fi 和服务器设置。";
+"Leave Maintenance and wait for the display to restart. Then press its button with this app open to send a photo. Automatic updates and Wi-Fi heartbeats are paused." = "退出维护并等待屏幕重启，然后保持 App 开启，按屏幕按键即可发送照片。自动更新和 Wi-Fi 心跳已暂停。";
+"Authorize this phone in Bluetooth Maintenance first, then choose Manual (Bluetooth)." = "请先在蓝牙维护中授权此手机，并选择“手动（蓝牙）”模式。";
+"Could not connect. Press the display's button and try again." = "无法连接，请按屏幕按键后重试。";
+"Transfer was not confirmed. Press the display's button and try again." = "传输未得到确认，请按屏幕按键后重试。";

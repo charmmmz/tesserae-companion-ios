@@ -13,6 +13,19 @@ backport can be compatible when it advertises the same stable API, while a
 build carrying a newer product version is not assumed compatible if its
 feature set is incomplete.
 
+## Experimental local Bluetooth Photo v2
+
+Local photo sending negotiates with firmware independently of the server
+Companion API. Native Photo v2 requires its own service UUID, authenticated
+`photo: 2` / `family: "tesserae"` identity, and a validated descriptor for
+geometry, packing, byte count and lifecycle. A hardware name or Bluetooth
+chip alone does not enable photo sending. Existing PicPak Photo v1 retains
+its separate protocol and format.
+
+Only opt-in E1004, E1001 and Sticky firmware profiles are implemented in the
+current experiment; physical BLE and panel acceptance is pending. OpenDisplay
+is a later adapter. See the [implementation and test handoff](docs/plans/2026-10-21-ble-photo-v2-implementation.md).
+
 ## First known upstream implementation
 
 As reviewed on 2026-07-28:

@@ -346,6 +346,56 @@ final class TesseraeCompanionUITests: XCTestCase {
         completionShot.name = "PicPak Compact Completion"; completionShot.lifetime = .keepAlways; add(completionShot)
     }
 
+    func testUnifiedMaintenanceOffersModeWithoutPicPakRefreshControls() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_UNIFIED_BLE"] = "1"
+        app.launch()
+        let nearby = app.buttons["onboarding-nearby-devices"]
+        XCTAssertTrue(nearby.waitForExistence(timeout: 5))
+        for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
+        nearby.tap()
+        app.buttons.containing(.staticText, identifier: "Tesserae-A1B2C3").firstMatch.tap()
+        app.buttons["Continue"].tap()
+        app.buttons["Enter 6-Digit Code"].tap()
+        let mode = app.buttons["nearby-screen-mode"]
+        XCTAssertTrue(mode.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["nearby-refresh-speed"].exists)
+        mode.tap()
+        app.buttons["Manual (Bluetooth)"].tap()
+        let saved = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@ AND isEnabled == true", "Manual (Bluetooth)"), object: mode)
+        XCTAssertEqual(XCTWaiter.wait(for: [saved], timeout: 4), .completed)
+        XCTAssertFalse(app.buttons["Allow This Device"].exists)
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Unified Bluetooth Mode Authorization"; shot.lifetime = .keepAlways; add(shot)
+    }
+
+    func testUnifiedPhotoSessionUsesNegotiatedPortraitPanelAndReceivesFrame() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_UNIFIED_BLE"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_UNIFIED_PHOTO"] = "1"
+        app.launch()
+        let nearby = app.buttons["onboarding-nearby-devices"]
+        XCTAssertTrue(nearby.waitForExistence(timeout: 5))
+        for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
+        nearby.tap()
+        app.buttons.containing(.staticText, identifier: "Tesserae-A1B2C3").firstMatch.tap()
+        XCTAssertTrue(app.buttons["ble-photo-start"].waitForExistence(timeout: 4))
+        app.buttons["ble-photo-start"].tap()
+        XCTAssertTrue(app.navigationBars["Send Photo over Bluetooth"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.navigationBars["Send to PicPak"].exists)
+        let resolution = app.descendants(matching: .any)["ble-photo-resolution"].firstMatch
+        XCTAssertTrue(resolution.waitForExistence(timeout: 3))
+        XCTAssertTrue(resolution.label.contains("1600") || resolution.label.contains("1,600"))
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "E1004 Negotiated Bluetooth Photo Editor"; shot.lifetime = .keepAlways; add(shot)
+        app.buttons["ble-send-photo"].tap()
+        XCTAssertTrue(app.staticTexts["Photo Sent"].waitForExistence(timeout: 45))
+        XCTAssertTrue(app.staticTexts["The display received your photo and will now refresh its screen."].exists)
+    }
+
     func testPicPakPhotoDiscoveryWaitsForSendAndRespondsToShortDrag() {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
