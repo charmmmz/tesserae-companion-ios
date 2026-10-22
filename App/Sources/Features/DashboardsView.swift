@@ -1077,10 +1077,11 @@ struct DashboardPreviewActionSheet: View {
                 deviceID: previewDeviceID
             )
         }
-        .tesseraeScreenBackground()
         .tesseraeHapticFeedback(trigger: hapticEvent)
         .padding(.bottom, TesseraeComposerLayout.pagePadding)
         .frame(idealWidth: 560, idealHeight: preferredSheetHeight)
+        // Include the footer padding so the backdrop reaches the sheet's bottom safe area.
+        .tesseraeScreenBackground()
         .presentationSizing(.fitted)
         .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.height(preferredSheetHeight), .large])
         .presentationContentInteraction(.scrolls)

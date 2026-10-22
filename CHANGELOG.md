@@ -66,6 +66,9 @@ capabilities.
 
 ### Fixed
 
+- Dashboard push and Lineup preview sheets keep a continuous background below
+  the action button, removing the mismatched strip along the bottom edge.
+
 - Send closes automatically after a successful photo or link send, returning to
   the previous screen with a brief confirmation. Failed or unconfirmed sends
   keep the photo, framing, link and display selection available for retry.
