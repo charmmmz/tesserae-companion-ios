@@ -2024,7 +2024,6 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3))
         app.buttons["Explore with Demo Data"].tap()
 
-        let tabBar = app.tabBars.firstMatch
         XCTAssertTrue(
             app.buttons["root-send-action"].waitForExistence(timeout: 3)
         )
@@ -2248,7 +2247,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         )
 
         app.buttons["root-send-close"].tap()
-        tabBar.buttons["Activity"].tap()
+        app.buttons["Activity"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["Shared Photo"].waitForExistence(timeout: 2))
         XCTAssertTrue(
             app.descendants(matching: .any).matching(

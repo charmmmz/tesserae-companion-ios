@@ -306,7 +306,7 @@ final class PanelPreviewGeometryTests: XCTestCase {
         XCTAssertEqual(framing.zoom, 1, accuracy: 0.000_001)
     }
 
-    func testPreviewPinchUsesTheAdvertisedBoundAndPreservesFocus() {
+    func testPreviewPinchUsesTheAdvertisedBoundAndPreservesVisibleCenter() {
         let framing = ImageFraming(
             focusX: 0.62,
             focusY: 0.38,
@@ -325,8 +325,53 @@ final class PanelPreviewGeometryTests: XCTestCase {
         )
 
         XCTAssertEqual(framing.focusX, 0.62, accuracy: 0.000_001)
-        XCTAssertEqual(framing.focusY, 0.38, accuracy: 0.000_001)
+        XCTAssertEqual(framing.focusY, 0.5, accuracy: 0.000_001)
         XCTAssertEqual(framing.zoom, 4, accuracy: 0.000_001)
+    }
+
+    func testOffCenterPinchKeepsTheSourcePointUnderTheMovingAnchor() {
+        for (width, height) in [(300.0, 400.0), (400.0, 300.0)] {
+            for (anchorX, anchorY) in [(0.25, 0.35), (0.75, 0.65)] {
+                let initial = ImageFraming(focusX: 0.5, focusY: 0.5, zoom: 2)
+                let before = initial.resolvedCrop(
+                    sourceWidth: 1_600, sourceHeight: 1_200,
+                    targetWidth: width, targetHeight: height
+                )
+                let changed = initial.applyingPreviewGesture(
+                    translationX: 12, translationY: -8, magnification: 1.5,
+                    canvasWidth: width, canvasHeight: height,
+                    sourceWidth: 1_600, sourceHeight: 1_200,
+                    targetWidth: width, targetHeight: height, maximumZoom: 4,
+                    zoomAnchorX: anchorX, zoomAnchorY: anchorY
+                )
+                let after = changed.resolvedCrop(
+                    sourceWidth: 1_600, sourceHeight: 1_200,
+                    targetWidth: width, targetHeight: height
+                )
+                XCTAssertEqual(before.x + anchorX * before.width,
+                               after.x + (anchorX + 12 / width) * after.width, accuracy: 0.000_001)
+                XCTAssertEqual(before.y + anchorY * before.height,
+                               after.y + (anchorY - 8 / height) * after.height, accuracy: 0.000_001)
+            }
+        }
+    }
+
+    func testPinchAtAnEdgeClampsTheCropWithoutExposingBlankSpace() {
+        let framing = ImageFraming(focusX: 0.05, focusY: 0.05, zoom: 3)
+            .applyingPreviewGesture(
+                translationX: 0, translationY: 0, magnification: 0.5,
+                canvasWidth: 300, canvasHeight: 400,
+                sourceWidth: 1_600, sourceHeight: 1_200,
+                targetWidth: 1_200, targetHeight: 1_600, maximumZoom: 4,
+                zoomAnchorX: 0.8, zoomAnchorY: 0.8
+            )
+        let crop = framing.resolvedCrop(
+            sourceWidth: 1_600, sourceHeight: 1_200,
+            targetWidth: 1_200, targetHeight: 1_600
+        )
+        XCTAssertEqual(crop.x, 0, accuracy: 0.000_001)
+        XCTAssertEqual(crop.y, 0, accuracy: 0.000_001)
+        XCTAssertEqual(framing.zoom, 1.5, accuracy: 0.000_001)
     }
 
     func testDraggingStartsAtTheVisibleCropEvenWhenStoredFocusIsPastAnEdge() {
