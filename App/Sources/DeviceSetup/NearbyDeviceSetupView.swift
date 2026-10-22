@@ -40,7 +40,7 @@ struct NearbyDeviceSetupView: View {
     @State private var serverPairingCode = ""
 
     private var isPicPakMaintenance: Bool {
-        device.hardware == .picPak42 && device.mode == .maintenance
+        nearby.resolvedHardware == .picPak42 && device.mode == .maintenance
     }
 
     private var hardwarePresentation: DisplayHardwarePresentation {
@@ -544,7 +544,7 @@ struct NearbyDeviceSetupView: View {
                         Text("Faster refresh may leave ghosting. Applies next refresh.")
                     }
                 }
-                if isPicPakMaintenance, let mode = nearby.screenMode {
+                if nearby.supportsScreenMode, let mode = nearby.screenMode {
                     Section {
                         Picker("Screen Mode", selection: Binding(
                             get: { nearby.screenMode ?? mode },
@@ -573,8 +573,10 @@ struct NearbyDeviceSetupView: View {
                         }
                     } footer: {
                         Text(mode == .bluetooth
-                             ? "After leaving Maintenance, press PicPak's button once with this app open to send a photo. Automatic updates and Wi-Fi heartbeats are paused."
-                             : "PicPak gets updates from your server over Wi-Fi.")
+                             ? (isPicPakMaintenance
+                                ? String(localized: "After leaving Maintenance, press PicPak's button once with this app open to send a photo. Automatic updates and Wi-Fi heartbeats are paused.")
+                                : String(localized: "Leave Maintenance and wait for the display to restart. Then press its button with this app open to send a photo. Automatic updates and Wi-Fi heartbeats are paused."))
+                             : String(localized: "Automatic updates use the saved Wi-Fi and server settings."))
                     }
                 }
                 Section("Current Network") {
@@ -616,7 +618,7 @@ struct NearbyDeviceSetupView: View {
                     screen = .wifi
                     nearby.scanWiFi()
                 }
-                if device.hardware != .picPak42 {
+                if !isPicPakMaintenance {
                     Button("Change Server", systemImage: "server.rack") {
                         changingServer = true
                         useConnectedServer = model.supportsDeviceSetup

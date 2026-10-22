@@ -24,8 +24,6 @@ struct TesseraePanelImagePreview: View {
     let isAutoFraming: Bool
     let autoFramingFeedback: PhotoFramingSession.Feedback?
     let onFramingInteraction: (() -> Void)?
-    // GestureState tracks cancellation only; its automatic reset must not move the image.
-    @GestureState private var isFramingGestureActive = false
     @State private var framingInteraction = PhotoFramingInteraction()
     @State private var activeFramingContext: FramingPreviewContext?
     @State private var framingControlsRevealTask: Task<Void, Never>?
@@ -81,12 +79,6 @@ struct TesseraePanelImagePreview: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(accessibilityIdentifier)
         .tesseraeHapticFeedback(trigger: hapticEvent)
-        .onChange(of: isFramingGestureActive) { _, isActive in
-            if !isActive {
-                // A cancelled gesture has no onEnded callback. Keep its last visible crop.
-                finishFramingInteraction()
-            }
-        }
         .onChange(of: framingContext) { _, _ in
             discardFramingInteraction()
         }
@@ -106,7 +98,7 @@ struct TesseraePanelImagePreview: View {
                     panelCanvas(size: proxy.size)
                         .animation(
                             !reduceMotion && !framingInteraction.isActive
-                                && !isFramingGestureActive && autoFramingFeedback == .applied
+                                && autoFramingFeedback == .applied
                                 ? .easeOut(duration: 0.18) : nil,
                             value: framing?.wrappedValue
                         )
@@ -221,14 +213,7 @@ struct TesseraePanelImagePreview: View {
         .onTapGesture {
             onCanvasTap?()
         }
-        .gesture(
-            framingGesture(size: size, image: image),
-            including: framingGestureMask(prioritized: false, image: image)
-        )
-        .highPriorityGesture(
-            framingGesture(size: size, image: image),
-            including: framingGestureMask(prioritized: true, image: image)
-        )
+        .gesture(framingGesture(size: size, image: image))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Display image preview")
         .accessibilityIdentifier(imageAccessibilityIdentifier)
@@ -241,8 +226,13 @@ struct TesseraePanelImagePreview: View {
             .disabled(!framingEditingEnabled)
             .font(.caption)
             .padding(.horizontal, 5)
-            .padding(.vertical, 5)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 5 : 0)
+            .background {
+                // Shrink the visible bar while keeping each button's 44pt hit area.
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(.regularMaterial)
+                    .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 0 : 4)
+            }
             .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("send-framing-controls")
@@ -253,13 +243,13 @@ struct TesseraePanelImagePreview: View {
     }
 
     private var framingItemPadding: CGFloat {
-        dynamicTypeSize.isAccessibilitySize ? 6 : 10
+        6
     }
 
     private var framingGestureHint: some View {
         Image(systemName: "hand.draw")
             .padding(.horizontal, framingItemPadding)
-            .frame(minWidth: 44, minHeight: framingButtonSize)
+            .frame(minWidth: dynamicTypeSize.isAccessibilitySize ? 44 : 28, minHeight: framingButtonSize)
             .accessibilityLabel("Drag · Pinch to zoom")
             .accessibilityIdentifier("send-framing-hint")
     }
@@ -327,7 +317,7 @@ struct TesseraePanelImagePreview: View {
             .fontWeight(.semibold)
             .fixedSize()
             .padding(.horizontal, framingItemPadding)
-            .frame(minWidth: 44, minHeight: framingButtonSize)
+            .frame(minWidth: dynamicTypeSize.isAccessibilitySize ? 44 : 36, minHeight: framingButtonSize)
             .accessibilityIdentifier("send-framing-zoom")
 
             Button {
@@ -357,14 +347,11 @@ struct TesseraePanelImagePreview: View {
     private func framingGesture(
         size: CGSize,
         image: UIImage?
-    ) -> some Gesture {
-        DragGesture(minimumDistance: prioritizesFramingGesture ? 0 : 1)
-            .simultaneously(with: MagnifyGesture())
-            .updating($isFramingGestureActive) { _, isActive, transaction in
-                isActive = true
-                transaction.disablesAnimations = true
-            }
-            .onChanged { value in
+    ) -> PhotoFramingGesture {
+        PhotoFramingGesture(
+            isEnabled: framingEditingEnabled && framing != nil && image != nil,
+            minimumDistance: prioritizesFramingGesture ? 0 : 1,
+            onChanged: { touches in
                 guard framingEditingEnabled, let image, let framing else { return }
                 withoutFramingAnimation {
                     if !framingInteraction.isActive {
@@ -377,30 +364,17 @@ struct TesseraePanelImagePreview: View {
                         previousZoomBoundary = zoomBoundary(for: framing.wrappedValue.zoom)
                     }
                     framingInteraction.update(
-                        translation: value.first?.translation,
-                        magnification: value.second?.magnification,
+                        touches: touches,
                         geometry: framingGeometry(size: size, image: image)
                     )
                     if let previewFraming = framingInteraction.previewFraming {
                         updateFramingHaptics(with: previewFraming)
                     }
                 }
-            }
-            .onEnded { value in
-                guard framingInteraction.isActive else { return }
-                guard activeFramingContext == framingContext, let image else {
-                    discardFramingInteraction()
-                    return
-                }
-                withoutFramingAnimation {
-                    framingInteraction.update(
-                        translation: value.first?.translation,
-                        magnification: value.second?.magnification,
-                        geometry: framingGeometry(size: size, image: image)
-                    )
-                    finishFramingInteraction()
-                }
-            }
+            },
+            // Cancellation and release both commit the last visible crop once.
+            onEnded: finishFramingInteraction
+        )
     }
 
     private var framingContext: FramingPreviewContext {
@@ -453,17 +427,6 @@ struct TesseraePanelImagePreview: View {
         activeFramingContext = nil
         previousGestureFraming = nil
         previousZoomBoundary = nil
-    }
-
-    private func framingGestureMask(
-        prioritized: Bool,
-        image: UIImage?
-    ) -> GestureMask {
-        guard framingEditingEnabled, framing != nil, image != nil,
-              prioritizesFramingGesture == prioritized else {
-            return .none
-        }
-        return .all
     }
 
     private func endFramingInteraction() {
@@ -526,8 +489,7 @@ struct PhotoFramingInteraction {
         let maximumZoom: Double
     }
 
-    private var translation = CGSize.zero
-    private var magnification: CGFloat = 1
+    private var touchTracker = PhotoFramingTouchTracker()
     private(set) var previewFraming: ImageFraming?
     private(set) var controlsHidden = false
     private(set) var controlsRevealGeneration = 0
@@ -537,31 +499,29 @@ struct PhotoFramingInteraction {
     mutating func begin(at framing: ImageFraming) {
         // Local editing starts from the parent's crop, then consumes gesture deltas.
         previewFraming = framing
-        translation = .zero
-        magnification = 1
+        touchTracker = PhotoFramingTouchTracker()
         controlsHidden = true
         controlsRevealGeneration += 1
     }
 
-    mutating func update(translation: CGSize?, magnification: CGFloat?, geometry: Geometry) {
+    mutating func update(touches: [Int: CGPoint], geometry: Geometry) {
         guard let currentFraming = previewFraming else { return }
-        // The drag and pinch can finish independently. A missing component is not a reset.
-        let previousTranslation = self.translation
-        let previousMagnification = self.magnification
-        if let translation { self.translation = translation }
-        if let magnification { self.magnification = magnification }
+        guard let change = touchTracker.update(touches: touches),
+              geometry.canvas.width > 0, geometry.canvas.height > 0 else { return }
         // Consume overshoot at the edges/zoom limits, so reversing direction moves immediately.
         previewFraming = currentFraming.applyingPreviewGesture(
-            translationX: Double(self.translation.width - previousTranslation.width),
-            translationY: Double(self.translation.height - previousTranslation.height),
-            magnification: Double(self.magnification / max(previousMagnification, 0.01)),
+            translationX: Double(change.translation.width),
+            translationY: Double(change.translation.height),
+            magnification: Double(change.magnification),
             canvasWidth: Double(geometry.canvas.width),
             canvasHeight: Double(geometry.canvas.height),
             sourceWidth: Double(geometry.source.width),
             sourceHeight: Double(geometry.source.height),
             targetWidth: Double(geometry.target.width),
             targetHeight: Double(geometry.target.height),
-            maximumZoom: geometry.maximumZoom
+            maximumZoom: geometry.maximumZoom,
+            zoomAnchorX: Double(change.anchor.x / geometry.canvas.width),
+            zoomAnchorY: Double(change.anchor.y / geometry.canvas.height)
         )
     }
 

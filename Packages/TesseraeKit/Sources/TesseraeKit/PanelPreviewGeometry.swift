@@ -241,6 +241,7 @@ public extension ImageFraming {
 
     /// Maps one drag/pinch gesture from panel-preview points back into the
     /// target-independent focus + zoom intent sent to Tesserae.
+    /// The zoom anchor is normalized to the canvas, before this sample's translation.
     func applyingPreviewGesture(
         translationX: Double,
         translationY: Double,
@@ -251,7 +252,9 @@ public extension ImageFraming {
         sourceHeight: Double,
         targetWidth: Double,
         targetHeight: Double,
-        maximumZoom: Double
+        maximumZoom: Double,
+        zoomAnchorX: Double = 0.5,
+        zoomAnchorY: Double = 0.5
     ) -> ImageFraming {
         let boundedMaximumZoom = max(maximumZoom, 1)
         let nextZoom = min(
@@ -279,21 +282,25 @@ public extension ImageFraming {
             return zoomed
         }
 
-        let fullPreviewWidth = canvasWidth / crop.width
-        let fullPreviewHeight = canvasHeight / crop.height
         let hasTranslation = abs(translationX) > 0.001
             || abs(translationY) > 0.001
-        guard hasTranslation else {
+        guard hasTranslation || nextZoom != zoom else {
             return zoomed
         }
 
-        // The requested focus can lie beyond the crop's legal center (for example
-        // after Auto Frame). Pan from the crop actually on screen so the first
-        // part of a drag is not spent traversing invisible, clamped-away space.
-        let translatedFocusX = crop.x + crop.width / 2
-            - translationX / fullPreviewWidth
-        let translatedFocusY = crop.y + crop.height / 2
-            - translationY / fullPreviewHeight
+        // Keep the source point under the previous touch centroid at the new
+        // centroid. Always start from the visible crop, including clamped Auto
+        // Frame focus values; hidden overshoot must not delay the next movement.
+        let previousCrop = resolvedCrop(
+            sourceWidth: sourceWidth, sourceHeight: sourceHeight,
+            targetWidth: targetWidth, targetHeight: targetHeight
+        )
+        let translatedFocusX = previousCrop.x + zoomAnchorX * previousCrop.width
+            + (0.5 - zoomAnchorX) * crop.width
+            - translationX / canvasWidth * crop.width
+        let translatedFocusY = previousCrop.y + zoomAnchorY * previousCrop.height
+            + (0.5 - zoomAnchorY) * crop.height
+            - translationY / canvasHeight * crop.height
         return ImageFraming(
             focusX: min(
                 max(translatedFocusX, crop.width / 2),

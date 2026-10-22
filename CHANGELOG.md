@@ -21,6 +21,17 @@ capabilities.
 - Activity can show only items that need attention, keeping retryable sends and
   failed updates easy to find while still allowing older history to load.
 
+- Experimental native Bluetooth Photo v2: negotiate display geometry and
+  packed pixel format from opted-in firmware, render photos locally, and send
+  directly without a server. Manual mode retains the Maintenance → authorize
+  → restart → button-to-send workflow. PicPak Photo v1 remains compatible.
+  E1004, E1001, E1003 and Sticky firmware profiles require physical-device
+  acceptance;
+  see the [implementation handoff](docs/plans/2026-10-21-ble-photo-v2-implementation.md).
+- Added E1003 landscape/16-gray regression coverage, including its
+  1,314,144-byte native frame, final 96-byte transfer chunk, and Swift/C
+  interoperability. The existing negotiated encoder handles its native format.
+
 ### Changed
 
 - Offline Album setup and review use shorter explanations focused on playback,

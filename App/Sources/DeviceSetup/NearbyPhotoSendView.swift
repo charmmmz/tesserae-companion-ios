@@ -19,6 +19,7 @@ struct NearbyPhotoSendView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(NearbyDeviceManager.self) private var nearby
     let device: NearbyTesseraeDevice
+    private var isUnifiedPhoto: Bool { device.photoProtocol == .tesseraeV2 }
     @State private var hasStarted = false
     @State private var didConnect = false
     @State private var loadedSelection: PhotosPickerItem?
@@ -33,7 +34,13 @@ struct NearbyPhotoSendView: View {
     @State private var preparing = false
     @State private var localError: String?
     @State private var sendTask: Task<Void, Never>?
-    private let panel = PanelProfile(width: 400, height: 300, gamut: "bwry_4", orientation: "landscape")
+    private var panel: PanelProfile {
+        nearby.photoCapabilities?.panel
+            ?? PanelProfile(width: 400, height: 300, gamut: "bwry_4", orientation: "landscape")
+    }
+    private var sendTitle: String {
+        isUnifiedPhoto ? String(localized: "Send Photo over Bluetooth") : String(localized: "Send to PicPak")
+    }
     private var aspect: PanelAspectRatio { PanelAspectRatio(panel: panel) }
     private var busy: Bool { preparing || nearby.photoState == .sending }
     private var canEditFraming: Bool { image != nil && fit == .fill }
@@ -58,7 +65,7 @@ struct NearbyPhotoSendView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .tesseraeScreenBackground()
-            .navigationTitle(phase == .editing ? "Send to PicPak" : "")
+            .navigationTitle(phase == .editing ? sendTitle : "")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(phase == .received ? .hidden : .visible, for: .navigationBar)
             .toolbar {
@@ -84,7 +91,8 @@ struct NearbyPhotoSendView: View {
             didConnect = true
             nearby.connect(to: device, qrCode: nil)
 #if DEBUG
-            if ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_PICPAK_PHOTO"] == "1" {
+            if ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_PICPAK_PHOTO"] == "1"
+                || ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_UNIFIED_PHOTO"] == "1" {
                 let format = UIGraphicsImageRendererFormat(); format.scale = 1
                 image = UIGraphicsImageRenderer(size: CGSize(width: 600, height: 300), format: format).image { c in
                     UIColor.systemYellow.setFill(); c.fill(CGRect(x: 0, y: 0, width: 600, height: 300))
@@ -105,7 +113,7 @@ struct NearbyPhotoSendView: View {
             TesseraeEInkDisplayArtwork(isMaintenance: false)
             VStack(spacing: 5) {
                 Text("Ready to Receive").font(.title2.bold())
-                DisplayHardwareBadge(presentation: DisplayHardwarePresentation(kind: device.hardware.catalogKind))
+                DisplayHardwareBadge(presentation: DisplayHardwarePresentation(kind: nearby.resolvedHardware?.catalogKind ?? device.hardware.catalogKind))
                 Text(device.name).font(.footnote).foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
@@ -136,7 +144,7 @@ struct NearbyPhotoSendView: View {
                 .frame(maxWidth: .infinity)
             }
             Button { send() } label: {
-                Label(preparing ? "Preparing…" : "Send to PicPak", systemImage: "paperplane.fill")
+                Label(preparing ? String(localized: "Preparing…") : sendTitle, systemImage: "paperplane.fill")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
@@ -145,7 +153,9 @@ struct NearbyPhotoSendView: View {
             .disabled(image == nil || busy)
             .accessibilityIdentifier("ble-send-photo")
             if let localError { Text(localError).font(.footnote).foregroundStyle(.secondary) }
-            Text("Keep this app open and your device close to PicPak.")
+            Text(isUnifiedPhoto
+                 ? String(localized: "Keep this app open and close to the display. Automatic updates stay paused in Bluetooth mode.")
+                 : String(localized: "Keep this app open and your device close to PicPak."))
                 .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
         }
     }
@@ -159,7 +169,9 @@ struct NearbyPhotoSendView: View {
                             .font(.system(size: 52)).foregroundStyle(TesseraeTheme.success)
                         VStack(spacing: 8) {
                             Text("Photo Sent").font(.title2.bold())
-                            Text("PicPak received your photo and will now refresh its screen.")
+                            Text(isUnifiedPhoto
+                                 ? String(localized: "The display received your photo and will now refresh its screen.")
+                                 : String(localized: "PicPak received your photo and will now refresh its screen."))
                                 .foregroundStyle(.secondary)
                         }
                         Button("Done") { close() }
@@ -220,7 +232,8 @@ struct NearbyPhotoSendView: View {
             )
             .accessibilityHint(canEditFraming ? "Drag to reposition the photo and pinch to zoom." : "Tap to choose a photo.")
 
-            Label("\(device.name) · 400 × 300", systemImage: "rectangle.on.rectangle")
+            Label("\(device.name) · \(panel.width) × \(panel.height)", systemImage: "rectangle.on.rectangle")
+                .accessibilityIdentifier("ble-photo-resolution")
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity)
@@ -319,8 +332,9 @@ struct NearbyPhotoSendView: View {
             guard let data = try await selection.loadTransferable(type: Data.self) else {
                 throw UploadImagePreparationError.decoding
             }
+            let maximumPixelSize = max(1536, panel.width, panel.height)
             let prepared = try await Task.detached(priority: .userInitiated) {
-                try UploadImagePreparer.prepare(data: data, fallbackContentType: "image/jpeg", maximumPixelSize: 1536)
+                try UploadImagePreparer.prepare(data: data, fallbackContentType: "image/jpeg", maximumPixelSize: maximumPixelSize)
             }.value
             try Task.checkCancellation()
             loadedSelection = selection
@@ -341,12 +355,28 @@ struct NearbyPhotoSendView: View {
         sendTask = Task { @MainActor in
             defer { preparing = false; framing.resumeEditing() }
             do {
-                let rgba = try PicPakPhotoEncoder.raster(image: image, fit: fit, framing: framing.framing(for: aspect))
-                let data = try await Task.detached(priority: .userInitiated) { try PicPakPhotoEncoder.encode(rgba: rgba) }.value
+                let data: Data
+                let capabilities = isUnifiedPhoto ? nearby.photoCapabilities : nil
+                if isUnifiedPhoto {
+                    guard let capabilities, nearby.connectionState == .ready else {
+                        throw BLESetupProtocolError.unsupportedVersion
+                    }
+                    let rgba = try LocalBluetoothPhotoRenderer.raster(image: image, fit: fit,
+                        framing: framing.framing(for: aspect), capabilities: capabilities)
+                    data = try await LocalBluetoothPhotoRenderer.encode(rgba: rgba, capabilities: capabilities)
+                } else {
+                    let rgba = try PicPakPhotoEncoder.raster(image: image, fit: fit, framing: framing.framing(for: aspect))
+                    data = try await Task.detached(priority: .userInitiated) { try PicPakPhotoEncoder.encode(rgba: rgba) }.value
+                }
                 try Task.checkCancellation()
-                nearby.sendPhoto(data)
+                try nearby.sendPhoto(data, to: device, capabilityDigest: capabilities?.digest)
             } catch { if !Task.isCancelled { localError = error.localizedDescription } }
         }
     }
-    private func close() { sendTask?.cancel(); framing.discardAnalysis(); nearby.endSession(for: device); dismiss() }
+    private func close() {
+        sendTask?.cancel()
+        framing.discardAnalysis()
+        nearby.endSession(for: device)
+        dismiss()
+    }
 }

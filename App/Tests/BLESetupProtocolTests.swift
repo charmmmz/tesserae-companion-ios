@@ -81,7 +81,7 @@ final class BLESetupProtocolTests: XCTestCase {
             ),
             BLESetupAdvertisement(
                 mode: .maintenance,
-                hardware: .waveshare133E6,
+                hardware: .unknown(9),
                 hardwareSuffix: "112233",
                 sessionID: Data([0x12, 0x34, 0x56, 0x78])
             )
@@ -89,9 +89,9 @@ final class BLESetupProtocolTests: XCTestCase {
         XCTAssertNil(BLESetupAdvertisement(
             serviceData: Data([1, 0x01, 4, 0, 0, 1, 0, 0, 0, 1])
         ))
-        XCTAssertNil(BLESetupAdvertisement(
+        XCTAssertEqual(BLESetupAdvertisement(
             serviceData: Data([2, 0x01, 99, 0, 0, 1, 0, 0, 0, 1])
-        ))
+        )?.hardware, .unknown(99))
     }
 
     func testDeviceInfoValidatesConnectionNonceForScannedCode() throws {
@@ -112,8 +112,8 @@ final class BLESetupProtocolTests: XCTestCase {
             serviceData: Data([2, 0x02, 11, 0xA1, 0xB2, 0xC3, 1, 2, 3, 4])
         ))
         XCTAssertEqual(advertisement.mode, .maintenance)
-        XCTAssertEqual(advertisement.hardware, .picPak42)
-        XCTAssertEqual(advertisement.hardware.catalogKind, "picpak_4_2")
+        XCTAssertEqual(advertisement.hardware, .unknown(11))
+        XCTAssertEqual(BLESetupHardware.resolve(code: 11, model: "picpak_4_2"), .picPak42)
     }
 
     func testRefreshSpeedDiagnosticsDecodeSupportedValuesWithoutNetwork() {

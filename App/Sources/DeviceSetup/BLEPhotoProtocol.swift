@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 import Security
+import TesseraeKit
 
 enum BLEScreenMode: String, CaseIterable, Sendable {
     case wifi, bluetooth
@@ -56,14 +57,19 @@ struct BLEPhotoTransfer {
     static let format = "picpak-bwry2-bottom-up"
     let id: UInt32
     let data: Data
+    let capabilities: BluetoothPhotoCapabilities?
     private(set) var offset = 0
     private(set) var expectedOffset = 0
     private(set) var waitingForReceipt = false
 
-    init(data: Data, id: UInt32) throws {
-        guard data.count == Self.byteCount, id != 0 else { throw BLESetupProtocolError.invalidFrame }
+    init(data: Data, id: UInt32, capabilities: BluetoothPhotoCapabilities? = nil) throws {
+        try capabilities?.validate()
+        guard data.count == (capabilities?.bytes ?? Self.byteCount), id != 0 else {
+            throw BLESetupProtocolError.invalidFrame
+        }
         self.data = data
         self.id = id
+        self.capabilities = capabilities
     }
     var digest: String { Data(SHA256.hash(data: data)).hexString }
     mutating func acknowledge(_ value: Int) throws -> Bool {
@@ -75,7 +81,7 @@ struct BLEPhotoTransfer {
     }
     mutating func nextPacket() -> Data? {
         guard offset < data.count else { waitingForReceipt = true; return nil }
-        let end = min(offset + Self.chunkBytes, data.count)
+        let end = min(offset + (capabilities?.chunkBytes ?? Self.chunkBytes), data.count)
         var packet = Self.bigEndian(id) + Self.bigEndian(UInt32(offset))
         packet.append(data[offset..<end])
         expectedOffset = end

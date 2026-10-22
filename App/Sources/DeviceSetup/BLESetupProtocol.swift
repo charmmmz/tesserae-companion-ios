@@ -4,6 +4,7 @@ import Foundation
 enum BLESetupProtocol {
     static let serviceUUID = "7A5E0001-7B6D-4F8B-9C2E-1D0A5A110001"
     static let photoServiceUUID = "7A5E0007-7B6D-4F8B-9C2E-1D0A5A110001"
+    static let unifiedPhotoServiceUUID = "7A5E0008-7B6D-4F8B-9C2E-1D0A5A110001"
     static let photoDataUUID = "7A5E0006-7B6D-4F8B-9C2E-1D0A5A110001"
     static let infoUUID = "7A5E0002-7B6D-4F8B-9C2E-1D0A5A110001"
     static let qrControlUUID = "7A5E0003-7B6D-4F8B-9C2E-1D0A5A110001"
@@ -146,12 +147,11 @@ struct BLESetupAdvertisement: Equatable, Sendable {
         }
         guard
             payload.count == 10,
-            payload[0] == BLESetupProtocol.protocolMajor,
-            let hardware = BLESetupHardware(rawValue: payload[2])
+            payload[0] == BLESetupProtocol.protocolMajor
         else { return nil }
         guard payload[1] <= 4 else { return nil }
         mode = payload[1] == 4 ? .photo : (payload[1] & 0x02 != 0 ? .maintenance : .setup)
-        self.hardware = hardware
+        self.hardware = BLESetupHardware(rawValue: payload[2])
         hardwareSuffix = payload[3..<6]
             .map { String(format: "%02X", $0) }
             .joined()
@@ -159,18 +159,47 @@ struct BLESetupAdvertisement: Equatable, Sendable {
     }
 }
 
-enum BLESetupHardware: UInt8, Equatable, Sendable {
-    case seeedReTerminalE1001 = 1
-    case seeedReTerminalE1002 = 2
-    case seeedReTerminalE1003 = 3
-    case seeedReTerminalE1004 = 4
-    case seeedEE02 = 5
-    case seeedEE0475 = 6
-    case seeedEE0473E6 = 7
-    case seeedXIAO75 = 8
-    case waveshare133E6 = 9
-    case wavesharePhotoPainter73 = 10
-    case picPak42 = 11
+/// Broadcast codes are hints. Codes 8, 9 and 11 have conflicting legacy
+/// assignments; only connected device info may resolve their hardware identity.
+enum BLESetupHardware: Equatable, Sendable {
+    case seeedReTerminalE1001, seeedReTerminalE1002, seeedReTerminalE1003, seeedReTerminalE1004
+    case seeedEE02, seeedEE03, seeedEE0475, seeedEE0473E6, seeedEE05, seeedSticky
+    case seeedXIAO75, waveshare133E6, wavesharePhotoPainter73, picPak42
+    case paperMono, goodDisplay133, inkplate13
+    case unknown(UInt8)
+
+    init(rawValue: UInt8) {
+        switch rawValue {
+        case 1: self = .seeedReTerminalE1001
+        case 2: self = .seeedReTerminalE1002
+        case 3: self = .seeedReTerminalE1003
+        case 4: self = .seeedReTerminalE1004
+        case 5: self = .seeedEE02
+        case 6: self = .seeedEE0475
+        case 7: self = .seeedEE0473E6
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    var rawValue: UInt8 {
+        switch self {
+        case .seeedReTerminalE1001: 1
+        case .seeedReTerminalE1002: 2
+        case .seeedReTerminalE1003: 3
+        case .seeedReTerminalE1004: 4
+        case .seeedEE02: 5
+        case .seeedEE0475: 6
+        case .seeedEE0473E6: 7
+        case .seeedXIAO75, .seeedSticky: 8
+        case .waveshare133E6, .seeedEE05: 9
+        case .wavesharePhotoPainter73: 10
+        case .picPak42, .seeedEE03: 11
+        case .paperMono: 12
+        case .goodDisplay133: 18
+        case .inkplate13: 19
+        case .unknown(let code): code
+        }
+    }
 
     var catalogKind: String {
         switch self {
@@ -179,16 +208,50 @@ enum BLESetupHardware: UInt8, Equatable, Sendable {
         case .seeedReTerminalE1003: "seeed_reterminal_e1003"
         case .seeedReTerminalE1004: "seeed_reterminal_e1004"
         case .seeedEE02: "seeed_ee02"
+        case .seeedEE03: "seeed_ee03"
         case .seeedEE0475: "seeed_ee04_75"
         case .seeedEE0473E6: "seeed_ee04_73e6"
+        case .seeedEE05: "seeed_ee05_213_bwry"
+        case .seeedSticky: "seeed_reterminal_sticky"
         case .seeedXIAO75: "seeed_xiao_75"
         case .waveshare133E6: "waveshare_133e6"
         case .wavesharePhotoPainter73: "waveshare_photopainter_73"
         case .picPak42: "picpak_4_2"
+        case .paperMono: "m5stack_papermono"
+        case .goodDisplay133: "gooddisplay_esp32_133c02"
+        case .inkplate13: "soldered_inkplate_13spectra"
+        case .unknown: "unknown"
         }
     }
-}
 
+    static func resolve(code: UInt8, model: String) -> Self {
+        let normalized = model.lowercased().filter { $0.isLetter || $0.isNumber }
+        let candidates: [Self] = [.seeedReTerminalE1001, .seeedReTerminalE1002,
+            .seeedReTerminalE1003, .seeedReTerminalE1004, .seeedEE02, .seeedEE03,
+            .seeedEE0475, .seeedEE0473E6, .seeedEE05, .seeedSticky, .seeedXIAO75,
+            .waveshare133E6, .wavesharePhotoPainter73, .picPak42, .paperMono,
+            .goodDisplay133, .inkplate13]
+        return candidates.first { candidate in
+            guard candidate.rawValue == code else { return false }
+            let catalog = candidate.catalogKind.filter { $0.isLetter || $0.isNumber }
+            let aliases: [String]
+            switch candidate {
+            case .seeedReTerminalE1001: aliases = ["reterminale1001"]
+            case .seeedReTerminalE1002: aliases = ["reterminale1002"]
+            case .seeedReTerminalE1003: aliases = ["reterminale1003"]
+            case .seeedReTerminalE1004: aliases = ["reterminale1004"]
+            case .seeedSticky: aliases = ["reterminalsticky"]
+            case .seeedEE0475: aliases = ["seeedee0475"]
+            case .seeedEE0473E6: aliases = ["seeedee0473e6"]
+            case .paperMono: aliases = ["papermono"]
+            case .goodDisplay133: aliases = ["gooddisplayesp32133c02"]
+            case .inkplate13: aliases = ["inkplate13spectra"]
+            default: aliases = []
+            }
+            return normalized == catalog || aliases.contains(normalized)
+        } ?? .unknown(code)
+    }
+}
 enum BLERefreshSpeed: String, CaseIterable, Equatable, Sendable {
     case fiveSeconds = "5s"
     case tenSeconds = "10s"
@@ -262,9 +325,16 @@ struct BLESetupDeviceInfo: Decodable, Equatable, Sendable {
     let model: String
     let firmware: String
     let mode: String
+    var photo: Int? = nil
+    var family: String? = nil
+    var kind: String? = nil
+
+    var resolvedHardware: BLESetupHardware {
+        BLESetupHardware.resolve(code: hardware, model: model)
+    }
 
     private enum CodingKeys: String, CodingKey {
-        case `protocol`, id, sid, hardware, model, firmware, mode
+        case `protocol`, id, sid, hardware, model, firmware, mode, photo, family, kind
         case connectionNonce = "connection_nonce"
     }
 

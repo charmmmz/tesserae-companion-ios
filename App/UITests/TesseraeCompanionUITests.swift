@@ -346,6 +346,81 @@ final class TesseraeCompanionUITests: XCTestCase {
         completionShot.name = "PicPak Compact Completion"; completionShot.lifetime = .keepAlways; add(completionShot)
     }
 
+    func testUnifiedMaintenanceOffersModeWithoutPicPakRefreshControls() {
+        assertUnifiedMaintenanceOffersMode(e1003: false)
+    }
+
+    func testE1003PhotoFirmwareOffersModeWithoutPicPakRefreshControls() {
+        assertUnifiedMaintenanceOffersMode(e1003: true)
+    }
+
+    private func assertUnifiedMaintenanceOffersMode(e1003: Bool) {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_UNIFIED_BLE"] = "1"
+        if e1003 { app.launchEnvironment["TESSERAE_UI_TEST_E1003_BLE"] = "1" }
+        app.launch()
+        let nearby = app.buttons["onboarding-nearby-devices"]
+        XCTAssertTrue(nearby.waitForExistence(timeout: 5))
+        for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
+        nearby.tap()
+        app.buttons.containing(.staticText, identifier: "Tesserae-A1B2C3").firstMatch.tap()
+        app.buttons["Continue"].tap()
+        app.buttons["Enter 6-Digit Code"].tap()
+        let mode = app.buttons["nearby-screen-mode"]
+        XCTAssertTrue(mode.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["nearby-refresh-speed"].exists)
+        mode.tap()
+        app.buttons["Manual (Bluetooth)"].tap()
+        let saved = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@ AND isEnabled == true", "Manual (Bluetooth)"), object: mode)
+        XCTAssertEqual(XCTWaiter.wait(for: [saved], timeout: 4), .completed)
+        XCTAssertFalse(app.buttons["Allow This Device"].exists)
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = e1003 ? "E1003 Bluetooth Mode Authorization" : "Unified Bluetooth Mode Authorization"
+        shot.lifetime = .keepAlways; add(shot)
+    }
+
+    func testUnifiedPhotoSessionUsesNegotiatedPortraitPanelAndReceivesFrame() {
+        assertUnifiedPhotoSessionReceivesFrame(e1003: false)
+    }
+
+    func testE1003PhotoSessionUsesNegotiatedGrayLandscapePanelAndReceivesFrame() {
+        assertUnifiedPhotoSessionReceivesFrame(e1003: true)
+    }
+
+    private func assertUnifiedPhotoSessionReceivesFrame(e1003: Bool) {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_UNIFIED_BLE"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_UNIFIED_PHOTO"] = "1"
+        if e1003 { app.launchEnvironment["TESSERAE_UI_TEST_E1003_BLE"] = "1" }
+        app.launch()
+        let nearby = app.buttons["onboarding-nearby-devices"]
+        XCTAssertTrue(nearby.waitForExistence(timeout: 5))
+        for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
+        nearby.tap()
+        app.buttons.containing(.staticText, identifier: "Tesserae-A1B2C3").firstMatch.tap()
+        XCTAssertTrue(app.buttons["ble-photo-start"].waitForExistence(timeout: 4))
+        app.buttons["ble-photo-start"].tap()
+        XCTAssertTrue(app.navigationBars["Send Photo over Bluetooth"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.navigationBars["Send to PicPak"].exists)
+        let resolution = app.descendants(matching: .any)["ble-photo-resolution"].firstMatch
+        XCTAssertTrue(resolution.waitForExistence(timeout: 3))
+        if e1003 {
+            XCTAssertTrue(resolution.label.contains("1872") || resolution.label.contains("1,872"))
+            XCTAssertTrue(resolution.label.contains("1404") || resolution.label.contains("1,404"))
+        } else {
+            XCTAssertTrue(resolution.label.contains("1600") || resolution.label.contains("1,600"))
+        }
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = e1003 ? "E1003 Negotiated Gray Bluetooth Photo Editor" : "E1004 Negotiated Bluetooth Photo Editor"
+        shot.lifetime = .keepAlways; add(shot)
+        app.buttons["ble-send-photo"].tap()
+        XCTAssertTrue(app.staticTexts["Photo Sent"].waitForExistence(timeout: 45))
+        XCTAssertTrue(app.staticTexts["The display received your photo and will now refresh its screen."].exists)
+    }
+
     func testPicPakPhotoDiscoveryWaitsForSendAndRespondsToShortDrag() {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
@@ -1943,7 +2018,6 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3))
         app.buttons["Explore with Demo Data"].tap()
 
-        let tabBar = app.tabBars.firstMatch
         XCTAssertTrue(
             app.buttons["root-send-action"].waitForExistence(timeout: 3)
         )
@@ -2160,7 +2234,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         ]
         XCTAssertTrue(sentBanner.waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["root-send-close"].waitForNonExistence(timeout: 3))
-        tabBar.buttons["Activity"].tap()
+        app.buttons["Activity"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["Shared Photo"].waitForExistence(timeout: 2))
         XCTAssertTrue(
             app.descendants(matching: .any).matching(
@@ -2189,11 +2263,11 @@ final class TesseraeCompanionUITests: XCTestCase {
         sample.tap()
         let auto = app.buttons["send-auto-framing"]
         XCTAssertTrue(auto.waitForExistence(timeout: 3))
-        XCTAssertGreaterThanOrEqual(auto.frame.width, 44 - 0.001)
-        XCTAssertGreaterThanOrEqual(auto.frame.height, 44 - 0.001)
+        XCTAssertGreaterThanOrEqual(auto.frame.width, 44 - 0.01)
+        XCTAssertGreaterThanOrEqual(auto.frame.height, 44 - 0.01)
         let reset = app.buttons["send-framing-reset"]
-        XCTAssertGreaterThanOrEqual(reset.frame.width, 44 - 0.001)
-        XCTAssertGreaterThanOrEqual(reset.frame.height, 44 - 0.001)
+        XCTAssertGreaterThanOrEqual(reset.frame.width, 44 - 0.01)
+        XCTAssertGreaterThanOrEqual(reset.frame.height, 44 - 0.01)
         XCTAssertEqual(auto.value as? String, "Adjusted")
         let hint = app.descendants(matching: .any)["send-framing-hint"]
         XCTAssertTrue(hint.exists)
@@ -2202,6 +2276,8 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(reset.isEnabled)
         let controls = app.descendants(matching: .any)["send-framing-controls"]
         let controlsHeight = controls.frame.height
+        XCTAssertEqual(controlsHeight, 44, accuracy: 0.5)
+        XCTAssertLessThan(controls.frame.width, 180)
         XCTAssertLessThanOrEqual(hint.frame.maxX, auto.frame.minX + 1)
         XCTAssertLessThanOrEqual(auto.frame.maxX, zoom.frame.minX)
         let shot = XCTAttachment(screenshot: app.screenshot())

@@ -11,7 +11,6 @@ private struct DisplayPreviewRefreshID: Hashable {
 
 struct DisplaysView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
@@ -77,10 +76,6 @@ struct DisplaysView: View {
 
         ScrollView {
             LazyVStack(spacing: displayCardSpacing) {
-                if model.supportsLineups {
-                    manageLineupsButton
-                }
-
                 ForEach(displays) { display in
                     displayRow(display, displayOrder: displayOrder)
                 }
@@ -175,8 +170,12 @@ struct DisplaysView: View {
         }
         .onDisappear { cancelDisplayDrag() }
         .toolbar {
-            if horizontalSizeClass == .compact || selectedDisplayID == nil {
-                ToolbarItemGroup(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                if model.supportsLineups {
+                    manageLineupsButton
+                }
+
+                if horizontalSizeClass == .compact || selectedDisplayID == nil {
                     TesseraeSendToolbarButton()
                     TesseraeSettingsToolbarButton()
                 }
@@ -187,51 +186,9 @@ struct DisplaysView: View {
     }
 
     private var manageLineupsButton: some View {
-        Button {
+        Button("Manage Lineups", systemImage: "rectangle.3.group") {
             lineupsPresented = true
-        } label: {
-            HStack(alignment: .center, spacing: 14) {
-                if !dynamicTypeSize.isAccessibilitySize {
-                    Image(systemName: "rectangle.3.group")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(TesseraeTheme.accent)
-                        .frame(width: 40, height: 40)
-                        .background(
-                            TesseraeTheme.accent.opacity(0.11),
-                            in: RoundedRectangle(
-                                cornerRadius: 12,
-                                style: .continuous
-                            )
-                        )
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Manage Lineups")
-                        .font(.headline)
-                    Text("Schedules, decks, and rotations")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                Spacer(minLength: 0)
-
-                if !dynamicTypeSize.isAccessibilitySize, !model.lineups.isEmpty {
-                    Text("\(model.lineups.count)")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .tesseraeCard()
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .accessibilityIdentifier("manage-lineups")
         .accessibilityHint("Opens Lineups and controls.")
     }

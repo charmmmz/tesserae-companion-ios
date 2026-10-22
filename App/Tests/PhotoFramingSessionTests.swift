@@ -330,15 +330,10 @@ struct PhotoFramingInteractionTests {
     func reversesAtEdge(direction: Double) throws {
         var interaction = PhotoFramingInteraction()
         interaction.begin(at: .centeredFill)
-        interaction.update(
-            translation: CGSize(width: direction * 1_000, height: 0),
-            magnification: nil, geometry: geometry
-        )
+        interaction.update(touches: [0: .zero], geometry: geometry)
+        interaction.update(touches: [0: CGPoint(x: direction * 1_000, y: 0)], geometry: geometry)
         let edge = rect(try #require(interaction.previewFraming))
-        interaction.update(
-            translation: CGSize(width: direction * 990, height: 0),
-            magnification: nil, geometry: geometry
-        )
+        interaction.update(touches: [0: CGPoint(x: direction * 990, y: 0)], geometry: geometry)
         let reversed = rect(try #require(interaction.previewFraming))
         #expect(abs(reversed.x - edge.x + direction * 10) < 0.000_001)
     }
@@ -347,13 +342,10 @@ struct PhotoFramingInteractionTests {
     func reversesAtZoomLimit(maximum: Bool) throws {
         var interaction = PhotoFramingInteraction()
         interaction.begin(at: ImageFraming(focusX: 0.5, focusY: 0.5, zoom: 2))
-        interaction.update(
-            translation: nil, magnification: maximum ? 10 : 0.1, geometry: geometry
-        )
+        interaction.update(touches: pinch(scale: 1), geometry: geometry)
+        interaction.update(touches: pinch(scale: maximum ? 10 : 0.1), geometry: geometry)
         #expect(interaction.previewFraming?.zoom == (maximum ? 4 : 1))
-        interaction.update(
-            translation: nil, magnification: maximum ? 9 : 0.11, geometry: geometry
-        )
+        interaction.update(touches: pinch(scale: maximum ? 9 : 0.11), geometry: geometry)
         let framing = try #require(interaction.previewFraming)
         #expect(abs(framing.zoom - (maximum ? 3.6 : 1.1)) < 0.000_001)
     }
@@ -362,10 +354,12 @@ struct PhotoFramingInteractionTests {
     func releaseAndNextDrag() throws {
         var interaction = PhotoFramingInteraction()
         interaction.begin(at: .centeredFill)
-        let translation = CGSize(width: 40, height: 0)
-        interaction.update(translation: translation, magnification: nil, geometry: geometry)
+        interaction.update(touches: [0: .zero], geometry: geometry)
+        let touches = [0: CGPoint(x: 40, y: 0)]
+        interaction.update(touches: touches, geometry: geometry)
         let visible = try #require(interaction.previewFraming)
-        interaction.update(translation: translation, magnification: nil, geometry: geometry)
+        interaction.update(touches: touches, geometry: geometry)
+        interaction.update(touches: [:], geometry: geometry)
         let result = interaction.end()
         let committed = try #require(result)
         #expect(committed == visible)
@@ -373,35 +367,71 @@ struct PhotoFramingInteractionTests {
 
         interaction.begin(at: committed)
         #expect(interaction.previewFraming == visible)
-        interaction.update(
-            translation: CGSize(width: 10, height: 0), magnification: nil, geometry: geometry
-        )
+        interaction.update(touches: [1: CGPoint(x: 100, y: 80)], geometry: geometry)
+        interaction.update(touches: [1: CGPoint(x: 110, y: 80)], geometry: geometry)
         let next = rect(try #require(interaction.previewFraming))
         #expect(abs(next.x - rect(visible).x - 10) < 0.000_001)
     }
 
-    @Test("A drag ending before the pinch retains its translation")
-    func independentGestureComponents() throws {
+    @Test("Drag to pinch to drag rebases without a jump, whichever finger lifts", arguments: [0, 1])
+    func fingerHandoffs(liftedFinger: Int) throws {
         var interaction = PhotoFramingInteraction()
-        interaction.begin(at: .centeredFill)
-        interaction.update(
-            translation: CGSize(width: 30, height: 20), magnification: 1.5, geometry: geometry
-        )
+        interaction.begin(at: ImageFraming(focusX: 0.5, focusY: 0.5, zoom: 2))
+        interaction.update(touches: [0: CGPoint(x: 50, y: 80)], geometry: geometry)
+        interaction.update(touches: [0: CGPoint(x: 60, y: 90)], geometry: geometry)
+        let dragged = try #require(interaction.previewFraming)
+        // The new finger moves the centroid 50pt without any physical motion.
+        interaction.update(touches: [0: CGPoint(x: 60, y: 90), 1: CGPoint(x: 160, y: 90)], geometry: geometry)
+        #expect(interaction.previewFraming == dragged)
+        let oldRect = rect(dragged)
+        let sourcePoint = CGPoint(x: (110 - oldRect.x) / oldRect.width,
+                                  y: (90 - oldRect.y) / oldRect.height)
+        let expanded = [0: CGPoint(x: 35, y: 100), 1: CGPoint(x: 185, y: 100)]
+        interaction.update(touches: expanded, geometry: geometry)
+        let pinched = try #require(interaction.previewFraming)
+        let pinchedRect = rect(pinched)
+        #expect(abs(pinched.zoom - 3) < 0.000_001)
+        #expect(abs(pinchedRect.x + sourcePoint.x * pinchedRect.width - 110) < 0.000_001)
+        #expect(abs(pinchedRect.y + sourcePoint.y * pinchedRect.height - 100) < 0.000_001)
+
+        let remainingID = 1 - liftedFinger
+        let remaining = try #require(expanded[remainingID])
+        interaction.update(touches: [remainingID: remaining], geometry: geometry)
+        #expect(interaction.previewFraming == pinched)
+        interaction.update(touches: [remainingID: CGPoint(x: remaining.x + 7, y: remaining.y - 5)], geometry: geometry)
+        let resumed = rect(try #require(interaction.previewFraming))
+        #expect(abs(resumed.x - pinchedRect.x - 7) < 0.000_001)
+        #expect(abs(resumed.y - pinchedRect.y + 5) < 0.000_001)
+
+        // A second pinch within the same touch sequence starts from scale 1.
+        let beforeSecondPinch = interaction.previewFraming
+        interaction.update(touches: [remainingID: CGPoint(x: 80, y: 100), 2: CGPoint(x: 180, y: 100)], geometry: geometry)
+        #expect(interaction.previewFraming == beforeSecondPinch)
+        interaction.update(touches: [remainingID: CGPoint(x: 90, y: 100), 2: CGPoint(x: 170, y: 100)], geometry: geometry)
+        #expect(abs(try #require(interaction.previewFraming).zoom - 2.4) < 0.000_001)
+    }
+
+    @Test("Replacing a finger or adding a third finger cannot introduce a crop jump")
+    func changedTouchMembership() throws {
+        var interaction = PhotoFramingInteraction()
+        interaction.begin(at: ImageFraming(focusX: 0.5, focusY: 0.5, zoom: 2))
+        interaction.update(touches: pinch(scale: 1), geometry: geometry)
+        interaction.update(touches: pinch(scale: 1.2), geometry: geometry)
         let before = try #require(interaction.previewFraming)
-        interaction.update(translation: nil, magnification: 1.5, geometry: geometry)
+        interaction.update(touches: [0: CGPoint(x: 100, y: 200), 2: CGPoint(x: 250, y: 80)], geometry: geometry)
         #expect(interaction.previewFraming == before)
-        interaction.update(translation: nil, magnification: nil, geometry: geometry)
-        let committed = interaction.end()
-        #expect(committed == before)
+        interaction.update(touches: [0: CGPoint(x: 100, y: 200), 2: CGPoint(x: 250, y: 80), 3: .zero], geometry: geometry)
+        #expect(interaction.previewFraming == before)
+        interaction.update(touches: [0: CGPoint(x: 100, y: 200), 2: CGPoint(x: 250, y: 80)], geometry: geometry)
+        #expect(interaction.previewFraming == before)
     }
 
     @Test("Cancellation without a final sample preserves the last visible crop")
     func interruptedGesture() throws {
         var interaction = PhotoFramingInteraction()
         interaction.begin(at: .centeredFill)
-        interaction.update(
-            translation: CGSize(width: -50, height: 20), magnification: 2, geometry: geometry
-        )
+        interaction.update(touches: pinch(scale: 1), geometry: geometry)
+        interaction.update(touches: pinch(scale: 2), geometry: geometry)
         let visible = try #require(interaction.previewFraming)
         let committed = interaction.end()
         let duplicateCompletion = interaction.end()
@@ -439,6 +469,10 @@ struct PhotoFramingInteractionTests {
         #expect(!interaction.isActive)
         #expect(!interaction.controlsHidden)
         #expect(interaction.controlsRevealGeneration != previousGeneration)
+    }
+
+    private func pinch(scale: CGFloat) -> [Int: CGPoint] {
+        [0: CGPoint(x: 150 - 50 * scale, y: 200), 1: CGPoint(x: 150 + 50 * scale, y: 200)]
     }
 
     private func rect(_ framing: ImageFraming) -> PanelImagePreviewRect {
