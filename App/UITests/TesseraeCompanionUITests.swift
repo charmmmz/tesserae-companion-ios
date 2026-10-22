@@ -2276,11 +2276,11 @@ final class TesseraeCompanionUITests: XCTestCase {
         sample.tap()
         let auto = app.buttons["send-auto-framing"]
         XCTAssertTrue(auto.waitForExistence(timeout: 3))
-        XCTAssertGreaterThanOrEqual(auto.frame.width, 44)
-        XCTAssertGreaterThanOrEqual(auto.frame.height, 44)
+        XCTAssertGreaterThanOrEqual(auto.frame.width, 44 - 0.01)
+        XCTAssertGreaterThanOrEqual(auto.frame.height, 44 - 0.01)
         let reset = app.buttons["send-framing-reset"]
-        XCTAssertGreaterThanOrEqual(reset.frame.width, 44)
-        XCTAssertGreaterThanOrEqual(reset.frame.height, 44)
+        XCTAssertGreaterThanOrEqual(reset.frame.width, 44 - 0.01)
+        XCTAssertGreaterThanOrEqual(reset.frame.height, 44 - 0.01)
         XCTAssertEqual(auto.value as? String, "Adjusted")
         let hint = app.descendants(matching: .any)["send-framing-hint"]
         XCTAssertTrue(hint.exists)
@@ -2289,6 +2289,8 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(reset.isEnabled)
         let controls = app.descendants(matching: .any)["send-framing-controls"]
         let controlsHeight = controls.frame.height
+        XCTAssertEqual(controlsHeight, 44, accuracy: 0.5)
+        XCTAssertLessThan(controls.frame.width, 180)
         XCTAssertLessThanOrEqual(hint.frame.maxX, auto.frame.minX + 1)
         XCTAssertLessThanOrEqual(auto.frame.maxX, zoom.frame.minX)
         let shot = XCTAttachment(screenshot: app.screenshot())

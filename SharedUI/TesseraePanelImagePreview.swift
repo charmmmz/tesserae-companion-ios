@@ -226,8 +226,13 @@ struct TesseraePanelImagePreview: View {
             .disabled(!framingEditingEnabled)
             .font(.caption)
             .padding(.horizontal, 5)
-            .padding(.vertical, 5)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 5 : 0)
+            .background {
+                // Shrink the visible bar while keeping each button's 44pt hit area.
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(.regularMaterial)
+                    .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 0 : 4)
+            }
             .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("send-framing-controls")
@@ -238,13 +243,13 @@ struct TesseraePanelImagePreview: View {
     }
 
     private var framingItemPadding: CGFloat {
-        dynamicTypeSize.isAccessibilitySize ? 6 : 10
+        6
     }
 
     private var framingGestureHint: some View {
         Image(systemName: "hand.draw")
             .padding(.horizontal, framingItemPadding)
-            .frame(minWidth: 44, minHeight: framingButtonSize)
+            .frame(minWidth: dynamicTypeSize.isAccessibilitySize ? 44 : 28, minHeight: framingButtonSize)
             .accessibilityLabel("Drag · Pinch to zoom")
             .accessibilityIdentifier("send-framing-hint")
     }
@@ -312,7 +317,7 @@ struct TesseraePanelImagePreview: View {
             .fontWeight(.semibold)
             .fixedSize()
             .padding(.horizontal, framingItemPadding)
-            .frame(minWidth: 44, minHeight: framingButtonSize)
+            .frame(minWidth: dynamicTypeSize.isAccessibilitySize ? 44 : 36, minHeight: framingButtonSize)
             .accessibilityIdentifier("send-framing-zoom")
 
             Button {
