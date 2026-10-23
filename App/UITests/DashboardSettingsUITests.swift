@@ -48,6 +48,17 @@ final class DashboardSettingsUITests: XCTestCase {
     XCTAssertTrue(preview.waitForExistence(timeout: 3))
     XCTAssertGreaterThan(preview.frame.height, 200)
     XCTAssertFalse(app.staticTexts["Preview and Push"].exists)
+    let icon = app.buttons["dashboard-settings-icon"]
+    scrollTo(icon, in: app)
+    icon.tap()
+    let calendar = app.buttons["dashboard-icon-calendar"]
+    XCTAssertTrue(calendar.waitForExistence(timeout: 3))
+    let iconShot = XCTAttachment(screenshot: app.screenshot())
+    iconShot.name = "Dashboard actual icon picker"
+    iconShot.lifetime = .keepAlways
+    add(iconShot)
+    calendar.tap()
+    XCTAssertEqual(icon.value as? String, "Calendar")
     let name = app.textFields["dashboard-settings-name"]
     scrollTo(name, in: app)
     name.tap()

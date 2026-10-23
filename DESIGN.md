@@ -246,7 +246,9 @@ the field's detail page. Unsupported controls retain their stored values and
 show the server's read-only reason alongside the web editor shortcut.
 
 Dashboard Settings opens with a large preview and an overlaid push button at
-the top right. Saving uses an accessible checkmark toolbar button.
+the top right. Saving uses an accessible checkmark toolbar button. The icon
+picker renders the same Phosphor glyphs as Dashboard cards, including the
+existing icon when it is outside the curated choices.
 
 A shared draft survives component and choice navigation. Ordered multiselect
 retains saved or unavailable choices, supports priority changes, and does not

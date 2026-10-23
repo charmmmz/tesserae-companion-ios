@@ -275,26 +275,20 @@ struct DashboardSettingsView: View {
           .accessibilityIdentifier("dashboard-settings-name")
       }
       fieldError("settings.name")
-      Picker("Icon", selection: settingText("icon")) {
-        Text("Default").tag("")
-        ForEach(Self.icons, id: \.value) { icon in
-          Text(LocalizedStringKey(icon.label)).tag(icon.value)
-        }
-        if let value = draft?.settings["icon"]?.settingText, !value.isEmpty,
-          !Self.icons.contains(where: { $0.value == value })
-        {
-          Text("Current icon").tag(value)
+      NavigationLink {
+        DashboardIconPicker(selection: settingText("icon"))
+      } label: {
+        LabeledContent("Icon") {
+          PhosphorIcon(name: draft?.settings["icon"]?.settingText, size: 24)
         }
       }
+      .accessibilityValue(
+        DashboardIconPicker.label(for: draft?.settings["icon"]?.settingText ?? "")
+      )
+      .accessibilityIdentifier("dashboard-settings-icon")
       fieldError("settings.icon")
     }
   }
-  private static let icons: [(value: String, label: String)] = [
-    ("house", "Home"), ("calendar", "Calendar"), ("sun", "Weather"), ("music-notes", "Music"),
-    ("image", "Photos"), ("cooking-pot", "Food"), ("check-square", "Tasks"),
-    ("chart-bar", "Statistics"),
-  ]
-
   private var displaySettings: some View {
     Section("Displays") {
       ForEach(model.sortedDisplays) { display in
@@ -466,5 +460,76 @@ struct DashboardSettingsView: View {
         conflict = ["revision_conflict", "schema_conflict"].contains(code)
       }
     } catch is CancellationError {} catch { self.error = error.localizedDescription }
+  }
+}
+
+private struct DashboardIconPicker: View {
+  @Environment(\.dismiss) private var dismiss
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+  @Binding var selection: String
+  @ScaledMetric(relativeTo: .title2) private var iconSize: CGFloat = 30
+
+  private struct Icon: Identifiable {
+    let id: String
+    let label: String
+  }
+  private static let icons: [Icon] = [
+    .init(id: "", label: "Default"), .init(id: "house", label: "Home"),
+    .init(id: "calendar", label: "Calendar"), .init(id: "sun", label: "Weather"),
+    .init(id: "music-notes", label: "Music"), .init(id: "image", label: "Photos"),
+    .init(id: "cooking-pot", label: "Food"), .init(id: "check-square", label: "Tasks"),
+    .init(id: "chart-bar", label: "Statistics"),
+  ]
+  private var icons: [Icon] {
+    Self.icons.contains { $0.id == selection }
+      ? Self.icons : Self.icons + [.init(id: selection, label: "Current icon")]
+  }
+
+  static func label(for value: String) -> String {
+    String(
+      localized: String.LocalizationValue(icons.first { $0.id == value }?.label ?? "Current icon"))
+  }
+
+  var body: some View {
+    ScrollView {
+      LazyVGrid(
+        columns: [GridItem(.adaptive(minimum: dynamicTypeSize.isAccessibilitySize ? 140 : 88))],
+        spacing: 14
+      ) {
+        ForEach(icons) { icon in
+          Button {
+            selection = icon.id
+            dismiss()
+          } label: {
+            VStack(spacing: 12) {
+              PhosphorIcon(name: icon.id, size: iconSize)
+              Text(LocalizedStringKey(icon.label)).font(.caption)
+                .foregroundStyle(.primary).multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity, minHeight: 86)
+            .padding(12)
+            .background(
+              selection == icon.id
+                ? Color.accentColor.opacity(0.12) : Color(.secondarySystemGroupedBackground),
+              in: .rect(cornerRadius: 16)
+            )
+            .overlay(alignment: .topTrailing) {
+              if selection == icon.id {
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(.tint).padding(6)
+              }
+            }
+          }
+          .buttonStyle(.plain)
+          .accessibilityLabel(LocalizedStringKey(icon.label))
+          .accessibilityValue(
+            selection == icon.id ? String(localized: "Selected") : String(localized: "Not selected")
+          )
+          .accessibilityIdentifier("dashboard-icon-\(icon.id.isEmpty ? "default" : icon.id)")
+        }
+      }
+      .padding()
+    }
+    .background(Color(.systemGroupedBackground))
+    .navigationTitle("Icon").navigationBarTitleDisplayMode(.inline)
   }
 }

@@ -54,6 +54,7 @@ capabilities.
   help and reset actions. Read-only fields display the server's explanation.
 - Dashboard Settings uses a large preview with a corner push button and a
   checkmark save action.
+- Dashboard icon selection now shows a visual grid of Phosphor icons.
 
 - Bluetooth photo packets now fit the connection's ordinary-write capacity,
   within the receiver's advertised limit. Updated PicPak and native Photo v2
