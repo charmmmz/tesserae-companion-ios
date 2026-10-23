@@ -49,6 +49,11 @@ capabilities.
 
 ### Changed
 
+- Nearby Setup & Maintenance keeps a concise entry guide visible alongside
+  discovered displays, with Refresh Button and PicPak Button timings, the
+  20-second hold limit, code scanning, and session timeout and exit instructions
+  in English and Chinese.
+
 - Dashboard component settings now show title/value rows, inline switches,
   searchable groups by control type, and dedicated editing pages containing
   help and reset actions. Read-only fields display the server's explanation.

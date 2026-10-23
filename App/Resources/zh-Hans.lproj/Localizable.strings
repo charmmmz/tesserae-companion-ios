@@ -469,8 +469,16 @@
 "Wi-Fi saved. Display is restarting…" = "Wi-Fi 已保存，显示屏正在重启…";
 "Wi-Fi Saved" = "Wi-Fi 已保存";
 "Wi-Fi settings are saved. The display is restarting." = "Wi-Fi 设置已保存，显示屏正在重启。";
-"Other displays: hold Refresh for 3 seconds, then release." = "其他显示屏：长按刷新键 3 秒后松开，即可进入维护模式。";
-"PicPak: hold for 10 seconds, then release before 20 to enter Bluetooth maintenance." = "PicPak：长按 10 秒，在 20 秒前松开，即可进入蓝牙维护。";
+"Keep the display close to your phone." = "请将显示屏靠近手机。";
+"Enter Maintenance Mode" = "进入维护模式";
+"Refresh Button" = "刷新键";
+"PicPak Button" = "PicPak 按键";
+"Hold Refresh, then release." = "长按刷新键，然后松开。";
+"Hold the button, then release." = "长按按键，然后松开。";
+"3 s" = "3 秒";
+"Release before 20 seconds to avoid reset or setup." = "请在 20 秒前松开，以免重置设备或进入配网。";
+"Select the display above, then scan the code on its screen." = "在上方选择显示屏，再扫描屏幕上的二维码。";
+"Closes after 5 minutes. To exit sooner, short-press the same button." = "维护模式将在 5 分钟后关闭，短按同一按键可提前退出。";
 "Authorize this device in PicPak Maintenance first: hold the button for 10 seconds, release before 20, then choose Manual (Bluetooth)." = "请先在 PicPak 蓝牙维护中授权这台设备：长按按键 10 秒，在 20 秒前松开，然后选择手动（蓝牙）模式。";
 
 "Move Up" = "上移";

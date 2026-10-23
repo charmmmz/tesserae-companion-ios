@@ -1043,10 +1043,7 @@ struct NearbyDisplaysView: View {
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.primary)
 
-                            Text("Other displays: hold Refresh for 3 seconds, then release.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text("PicPak: hold for 10 seconds, then release before 20 to enter Bluetooth maintenance.")
+                            Text("Keep the display close to your phone.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -1122,6 +1119,37 @@ struct NearbyDisplaysView: View {
             } header: {
                 Text("Displays Nearby")
             }
+
+            Section {
+                NearbyMaintenanceEntryRow(
+                    title: "Refresh Button",
+                    instruction: "Hold Refresh, then release.",
+                    duration: "3 s"
+                )
+                NearbyMaintenanceEntryRow(
+                    title: "PicPak Button",
+                    instruction: "Hold the button, then release.",
+                    duration: "10 s"
+                )
+                Label {
+                    Text("Release before 20 seconds to avoid reset or setup.")
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle")
+                        .accessibilityHidden(true)
+                }
+                .font(.footnote)
+                .foregroundStyle(TesseraeTheme.warning)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityElement(children: .combine)
+            } header: {
+                Text("Enter Maintenance Mode")
+            } footer: {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Select the display above, then scan the code on its screen.")
+                    Text("Closes after 5 minutes. To exit sooner, short-press the same button.")
+                }
+                .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .scrollContentBackground(.hidden)
         .tesseraeScreenBackground()
@@ -1156,5 +1184,40 @@ struct NearbyDisplaysView: View {
 
     private var nearbyAccent: Color {
         TesseraeTheme.accent
+    }
+}
+
+private struct NearbyMaintenanceEntryRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    let title: LocalizedStringKey
+    let instruction: LocalizedStringKey
+    let duration: LocalizedStringKey
+
+    var body: some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+            : AnyLayout(HStackLayout(spacing: 12))
+
+        layout {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                Text(instruction)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text(duration)
+                .font(.headline.monospacedDigit())
+                .foregroundStyle(TesseraeTheme.accent)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(TesseraeTheme.accentSoft, in: Capsule())
+        }
+        .padding(.vertical, 4)
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .combine)
     }
 }
