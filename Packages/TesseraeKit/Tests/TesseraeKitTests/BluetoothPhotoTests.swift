@@ -22,7 +22,8 @@ struct BluetoothPhotoTests {
     @Test(arguments: [
         ("schema", 3), ("width", 0), ("height", -1), ("visible_width", 7),
         ("x_offset", 1), ("stride", 4), ("bytes", 4), ("chunk_bytes", 0),
-        ("chunk_bytes", 385), ("width", Int.max)
+        ("chunk_bytes", 385), ("width", Int.max), ("max_window", 0),
+        ("max_window", 5), ("max_window", Int.max)
     ])
     func rejectsInvalidGeometryAndBudgets(key: String, value: Int) throws {
         let caps = try Self.capabilities(changes: [key: value])
@@ -38,6 +39,30 @@ struct BluetoothPhotoTests {
     @Test func rejectsBooleanDimensionsAndUnknownFormat() {
         #expect(throws: (any Error).self) { try Self.capabilities(changes: ["width": true]) }
         #expect(throws: (any Error).self) { try Self.capabilities(changes: ["format": "future-format"]) }
+        #expect(throws: (any Error).self) { try Self.capabilities(changes: ["max_window": true]) }
+        #expect(throws: (any Error).self) { try Self.capabilities(changes: ["max_window": 1.5]) }
+        #expect(throws: (any Error).self) { try Self.capabilities(changes: ["max_window": "4"]) }
+    }
+
+    @Test func missingWindowKeepsOriginalStopAndWaitContract() throws {
+        let original = try Self.capabilities()
+        try original.validate()
+        #expect(original.maxWindow == nil)
+        let advertised = try Self.capabilities(changes: ["max_window": 4])
+        try advertised.validate()
+        #expect(advertised.maxWindow == 4)
+        // Transport negotiation does not change the pixel/layout digest.
+        #expect(advertised.digest == original.digest)
+        #expect(advertised.panel == original.panel)
+    }
+
+    @Test(arguments: 1...4)
+    func acceptsOnlyBoundedWindowSizes(window: Int) throws {
+        let caps = try Self.capabilities(changes: ["max_window": window])
+        try caps.validate()
+        let encoded = try JSONEncoder().encode(caps)
+        let roundTrip = try JSONDecoder().decode(BluetoothPhotoCapabilities.self, from: encoded)
+        #expect(roundTrip.maxWindow == window)
     }
 
     @Test func spectraUsesSparseControllerCodes() throws {

@@ -579,6 +579,24 @@ struct NearbyDeviceSetupView: View {
                              : String(localized: "Automatic updates use the saved Wi-Fi and server settings."))
                     }
                 }
+                if nearby.screenModeUnavailable {
+                    Section {
+                        Text("The display's screen mode settings could not be read. Restore Automatic to use its saved Wi-Fi and server settings.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                        Button("Restore Automatic (Wi-Fi)") { nearby.setScreenMode(.wifi) }
+                            .accessibilityIdentifier("nearby-restore-automatic")
+                            .disabled(nearby.isSavingScreenMode || nearby.screenModeNeedsReadback
+                                      || nearby.refreshSpeedSetting.isSaving || nearby.refreshSpeedSetting.needsReadback
+                                      || nearby.connectionState != .ready)
+                        if nearby.isSavingScreenMode { ProgressView("Saving screen mode…") }
+                        if let message = nearby.screenModeError {
+                            Text(message).font(.footnote).foregroundStyle(.secondary)
+                        }
+                        if nearby.screenModeNeedsReadback {
+                            Button("Check Again") { nearby.requestDiagnostics() }
+                        }
+                    }
+                }
                 Section("Current Network") {
                     LabeledContent("Wi-Fi", value: diagnostics.ssid ?? "Not configured")
                     LabeledContent("IP Address", value: diagnostics.ipAddress ?? "—")

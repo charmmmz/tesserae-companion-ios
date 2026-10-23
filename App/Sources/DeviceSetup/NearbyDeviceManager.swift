@@ -48,6 +48,7 @@ struct NearbyDeviceDiagnostics: Equatable, Sendable {
     let ipAddress: String?
     let logs: [String]
     let screenMode: BLEScreenMode?
+    let screenModeUnavailable: Bool
     let refreshSpeed: BLERefreshSpeed?
 
     init(event: [String: Any]) {
@@ -63,6 +64,12 @@ struct NearbyDeviceDiagnostics: Equatable, Sendable {
         ipAddress = event["ip"] as? String
         logs = event["logs"] as? [String] ?? []
         screenMode = (event["screen_mode"] as? String).flatMap(BLEScreenMode.init)
+        if let flag = event["screen_mode_error"] as? NSNumber,
+           CFGetTypeID(flag) == CFBooleanGetTypeID() {
+            screenModeUnavailable = flag.boolValue
+        } else {
+            screenModeUnavailable = false
+        }
         refreshSpeed = (event["refresh_speed"] as? String).flatMap(BLERefreshSpeed.init)
     }
 }
@@ -187,6 +194,11 @@ final class NearbyDeviceManager: NSObject {
                 || (deviceInfo?.photo == 2 && deviceInfo?.family == "tesserae"))
     }
 
+    var screenModeUnavailable: Bool {
+        supportsScreenMode && deviceInfo?.photo == 2 && deviceInfo?.family == "tesserae"
+            && screenMode == nil && diagnostics?.screenModeUnavailable == true
+    }
+
     private var hasPhotoDataChannel: Bool {
 #if DEBUG
         if isSetupUIFixture { return true }
@@ -202,7 +214,6 @@ final class NearbyDeviceManager: NSObject {
     private var photoTimeoutTask: Task<Void, Never>?
     private var photoTransfer: BLEPhotoTransfer?
     private var pendingPhotoMessage: Data?
-    private var pendingPhotoIsBinary = false
     private var photoRetries = 0
     private var photoCharacteristic: CBCharacteristic?
 
@@ -232,6 +243,8 @@ final class NearbyDeviceManager: NSObject {
     private var appIsActive = false
     private var refreshSpeedTimeoutTask: Task<Void, Never>?
 #if DEBUG
+    private var fixturePhotoReceivedOffset = 0
+    private var fixturePhotoPacketOffsets: Set<UInt32> = []
     private let isUnifiedUIFixture = ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_UNIFIED_BLE"] == "1"
     private let isPhotoUIFixture = ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_PICPAK_PHOTO"] == "1"
         || ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_UNIFIED_PHOTO"] == "1"
@@ -586,7 +599,19 @@ final class NearbyDeviceManager: NSObject {
                 if binary, message.count > 8 {
                     let id = message.prefix(4).reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
                     let offset = message.dropFirst(4).prefix(4).reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
-                    self.receiveFixtureEvent(["event": "photo_ack", "id": id, "offset": Int(offset) + message.count - 8])
+                    if self.isUnifiedUIFixture {
+                        self.fixturePhotoReceivedOffset = max(self.fixturePhotoReceivedOffset,
+                                                              Int(offset) + message.count - 8)
+                        let firstReceipt = self.fixturePhotoPacketOffsets.insert(offset).inserted
+                        if ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_DROP_PHOTO_ACKS"] == "1",
+                           firstReceipt, self.fixturePhotoReceivedOffset <= 4 * 384 {
+                            return // Simulate all ACKs lost for the first window.
+                        }
+                        self.receiveFixtureEvent(["event": "photo_ack", "id": id,
+                                                  "offset": self.fixturePhotoReceivedOffset])
+                    } else {
+                        self.receiveFixtureEvent(["event": "photo_ack", "id": id, "offset": Int(offset) + message.count - 8])
+                    }
                 } else if let object = try? JSONSerialization.jsonObject(with: message) as? [String: Any] {
                     self.receiveSetupFixtureCommand(object)
                 }
@@ -645,7 +670,11 @@ final class NearbyDeviceManager: NSObject {
                 "ssid": "Home Wi-Fi",
             ]
             if isPicPakUIFixture { event["refresh_speed"] = "5s" }
-            if isUnifiedUIFixture || !isE1003UIFixture {
+            if isUnifiedUIFixture,
+               ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_CORRUPT_PHOTO_MODE"] == "1",
+               screenMode == nil {
+                event["screen_mode_error"] = true
+            } else if isUnifiedUIFixture || !isE1003UIFixture {
                 event["screen_mode"] = screenMode?.rawValue ?? "wifi"
             }
             if let data = try? JSONSerialization.data(withJSONObject: event) {
@@ -680,9 +709,11 @@ final class NearbyDeviceManager: NSObject {
                 "kind": deviceInfo?.kind ?? "", "width": width, "height": height,
                 "visible_width": width, "visible_height": height, "x_offset": 0,
                 "format": isE1003UIFixture ? "gray4-msb" : "spectra6-msb",
-                "stride": width / 2, "bytes": width * height / 2, "chunk_bytes": 384,
+                "stride": width / 2, "bytes": width * height / 2, "chunk_bytes": 384, "max_window": 4,
                 "digest": String(repeating: "a", count: 64), "row_order": "top_down", "lifecycle": "manual"])
         case "photo_begin":
+            fixturePhotoReceivedOffset = 0
+            fixturePhotoPacketOffsets = []
             receiveFixtureEvent(["event": "photo_ack", "id": command["id"] ?? 0, "offset": 0])
         case "photo_end":
             receiveFixtureEvent(["event": "photo_received", "id": command["id"] ?? 0])
@@ -862,10 +893,16 @@ final class NearbyDeviceManager: NSObject {
                   try transfer.acknowledge(offset) else { return }
             photoTimeoutTask?.cancel()
             photoProgress = Double(offset) / Double(transfer.data.count)
-            let packet = transfer.nextPacket()
+            let packets = transfer.nextPackets()
             photoTransfer = transfer
-            if let packet { sendPhotoMessage(packet, binary: true) }
-            else { sendPhotoControl(["op": "photo_end", "id": transfer.id]) }
+            pendingPhotoMessage = nil
+            photoRetries = 0
+            if transfer.waitingForReceipt {
+                sendPhotoControl(["op": "photo_end", "id": transfer.id])
+            } else {
+                for packet in packets { queueMessage(packet, binary: true) }
+                armPhotoTimeout()
+            }
         case "photo_received":
             guard let transfer = photoTransfer, transfer.waitingForReceipt,
                   object["id"] as? UInt32 == transfer.id else { return }
@@ -956,7 +993,7 @@ final class NearbyDeviceManager: NSObject {
 
     func setScreenMode(_ mode: BLEScreenMode) {
         guard supportsScreenMode,
-              screenMode != nil, connectionState == .ready,
+              (screenMode != nil || (screenModeUnavailable && mode == .wifi)), connectionState == .ready,
               !isSavingScreenMode, !screenModeNeedsReadback, !refreshSpeedSetting.isSaving,
               !refreshSpeedSetting.needsReadback else { return }
         let request = UInt32.random(in: 1...UInt32.max)
@@ -1009,7 +1046,6 @@ final class NearbyDeviceManager: NSObject {
 
     private func sendPhotoMessage(_ data: Data, binary: Bool) {
         pendingPhotoMessage = data
-        pendingPhotoIsBinary = binary
         photoRetries = 0
         queueMessage(data, binary: binary)
         armPhotoTimeout()
@@ -1019,8 +1055,12 @@ final class NearbyDeviceManager: NSObject {
         photoTimeoutTask?.cancel()
         photoTimeoutTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(8))
-            guard !Task.isCancelled, let self, let data = self.pendingPhotoMessage,
-                  self.photoTransfer != nil else { return }
+            guard !Task.isCancelled, let self, let transfer = self.photoTransfer else { return }
+            // A duplicate of the oldest outstanding packet requests the latest
+            // cumulative ACK. Replaying the whole window could queue duplicates
+            // alongside new packets after a late ACK and exceed the device bound.
+            let control = self.pendingPhotoMessage
+            guard let data = control ?? transfer.retryPackets().first else { return }
             guard self.photoRetries < 2, !self.isWriteInFlight, self.pendingWrites.isEmpty else {
                 self.fail(self.photoCapabilities == nil
                     ? String(localized: "Transfer was not confirmed. Press PicPak's button and try again.")
@@ -1029,7 +1069,7 @@ final class NearbyDeviceManager: NSObject {
             }
             self.photoRetries += 1
             // Re-frame with fresh authenticated counters; never replay ciphertext.
-            self.queueMessage(data, binary: self.pendingPhotoIsBinary)
+            self.queueMessage(data, binary: control == nil)
             self.armPhotoTimeout()
         }
     }

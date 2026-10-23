@@ -1,6 +1,6 @@
 # Bluetooth Photo v2 implementation and hardware handoff
 
-Date: 2026-10-21. Local experimental implementation of phases 0–1 of the
+Updated: 2026-10-23. Local experimental implementation of phases 0–1 of the
 [hardware audit](2026-10-21-bluetooth-hardware-audit.md). Hardware acceptance is
 pending; this does not extend the production support list.
 
@@ -104,7 +104,7 @@ After authentication, `photo_capabilities` returns:
   "width": 1200, "height": 1600,
   "visible_width": 1200, "visible_height": 1600, "x_offset": 0,
   "format": "spectra6-msb", "stride": 600, "bytes": 960000,
-  "chunk_bytes": 384,
+  "chunk_bytes": 384, "max_window": 4,
   "digest": "e4a1365bc0232bd2666dbd403055fa710ab6cbe60cf2eaa2805140a7ea5f0f3f",
   "row_order": "top_down", "lifecycle": "manual"
 }
@@ -138,11 +138,35 @@ transfer ID, four-byte big-endian offset, and 1–384 pixel bytes. Existing
 encrypted BLE fragmentation handles ATT write limits. Control and data share
 the connection's monotonic crypto counters, with separate reassembly buffers.
 
-The first version uses one in-flight logical chunk and cumulative offset ACKs.
-Retries re-encrypt with a fresh counter. Identical duplicate data is accepted;
-future offsets, conflicting retries, overflow, wrong ID, and old connection
-generations are rejected. Disconnect discards an unfinished frame. There is
-no cross-connection resume or compression.
+The optional `max_window` extension accepts integers 1…4. When absent,
+Companion uses one in-flight logical packet (also unchanged for PicPak). New
+firmware advertises 4; Companion fills only free slots and uses the existing
+per-packet cumulative ACKs. Pixel/descriptor digests, crypto, begin/end and ACK
+shapes are unchanged. Sending all bytes does not allow `photo_end` until all
+bytes are cumulatively ACKed. On an eight-second timeout, only the oldest
+unconfirmed logical packet is retried with a fresh counter; its reply confirms
+the receiver's latest offset. This avoids replaying a whole window beside newly
+queued packets. Duplicate/stale ACKs cannot advance progress. Identical data
+retries are accepted; future offsets, conflicting retries, overflow, wrong ID,
+and old generations are rejected. Disconnect discards incomplete data. No
+cross-connection resume or compression is implemented.
+
+Firmware Photo events use bounded NimBLE congestion retries instead of sleeping
+15 ms per notification fragment. Four packets still use four writes and four
+ACKs; ATT writes retain responses. This overlaps application ACK waits, without
+a measured speedup or power claim. Packed-byte RLE is deferred after the offline
+comparison in the [firmware protocol document](https://github.com/dmellok/tesserae-device-firmware/pull/49).
+
+Mode storage now consumes a one-shot entry prompt before painting; cold/crash
+reboots and battery recovery do not re-arm it. Existing v1 Manual configurations
+are read without creating a prompt. If mode data is unreadable, authenticated
+Maintenance diagnostics supplies `screen_mode_error:true`; Companion offers
+**Restore Automatic (Wi-Fi)** rather than inventing a current mode. Automatic
+blindly replaces the blob while preserving saved network/server settings; real
+NVS write failures remain visible. The one-shot commit before paint can lose
+one instruction if power fails between those operations, but cannot repeat it
+over a later photo. Existing critical-battery and explicit Maintenance screens
+remain intentional changes to the glass.
 
 `photo_end` verifies completeness and SHA-256 before `photo_received`. This
 acknowledges verified reception; the panel driver's void return does not
@@ -151,7 +175,16 @@ disconnect while the firmware shuts the radios down before painting.
 
 ## Verification and repeatability
 
-Local checks completed during implementation:
+The 2026-10-23 review follow-up passed the full Kit suite (two optional export
+tests skipped by default), Companion unit suite (130 XCTest cases, one skipped,
+and 83 Swift Testing cases), and seven targeted Simulator UI flows: E1003 and
+E1004 Maintenance/photo sending, PicPak sending, corrupt-mode Automatic recovery,
+and loss of every first-window ACK followed by timeout/retry and completion.
+Firmware sanitizer/crypto suites and all seven representative build targets
+also passed locally. These checks do not measure physical BLE speed, panel
+refresh or sleep current; the PR's Actions run validates the Linux CI separately.
+
+Earlier local checks completed during implementation:
 
 - TesseraeKit unit suite and Companion unit suite, including geometry,
   packing, conflicting device IDs, retries, and existing PicPak regressions.
@@ -174,8 +207,8 @@ The firmware work is in the sibling checkout `tesserae-device-firmware-ble`,
 branch `codex/ble-photo-v2`, based on upstream
 `421d51a41a843e94757b2261aed619aad0996b66` (1.52.0). The initial clone
 already contained this revision; it is newer than the fixed 1.51.0 snapshot
-used by the earlier hardware audit. The reviewed implementation is
-[firmware commit a0ca4f4](https://github.com/charmmmz/tesserae-device-firmware/commit/a0ca4f4b5ade4f80c7fa777d9627a889c97476d9).
+used by the earlier hardware audit. The 2026-10-23 review fixes are at
+[firmware commit f4c2945](https://github.com/charmmmz/tesserae-device-firmware/commit/f4c2945376eb363494001d818cc741e559a4dad4).
 Generate descriptors there with:
 
 ```sh

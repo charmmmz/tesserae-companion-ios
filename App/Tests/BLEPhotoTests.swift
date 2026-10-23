@@ -93,6 +93,16 @@ final class BLEPhotoTests: XCTestCase {
         XCTAssertNil(NearbyDeviceDiagnostics(event: ["screen_mode": "future-mode"]).screenMode)
     }
 
+    func testUnreadableModeIsExplicitAndOlderDiagnosticsRemainUnknown() {
+        let corrupt = NearbyDeviceDiagnostics(event: ["screen_mode_error": true])
+        XCTAssertNil(corrupt.screenMode)
+        XCTAssertTrue(corrupt.screenModeUnavailable)
+        for value in [false, 1, "true", NSNull()] as [Any] {
+            XCTAssertFalse(NearbyDeviceDiagnostics(event: ["screen_mode_error": value]).screenModeUnavailable)
+        }
+        XCTAssertFalse(NearbyDeviceDiagnostics(event: [:]).screenModeUnavailable)
+    }
+
     func testPixelPackingPreservesPaletteAndBottomUpRows() throws {
         let palette: [[UInt8]] = [[0,0,0,255], [255,255,255,255], [255,255,0,255], [255,0,0,255]]
         var pixels = Data()
