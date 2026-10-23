@@ -1,6 +1,6 @@
 # Bluetooth Photo v2 implementation and hardware handoff
 
-Date: 2026-10-21. Local experimental implementation of phases 0–1 of the
+Updated: 2026-10-23. Local experimental implementation of phases 0–1 of the
 [hardware audit](2026-10-21-bluetooth-hardware-audit.md). Hardware acceptance is
 pending; this does not extend the production support list.
 
@@ -143,6 +143,17 @@ Retries re-encrypt with a fresh counter. Identical duplicate data is accepted;
 future offsets, conflicting retries, overflow, wrong ID, and old connection
 generations are rejected. Disconnect discards an unfinished frame. There is
 no cross-connection resume or compression.
+
+Mode storage now consumes a one-shot entry prompt before painting; cold/crash
+reboots and battery recovery do not re-arm it. Existing v1 Manual configurations
+are read without creating a prompt. If mode data is unreadable, authenticated
+Maintenance diagnostics supplies `screen_mode_error:true`; Companion offers
+**Restore Automatic (Wi-Fi)** rather than inventing a current mode. Automatic
+blindly replaces the blob while preserving saved network/server settings; real
+NVS write failures remain visible. The one-shot commit before paint can lose
+one instruction if power fails between those operations, but cannot repeat it
+over a later photo. Existing critical-battery and explicit Maintenance screens
+remain intentional changes to the glass.
 
 `photo_end` verifies completeness and SHA-256 before `photo_received`. This
 acknowledges verified reception; the panel driver's void return does not

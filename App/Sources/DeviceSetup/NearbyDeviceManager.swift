@@ -48,6 +48,7 @@ struct NearbyDeviceDiagnostics: Equatable, Sendable {
     let ipAddress: String?
     let logs: [String]
     let screenMode: BLEScreenMode?
+    let screenModeUnavailable: Bool
     let refreshSpeed: BLERefreshSpeed?
 
     init(event: [String: Any]) {
@@ -63,6 +64,12 @@ struct NearbyDeviceDiagnostics: Equatable, Sendable {
         ipAddress = event["ip"] as? String
         logs = event["logs"] as? [String] ?? []
         screenMode = (event["screen_mode"] as? String).flatMap(BLEScreenMode.init)
+        if let flag = event["screen_mode_error"] as? NSNumber,
+           CFGetTypeID(flag) == CFBooleanGetTypeID() {
+            screenModeUnavailable = flag.boolValue
+        } else {
+            screenModeUnavailable = false
+        }
         refreshSpeed = (event["refresh_speed"] as? String).flatMap(BLERefreshSpeed.init)
     }
 }
@@ -185,6 +192,11 @@ final class NearbyDeviceManager: NSObject {
         activeDevice?.mode == .maintenance
             && (resolvedHardware == .picPak42
                 || (deviceInfo?.photo == 2 && deviceInfo?.family == "tesserae"))
+    }
+
+    var screenModeUnavailable: Bool {
+        supportsScreenMode && deviceInfo?.photo == 2 && deviceInfo?.family == "tesserae"
+            && screenMode == nil && diagnostics?.screenModeUnavailable == true
     }
 
     private var hasPhotoDataChannel: Bool {
@@ -645,7 +657,11 @@ final class NearbyDeviceManager: NSObject {
                 "ssid": "Home Wi-Fi",
             ]
             if isPicPakUIFixture { event["refresh_speed"] = "5s" }
-            if isUnifiedUIFixture || !isE1003UIFixture {
+            if isUnifiedUIFixture,
+               ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_CORRUPT_PHOTO_MODE"] == "1",
+               screenMode == nil {
+                event["screen_mode_error"] = true
+            } else if isUnifiedUIFixture || !isE1003UIFixture {
                 event["screen_mode"] = screenMode?.rawValue ?? "wifi"
             }
             if let data = try? JSONSerialization.data(withJSONObject: event) {
@@ -956,7 +972,7 @@ final class NearbyDeviceManager: NSObject {
 
     func setScreenMode(_ mode: BLEScreenMode) {
         guard supportsScreenMode,
-              screenMode != nil, connectionState == .ready,
+              (screenMode != nil || (screenModeUnavailable && mode == .wifi)), connectionState == .ready,
               !isSavingScreenMode, !screenModeNeedsReadback, !refreshSpeedSetting.isSaving,
               !refreshSpeedSetting.needsReadback else { return }
         let request = UInt32.random(in: 1...UInt32.max)

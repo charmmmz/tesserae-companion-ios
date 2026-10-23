@@ -381,6 +381,29 @@ final class TesseraeCompanionUITests: XCTestCase {
         shot.lifetime = .keepAlways; add(shot)
     }
 
+    func testUnreadablePhotoModeCanRestoreAutomaticWithoutFactoryReset() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_UNIFIED_BLE"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_CORRUPT_PHOTO_MODE"] = "1"
+        app.launch()
+        let nearby = app.buttons["onboarding-nearby-devices"]
+        XCTAssertTrue(nearby.waitForExistence(timeout: 5))
+        for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
+        nearby.tap()
+        app.buttons.containing(.staticText, identifier: "Tesserae-A1B2C3").firstMatch.tap()
+        app.buttons["Continue"].tap()
+        app.buttons["Enter 6-Digit Code"].tap()
+        let restore = app.buttons["nearby-restore-automatic"]
+        XCTAssertTrue(restore.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["nearby-screen-mode"].exists)
+        restore.tap()
+        let mode = app.buttons["nearby-screen-mode"]
+        XCTAssertTrue(mode.waitForExistence(timeout: 5))
+        XCTAssertEqual(mode.value as? String, "Automatic (Wi-Fi)")
+        XCTAssertFalse(restore.exists)
+    }
+
     func testUnifiedPhotoSessionUsesNegotiatedPortraitPanelAndReceivesFrame() {
         assertUnifiedPhotoSessionReceivesFrame(e1003: false)
     }
