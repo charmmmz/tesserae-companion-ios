@@ -52,6 +52,8 @@ capabilities.
 - Dashboard component settings now show title/value rows, inline switches,
   searchable groups by control type, and dedicated editing pages containing
   help and reset actions. Read-only fields display the server's explanation.
+- Dashboard Settings uses a large preview with a corner push button and a
+  checkmark save action.
 
 - Bluetooth photo packets now fit the connection's ordinary-write capacity,
   within the receiver's advertised limit. Updated PicPak and native Photo v2

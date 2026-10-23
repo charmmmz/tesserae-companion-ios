@@ -44,6 +44,10 @@ final class DashboardSettingsUITests: XCTestCase {
 
   func testDetailSaveAndPush() {
     let app = openDashboard()
+    let preview = app.descendants(matching: .any)["dashboard-settings-preview"].firstMatch
+    XCTAssertTrue(preview.waitForExistence(timeout: 3))
+    XCTAssertGreaterThan(preview.frame.height, 200)
+    XCTAssertFalse(app.staticTexts["Preview and Push"].exists)
     let name = app.textFields["dashboard-settings-name"]
     scrollTo(name, in: app)
     name.tap()

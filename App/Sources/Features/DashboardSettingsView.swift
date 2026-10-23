@@ -95,9 +95,20 @@ struct DashboardSettingsView: View {
       }
       ToolbarItem(placement: .confirmationAction) {
         if draft?.original.canEdit == true {
-          Button("Save") { Task { await save() } }
-            .disabled(!dirty || !canEdit || conflict)
-            .accessibilityIdentifier("dashboard-settings-save")
+          Button {
+            Task { await save() }
+          } label: {
+            if isSaving {
+              ProgressView().accessibilityLabel("Save")
+            } else {
+              Label("Save", systemImage: "checkmark").labelStyle(.iconOnly)
+            }
+          }
+          .buttonStyle(.borderedProminent)
+          .buttonBorderShape(.circle)
+          .accessibilityLabel("Save")
+          .disabled(!dirty || !canEdit || conflict)
+          .accessibilityIdentifier("dashboard-settings-save")
         }
       }
     }
@@ -130,25 +141,35 @@ struct DashboardSettingsView: View {
   private var overview: some View {
     Section {
       if let dashboard {
-        Button {
-          pushTarget = dashboard
-        } label: {
-          HStack(spacing: 14) {
-            PreviewArtwork(
-              state: model.dashboardPreview(for: dashboard, deviceID: previewDeviceID),
-              placeholderSystemName: "rectangle", placeholderLabel: "Dashboard preview placeholder",
-              imageLabel: "Dashboard preview", accessibilityIdentifier: "dashboard-settings-preview"
-            )
-            .frame(width: 72, height: 64)
-            .clipShape(.rect(cornerRadius: 6))
-            Text("Preview and Push").frame(maxWidth: .infinity, alignment: .leading)
-            Image(systemName: "paperplane").foregroundStyle(.secondary)
+        PreviewArtwork(
+          state: model.dashboardPreview(for: dashboard, deviceID: previewDeviceID),
+          placeholderSystemName: "rectangle", placeholderLabel: "Dashboard preview placeholder",
+          imageLabel: "Dashboard preview", accessibilityIdentifier: "dashboard-settings-preview"
+        )
+        .frame(maxWidth: .infinity)
+        .frame(height: 260)
+        .overlay(alignment: .topTrailing) {
+          Button {
+            pushTarget = dashboard
+          } label: {
+            Label("Push", systemImage: "paperplane.fill")
+              .labelStyle(.iconOnly)
+              .font(.body.weight(.semibold))
+              .frame(width: 44, height: 44)
+              .background(.regularMaterial, in: Circle())
+              .shadow(color: .black.opacity(0.12), radius: 3, y: 2)
           }
+          .buttonStyle(.plain)
+          .disabled(dirty || isSaving)
+          .accessibilityIdentifier("dashboard-settings-push")
+          .padding(10)
         }
-        .disabled(dirty || isSaving)
-        .accessibilityIdentifier("dashboard-settings-push")
+        .listRowInsets(EdgeInsets())
+        .listRowBackground(Color.clear)
       }
       if saved { Label("Settings saved", systemImage: "checkmark.circle").foregroundStyle(.green) }
+    } footer: {
+      if dirty { Text("Save your changes before pushing.") }
     }
   }
 
