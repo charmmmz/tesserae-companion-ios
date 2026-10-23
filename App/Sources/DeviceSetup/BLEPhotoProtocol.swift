@@ -3,7 +3,7 @@ import CryptoKit
 import Security
 import TesseraeKit
 
-enum BLEScreenMode: String, CaseIterable, Sendable {
+enum BLEScreenMode: String, Codable, CaseIterable, Sendable {
     case wifi, bluetooth
     var title: String {
         switch self {

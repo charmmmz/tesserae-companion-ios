@@ -10,6 +10,7 @@ private struct DisplayPreviewRefreshID: Hashable {
 }
 
 struct DisplaysView: View {
+    @Environment(NearbyDeviceManager.self) private var nearby
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(AppModel.self) private var model
@@ -268,6 +269,10 @@ struct DisplaysView: View {
         )
     }
 
+    private func localState(_ display: DisplaySummary) -> DisplayBluetoothPresentation {
+        nearby.displayRecords.presentation(for: display, serverID: model.activeInstance?.id)
+    }
+
     private func displayRow(
         _ display: DisplaySummary,
         displayOrder: [String]
@@ -276,7 +281,7 @@ struct DisplaysView: View {
             .accessibilityHint(
                 "Tap for details. Long press and drag to reorder."
             )
-            .accessibilityLabel(Text("\(display.name), \(display.freshnessLabel)"))
+            .accessibilityLabel(Text("\(display.name), \(localState(display).isBluetooth ? String(localized: "Bluetooth Mode") : display.freshnessLabel)"))
             .accessibilityValue(
                 Text("Display \((displayOrder.firstIndex(of: display.id) ?? 0) + 1) of \(displayOrder.count)")
             )
@@ -285,11 +290,12 @@ struct DisplaysView: View {
                 Text([display.hardwarePresentation.brand?.displayName,
                       display.hardwarePresentation.modelName].compactMap { $0 }.joined(separator: ", "))
             )
-            .accessibilityCustomContent("Battery", Text(display.batteryPercent.map { "\($0)%" } ?? "—"))
-            .accessibilityCustomContent("Wi-Fi", Text(display.rssiDBM.map { "\($0) dBm" } ?? "—"))
+            .accessibilityCustomContent("Battery", Text(localState(display).batteryText))
+            .accessibilityCustomContent("Connection", Text(localState(display).isBluetooth
+                ? String(localized: "Bluetooth Mode") : (display.rssiDBM.map { "\($0) dBm" } ?? "—")))
             .accessibilityCustomContent(
                 "Status",
-                Text(display.hasPendingRender == true
+                Text(localState(display).isBluetooth ? String(localized: "Bluetooth Mode") : display.hasPendingRender == true
                      ? String(localized: "Waiting for display refresh")
                      : display.freshnessLabel)
             )
@@ -561,6 +567,11 @@ private struct DisplayReorderLongPressGesture: UIGestureRecognizerRepresentable 
 }
 
 private struct DisplayCard: View {
+    @Environment(AppModel.self) private var model
+    @Environment(NearbyDeviceManager.self) private var nearby
+    private var local: DisplayBluetoothPresentation {
+        nearby.displayRecords.presentation(for: display, serverID: model.activeInstance?.id)
+    }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let display: DisplaySummary
@@ -599,12 +610,13 @@ private struct DisplayCard: View {
                     : AnyLayout(HStackLayout(spacing: 12))) {
                     metric(
                         "battery.75percent",
-                        display.batteryPercent.map { "\($0)%" } ?? "—"
+                        local.batteryText
                     )
-                    metric(
-                        "wifi",
-                        display.rssiDBM.map { "\($0) dBm" } ?? "—"
-                    )
+                    if local.isBluetooth {
+                        BluetoothModeLabel(compact: true)
+                    } else {
+                        metric("wifi", display.rssiDBM.map { "\($0) dBm" } ?? "—")
+                    }
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -626,7 +638,7 @@ private struct DisplayCard: View {
             )
 
             Circle()
-                .fill(display.freshnessColor)
+                .fill(local.isBluetooth ? TesseraeTheme.info : display.freshnessColor)
                 .frame(width: 8, height: 8)
                 .overlay {
                     Circle()
@@ -636,7 +648,7 @@ private struct DisplayCard: View {
         }
         .frame(width: 24, height: 24)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(display.freshnessLabel)
+        .accessibilityLabel(local.isBluetooth ? String(localized: "Bluetooth Mode") : display.freshnessLabel)
     }
 
     private var cardSurfaceColor: Color {
@@ -654,15 +666,15 @@ private struct DisplayCard: View {
 
             ZStack(alignment: .topTrailing) {
                 PreviewArtwork(
-                    state: preview,
+                    state: local.preview ?? preview,
                     placeholderSystemName: display.previewSymbol,
                     placeholderLabel: "Display preview placeholder, \(display.panel.width) by \(display.panel.height), \(display.panel.orientation)",
-                    imageLabel: "Last-served device preview for \(display.name)",
+                    imageLabel: local.usesLocalPreview ? String(localized: "Last Bluetooth Send") : String(localized: "Last-served device preview for \(display.name)"),
                     accessibilityIdentifier: "display-preview-\(display.id)",
                     placeholderDetail: "\(display.panel.width) × \(display.panel.height)"
                 )
 
-                if display.hasPendingRender == true {
+                if display.hasPendingRender == true && !local.isBluetooth && !local.usesLocalPreview {
                     PendingRenderGlyph()
                         .offset(x: 6, y: -6)
                         .transition(
@@ -717,6 +729,10 @@ private struct PendingRenderGlyph: View {
 }
 
 private struct DisplayDetailView: View {
+    @Environment(NearbyDeviceManager.self) private var nearby
+    private var local: DisplayBluetoothPresentation {
+        nearby.displayRecords.presentation(for: currentDisplay, serverID: model.activeInstance?.id)
+    }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private enum ScreenPage: Hashable {
         case current
@@ -742,7 +758,7 @@ private struct DisplayDetailView: View {
     }
 
     private var visibleScreenPage: ScreenPage {
-        currentDisplay.pendingRender == nil ? .current : selectedScreenPage
+        currentDisplay.pendingRender == nil || local.isBluetooth || local.usesLocalPreview ? .current : selectedScreenPage
     }
 
     var body: some View {
@@ -759,11 +775,12 @@ private struct DisplayDetailView: View {
                     systemImage: "antenna.radiowaves.left.and.right"
                 ) {
                     detailRow("Status") {
-                        Label(
-                            currentDisplay.freshnessLabel,
-                            systemImage: currentDisplay.freshnessSymbol
-                        )
-                        .foregroundStyle(currentDisplay.freshnessColor)
+                        if local.isBluetooth {
+                            BluetoothModeLabel()
+                        } else {
+                            Label(currentDisplay.freshnessLabel, systemImage: currentDisplay.freshnessSymbol)
+                                .foregroundStyle(currentDisplay.freshnessColor)
+                        }
                     }
 
                     detailRow("Last Seen") {
@@ -788,17 +805,42 @@ private struct DisplayDetailView: View {
                     }
 
                     detailRow("Battery") {
-                        Text(
-                            currentDisplay.batteryPercent.map { "\($0)%" }
-                                ?? String(localized: "Not reported")
-                        )
+                        VStack(alignment: .trailing, spacing: 3) {
+                            Text(local.batteryText)
+                            if let date = local.batteryDate {
+                                Text(date, format: .dateTime.month().day().hour().minute())
+                                    .font(.caption2).foregroundStyle(.secondary)
+                            }
+                        }
                     }
 
-                    detailRow("Signal") {
-                        Text(
-                            currentDisplay.rssiDBM.map { "\($0) dBm" }
-                                ?? String(localized: "Not reported")
-                        )
+                    if local.isBluetooth {
+                        if let date = local.record?.modeConfirmedAt {
+                            detailRow("Mode Confirmed") {
+                                Text(date, format: .dateTime.month().day().hour().minute())
+                            }
+                        }
+                        Text("Last confirmed on this device. Bluetooth may be disconnected while the display sleeps.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    } else {
+                        detailRow("Signal") {
+                            Text(currentDisplay.rssiDBM.map { "\($0) dBm" } ?? String(localized: "Not reported"))
+                        }
+                    }
+                    if let voltage = local.voltageText, let date = local.record?.batteryRecordedAt {
+                        detailRow("Last Bluetooth Battery") {
+                            VStack(alignment: .trailing, spacing: 3) {
+                                Text(voltage)
+                                Text(date, format: .dateTime.month().day().hour().minute())
+                                    .font(.caption2).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+
+                if !nearby.displayRecords.records.isEmpty {
+                    detailCard("Bluetooth Record", systemImage: "link") {
+                        BluetoothRecordLinkView(displayID: currentDisplay.id)
                     }
                 }
 
@@ -912,7 +954,7 @@ private struct DisplayDetailView: View {
     }
 
     private var shouldShowNextUpdateCard: Bool {
-        guard model.supportsDeviceTimeline else { return false }
+        guard model.supportsDeviceTimeline, !local.isBluetooth else { return false }
         if model.loadingDeviceTimelineIDs.contains(currentDisplay.id) {
             return true
         }
@@ -1155,13 +1197,18 @@ private struct DisplayDetailView: View {
 
     private var screenCarouselCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            screenPageHeader
+            if local.usesLocalPreview {
+                Label("Last Bluetooth Send", systemImage: "photo")
+                    .font(.headline)
+            } else {
+                screenPageHeader
+            }
 
-            TabView(selection: $selectedScreenPage) {
+            TabView(selection: Binding(get: { visibleScreenPage }, set: { selectedScreenPage = $0 })) {
                 currentScreenPreview
                     .tag(ScreenPage.current)
 
-                if currentDisplay.pendingRender != nil {
+                if currentDisplay.pendingRender != nil && !local.isBluetooth && !local.usesLocalPreview {
                     nextScreenPreview
                         .tag(ScreenPage.next)
                 }
@@ -1174,11 +1221,17 @@ private struct DisplayDetailView: View {
                 "display-screen-carousel-\(currentDisplay.id)"
             )
 
-            if currentDisplay.pendingRender != nil {
+            if local.usesLocalPreview, let date = local.record?.photoReceivedAt {
+                Text(date, format: .dateTime.year().month().day().hour().minute())
+                    .font(.caption).foregroundStyle(.secondary)
+                Text("The display confirmed receipt. Screen refresh completion is not reported.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            if currentDisplay.pendingRender != nil && !local.isBluetooth && !local.usesLocalPreview {
                 screenPageIndicator
             }
 
-            if currentDisplay.hasPendingRender == true,
+            if currentDisplay.hasPendingRender == true, !local.isBluetooth, !local.usesLocalPreview,
                currentDisplay.pendingRender == nil
             {
                 pendingRefreshExplanation
@@ -1197,7 +1250,7 @@ private struct DisplayDetailView: View {
 
     private var screenPageHeader: some View {
         ZStack(alignment: .leading) {
-            Label("Current Screen", systemImage: "display")
+            Label(local.isBluetooth ? String(localized: "Last Server Preview") : String(localized: "Current Screen"), systemImage: "display")
                 .font(.headline)
                 .opacity(visibleScreenPage == .current ? 1 : 0)
                 .accessibilityHidden(visibleScreenPage != .current)
@@ -1233,10 +1286,10 @@ private struct DisplayDetailView: View {
 
     private var currentScreenPreview: some View {
         PreviewArtwork(
-            state: model.displayPreviews[currentDisplay.id],
+            state: local.preview ?? model.displayPreviews[currentDisplay.id],
             placeholderSystemName: currentDisplay.previewSymbol,
             placeholderLabel: "Display preview placeholder, \(currentDisplay.panel.width) by \(currentDisplay.panel.height), \(currentDisplay.panel.orientation)",
-            imageLabel: "Last-served device preview for \(currentDisplay.name)",
+            imageLabel: local.usesLocalPreview ? String(localized: "Last Bluetooth Send") : String(localized: "Last-served device preview for \(currentDisplay.name)"),
             accessibilityIdentifier: "display-detail-preview-\(currentDisplay.id)",
             placeholderDetail: "\(currentDisplay.panel.width) × \(currentDisplay.panel.height)"
         )

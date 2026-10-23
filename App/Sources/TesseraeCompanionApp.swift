@@ -145,7 +145,10 @@ struct TesseraeCompanionApp: App {
         _healthBridgeModel = State(initialValue: HealthBridgeModel())
         _galleryUploads = State(initialValue: GalleryUploadCoordinator())
         _messageCenter = State(initialValue: TesseraeMessageCenter())
-        _nearbyDevices = State(initialValue: NearbyDeviceManager())
+        _nearbyDevices = State(initialValue: NearbyDeviceManager(displayRecords: BluetoothDisplayStore(
+            fileURL: ProcessInfo.processInfo.environment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] == "1"
+                ? nil : BluetoothDisplayStore.defaultFileURL
+        )))
         _setupNetworks = State(
             initialValue: SetupNetworkStore(
                 credentials: KeychainCredentialStore(
@@ -192,6 +195,7 @@ struct TesseraeCompanionApp: App {
 #if DEBUG
 @MainActor
 struct TesseraePreviewHost<Content: View>: View {
+    @State private var nearbyDevices = NearbyDeviceManager(displayRecords: BluetoothDisplayStore(fileURL: nil))
     @State private var model: AppModel
     @State private var galleryUploads = GalleryUploadCoordinator()
     @State private var messageCenter = TesseraeMessageCenter()
@@ -218,6 +222,7 @@ struct TesseraePreviewHost<Content: View>: View {
 
     var body: some View {
         content
+            .environment(nearbyDevices)
             .environment(model)
             .environment(healthBridgeModel)
             .environment(galleryUploads)

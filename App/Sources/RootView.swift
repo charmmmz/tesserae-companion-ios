@@ -47,6 +47,12 @@ struct RootView: View {
         }
         .animation(.snappy, value: model.activeInstance?.id)
         .environment(presentation)
+        .onChange(of: model.activeInstance?.id, initial: true) { _, id in
+            nearbyDevices.displayRecords.activeServerID = id
+            rememberServerDisplays()
+        }
+        .onChange(of: model.displays) { rememberServerDisplays() }
+        .onChange(of: model.displayPreviews) { rememberServerDisplays() }
         .tesseraeMessageCenterInset()
         .sheet(isPresented: $serversPresented) {
             OnboardingView(isChoosingServer: true)
@@ -135,6 +141,11 @@ struct RootView: View {
         } message: {
             Text(model.lastError ?? "")
         }
+    }
+
+    private func rememberServerDisplays() {
+        nearbyDevices.displayRecords.observeServer(displays: model.displays, previews: model.displayPreviews,
+                                                   serverID: model.activeInstance?.id)
     }
 
     private var connectionMessageRevision: String {

@@ -126,6 +126,21 @@ write-without-response window only when firmware explicitly supports it. Older
 PicPak firmware keeps its acknowledged-write path. See the
 [PicPak throughput test guide](docs/ble-photo-throughput-testing.md).
 
+Companion keeps the last authenticated Bluetooth mode and battery voltage on
+this phone or tablet. Displays shows Bluetooth mode in place of Wi-Fi signal,
+retains the last server-reported battery percentage and its timestamp, and shows
+the last verified Bluetooth photo with its receipt time. The preview is decoded
+from the transmitted frame; receipt does not confirm physical screen refresh.
+After returning to Automatic, the local photo remains until a newer server
+heartbeat and changed server preview are observed. Records survive app restarts.
+
+Exact device IDs associate automatically within the server where Bluetooth was
+used. If firmware reports different BLE and server IDs (including older PicPak),
+open the display details and choose **Bluetooth Record → Bluetooth Device** only
+after confirming the physical display. The record can be forgotten there.
+Earlier uncached photos cannot be recovered, and other phones' operations do
+not sync into this local record.
+
 ## Your server, your data
 
 The app connects directly to your own Tesserae server. There is no separate

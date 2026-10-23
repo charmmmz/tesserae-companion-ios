@@ -13,8 +13,9 @@ SDK, analytics SDK, tracking, or telemetry.
   device-only accessibility class. It is not stored in UserDefaults or in the
   App Group container.
 - Photos selected in the app, Share Sheet, or Shortcuts are sent directly to
-  the user's selected Tesserae instance. They do not pass through a service
-  operated by the iOS app maintainer.
+  the user's selected Tesserae instance, or directly to the chosen display for
+  Bluetooth photo sends. They do not pass through a service operated by the
+  iOS app maintainer.
 - Auto Frame analyzes a thumbnail locally using Apple Vision when a selected
   photo's Fill preview first becomes ready, or when the user taps Auto again.
   Detected face and subject regions remain in memory for
@@ -31,6 +32,15 @@ SDK, analytics SDK, tracking, or telemetry.
 - Display, Dashboard, and Gallery preview images are fetched directly from that instance
   only when it advertises the optional feature. The app keeps them in memory
   with their ETags and does not write them to the App Group or photo library.
+- After authenticated Bluetooth diagnostics or a confirmed mode change, the
+  app retains the mode and voltage locally. After verified photo reception, it
+  saves one preview per Bluetooth display, decoded from the transmitted pixels
+  with a maximum edge of 760 pixels, plus receipt time. These protected files
+  live in the app's Application Support directory. Local display associations
+  and last server-reported battery readings are also retained. They are not
+  uploaded to the server or photo library and remain until replaced, forgotten
+  from display details, or the app is removed. A factory-reset acknowledgement
+  clears that Bluetooth device's local record.
 - A photo whose upload is interrupted is stored with iOS file protection in
   the App Group so the containing app can retry it with the same idempotency
   key. It is deleted immediately after server acceptance or purged after 24

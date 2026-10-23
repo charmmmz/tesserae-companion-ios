@@ -846,3 +846,36 @@
 "All choices selected" = "已选择全部选项";
 "Yes" = "是";
 "0 updates only on push. An empty wake interval uses the display’s default." = "更新间隔为 0 时仅在推送时更新；唤醒间隔留空则沿用显示屏设置。";
+
+"Bluetooth Mode" = "蓝牙模式";
+
+"Bluetooth Device" = "蓝牙设备";
+
+"Not linked" = "未关联";
+
+"Link only if this is the same physical display. Records are saved on this iPhone or iPad." = "请确认是同一台实体设备后再关联。记录保存在本台 iPhone 或 iPad。";
+
+"Bluetooth Record" = "蓝牙记录";
+
+"Mode Confirmed" = "模式确认时间";
+
+"Last Bluetooth Battery" = "上次蓝牙电压";
+
+"Last Bluetooth Send" = "上次蓝牙发送";
+
+"Last Server Preview" = "上次服务器画面";
+
+"Last confirmed on this device. Bluetooth may be disconnected while the display sleeps." = "这是本机最后确认的模式。设备休眠时，蓝牙可能已断开。";
+
+"The display confirmed receipt. Screen refresh completion is not reported." = "设备已确认接收，尚无法确认屏幕是否完成刷新。";
+
+"Bluetooth records could not be read." = "无法读取蓝牙记录。";
+
+"Bluetooth records could not be saved. They may be lost when the app closes." = "无法保存蓝牙记录，关闭 App 后记录可能丢失。";
+
+"Forget Bluetooth Record" = "删除蓝牙记录";
+
+"Forget Bluetooth Record?" = "删除蓝牙记录？";
+"This removes the saved mode, voltage, and photo preview from this device." = "这会从本机删除保存的模式、电压和照片预览。";
+
+"Bluetooth" = "蓝牙";

@@ -344,6 +344,32 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Photo Sent"].waitForExistence(timeout: 12))
         let completionShot = XCTAttachment(screenshot: app.screenshot())
         completionShot.name = "PicPak Compact Completion"; completionShot.lifetime = .keepAlways; add(completionShot)
+        app.buttons["Done"].firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Nearby Displays"].waitForExistence(timeout: 4))
+        app.navigationBars["Nearby Displays"].buttons.firstMatch.tap()
+        let demo = app.buttons["Explore with Demo Data"]
+        XCTAssertTrue(demo.waitForExistence(timeout: 4))
+        for _ in 0..<3 where !demo.isHittable { app.swipeUp() }
+        demo.tap()
+        let display = app.buttons["display-card-picpak-kitchen"]
+        XCTAssertTrue(display.waitForExistence(timeout: 8))
+        display.tap()
+        let link = app.buttons["bluetooth-record-link-picpak-kitchen"]
+        for _ in 0..<4 where !link.isHittable { app.swipeUp() }
+        XCTAssertTrue(link.exists)
+        link.tap()
+        app.buttons["Tesserae-A1B2C3 · picpak-a1b2c3"].tap()
+        for _ in 0..<4 where !app.staticTexts["Last Bluetooth Send"].isHittable { app.swipeDown() }
+        XCTAssertTrue(app.staticTexts["Last Bluetooth Send"].exists)
+        let savedPreview = app.descendants(matching: .any)["display-detail-preview-picpak-kitchen"].firstMatch
+        XCTAssertEqual(savedPreview.label, "Last Bluetooth Send")
+        let savedShot = XCTAttachment(screenshot: app.screenshot())
+        savedShot.name = "Linked Bluetooth Display Record"; savedShot.lifetime = .keepAlways; add(savedShot)
+        app.navigationBars["Kitchen"].buttons.firstMatch.tap()
+        XCTAssertTrue(display.waitForExistence(timeout: 4))
+        XCTAssertTrue(display.label.contains("Bluetooth Mode"))
+        let cardShot = XCTAttachment(screenshot: app.screenshot())
+        cardShot.name = "Bluetooth Mode Display Card"; cardShot.lifetime = .keepAlways; add(cardShot)
     }
 
     func testPicPakFastPhotoResynchronizesAfterAMissingPacket() {

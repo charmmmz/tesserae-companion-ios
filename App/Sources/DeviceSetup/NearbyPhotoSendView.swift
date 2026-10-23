@@ -174,6 +174,9 @@ struct NearbyPhotoSendView: View {
                                  : String(localized: "PicPak received your photo and will now refresh its screen."))
                                 .foregroundStyle(.secondary)
                         }
+                        if let error = nearby.displayRecords.storageError {
+                            Text(error).font(.footnote).foregroundStyle(TesseraeTheme.warning)
+                        }
                         Button("Done") { close() }
                             .buttonStyle(.borderedProminent)
                             .tint(TesseraeTheme.accentFill).controlSize(.large)
@@ -369,7 +372,8 @@ struct NearbyPhotoSendView: View {
                     data = try await Task.detached(priority: .userInitiated) { try PicPakPhotoEncoder.encode(rgba: rgba) }.value
                 }
                 try Task.checkCancellation()
-                try nearby.sendPhoto(data, to: device, capabilityDigest: capabilities?.digest)
+                let preview = try LocalBluetoothPhotoRenderer.previewPNG(frame: data, capabilities: capabilities)
+                try nearby.sendPhoto(data, to: device, capabilityDigest: capabilities?.digest, previewPNG: preview)
             } catch { if !Task.isCancelled { localError = error.localizedDescription } }
         }
     }

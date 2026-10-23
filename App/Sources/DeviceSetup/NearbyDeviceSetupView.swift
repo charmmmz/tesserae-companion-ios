@@ -490,6 +490,11 @@ struct NearbyDeviceSetupView: View {
 
     private var maintenance: some View {
         Form {
+            if let error = nearby.displayRecords.storageError {
+                Section {
+                    Text(error).font(.footnote).foregroundStyle(TesseraeTheme.warning)
+                }
+            }
             if let diagnostics = nearby.diagnostics {
                 Section {
                     displayIdentityRows

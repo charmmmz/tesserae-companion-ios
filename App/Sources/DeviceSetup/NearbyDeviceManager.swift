@@ -160,6 +160,7 @@ struct NearbyConnectionLifecycle {
 @MainActor
 @Observable
 final class NearbyDeviceManager: NSObject {
+    let displayRecords: BluetoothDisplayStore
     private struct PendingConnection {
         let device: NearbyTesseraeDevice
         let peripheral: CBPeripheral
@@ -214,6 +215,7 @@ final class NearbyDeviceManager: NSObject {
     private var screenModeTimeoutTask: Task<Void, Never>?
     private var photoTimeoutTask: Task<Void, Never>?
     private var photoTransfer: BLEPhotoTransfer?
+    private var pendingPhotoPreview: Data?
     private var photoTransportCapabilities: BLEPhotoTransportCapabilities?
     private var isResynchronizingPhoto = false
     private var photoStatusRequest: UInt32 = 0
@@ -278,7 +280,8 @@ final class NearbyDeviceManager: NSObject {
         return "\(nsError.domain)(\(nsError.code)): \(nsError.localizedDescription)"
     }
 
-    override init() {
+    init(displayRecords: BluetoothDisplayStore = BluetoothDisplayStore()) {
+        self.displayRecords = displayRecords
         super.init()
 #if DEBUG
         if isSetupUIFixture {
@@ -847,6 +850,7 @@ final class NearbyDeviceManager: NSObject {
         case "diagnostics":
             diagnostics = NearbyDeviceDiagnostics(event: object)
             screenMode = diagnostics?.screenMode
+            rememberDisplayStatus(mode: screenMode, batteryMillivolts: diagnostics?.batteryMillivolts)
             screenModeNeedsReadback = false
             photoAuthorized = photoKeyAccount.map { BLEPhotoKeyStore.read($0) != nil } ?? false
             refreshSpeedSetting.receiveDiagnostics(
@@ -869,6 +873,7 @@ final class NearbyDeviceManager: NSObject {
             guard capabilities.kind == deviceInfo?.kind else { throw BLESetupProtocolError.unexpectedDevice }
             // The device's format declaration is authoritative, never its BLE number.
             photoCapabilities = capabilities
+            rememberDisplayStatus(mode: .bluetooth)
             photoTransportCapabilities = try JSONDecoder().decode(BLEPhotoTransportCapabilities.self, from: data)
             isLoadingPhotoCapabilities = false
             photoTimeoutTask?.cancel()
@@ -883,6 +888,7 @@ final class NearbyDeviceManager: NSObject {
             screenModeRequest = nil
             isSavingScreenMode = false
             screenMode = mode
+            rememberDisplayStatus(mode: mode)
             do {
                 if mode == .bluetooth {
                     guard let encoded = object["photo_key"] as? String,
@@ -913,6 +919,7 @@ final class NearbyDeviceManager: NSObject {
             photoTransportCapabilities = try JSONDecoder().decode(BLEPhotoTransportCapabilities.self,
                 from: JSONSerialization.data(withJSONObject: object))
             photoDeviceStatus = BLEPhotoDeviceStatus(event: object)
+            rememberDisplayStatus(mode: photoDeviceStatus?.screenMode, batteryMillivolts: photoDeviceStatus?.batteryMillivolts)
             photoTimeoutTask?.cancel()
             connectionState = .ready
             statusMessage = nil
@@ -962,6 +969,10 @@ final class NearbyDeviceManager: NSObject {
             guard let transfer = photoTransfer, transfer.waitingForReceipt,
                   object["id"] as? UInt32 == transfer.id else { return }
             photoTimeoutTask?.cancel()
+            if let deviceID = deviceInfo?.id, let pendingPhotoPreview {
+                displayRecords.receivedPhoto(deviceID: deviceID, previewPNG: pendingPhotoPreview)
+            }
+            pendingPhotoPreview = nil
             if let startedAt = photoTransferStartedAt {
                 let seconds = ProcessInfo.processInfo.systemUptime - startedAt
                 let bytesPerSecond = Double(transfer.data.count) / max(seconds, 0.001)
@@ -991,6 +1002,7 @@ final class NearbyDeviceManager: NSObject {
             connectionState = .restarting
             statusMessage = String(localized: "Wi-Fi settings cleared. Display is restarting…")
         case "factory_resetting":
+            if let deviceID = deviceInfo?.id { displayRecords.remove(deviceID: deviceID) }
             if let id = photoKeyAccount { BLEPhotoKeyStore.remove(id) }
             connectionState = .restarting
             statusMessage = String(localized: "Display reset. It is restarting…")
@@ -1017,6 +1029,7 @@ final class NearbyDeviceManager: NSObject {
     }
 
     private func fail(_ message: String) {
+        pendingPhotoPreview = nil
         resetRefreshSpeedSetting()
         photoTimeoutTask?.cancel()
         screenModeTimeoutTask?.cancel()
@@ -1077,7 +1090,13 @@ final class NearbyDeviceManager: NSObject {
         sendCommand(["op": "set_screen_mode", "value": mode.rawValue, "request": request])
     }
 
-    func sendPhoto(_ data: Data, to device: NearbyTesseraeDevice, capabilityDigest: String?) throws {
+    private func rememberDisplayStatus(mode: BLEScreenMode?, batteryMillivolts: Int? = nil) {
+        guard let info = deviceInfo else { return }
+        displayRecords.observe(deviceID: info.id, name: activeDevice?.name ?? info.model,
+                               mode: mode, batteryMillivolts: batteryMillivolts)
+    }
+
+    func sendPhoto(_ data: Data, to device: NearbyTesseraeDevice, capabilityDigest: String?, previewPNG: Data? = nil) throws {
         guard connectionState == .ready, activeDevice?.mode == .photo,
               hasPhotoDataChannel,
               photoState != .sending,
@@ -1104,6 +1123,7 @@ final class NearbyDeviceManager: NSObject {
         let transfer = try BLEPhotoTransfer(data: data, id: .random(in: 1...UInt32.max),
                                            capabilities: photoCapabilities, transport: transport)
         photoTransfer = transfer
+        pendingPhotoPreview = previewPNG
         isResynchronizingPhoto = false
         photoTransferStartedAt = ProcessInfo.processInfo.systemUptime
         photoRetryCount = 0
@@ -1175,6 +1195,7 @@ final class NearbyDeviceManager: NSObject {
     }
 
     private func resetPhotoSession() {
+        pendingPhotoPreview = nil
 #if DEBUG
         fixtureWriteGeneration &+= 1
         fixtureWriteTail?.cancel()

@@ -13,6 +13,10 @@ capabilities.
 
 ### Added
 
+- Displays retains the last confirmed Bluetooth mode, battery readings, and
+  verified Bluetooth photo preview locally across app restarts. Details show
+  timestamps and allow explicit association when BLE and server IDs differ.
+
 - Dashboard cards and list rows open native settings on compatible servers:
   edit names, icons, display bindings, content/wake intervals, appearance, and
   declared Canvas configuration. Saves preserve unrelated content, detect
