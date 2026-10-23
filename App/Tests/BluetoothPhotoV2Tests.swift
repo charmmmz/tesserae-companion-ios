@@ -5,11 +5,13 @@ import TesseraeKit
 @testable import Tesserae_Companion
 
 struct BluetoothPhotoV2Tests {
-    static func capabilities(width: Int = 4, height: Int = 2, chunk: Int = 3) throws -> BluetoothPhotoCapabilities {
-        let object: [String: Any] = ["schema": 2, "kind": "test_panel", "width": width, "height": height,
+    static func capabilities(width: Int = 4, height: Int = 2, chunk: Int = 3,
+                             window: Int? = nil) throws -> BluetoothPhotoCapabilities {
+        var object: [String: Any] = ["schema": 2, "kind": "test_panel", "width": width, "height": height,
             "visible_width": width, "visible_height": height, "x_offset": 0, "format": "bwry2-msb",
             "stride": (width + 3) / 4, "bytes": ((width + 3) / 4) * height, "chunk_bytes": chunk,
             "digest": String(repeating: "b", count: 64), "row_order": "top_down", "lifecycle": "manual"]
+        if let window { object["max_window"] = window }
         return try JSONDecoder().decode(BluetoothPhotoCapabilities.self, from: JSONSerialization.data(withJSONObject: object))
     }
 
@@ -52,6 +54,95 @@ struct BluetoothPhotoV2Tests {
         #expect(throws: (any Error).self) {
             try BLEPhotoTransfer(data: Data(count: 30_000), id: 1, capabilities: caps)
         }
+    }
+
+    @Test func cumulativeAcknowledgementsRefillOnlyTheFreeWindow() throws {
+        let caps = try Self.capabilities(width: 32, height: 2, chunk: 3, window: 4)
+        var transfer = try BLEPhotoTransfer(data: Data(0..<16), id: 0x01020304, capabilities: caps)
+        #expect(transfer.isAwaitingBegin)
+        #expect(transfer.nextPackets().isEmpty)
+        #expect(transfer.retryPackets().isEmpty)
+        #expect(try transfer.acknowledge(0))
+        #expect(!transfer.isAwaitingBegin)
+        #expect(!((try transfer.acknowledge(0)))) // Begin is accepted only once.
+
+        let first = transfer.nextPackets()
+        #expect(first.map { $0[7] } == [0, 3, 6, 9])
+        #expect(transfer.expectedOffset == 12)
+        #expect(transfer.outstandingPacketCount == 4)
+        #expect(transfer.nextPackets().isEmpty)
+        #expect(!transfer.waitingForReceipt)
+        #expect(transfer.retryPackets() == first)
+
+        // Losing the notification for offset 3 does not stall a cumulative ACK.
+        #expect(try transfer.acknowledge(6))
+        #expect(transfer.offset == 6)
+        #expect(transfer.outstandingPacketCount == 2)
+        let last = transfer.nextPackets()
+        #expect(last.map { $0[7] } == [12, 15])
+        #expect(last.last == Data([1, 2, 3, 4, 0, 0, 0, 15, 15]))
+        #expect(transfer.expectedOffset == 16)
+        #expect(transfer.outstandingPacketCount == 4)
+        #expect(transfer.nextPacket() == nil)
+        #expect(!transfer.waitingForReceipt) // All sent still needs all ACKs.
+        #expect(transfer.retryPackets() == Array(first.suffix(2)) + last)
+        #expect(!((try transfer.acknowledge(3))))
+        #expect(!((try transfer.acknowledge(6))))
+        #expect(transfer.offset == 6)
+        #expect(try transfer.acknowledge(12))
+        #expect(transfer.retryPackets() == last)
+        #expect(!transfer.waitingForReceipt)
+        #expect(try transfer.acknowledge(16))
+        #expect(transfer.waitingForReceipt)
+        #expect(transfer.retryPackets().isEmpty)
+        #expect(transfer.nextPackets().isEmpty)
+        #expect(!((try transfer.acknowledge(16))))
+    }
+
+    @Test(arguments: [-1, 1, 4, 13, 16, 17])
+    func rejectsUnsentOrUnalignedAcknowledgements(value: Int) throws {
+        let caps = try Self.capabilities(width: 32, height: 2, chunk: 3, window: 4)
+        var transfer = try BLEPhotoTransfer(data: Data(0..<16), id: 1, capabilities: caps)
+        #expect(try transfer.acknowledge(0))
+        #expect(transfer.nextPackets().count == 4) // Sent through offset 12.
+        #expect(throws: (any Error).self) { try transfer.acknowledge(value) }
+        #expect(transfer.offset == 0 && transfer.expectedOffset == 12)
+    }
+
+    @Test func staleAcknowledgementsMustStillBePacketBoundaries() throws {
+        let caps = try Self.capabilities(width: 32, height: 2, chunk: 3, window: 4)
+        var transfer = try BLEPhotoTransfer(data: Data(0..<16), id: 1, capabilities: caps)
+        #expect(try transfer.acknowledge(0))
+        #expect(transfer.nextPackets().count == 4)
+        #expect(try transfer.acknowledge(9))
+        #expect(!((try transfer.acknowledge(3))))
+        #expect(throws: (any Error).self) { try transfer.acknowledge(4) }
+        #expect(transfer.offset == 9)
+    }
+
+    @Test(arguments: [nil, 1, 2, 3, 4] as [Int?])
+    func respectsNegotiatedWindowAndRetainsExactRetryPackets(window: Int?) throws {
+        let caps = try Self.capabilities(width: 32, height: 2, chunk: 3, window: window)
+        var transfer = try BLEPhotoTransfer(data: Data(0..<16), id: 1, capabilities: caps)
+        #expect(try transfer.acknowledge(0))
+        let packets = transfer.nextPackets()
+        #expect(transfer.windowSize == (window ?? 1))
+        #expect(packets.count == (window ?? 1))
+        #expect(transfer.nextPackets().isEmpty)
+        #expect(transfer.retryPackets() == packets)
+        #expect(transfer.offset == 0)
+    }
+
+    @Test func legacyPicPakRemainsOnePacketAtATime() throws {
+        var transfer = try BLEPhotoTransfer(data: Data(repeating: 0x1b, count: 30_000), id: 1)
+        #expect(transfer.windowSize == 1)
+        #expect(try transfer.acknowledge(0))
+        let packets = transfer.nextPackets()
+        #expect(packets.count == 1 && packets[0].count == 200)
+        #expect(transfer.nextPackets().isEmpty)
+        #expect(transfer.retryPackets() == packets)
+        #expect(try transfer.acknowledge(192))
+        #expect(transfer.nextPackets().count == 1)
     }
 
     @Test @MainActor func rasterPreservesTopAndBottomMarkers() throws {

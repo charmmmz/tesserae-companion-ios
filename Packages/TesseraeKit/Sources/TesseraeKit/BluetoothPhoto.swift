@@ -65,8 +65,8 @@ public enum BluetoothPhotoError: Error, LocalizedError, Equatable, Sendable {
 }
 
 /// Authenticated Photo v2 reply; never inferred from a hardware advertisement.
-/// v2.0 deliberately accepts one top-down packed format and window=1. Unsupported
-/// extensions fail closed until a corresponding encoder/transport exists.
+/// The optional window limit extends the original stop-and-wait transport;
+/// absence means one packet, preserving older Photo v2 firmware.
 public struct BluetoothPhotoCapabilities: Codable, Equatable, Sendable {
     public let schema: Int
     public let kind: String
@@ -79,6 +79,7 @@ public struct BluetoothPhotoCapabilities: Codable, Equatable, Sendable {
     public let stride: Int
     public let bytes: Int
     public let chunkBytes: Int
+    public let maxWindow: Int?
     public let digest: String
     public let rowOrder: String
     public let lifecycle: String
@@ -87,6 +88,7 @@ public struct BluetoothPhotoCapabilities: Codable, Equatable, Sendable {
         case schema, kind, width, height, format, stride, bytes, digest, lifecycle
         case visibleWidth = "visible_width", visibleHeight = "visible_height"
         case xOffset = "x_offset", chunkBytes = "chunk_bytes", rowOrder = "row_order"
+        case maxWindow = "max_window"
     }
 
     public func validate() throws {
@@ -97,6 +99,7 @@ public struct BluetoothPhotoCapabilities: Codable, Equatable, Sendable {
               stride == (width * format.bitsPerPixel + 7) / 8,
               bytes == stride * height, bytes <= 4 * 1024 * 1024,
               (1...384).contains(chunkBytes), rowOrder == "top_down",
+              (1...4).contains(maxWindow ?? 1),
               lifecycle == "manual", digest.utf8.count == 64,
               digest.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) })
         else { throw BluetoothPhotoError.invalidCapabilities }

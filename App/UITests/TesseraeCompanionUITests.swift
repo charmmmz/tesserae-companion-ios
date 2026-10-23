@@ -412,12 +412,17 @@ final class TesseraeCompanionUITests: XCTestCase {
         assertUnifiedPhotoSessionReceivesFrame(e1003: true)
     }
 
-    private func assertUnifiedPhotoSessionReceivesFrame(e1003: Bool) {
+    func testUnifiedPhotoWindowRecoversWhenAllFirstWindowACKsAreLost() {
+        assertUnifiedPhotoSessionReceivesFrame(e1003: false, dropACKs: true)
+    }
+
+    private func assertUnifiedPhotoSessionReceivesFrame(e1003: Bool, dropACKs: Bool = false) {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_UNIFIED_BLE"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_UNIFIED_PHOTO"] = "1"
         if e1003 { app.launchEnvironment["TESSERAE_UI_TEST_E1003_BLE"] = "1" }
+        if dropACKs { app.launchEnvironment["TESSERAE_UI_TEST_DROP_PHOTO_ACKS"] = "1" }
         app.launch()
         let nearby = app.buttons["onboarding-nearby-devices"]
         XCTAssertTrue(nearby.waitForExistence(timeout: 5))
