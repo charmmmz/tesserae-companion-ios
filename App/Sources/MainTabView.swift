@@ -35,6 +35,42 @@ struct TesseraeSendToolbarButton: View {
     }
 }
 
+struct TesseraeRootToolbar<ContextAction: View>: ToolbarContent {
+    var showsGlobalActions = true
+    @ViewBuilder let contextAction: ContextAction
+
+    var body: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            // One system toolbar item gives every page the same capsule margins.
+            // Three 44 pt targets, 4 pt gaps, and those margins keep it near 150 pt.
+            HStack(spacing: 4) {
+                contextAction
+                if showsGlobalActions {
+                    TesseraeSendToolbarButton()
+                    TesseraeSettingsToolbarButton()
+                }
+            }
+            .labelStyle(.iconOnly)
+            .menuStyle(.button)
+            .buttonStyle(TesseraeRootToolbarButtonStyle())
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("root-toolbar-actions")
+        }
+    }
+}
+
+private struct TesseraeRootToolbarButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 20))
+            .imageScale(.medium)
+            .foregroundStyle(TesseraeTheme.accent)
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+            .opacity(configuration.isPressed ? 0.5 : 1)
+    }
+}
+
 private enum AppTab: Hashable {
     case displays
     case dashboards

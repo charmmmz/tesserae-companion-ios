@@ -858,11 +858,42 @@ final class TesseraeCompanionUITests: XCTestCase {
 
         let settings = app.buttons["root-settings"]
 
+        func checkToolbar(contextID: String, name: String) -> CGRect {
+            let actions = [
+                app.buttons[contextID],
+                app.buttons["root-send-action"],
+                settings,
+            ]
+            var bounds = CGRect.null
+            for action in actions {
+                XCTAssertTrue(action.waitForExistence(timeout: 3))
+                XCTAssertTrue(action.isHittable)
+                XCTAssertGreaterThanOrEqual(action.frame.width, 44 - 0.01)
+                XCTAssertGreaterThanOrEqual(action.frame.height, 44 - 0.01)
+                XCTAssertTrue(app.frame.contains(action.frame))
+                bounds = bounds.union(action.frame)
+            }
+            XCTAssertLessThanOrEqual(actions[0].frame.maxX, actions[1].frame.minX + 0.5)
+            XCTAssertLessThanOrEqual(actions[1].frame.maxX, actions[2].frame.minX + 0.5)
+            XCTAssertLessThanOrEqual(bounds.width, 150)
+            let screenshot = XCTAttachment(screenshot: app.screenshot())
+            screenshot.name = name
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+            return bounds
+        }
+
         XCTAssertTrue(settings.waitForExistence(timeout: 2))
         XCTAssertTrue(settings.isHittable)
         XCTAssertLessThanOrEqual(settings.frame.maxX, app.frame.maxX)
         XCTAssertFalse(app.buttons["dashboard-layout-toggle"].exists)
         XCTAssertFalse(app.buttons["clear-local-activity"].exists)
+        let displaysToolbar = checkToolbar(contextID: "manage-lineups", name: "Displays Root Toolbar")
+
+        app.buttons["Library"].firstMatch.tap()
+        let libraryToolbar = checkToolbar(contextID: "gallery-create-folder", name: "Library Root Toolbar")
+        XCTAssertEqual(libraryToolbar.width, displaysToolbar.width, accuracy: 0.5)
+        XCTAssertEqual(libraryToolbar.minX, displaysToolbar.minX, accuracy: 0.5)
 
         app.buttons["Dashboards"].firstMatch.tap()
         XCTAssertTrue(settings.waitForExistence(timeout: 2))
@@ -877,15 +908,14 @@ final class TesseraeCompanionUITests: XCTestCase {
             app.buttons["dashboard-layout-toggle"].frame.maxX
         )
         XCTAssertFalse(app.buttons["clear-local-activity"].exists)
-        let dashboardsToolbarScreenshot = XCTAttachment(
-            screenshot: app.screenshot()
-        )
-        dashboardsToolbarScreenshot.name = "Dashboards Root Toolbar"
-        dashboardsToolbarScreenshot.lifetime = .keepAlways
-        add(dashboardsToolbarScreenshot)
+        let dashboardsToolbar = checkToolbar(contextID: "dashboard-layout-toggle", name: "Dashboards Root Toolbar")
+        XCTAssertEqual(dashboardsToolbar.width, displaysToolbar.width, accuracy: 0.5)
+        XCTAssertEqual(dashboardsToolbar.minX, displaysToolbar.minX, accuracy: 0.5)
 
         XCTAssertFalse(app.tabBars.buttons["Send"].exists)
-        app.buttons["root-send-action"].tap()
+        app.buttons["root-send-action"]
+            .coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.5))
+            .tap()
         let sendSettingsQuery = app.buttons.matching(
             identifier: "root-settings"
         )
@@ -906,12 +936,18 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertLessThanOrEqual(settings.frame.maxX, app.frame.maxX)
         XCTAssertFalse(app.buttons["clear-local-activity"].exists)
         XCTAssertFalse(app.buttons["dashboard-layout-toggle"].exists)
-        let activityToolbarScreenshot = XCTAttachment(
-            screenshot: app.screenshot()
-        )
-        activityToolbarScreenshot.name = "Activity Root Toolbar"
-        activityToolbarScreenshot.lifetime = .keepAlways
-        add(activityToolbarScreenshot)
+        let activityToolbar = checkToolbar(contextID: "activity-filter", name: "Activity Root Toolbar")
+        XCTAssertEqual(activityToolbar.width, displaysToolbar.width, accuracy: 0.5)
+        XCTAssertEqual(activityToolbar.minX, displaysToolbar.minX, accuracy: 0.5)
+        app.buttons["activity-filter"]
+            .coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.5))
+            .tap()
+        let needsAttention = app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier == %@ OR label == %@", "activity-filter-needs-attention", "Needs Attention")
+        ).firstMatch
+        XCTAssertTrue(needsAttention.waitForExistence(timeout: 3))
+        needsAttention.tap()
+        XCTAssertEqual(app.buttons["activity-filter"].value as? String, "Needs Attention")
     }
 
     func testDashboardGroupCollapseAndExpand() {

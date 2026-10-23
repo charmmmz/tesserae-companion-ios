@@ -170,14 +170,11 @@ struct DisplaysView: View {
         }
         .onDisappear { cancelDisplayDrag() }
         .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
+            TesseraeRootToolbar(
+                showsGlobalActions: horizontalSizeClass == .compact || selectedDisplayID == nil
+            ) {
                 if model.supportsLineups {
                     manageLineupsButton
-                }
-
-                if horizontalSizeClass == .compact || selectedDisplayID == nil {
-                    TesseraeSendToolbarButton()
-                    TesseraeSettingsToolbarButton()
                 }
             }
         }

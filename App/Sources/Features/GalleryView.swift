@@ -182,14 +182,11 @@ struct GalleryView: View {
         }
         .navigationTitle("Library")
         .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
+            TesseraeRootToolbar {
                 Button("Create Folder", systemImage: "folder.badge.plus") {
                     beginCreatingFolder()
                 }
                 .accessibilityIdentifier("gallery-create-folder")
-
-                TesseraeSendToolbarButton()
-                TesseraeSettingsToolbarButton()
             }
         }
         .sheet(isPresented: $creatingFolder) {

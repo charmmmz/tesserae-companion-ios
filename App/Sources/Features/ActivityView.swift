@@ -102,7 +102,7 @@ struct ActivityView: View {
             }
         }
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            TesseraeRootToolbar {
                 Menu {
                     Picker("Activity Filter", selection: $filter) {
                         Text("All")
@@ -122,10 +122,6 @@ struct ActivityView: View {
                 }
                 .accessibilityValue(filter.label)
                 .accessibilityIdentifier("activity-filter")
-            }
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                TesseraeSendToolbarButton()
-                TesseraeSettingsToolbarButton()
             }
         }
         .tesseraeScreenBackground()

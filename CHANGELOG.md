@@ -34,6 +34,10 @@ capabilities.
 
 ### Changed
 
+- Displays, Dashboards, Library, and Activity share a compact toolbar with
+  consistent widths, Tesserae theme colours, and full-size touch targets for
+  all three actions.
+
 - Offline Album setup and review use shorter explanations focused on playback,
   display support, and storage. Photo ordering stays in the Album draft when
   returning from its ordering page, without a separate Apply step.

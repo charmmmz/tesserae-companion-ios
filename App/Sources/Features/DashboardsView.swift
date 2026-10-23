@@ -291,7 +291,7 @@ struct DashboardsView: View {
             endDashboardDrag()
         }
         .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
+            TesseraeRootToolbar {
                 Button {
                     toggleLayoutMode()
                 } label: {
@@ -305,9 +305,6 @@ struct DashboardsView: View {
                     )
                 }
                 .accessibilityIdentifier("dashboard-layout-toggle")
-
-                TesseraeSendToolbarButton()
-                TesseraeSettingsToolbarButton()
             }
         }
         .overlay {
