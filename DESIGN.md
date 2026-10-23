@@ -170,7 +170,7 @@ The iOS target and Share Extension support both device families while retaining
 an iOS 18 minimum. Displays use a persistent NavigationSplitView; compact windows
 collapse into native navigation, and Lineups has an explicit return action in wide
 windows. Dashboards use the full page with adaptive cards or a list, opening a
-compact modal for preview and push. Photo composers keep their draft,
+native settings when selecting the name, with a compact modal for preview and push. Photo composers keep their draft,
 framing, target selection and submission state above adaptive regions. On iOS
 27.1, wide composers use ArrangementView to respect active divisions; older
 systems use a two-column layout. Compact and accessibility layouts remain scrollable.
@@ -184,9 +184,9 @@ window changes do not initiate a new connection. No server API changes are requi
 
 ### Explicitly out of scope for release 1.0
 
-- Canvas or dashboard editing;
-- widget/plugin installation or configuration;
-- theme editing;
+- full Canvas/Dashboard layout or source-code editing;
+- widget/plugin installation or global configuration;
+- theme authoring;
 - advanced schedule, navigation, condition, and deck editing outside the four
   native Lineup intents;
 - firmware installation, calibration, and destructive device settings;
@@ -233,6 +233,27 @@ identity or authentication.
 
 The app must not claim that an e-ink panel has physically refreshed when
 the server only accepted or published the render.
+
+### Native Dashboard settings
+
+On compatible servers, Dashboard names open native settings. Content fields
+are grouped by component; display bindings, update intervals and appearance
+have separate pages. Help, defaults, clear and reset actions appear on demand.
+Unsupported controls retain their stored values and link to the web editor.
+
+A shared draft survives component and choice navigation. Ordered multiselect
+retains saved or unavailable choices, supports priority changes, and does not
+repeat selected rows among available choices. The explicit Save on Dashboard
+Settings submits one revision-checked partial update. Conflicts preserve the
+draft and require a confirmed reload; saving refreshes the preview without
+pushing a frame. Leaving an unsaved draft requires confirmation.
+
+`dashboard_settings` gates basic settings; `dashboard_component_settings`
+additionally gates per-instance widget fields and scoped searchable choices.
+`dashboards:write` is optional and requires an operator grant; existing pairings
+retain read-only access until granted. Servers without these capabilities keep
+preview/push and the web shortcut. Layout, code and global plugin management
+remain in the web editor.
 
 ### 3.3 Send a family photo from the share sheet
 
@@ -608,9 +629,10 @@ Job lifecycle and terminal business outcome are separate:
 | Result | `published` | Show Published to server/panel transport. |
 | Result | `quiet` | Explain that quiet hours were respected; an explicit user send may retry with override. |
 
-Both dashboard and image writes require `Idempotency-Key`. Reusing a key with
+Dashboard push and image-send requests require `Idempotency-Key`. Reusing a key with
 the same request returns the original Job; changing the payload returns
-`idempotency_conflict`.
+`idempotency_conflict`. Dashboard settings PATCH instead uses the fetched page
+and schema revisions for concurrency control.
 
 An e-ink device may poll after the server publishes an artifact. The UI
 language must distinguish “published” from a physically observed refresh

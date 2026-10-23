@@ -174,6 +174,43 @@ public actor LiveTesseraeClient: TesseraeServing {
         return try await perform(request, expectedStatusCodes: [200])
     }
 
+    public func fetchDashboardSettings(id: String, instance: TesseraeInstance) async throws -> DashboardSettings {
+        let request = try await authenticatedRequest(instance: instance, path: ["dashboards", id, "settings"], method: "GET")
+        return try await perform(request, expectedStatusCodes: [200])
+    }
+
+    public func fetchDashboardSettingChoices(
+        id: String, fieldID: String, query: String, limit: Int, offset: Int,
+        schemaRevision: String? = nil, instance: TesseraeInstance
+    ) async throws -> DashboardSettingChoices {
+        var queryItems = [
+            URLQueryItem(name: "q", value: query),
+            URLQueryItem(name: "limit", value: String(limit)),
+            URLQueryItem(name: "offset", value: String(offset)),
+        ]
+        if let schemaRevision { queryItems.append(URLQueryItem(name: "schema_revision", value: schemaRevision)) }
+        let request = try await authenticatedRequest(
+            instance: instance, path: ["dashboards", id, "settings", "fields", fieldID, "choices"],
+            method: "GET", queryItems: queryItems)
+        return try await perform(request, expectedStatusCodes: [200])
+    }
+
+    public func updateDashboardSettings(id: String, patch: DashboardSettingsPatch, instance: TesseraeInstance) async throws -> DashboardSettings {
+        let request = try await authenticatedRequest(instance: instance, path: ["dashboards", id, "settings"], method: "PATCH", body: TesseraeJSON.encoder().encode(patch))
+        let result = try await response(for: request)
+        if result.statusCode == 400 {
+            struct ValidationResponse: Decodable {
+                struct Detail: Decodable { let message: String; let fields: [String: String]? }
+                let error: Detail
+            }
+            if let error = try? TesseraeJSON.decoder().decode(ValidationResponse.self, from: result.data).error {
+                throw DashboardSettingsValidationError(message: error.message, fields: error.fields ?? [:])
+            }
+        }
+        guard result.statusCode == 200 else { throw try serverError(from: result) }
+        return try TesseraeJSON.decoder().decode(DashboardSettings.self, from: result.data)
+    }
+
     public func fetchDashboards(instance: TesseraeInstance) async throws -> [DashboardSummary] {
         let request = try await authenticatedRequest(
             instance: instance,

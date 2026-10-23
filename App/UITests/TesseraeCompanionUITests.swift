@@ -1004,6 +1004,8 @@ final class TesseraeCompanionUITests: XCTestCase {
         add(listLayoutScreenshot)
 
         pantryListRow.tap()
+        XCTAssertTrue(app.textFields["dashboard-settings-name"].waitForExistence(timeout: 3))
+        app.buttons["dashboard-settings-push"].tap()
         XCTAssertTrue(
             app.staticTexts["dashboard-push-sheet-title"]
                 .waitForExistence(timeout: 2)
@@ -1013,6 +1015,7 @@ final class TesseraeCompanionUITests: XCTestCase {
                 .waitForExistence(timeout: 2)
         )
         app.buttons["Cancel"].tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(layoutToggle.waitForExistence(timeout: 2))
 
         layoutToggle.tap()

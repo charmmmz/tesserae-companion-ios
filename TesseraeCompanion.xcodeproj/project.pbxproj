@@ -41,6 +41,7 @@
 		59A4C59F6ADE317BF4F66B1A /* DraftEditingSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BA6516AC76BFF5C21FAAE27 /* DraftEditingSession.swift */; };
 		5A01B168EA0272D1154E06BA /* PhotoFramingSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90C9F22206234BD938D1E5B1 /* PhotoFramingSession.swift */; };
 		5A369EE1C0A1B4C46F414077 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E10BE2603FB01EFAAE4419 /* SettingsView.swift */; };
+		5CC2CC564A1BE6925C43F4D5 /* DashboardSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A05849C6115D35450BA3707F /* DashboardSettingsView.swift */; };
 		5EB4D303FD2F67C98154415C /* DisplayHardwareBadgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 834AF00906D63D9F2A468C94 /* DisplayHardwareBadgeTests.swift */; };
 		5EC9A7DAA43DC020D3D5DE6D /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68D757E72A99A23D9A75B361 /* OnboardingView.swift */; };
 		64D3E04F40AB9CBE6306FBC0 /* RemindersBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CBD8BCA89698A1281940F5D /* RemindersBridge.swift */; };
@@ -50,12 +51,14 @@
 		68F3F911C34454CFAB4148D2 /* PhotoFramingSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E726D6EBD2787B7CEED6CC14 /* PhotoFramingSessionTests.swift */; };
 		6934735274B0175C7C2D2AF8 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F548F3379CFFB93726CD704 /* MainTabView.swift */; };
 		69E964DA91CB8FFDFC343170 /* HealthSnapshotFactoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 259C8594008E905790574F3A /* HealthSnapshotFactoryTests.swift */; };
+		6C45BF99D82AB95DD6A2B979 /* DashboardComponentSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 392FCC1E3CDA7DF07E4B4444 /* DashboardComponentSettingsView.swift */; };
 		6FD2A3368ED54597304902DB /* PhosphorDashboardIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 025F289A1CFEF8C9B59D15E0 /* PhosphorDashboardIcon.swift */; };
 		7640D052F916B7D073F4D161 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = DA70B355A13002C7B64EA149 /* Localizable.strings */; };
 		7878E69E20C0262F96387CA4 /* AdaptiveComposerLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 982ACAB2004BA498F82E4AA0 /* AdaptiveComposerLayout.swift */; };
 		78BD5F20FF35935BF1ED6F68 /* DeviceSetupQRScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 426B2AE06E8492AEE89F8943 /* DeviceSetupQRScanner.swift */; };
 		7947C5ABEA598A1D59C57C68 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8FE0A6BC06BC1C26FD5AD93A /* Assets.xcassets */; };
 		7C7957F03F775B5E9B059BE2 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B2A5670FEC5BD4923C95159E /* PrivacyInfo.xcprivacy */; };
+		80FF4272E3D31DF51A6245B8 /* DashboardSettingsAppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 348EE5DFDB46CEDFD1DBFFEE /* DashboardSettingsAppModelTests.swift */; };
 		86913487D95BFCE535E7C38C /* AlbumsAndActivityUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B1C7C0CE5B9420ECC69B548 /* AlbumsAndActivityUITests.swift */; };
 		916CBD8751A5A4B3F64FA338 /* AdaptiveLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD032CACF5897CDEDECD5C5F /* AdaptiveLayoutTests.swift */; };
 		923B54BBAA318026F2C29769 /* PreviewArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61AF530D779237A174E117C6 /* PreviewArtwork.swift */; };
@@ -68,6 +71,7 @@
 		A9C1333F5B8DEEBBCBECCF92 /* BLEPhotoProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13FE9A7CF2AD8318230B5311 /* BLEPhotoProtocol.swift */; };
 		ADE2EF08AEC3F760A31BA858 /* Phosphor.ttf in Resources */ = {isa = PBXBuildFile; fileRef = CB98E98A7C6727AE8FE4694E /* Phosphor.ttf */; };
 		B3B4F023539326701EB077DF /* LineupsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCAC4A35BBC2B83469A3411C /* LineupsUITests.swift */; };
+		B70394B493B56F40CF840CA5 /* DashboardSettingChoicesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB7F1822FF079CC4AABFAFD /* DashboardSettingChoicesView.swift */; };
 		B77A29D5903251374F98C622 /* ActivityJobExpiryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99F8FB591FB5C627BC90D186 /* ActivityJobExpiryTests.swift */; };
 		BB0805FDC6491F8D39B294A4 /* PhotoSubjectAnalyzerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9024204C8FC942747ED4D797 /* PhotoSubjectAnalyzerTests.swift */; };
 		BCC58FB96478BC3992F3946E /* ActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1A411679F997EDCC5BDFF5 /* ActivityView.swift */; };
@@ -75,6 +79,7 @@
 		C43F0E113EF4A9E5D6AC77F0 /* OfflineAlbumView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A788C388472DC02CC74EDEB /* OfflineAlbumView.swift */; };
 		CA3CCC0682447B674710FFE9 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 0580CE81ECB940408B4B84B9 /* InfoPlist.strings */; };
 		CB4BA3CC542CA597567043D8 /* FittedPreviewLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A04E5CC172EAC80A6C24F75 /* FittedPreviewLayout.swift */; };
+		D72F7AB7540DAF09C2FDB102 /* DashboardSettingsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7D732F7AB479072C4C94DA1 /* DashboardSettingsUITests.swift */; };
 		D934305BF70255B473EC70FA /* NearbyDeviceSetupError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BEB87772E7D7FCDD812DDC7 /* NearbyDeviceSetupError.swift */; };
 		DF2314E330D5BC6AA639C723 /* TesseraeShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 6F532D2BC8A0893B35702D88 /* TesseraeShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		DF677F561B92558755B27EBF /* PhotoFramingSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90C9F22206234BD938D1E5B1 /* PhotoFramingSession.swift */; };
@@ -138,6 +143,7 @@
 		025F289A1CFEF8C9B59D15E0 /* PhosphorDashboardIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhosphorDashboardIcon.swift; sourceTree = "<group>"; };
 		0580CE81ECB940408B4B84B9 /* InfoPlist.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = InfoPlist.strings; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		0B1C7C0CE5B9420ECC69B548 /* AlbumsAndActivityUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlbumsAndActivityUITests.swift; sourceTree = "<group>"; };
+		0BB7F1822FF079CC4AABFAFD /* DashboardSettingChoicesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardSettingChoicesView.swift; sourceTree = "<group>"; };
 		1204CDD20048DC222C43E9F8 /* AdaptiveLayoutUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdaptiveLayoutUITests.swift; sourceTree = "<group>"; };
 		135374B71848FF0E87F4A6D3 /* TesseraePanelImagePreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TesseraePanelImagePreview.swift; sourceTree = "<group>"; };
 		13FE9A7CF2AD8318230B5311 /* BLEPhotoProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BLEPhotoProtocol.swift; sourceTree = "<group>"; };
@@ -151,7 +157,9 @@
 		2EA333FF9332F6E7F0A3AAEA /* PhotoFramingGesture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoFramingGesture.swift; sourceTree = "<group>"; };
 		2F71FB166C88F622C1873E39 /* SendView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendView.swift; sourceTree = "<group>"; };
 		30CBA6B44083893EBB93FB17 /* LineupsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineupsView.swift; sourceTree = "<group>"; };
+		348EE5DFDB46CEDFD1DBFFEE /* DashboardSettingsAppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardSettingsAppModelTests.swift; sourceTree = "<group>"; };
 		36574431BF8F9CAB78DF3088 /* DisplayHardwareBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayHardwareBadge.swift; sourceTree = "<group>"; };
+		392FCC1E3CDA7DF07E4B4444 /* DashboardComponentSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardComponentSettingsView.swift; sourceTree = "<group>"; };
 		3A4080F0A169BC5BCBF484AC /* PicPakPhotoEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PicPakPhotoEncoder.swift; sourceTree = "<group>"; };
 		426B2AE06E8492AEE89F8943 /* DeviceSetupQRScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceSetupQRScanner.swift; sourceTree = "<group>"; };
 		431BEA456C9FDD3620503327 /* NearbyDeviceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearbyDeviceManager.swift; sourceTree = "<group>"; };
@@ -186,6 +194,7 @@
 		9A04E5CC172EAC80A6C24F75 /* FittedPreviewLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FittedPreviewLayout.swift; sourceTree = "<group>"; };
 		9A5B1ACBB0D226BC89B9674D /* ActivityPresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityPresentationTests.swift; sourceTree = "<group>"; };
 		9BC6F53F178D10E050100D5A /* TesseraeCompanionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TesseraeCompanionApp.swift; sourceTree = "<group>"; };
+		A05849C6115D35450BA3707F /* DashboardSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardSettingsView.swift; sourceTree = "<group>"; };
 		A6B1174AA85BE4EB711F746F /* DisplaysView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplaysView.swift; sourceTree = "<group>"; };
 		A8E3107649C81BDC8A30C213 /* BluetoothPhotoV2Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothPhotoV2Tests.swift; sourceTree = "<group>"; };
 		A9C23085D21C3F8015FC68D9 /* ActivityPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityPresentation.swift; sourceTree = "<group>"; };
@@ -215,6 +224,7 @@
 		EEABAD3353BA2EB74A7FFD23 /* LineupEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineupEditorView.swift; sourceTree = "<group>"; };
 		F1964C9534AA2D6526D1275E /* TesseraeCompanionUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = TesseraeCompanionUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F6BCE92FAB7DF4093DAAE45D /* ConnectionRecoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionRecoveryTests.swift; sourceTree = "<group>"; };
+		F7D732F7AB479072C4C94DA1 /* DashboardSettingsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardSettingsUITests.swift; sourceTree = "<group>"; };
 		F99101E3410A2CB4183DCF85 /* LocalBluetoothPhotoRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalBluetoothPhotoRenderer.swift; sourceTree = "<group>"; };
 		FD8060E9227692A0914DB946 /* TesseraeTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TesseraeTheme.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -244,6 +254,7 @@
 			children = (
 				1204CDD20048DC222C43E9F8 /* AdaptiveLayoutUITests.swift */,
 				0B1C7C0CE5B9420ECC69B548 /* AlbumsAndActivityUITests.swift */,
+				F7D732F7AB479072C4C94DA1 /* DashboardSettingsUITests.swift */,
 				CCAC4A35BBC2B83469A3411C /* LineupsUITests.swift */,
 				7F7B082A4F4C920F49545310 /* TesseraeCompanionUITests.swift */,
 			);
@@ -304,6 +315,7 @@
 				BD5EEF99A30C18C07C717772 /* BLESetupProtocolTests.swift */,
 				A8E3107649C81BDC8A30C213 /* BluetoothPhotoV2Tests.swift */,
 				F6BCE92FAB7DF4093DAAE45D /* ConnectionRecoveryTests.swift */,
+				348EE5DFDB46CEDFD1DBFFEE /* DashboardSettingsAppModelTests.swift */,
 				834AF00906D63D9F2A468C94 /* DisplayHardwareBadgeTests.swift */,
 				E4901B9808092D465184CABA /* GalleryViewTests.swift */,
 				259C8594008E905790574F3A /* HealthSnapshotFactoryTests.swift */,
@@ -408,6 +420,9 @@
 			children = (
 				A9C23085D21C3F8015FC68D9 /* ActivityPresentation.swift */,
 				AB1A411679F997EDCC5BDFF5 /* ActivityView.swift */,
+				392FCC1E3CDA7DF07E4B4444 /* DashboardComponentSettingsView.swift */,
+				0BB7F1822FF079CC4AABFAFD /* DashboardSettingChoicesView.swift */,
+				A05849C6115D35450BA3707F /* DashboardSettingsView.swift */,
 				DA9D7AD75F28CF202A22080E /* DashboardsView.swift */,
 				A6B1174AA85BE4EB711F746F /* DisplaysView.swift */,
 				6BA6516AC76BFF5C21FAAE27 /* DraftEditingSession.swift */,
@@ -591,9 +606,9 @@
 			projectRoot = "";
 			targets = (
 				9432DA2869BF47821B1E91E8 /* TesseraeCompanion */,
-				BF8FA7A603C51A901CE3496C /* TesseraeShare */,
-				2E0E36907526CC0D16BA5050 /* TesseraeCompanionUITests */,
 				A98D2993617B8AE8AD8A7FDA /* TesseraeCompanionTests */,
+				2E0E36907526CC0D16BA5050 /* TesseraeCompanionUITests */,
+				BF8FA7A603C51A901CE3496C /* TesseraeShare */,
 			);
 		};
 /* End PBXProject section */
@@ -647,6 +662,7 @@
 			files = (
 				F523C69312AEEDD2C5C25C01 /* AdaptiveLayoutUITests.swift in Sources */,
 				86913487D95BFCE535E7C38C /* AlbumsAndActivityUITests.swift in Sources */,
+				D72F7AB7540DAF09C2FDB102 /* DashboardSettingsUITests.swift in Sources */,
 				B3B4F023539326701EB077DF /* LineupsUITests.swift in Sources */,
 				A39325FC03A45BD076B23270 /* TesseraeCompanionUITests.swift in Sources */,
 			);
@@ -663,6 +679,9 @@
 				56C7CF9DC0CBA6DC2FE131BD /* AppModel.swift in Sources */,
 				A9C1333F5B8DEEBBCBECCF92 /* BLEPhotoProtocol.swift in Sources */,
 				E537E660E8D727EBC31DF725 /* BLESetupProtocol.swift in Sources */,
+				6C45BF99D82AB95DD6A2B979 /* DashboardComponentSettingsView.swift in Sources */,
+				B70394B493B56F40CF840CA5 /* DashboardSettingChoicesView.swift in Sources */,
+				5CC2CC564A1BE6925C43F4D5 /* DashboardSettingsView.swift in Sources */,
 				F2B69015E438D0D45B00B241 /* DashboardsView.swift in Sources */,
 				78BD5F20FF35935BF1ED6F68 /* DeviceSetupQRScanner.swift in Sources */,
 				65EC60FE0E110924626C640A /* DisplayHardwareBadge.swift in Sources */,
@@ -713,6 +732,7 @@
 				EF027BEE001DABA6D3E84627 /* BLESetupProtocolTests.swift in Sources */,
 				065F51AE903AB65EE0538679 /* BluetoothPhotoV2Tests.swift in Sources */,
 				E8F9020298F307760D7FA918 /* ConnectionRecoveryTests.swift in Sources */,
+				80FF4272E3D31DF51A6245B8 /* DashboardSettingsAppModelTests.swift in Sources */,
 				5EB4D303FD2F67C98154415C /* DisplayHardwareBadgeTests.swift in Sources */,
 				FF4C2B0911D8ED227B8224AD /* GalleryViewTests.swift in Sources */,
 				69E964DA91CB8FFDFC343170 /* HealthSnapshotFactoryTests.swift in Sources */,

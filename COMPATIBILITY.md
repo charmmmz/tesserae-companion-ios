@@ -292,3 +292,63 @@ loaded the E1004's authenticated device preview and displayed the retained
 full composition at the correct 1200 × 1600 portrait aspect ratio. Dashboard
 preview preparation still needs a physical-device observation; its transport
 and retry states are covered by client and contract tests.
+
+## Dashboard settings
+
+Native Dashboard settings require the optional `dashboard_settings` capability.
+Read-only pairings can inspect them; writing requires an operator grant of
+`dashboards:write`. Servers without this capability keep existing preview/push
+and the Open in Tesserae shortcut.
+
+Component editing additionally requires `dashboard_component_settings`.
+Settings-only servers decode with empty component groups and PATCH bodies omit
+the extension keys. Newer servers expose one group per Grid cell, Canvas
+widget/data element, Code widget source, or binding. Text, number, boolean,
+select and ordered multiselect share a parent draft across subpages. Dynamic
+choices support search, paging, retry and unavailable selections. Unsupported
+or conditional controls remain read-only and retain their stored values;
+location, slider, native color and full conditional visibility are a later batch.
+
+### Validation — 2026-10-23
+
+Kit checks cover real server-generated fixtures, one-instance partial PATCH,
+secret omission, displayed defaults without writes, scoped choices, pagination,
+old-server compatibility, clear/reset, ordered selections, atomic rejection and
+schema conflicts. Dashboard paths/schemas and five fixtures match the server,
+preserving unrelated client contract additions. Swift-to-Python and real
+Swift-to-NAS unbound-copy HTTP round trips also passed.
+
+The server passed 558 related tests, Ruff/format/mypy and live permission,
+validation, conflict, redaction, persistence and preview checks. Its temporary
+container-layer patch was backed up with rollback verification; it survives
+restart but is lost on image update or container recreation. Shared inputs
+were validated only on copies. Test copies and temporary credentials were
+removed; original dashboards, bindings and existing pairing scopes stayed
+unchanged. Preview rendering does not establish physical display refresh.
+
+Debug 0.8.1 (15) was signed, installed and launched on iPhone 17 Pro (iOS 27.2),
+retaining its pairing with the patched server (base 0.466.1). Manual acceptance
+passed for rename, reminder-list selection and media-player priority changes,
+Save and reopen. Independent GET and disk readback matched the intended changes
+and other components remained unchanged. No frame was pushed to a display.
+
+The opt-in `testLiveServerSettingsSaveAndReload` uses
+`TESSERAE_LIVE_DASHBOARD_ID`; `testLiveComponentChoicesAndPrioritySaveAndReload`
+uses a non-secret `TESSERAE_COMPONENT_QA_JSON` manifest. Both require separately
+prepared unbound QA pages and the phone's existing pairing; ordinary runs skip
+them. Physical attempts exited during XCTest bootstrap with code 74 before any
+test body ran. Manual acceptance is separate from automated device acceptance.
+
+### Compact settings UI follow-up
+
+Display, update and appearance preferences have separate pages. Field help,
+defaults, limits and reset/clear actions appear on demand; web-only fields stay
+collapsed. Choices show saved selections once, preserve order and keep Done at
+the bottom, including while searching. Explicit top-level Save remains.
+
+Five iPhone and three iPad simulator checks passed: settings save/push,
+unsaved-exit protection, preferences/details navigation, component choice and
+priority save/reopen, and Chinese accessibility-size dark layout. Exported
+screenshots were inspected and signed Debug device compilation passed. The
+phone is currently unavailable, so this layout follow-up has not been installed
+or physically accepted; the earlier manual checks apply to the previous UI.

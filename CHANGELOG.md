@@ -13,6 +13,17 @@ capabilities.
 
 ### Added
 
+- Dashboard cards and list rows open native settings on compatible servers:
+  edit names, icons, display bindings, content/wake intervals, appearance, and
+  declared Canvas configuration. Saves preserve unrelated content, detect
+  concurrent changes, and keep existing secrets unless explicitly replaced or
+  cleared. Older servers retain the web editing shortcut.
+- Dashboard content settings now include individual Grid widgets, Canvas
+  components, and structured data sources on compatible servers. Search
+  reminder lists, publishers, and media players; order selected players by
+  priority; and keep a single draft while moving between component pages.
+  Resetting a field to its default is separate from clearing its value.
+
 - Bluetooth maintenance on supported Tesserae displays offers Change Server.
   Use the server connected in Companion, or enter another server's address and
   device pairing code, then confirm Wi-Fi before saving. Wi-Fi-only repair
@@ -33,6 +44,10 @@ capabilities.
   interoperability. The existing negotiated encoder handles its native format.
 
 ### Changed
+
+- Dashboard settings use compact field rows and separate pages for display,
+  update, and appearance preferences. Field help and reset actions are available
+  on demand; choice lists show selections once and keep Done within reach.
 
 - Displays, Dashboards, Library, and Activity share a compact toolbar with
   consistent widths, Tesserae theme colours, and full-size touch targets for

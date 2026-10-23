@@ -34,7 +34,7 @@ The proposal reflects the maintainer reviews in
 [Discussion #203](https://github.com/dmellok/tesserae/discussions/203), and
 [Discussion #225](https://github.com/dmellok/tesserae/discussions/225), and
 [Discussion #230](https://github.com/dmellok/tesserae/discussions/230).
-Dashboard editing, plugin administration, firmware controls,
+Full Dashboard layout/code editing, plugin administration, firmware controls,
 History deletion/administration, and general server administration remain
 outside this contract.
 
@@ -77,6 +77,9 @@ outside this contract.
 | `GET` | `/api/app/v1/devices` | List stable display targets and lightweight status |
 | `GET` | `/api/app/v1/devices/{device_id}/preview` | Read the last-served device-specific logical preview |
 | `GET` | `/api/app/v1/dashboards` | List saved dashboards without forcing renders |
+| `GET` | `/api/app/v1/dashboards/{dashboard_id}/settings` | Read basic settings, declared inputs, and capability-gated component fields |
+| `PATCH` | `/api/app/v1/dashboards/{dashboard_id}/settings` | Atomically save changed settings using the fetched revision |
+| `GET` | `/api/app/v1/dashboards/{dashboard_id}/settings/fields/{field_id}/choices` | Search the current choices of one referenced field |
 | `GET` | `/api/app/v1/dashboards/{dashboard_id}/preview` | Read or prepare an on-demand cached preview |
 | `POST` | `/api/app/v1/dashboards/{dashboard_id}/push` | Push to bindings or explicit targets |
 | `POST` | `/api/app/v1/images` | Upload one still image to explicit targets |
@@ -766,3 +769,73 @@ pairing through publish polling.
   store and bundled Reminders widget;
 - the exact reusable PNG stage each packed renderer exposes as its
   device-specific preview.
+
+## Native Dashboard settings (additive capability)
+
+`dashboard_settings` advertises GET/PATCH
+`/api/app/v1/dashboards/{dashboard_id}/settings`. GET requires `dashboards:read`;
+PATCH requires the separately granted optional `dashboards:write` scope. This
+capability is optional; older servers keep preview/push and web editing.
+
+The response provides `kind`, `can_edit`, a whole-page `revision`, settings,
+server-owned appearance choices, and Canvas inputs. Servers with only this
+capability expose metadata settings for Grid dashboards. Input targets, source code, CSS, and layout never cross
+this editing boundary. Unsupported input types remain read-only in the app.
+
+PATCH carries the fetched revision plus only changed `settings`/`inputs` keys.
+Omission preserves a value; explicit null clears supported nullable values.
+Secret inputs return a configured flag without their value; empty replacement
+text in the app preserves the original and Clear is a distinct action.
+A `409 revision_conflict` keeps the draft until the user chooses to reload.
+`400 invalid_request` may include `error.fields` keyed by `settings.name` or
+`inputs.<name>` for inline errors; `403` is a permission failure, not a request
+to pair again. Successful save returns the updated detail, invalidates cached
+previews, and does not itself push to hardware. The app reuses existing preview
+and push endpoints after saving.
+
+The additive `dashboard_component_settings` capability extends the same response
+with `schema_revision`, `components`, and `coverage`. Each component describes
+one Grid cell, Canvas widget/data element, Code widget source, or binding.
+Its fields reuse the input schema, with server-generated `field_id`, defaults,
+override/mixed state, limits, clear/reset support, and dynamic-choice metadata.
+Declared inputs take precedence over the corresponding discovered fields.
+Components are grouped by instance even when several fragments use the same
+widget. Component and field IDs are opaque; clients must not construct paths
+into the saved document from a label or widget name. Unknown types and
+unavailable widgets are displayed without erasing their data. The first batch
+supports text, numeric, boolean, single-choice, and ordered multiple-choice
+controls. Fields needing location search, sliders, native color controls, or
+conditional visibility remain read-only when the server cannot safely expose
+them through these controls.
+
+PATCH adds `component_values` keyed by opaque field ID and `reset_fields` for
+both declared and component fields. New clients send the fetched
+`schema_revision` with every save; `409 schema_conflict` preserves the draft.
+Reset deletes explicit overrides, null explicitly clears, and omission keeps
+the current value. All sections validate and save atomically, with errors at
+`component_values.<field_id>` or `reset_fields.<field_id>` as applicable.
+The server rejects overlapping declared-input and component writes to the same
+target. `value_state: mixed` has no single value to initialize; opening the
+form preserves every target until an explicit edit or reset. Schema revisions
+cover component targets and widget field definitions, while ordinary changes
+to dynamic choice availability do not invalidate the whole form.
+Older-server responses decode with empty components; their PATCH bodies omit
+the extension keys. Defaults shown in a form are never implicitly persisted.
+
+`GET /api/app/v1/dashboards/{id}/settings/fields/{field_id}/choices` uses
+`dashboards:read`, `q`, `limit`, `offset`, and optional `schema_revision`.
+It returns `status` (`ready` or `unavailable`), `choices`, pagination metadata,
+and the schema revision. A provider failure remains distinct from an empty
+result; `unavailable` can be retried without discarding the selection. Secret
+and unrelated fields cannot be queried. Ordered multiselect
+values retain their order; saved choices missing from the latest results stay
+in the draft until explicitly removed. Newly introduced choices are validated
+against the current provider; unchanged missing selections remain intact.
+Secret fields omit values, defaults, and choices, and safe validation errors
+never include submitted values.
+
+The shared examples include `dashboard-component-settings-response.json`,
+`dashboard-component-settings-patch.json`, and
+`dashboard-settings-choices-response.json`. They are copied directly from the
+server contract fixtures and decoded by the Kit tests alongside the older
+settings-only response.

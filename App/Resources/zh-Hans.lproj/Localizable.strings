@@ -727,3 +727,122 @@
 "Authorize this phone in Bluetooth Maintenance first, then choose Manual (Bluetooth)." = "请先在蓝牙维护中授权此手机，并选择“手动（蓝牙）”模式。";
 "Could not connect. Press the display's button and try again." = "无法连接，请按屏幕按键后重试。";
 "Transfer was not confirmed. Press the display's button and try again." = "传输未得到确认，请按屏幕按键后重试。";
+
+"Opens Dashboard settings." = "打开仪表盘设置。";
+
+"Dashboard Settings" = "仪表盘设置";
+
+"Dashboard Configuration" = "仪表盘配置";
+
+"This Dashboard changed elsewhere. Reload its settings before saving again." = "此仪表盘已在其他地方修改。请重新载入设置后再保存。";
+
+"Reload Settings" = "重新载入设置";
+
+"Editing requires permission in Tesserae Settings. Grant Dashboard editing to this app, then reload." = "编辑需要在 Tesserae 设置中授权。请为此 App 开启仪表盘编辑权限，然后重新载入。";
+
+"This Dashboard has no custom settings. Use the web editor for advanced changes." = "此仪表盘未声明自定义设置。高级编辑请使用网页版。";
+
+"This server does not support native Dashboard settings yet. Open this Dashboard in Tesserae to edit it." = "此服务器尚不支持 App 内的仪表盘设置。请在 Tesserae 网页版打开此仪表盘进行编辑。";
+
+"Preview and Push" = "预览并推送";
+
+"Save your changes before previewing and pushing." = "保存修改后即可预览并推送。";
+
+"Settings saved" = "设置已保存";
+
+"Icon" = "图标";
+
+"Current icon" = "当前图标";
+
+"Food" = "餐饮";
+
+"Statistics" = "统计";
+
+"Unavailable display" = "不可用的显示屏";
+
+"Content update interval (minutes)" = "内容更新间隔（分钟）";
+
+"Wake interval (seconds)" = "唤醒间隔（秒）";
+
+"Content updates: 0 means only when pushed. Leave Wake empty to use each display’s own interval. The server applies the limits supported by each display." = "内容更新设为 0 表示仅在推送时更新。唤醒间隔留空表示使用显示屏自身设置。服务器会按各显示屏支持的范围调整。";
+
+"Appearance" = "外观";
+
+"Theme" = "主题";
+
+"Style" = "样式";
+
+"Font" = "字体";
+
+"Required" = "必填";
+
+"Keep saved value" = "保留已保存的值";
+
+"Clear saved value" = "清除已保存的值";
+
+"Will be cleared when saved" = "保存时将清除";
+
+"Will be replaced when saved" = "保存时将替换";
+
+"Saved value will be kept" = "将保留已保存的值";
+
+"Not configured" = "尚未配置";
+
+"Dashboard preview" = "仪表盘预览";
+
+"Remove unavailable display" = "移除不可用的显示屏";
+
+/* Dashboard component settings */
+"Done Selecting" = "完成选择";
+"Components" = "组件";
+"Component unavailable" = "组件不可用";
+"No additional component settings" = "没有其他组件设置";
+"%lld editable settings" = "%lld 项可编辑设置";
+"Unsaved changes" = "尚未保存的修改";
+"Review this component’s settings" = "请检查此组件的设置";
+"This Dashboard has no editable content fields. Open the web editor for layout or code changes." = "此 Dashboard 没有可编辑的内容字段。布局和代码请在网页编辑器中修改。";
+"This server has no Dashboard-level fields for this page. Component settings require a newer server." = "服务端未提供此页面的 Dashboard 级字段。组件设置需要更新的服务端。";
+"Edit each component here, then save all changes together on this page." = "进入各组件编辑，然后返回此页统一保存。";
+"Check that this widget is installed and enabled on your server." = "请检查此 Widget 是否已在服务端安装并启用。";
+"Changes stay in your draft. Return to Dashboard Settings to save them." = "修改会保留在草稿中。请返回 Dashboard 设置页保存。";
+"This field requires the web editor." = "此字段需在网页编辑器中修改。";
+"Multiple different values" = "存在多个不同的值";
+"Set a shared value" = "设置统一值";
+"Default: %@" = "默认值：%@";
+"Will use the default when saved" = "保存后将使用默认值";
+"Using default" = "使用默认值";
+"Use widget default" = "使用组件默认值";
+"Value Options" = "数值选项";
+"Minimum: %@" = "最小值：%@";
+"Maximum: %@" = "最大值：%@";
+"Saved value" = "已保存的值";
+"Selected — highest priority first" = "已选项，优先级由高到低";
+"Selected" = "已选择";
+"Saved selections stay here even when they are absent from the available choices." = "已保存的选择会保留在这里，即使当前可用选项中没有这些值。";
+"Available Choices" = "可用选项";
+"Not selected" = "未选择";
+"No choices are available." = "暂无可用选项。";
+"No matching choices." = "没有匹配的选项。";
+"Load More" = "加载更多";
+"Search Choices" = "搜索选项";
+"Refresh Choices" = "刷新选项";
+"Move %@ up" = "将 %@ 上移";
+"Move %@ down" = "将 %@ 下移";
+"Remove %@" = "移除 %@";
+"Choices could not be loaded. Your selections are kept. Try again." = "无法加载选项，已保留当前选择。请重试。";
+
+/* Compact Dashboard settings */
+"Preferences" = "偏好设置";
+"Save applies all changes." = "保存将应用所有修改。";
+"Return to Dashboard Settings to save." = "返回仪表盘设置后保存。";
+"Web settings" = "网页设置";
+"About this setting" = "设置说明";
+"Options for %@" = "%@的选项";
+"Replace saved value" = "替换已保存的值";
+"Minimum" = "最小值";
+"Maximum" = "最大值";
+"%lld selected" = "已选 %lld 项";
+"First is preferred." = "优先使用排在前面的播放器。";
+"All choices selected" = "已选择全部选项";
+"Yes" = "是";
+"0 updates only on push. An empty wake interval uses the display’s default." = "更新间隔为 0 时仅在推送时更新；唤醒间隔留空则沿用显示屏设置。";

@@ -15,6 +15,11 @@ SPEC = yaml.safe_load((ROOT / "app-v1.openapi.yaml").read_text())
 FIXTURES = ROOT / "Fixtures"
 
 CASES = {
+    "dashboard-settings-response.json": "DashboardSettingsResponse",
+    "dashboard-settings-patch-request.json": "DashboardSettingsPatchRequest",
+    "dashboard-component-settings-response.json": "DashboardSettingsResponse",
+    "dashboard-component-settings-patch.json": "DashboardSettingsPatchRequest",
+    "dashboard-settings-choices-response.json": "DashboardSettingsChoicesResponse",
     "capabilities.json": "Capabilities",
     "capabilities-previews.json": "Capabilities",
     "capabilities-extended.json": "Capabilities",
@@ -120,6 +125,8 @@ def test_openapi_shape_and_operation_ids_are_stable() -> None:
         "/api/app/v1/devices/{device_id}/upcoming",
         "/api/app/v1/devices/{device_id}/preview",
         "/api/app/v1/dashboards",
+        "/api/app/v1/dashboards/{dashboard_id}/settings",
+        "/api/app/v1/dashboards/{dashboard_id}/settings/fields/{field_id}/choices",
         "/api/app/v1/dashboards/{dashboard_id}/preview",
         "/api/app/v1/dashboards/{dashboard_id}/push",
         "/api/app/v1/images",

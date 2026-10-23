@@ -17,6 +17,9 @@ public protocol TesseraeServing: Sendable {
         limit: Int?,
         instance: TesseraeInstance
     ) async throws -> DeviceUpcomingResponse
+    func fetchDashboardSettings(id: String, instance: TesseraeInstance) async throws -> DashboardSettings
+    func fetchDashboardSettingChoices(id: String, fieldID: String, query: String, limit: Int, offset: Int, schemaRevision: String?, instance: TesseraeInstance) async throws -> DashboardSettingChoices
+    func updateDashboardSettings(id: String, patch: DashboardSettingsPatch, instance: TesseraeInstance) async throws -> DashboardSettings
     func fetchDashboards(instance: TesseraeInstance) async throws -> [DashboardSummary]
     func fetchGalleryFolders(instance: TesseraeInstance) async throws -> [GalleryFolder]
     func fetchGalleryFolder(
@@ -171,6 +174,16 @@ public protocol TesseraeServing: Sendable {
 }
 
 public extension TesseraeServing {
+    func fetchDashboardSettingChoices(id: String, fieldID: String, query: String, limit: Int, offset: Int, schemaRevision: String? = nil, instance: TesseraeInstance) async throws -> DashboardSettingChoices {
+        throw TesseraeClientError.unavailable
+    }
+    func fetchDashboardSettings(id: String, instance: TesseraeInstance) async throws -> DashboardSettings {
+        throw TesseraeClientError.unavailable
+    }
+    func updateDashboardSettings(id: String, patch: DashboardSettingsPatch, instance: TesseraeInstance) async throws -> DashboardSettings {
+        throw TesseraeClientError.unavailable
+    }
+
     /// Backward-compatible unframed upload used by the existing app, Share
     /// Extension, and App Intents until their editing surfaces adopt 0.6.
     func sendImage(

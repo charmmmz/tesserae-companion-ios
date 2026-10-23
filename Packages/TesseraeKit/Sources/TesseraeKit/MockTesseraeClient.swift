@@ -8,6 +8,7 @@ public actor MockTesseraeClient: TesseraeServing {
     private let latency: Duration
     private var completedJobs: [String: PushJob] = [:]
     private var jobsByIdempotencyKey: [String: PushJob] = [:]
+    private var dashboardSettingsByID: [String: DashboardSettings] = [:]
     private var lineupEnabled = true
     private var lineupCurrentPageID = "pantry"
     private var authoredLineups: [String: Lineup] = [:]
@@ -158,6 +159,8 @@ public actor MockTesseraeClient: TesseraeServing {
                 "devices",
                 "dashboards",
                 "dashboard_push",
+                "dashboard_settings",
+                "dashboard_component_settings",
                 "image_push",
                 "image_url_push",
                 "jobs",
@@ -418,7 +421,202 @@ public actor MockTesseraeClient: TesseraeServing {
                 updatedAt: .now.addingTimeInterval(-86_400),
                 webURL: "/pages/photo-frame"
             ),
+        ].map { dashboard in
+            guard let edited = dashboardSettingsByID[dashboard.id] else { return dashboard }
+            let ids: [String] = if case let .array(values) = edited.settings["device_ids"] { values.map(\.settingText) } else { dashboard.deviceIDs }
+            return DashboardSummary(id: dashboard.id, name: edited.settings["name"]?.settingText ?? dashboard.name,
+                kind: dashboard.kind, iconName: edited.settings["icon"]?.settingText, deviceIDs: ids,
+                updatedAt: dashboard.updatedAt, webURL: dashboard.webURL)
+        }
+    }
+
+    public func fetchDashboardSettings(id: String, instance: TesseraeInstance) async throws -> DashboardSettings {
+        if let settings = dashboardSettingsByID[id] { return settings }
+        guard let dashboard = try await fetchDashboards(instance: instance).first(where: { $0.id == id }) else {
+            throw TesseraeClientError.httpStatus(404)
+        }
+        let result = DashboardSettings(kind: dashboard.kind, dashboardID: id, revision: "demo-1", canEdit: true,
+            settings: ["name": .string(dashboard.name), "icon": dashboard.iconName.map(DashboardSettingValue.string) ?? .null,
+                       "device_ids": .array(dashboard.deviceIDs.map(DashboardSettingValue.string)),
+                       "refresh_minutes": .number(30), "sleep_interval_s": .null,
+                       "theme": .string("light"), "style": .string("standard"), "font": .null],
+            options: ["themes": [.init(value: .string("light"), label: "Light"), .init(value: .string("dark"), label: "Dark")],
+                      "styles": [.init(value: .string("standard"), label: "Standard")], "fonts": []],
+            inputs: dashboard.kind == .canvas ? [
+                .init(name: "heading", label: "Heading", type: "string", required: true, help: "The heading shown on this Dashboard.", choices: [], secret: false, editable: true, configured: true, value: .string("Pantry")),
+                .init(name: "show_date", label: "Show date", type: "boolean", required: false, help: "", choices: [], secret: false, editable: true, configured: true, value: .bool(true)),
+                .init(name: "access_key", label: "Access key", type: "password", required: false, help: "", choices: [], secret: true, editable: true, configured: true, value: nil)
+            ] : [], webURL: dashboard.webURL ?? "/pages/\(id)",
+            schemaRevision: "demo-component-schema-1", components: dashboardSettingComponents(),
+            coverage: .init(status: "complete", editableFields: 6, readonlyFields: 0, unavailableComponents: 0))
+        dashboardSettingsByID[id] = result
+        return result
+    }
+
+    private func dashboardSettingComponents() -> [DashboardSettingComponent] {
+        [
+            .init(id: "demo-reminders", label: "Reminders", kind: "grid_cell", widget: "apple_reminders", fields: [
+                .init(name: "list_id", label: "Reminder list", type: "select", required: false,
+                      help: "Choose the list displayed on this Dashboard.", choices: [], secret: false,
+                      editable: true, configured: true, value: .string("groceries"),
+                      fieldID: "demo-reminders-list", defaultValue: .string("all"), resettable: true, choicesDynamic: true),
+                .init(name: "title", label: "Title", type: "string", required: false, help: "", choices: [],
+                      secret: false, editable: true, configured: true, value: .string("Shopping"),
+                      fieldID: "demo-reminders-title", defaultValue: .string("Reminders"), resettable: true),
+                .init(name: "max_items", label: "Maximum items", type: "number", required: false, help: "", choices: [],
+                      secret: false, editable: true, configured: false, value: .number(8),
+                      fieldID: "demo-reminders-count", defaultValue: .number(8), usingDefault: true,
+                      resettable: true, min: 1, max: 30, step: 1),
+            ]),
+            .init(id: "demo-album", label: "Album Art", kind: "canvas_element", widget: "album_art", fields: [
+                .init(name: "entities", label: "Media players", type: "multiselect", required: false,
+                      help: "Highest priority first.", choices: [], secret: false,
+                      editable: true, configured: true,
+                      value: .array([.string("media_player.living_room"), .string("media_player.kitchen")]),
+                      fieldID: "demo-album-players", defaultValue: .array([]), resettable: true, choicesDynamic: true),
+                .init(name: "label", label: "Label", type: "string", required: false, help: "", choices: [],
+                      secret: false, editable: true, configured: false, value: .string("Now Playing"),
+                      fieldID: "demo-album-label", defaultValue: .string("Now Playing"), usingDefault: true, resettable: true),
+                .init(name: "show_label", label: "Show label", type: "boolean", required: false, help: "", choices: [],
+                      secret: false, editable: true, configured: false, value: .bool(true),
+                      fieldID: "demo-album-show", defaultValue: .bool(true), usingDefault: true, resettable: true),
+            ], fragment: "album-cover"),
         ]
+    }
+
+    private func dashboardChoices(for field: DashboardSettingInput) -> [DashboardSettingChoice] {
+        switch field.fieldID {
+        case "demo-reminders-list":
+            return [
+                .init(value: .string("all"), label: "All reminders"),
+                .init(value: .string("groceries"), label: "Groceries"),
+                .init(value: .string("work"), label: "Work"),
+                .init(value: .string("home"), label: "Home"),
+            ]
+        case "demo-album-players":
+            return [
+                .init(value: .string("media_player.living_room"), label: "Living Room"),
+                .init(value: .string("media_player.kitchen"), label: "Kitchen"),
+                .init(value: .string("media_player.bedroom"), label: "Bedroom"),
+                .init(value: .string("media_player.office"), label: "Office"),
+            ]
+        default: return field.choices
+        }
+    }
+
+    public func fetchDashboardSettingChoices(
+        id: String, fieldID: String, query: String, limit: Int, offset: Int,
+        schemaRevision: String? = nil, instance: TesseraeInstance
+    ) async throws -> DashboardSettingChoices {
+        let settings = try await fetchDashboardSettings(id: id, instance: instance)
+        if let schemaRevision, schemaRevision != settings.schemaRevision {
+            throw TesseraeClientError.server(code: "schema_conflict", message: "These settings changed elsewhere.", requestID: nil)
+        }
+        guard let field = (settings.inputs + settings.components.flatMap(\.fields)).first(where: { $0.fieldID == fieldID }), !field.secret else {
+            throw TesseraeClientError.httpStatus(404)
+        }
+        guard limit > 0, limit <= 100, offset >= 0 else {
+            throw TesseraeClientError.httpStatus(400)
+        }
+        let choices = dashboardChoices(for: field).filter {
+            query.isEmpty || $0.label.localizedCaseInsensitiveContains(query) || $0.value.settingText.localizedCaseInsensitiveContains(query)
+        }
+        let page = Array(choices.dropFirst(offset).prefix(limit))
+        return .init(choices: page, total: choices.count, offset: offset, limit: limit,
+                     hasMore: offset + page.count < choices.count, fieldID: fieldID, schemaRevision: settings.schemaRevision)
+    }
+
+    public func updateDashboardSettings(id: String, patch: DashboardSettingsPatch, instance: TesseraeInstance) async throws -> DashboardSettings {
+        let current = try await fetchDashboardSettings(id: id, instance: instance)
+        guard patch.revision == current.revision else {
+            throw TesseraeClientError.server(code: "revision_conflict", message: "This Dashboard changed elsewhere.", requestID: nil)
+        }
+        if let schemaRevision = patch.schemaRevision, schemaRevision != current.schemaRevision {
+            throw TesseraeClientError.server(code: "schema_conflict", message: "These settings changed elsewhere.", requestID: nil)
+        }
+        if (!patch.componentValues.isEmpty || !patch.resetFields.isEmpty) && patch.schemaRevision == nil {
+            throw DashboardSettingsValidationError(message: "Reload the settings first.", fields: ["schema_revision": "Required"])
+        }
+        var settings = current.settings
+        settings.merge(patch.settings) { _, new in new }
+        if settings["name"]?.settingText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
+            throw DashboardSettingsValidationError(message: "Enter a Dashboard name.", fields: ["settings.name": "Enter a Dashboard name."])
+        }
+        let allFields = current.inputs + current.components.flatMap(\.fields)
+        for name in patch.inputs.keys where !current.inputs.contains(where: { $0.name == name }) {
+            throw DashboardSettingsValidationError(message: "Unknown field.", fields: ["inputs.\(name)": "Unknown field."])
+        }
+        for id in patch.componentValues.keys where !current.components.flatMap(\.fields).contains(where: { $0.fieldID == id }) {
+            throw DashboardSettingsValidationError(message: "Unknown field.", fields: ["component_values.\(id)": "Unknown field."])
+        }
+        for id in patch.resetFields where !allFields.contains(where: { $0.fieldID == id && $0.resettable }) {
+            throw DashboardSettingsValidationError(message: "This field cannot be reset.", fields: ["reset_fields.\(id)": "Cannot reset."])
+        }
+        func apply(_ field: DashboardSettingInput, component: Bool) throws -> DashboardSettingInput {
+            let errorKey = component ? "component_values.\(field.id)" : "inputs.\(field.name)"
+            let value = component ? patch.componentValues[field.id] : patch.inputs[field.name]
+            let resetting = field.fieldID.map(patch.resetFields.contains) ?? false
+            guard value != nil || resetting else { return field }
+            guard field.isSupported else {
+                throw DashboardSettingsValidationError(message: "This field is read only.", fields: [errorKey: "Read only."])
+            }
+            guard !(value != nil && resetting) else {
+                throw DashboardSettingsValidationError(message: "Choose a value or reset.", fields: [errorKey: "Conflicting changes."])
+            }
+            var result = field
+            if resetting {
+                result.value = field.defaultValue
+                result.hasOverride = false
+                result.configured = false
+                result.valueState = field.defaultValue == nil ? "unset" : "uniform"
+                return result
+            }
+            guard let value else { return result }
+            if value == .null {
+                guard field.canClear else {
+                    throw DashboardSettingsValidationError(message: "This field is required.", fields: [errorKey: "Required."])
+                }
+            } else {
+                let valid: Bool
+                switch field.type {
+                case "number", "integer":
+                    if case let .number(number) = value {
+                        valid = number.isFinite && (field.min.map { number >= $0 } ?? true)
+                            && (field.max.map { number <= $0 } ?? true)
+                            && (field.type != "integer" || number.rounded() == number)
+                    } else { valid = false }
+                case "boolean", "switch":
+                    if case .bool = value { valid = true } else { valid = false }
+                case "select", "multiselect":
+                    let candidates = dashboardChoices(for: field).map(\.value)
+                    let old = if case let .array(items) = field.value { items } else { field.value.map { [$0] } ?? [] }
+                    let selected = if case let .array(items) = value { items } else { [value] }
+                    let shape = field.type == "multiselect" ? { if case .array = value { true } else { false } }() : true
+                    valid = shape && Set(selected).count == selected.count && selected.allSatisfy { candidates.contains($0) || old.contains($0) }
+                default:
+                    if case let .string(text) = value { valid = !field.required || !text.isEmpty } else { valid = false }
+                }
+                guard valid else {
+                    throw DashboardSettingsValidationError(message: "Check the field value.", fields: [errorKey: "Invalid value."])
+                }
+            }
+            result.value = field.secret ? nil : value
+            result.hasOverride = true
+            result.configured = value != .null && value != .string("")
+            result.valueState = "uniform"
+            return result
+        }
+        let inputs = try current.inputs.map { try apply($0, component: false) }
+        let components = try current.components.map { component in
+            var result = component
+            result.fields = try component.fields.map { try apply($0, component: true) }
+            return result
+        }
+        let result = DashboardSettings(kind: current.kind, dashboardID: id, revision: UUID().uuidString, canEdit: current.canEdit,
+            settings: settings, options: current.options, inputs: inputs, webURL: current.webURL,
+            schemaRevision: current.schemaRevision, components: components, coverage: current.coverage)
+        dashboardSettingsByID[id] = result
+        return result
     }
 
     public func fetchGalleryFolders(

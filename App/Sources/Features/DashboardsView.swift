@@ -97,6 +97,7 @@ struct DashboardsView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var query = ""
+    @State private var settingsDashboardID: String?
     @State private var draggedOccurrenceID: DashboardOccurrenceID?
     @State private var dropTargetOccurrenceID: DashboardOccurrenceID?
     @State private var expandedOccurrenceID: DashboardOccurrenceID?
@@ -181,6 +182,10 @@ struct DashboardsView: View {
         NavigationStack {
             dashboardList
                 .navigationTitle("Dashboards")
+                .navigationDestination(item: $settingsDashboardID) { id in
+                    DashboardSettingsView(dashboardID: id)
+                        .id("\(model.activeInstance?.id ?? "")|\(id)")
+                }
         }
         .sheet(item: $dashboardToPush) { _ in
             if let context = selectedContext {
@@ -623,7 +628,7 @@ struct DashboardsView: View {
                 }
             } else {
                 Button {
-                    dashboardToPush = pushContext
+                    settingsDashboardID = dashboard.id
                 } label: {
                     HStack(alignment: .center, spacing: 12) {
                         dashboardIdentityIcon(dashboard)
@@ -644,7 +649,7 @@ struct DashboardsView: View {
                 .accessibilityIdentifier(
                     "dashboard-row-\(occurrenceID.accessibilitySuffix)"
                 )
-                .accessibilityHint("Opens Dashboard preview and Push options.")
+                .accessibilityHint("Opens Dashboard settings.")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -664,7 +669,17 @@ struct DashboardsView: View {
         pushContext: DashboardPushContext
     ) -> some View {
         VStack(alignment: .leading, spacing: 9) {
-            dashboardTitle(dashboard, occurrenceID: occurrenceID)
+            Button {
+                settingsDashboardID = dashboard.id
+            } label: {
+                HStack {
+                    dashboardTitle(dashboard, occurrenceID: occurrenceID)
+                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("dashboard-settings-\(occurrenceID.accessibilitySuffix)")
 
             Text(dashboard.kind.rawValue.capitalized)
                 .font(.caption.monospaced())

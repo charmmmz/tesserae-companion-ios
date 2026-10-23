@@ -937,6 +937,61 @@ final class AppModel {
         }
     }
 
+    var supportsDashboardSettings: Bool {
+        capabilities?.features.contains("dashboard_settings") == true
+    }
+
+    var supportsDashboardComponentSettings: Bool {
+        capabilities?.features.contains("dashboard_component_settings") == true
+    }
+
+    func fetchDashboardSettingChoices(
+        _ id: String, fieldID: String, query: String, offset: Int,
+        schemaRevision: String?
+    ) async throws -> DashboardSettingChoices {
+        let revision = connectionRevision
+        guard supportsDashboardComponentSettings, let activeInstance else {
+            throw TesseraeClientError.unavailable
+        }
+        let result = try await activeClient.fetchDashboardSettingChoices(
+            id: id, fieldID: fieldID, query: query, limit: 50, offset: offset,
+            schemaRevision: schemaRevision, instance: activeInstance)
+        try checkConnectionRevision(revision)
+        return result
+    }
+
+    func fetchDashboardSettings(_ id: String) async throws -> DashboardSettings {
+        let revision = connectionRevision
+        guard supportsDashboardSettings, let activeInstance else { throw TesseraeClientError.unavailable }
+        let result = try await activeClient.fetchDashboardSettings(id: id, instance: activeInstance)
+        try checkConnectionRevision(revision)
+        return result
+    }
+
+    func saveDashboardSettings(_ id: String, patch: DashboardSettingsPatch) async throws -> DashboardSettings {
+        let revision = connectionRevision
+        guard supportsDashboardSettings, let activeInstance else { throw TesseraeClientError.unavailable }
+        let result = try await activeClient.updateDashboardSettings(id: id, patch: patch, instance: activeInstance)
+        try checkConnectionRevision(revision)
+        dashboardPreviews = dashboardPreviews.filter { $0.key.dashboardID != id }
+        dashboardPreviewRequestIDs = dashboardPreviewRequestIDs.filter { $0.key.dashboardID != id }
+        previewGeneration &+= 1
+        // Reflect the accepted response immediately even if the subsequent list refresh fails.
+        if let index = dashboards.firstIndex(where: { $0.id == id }) {
+            let previous = dashboards[index]
+            let ids: [String] = if case let .array(values) = result.settings["device_ids"] {
+                values.compactMap { if case let .string(value) = $0 { value } else { nil } }
+            } else { previous.deviceIDs }
+            dashboards[index] = DashboardSummary(id: id, name: result.settings["name"]?.settingText ?? previous.name,
+                kind: previous.kind, iconName: result.settings["icon"]?.settingText, deviceIDs: ids,
+                updatedAt: .now, webURL: previous.webURL)
+            reconcileDashboardOrder()
+        }
+        if connectionMode == .live { await persistSnapshot(showErrors: false) }
+        try checkConnectionRevision(revision)
+        return result
+    }
+
     func refreshDashboards(
         showErrors: Bool = true,
         saveSnapshot: Bool = true
