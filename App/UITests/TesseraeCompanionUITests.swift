@@ -346,6 +346,27 @@ final class TesseraeCompanionUITests: XCTestCase {
         completionShot.name = "PicPak Compact Completion"; completionShot.lifetime = .keepAlways; add(completionShot)
     }
 
+    func testPicPakFastPhotoResynchronizesAfterAMissingPacket() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_BLE"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_PHOTO"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_FAST_PHOTO"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_DROP_PHOTO_PACKET"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_PHOTO_MAX_WRITE"] = "90"
+        app.launch()
+        let nearby = app.buttons["onboarding-nearby-devices"]
+        XCTAssertTrue(nearby.waitForExistence(timeout: 5))
+        for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
+        nearby.tap()
+        app.buttons.containing(.staticText, identifier: "Tesserae-A1B2C3").firstMatch.tap()
+        XCTAssertTrue(app.buttons["ble-photo-start"].waitForExistence(timeout: 4))
+        app.buttons["ble-photo-start"].tap()
+        XCTAssertTrue(app.buttons["ble-send-photo"].waitForExistence(timeout: 8))
+        app.buttons["ble-send-photo"].tap()
+        XCTAssertTrue(app.staticTexts["Photo Sent"].waitForExistence(timeout: 30))
+    }
+
     func testUnifiedMaintenanceOffersModeWithoutPicPakRefreshControls() {
         assertUnifiedMaintenanceOffersMode(e1003: false)
     }

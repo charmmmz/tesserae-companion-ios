@@ -139,21 +139,29 @@ encrypted BLE fragmentation handles ATT write limits. Control and data share
 the connection's monotonic crypto counters, with separate reassembly buffers.
 
 The optional `max_window` extension accepts integers 1…4. When absent,
-Companion uses one in-flight logical packet (also unchanged for PicPak). New
+Companion uses one in-flight logical packet (including older PicPak firmware). New
 firmware advertises 4; Companion fills only free slots and uses the existing
 per-packet cumulative ACKs. Pixel/descriptor digests, crypto, begin/end and ACK
 shapes are unchanged. Sending all bytes does not allow `photo_end` until all
-bytes are cumulatively ACKed. On an eight-second timeout, only the oldest
-unconfirmed logical packet is retried with a fresh counter; its reply confirms
+bytes are cumulatively ACKed. On the original response-write path, an eight-second
+timeout retries only the oldest unconfirmed logical packet with a fresh counter; its reply confirms
 the receiver's latest offset. This avoids replaying a whole window beside newly
 queued packets. Duplicate/stale ACKs cannot advance progress. Identical data
-retries are accepted; future offsets, conflicting retries, overflow, wrong ID,
+retries are accepted; conflicting retries, overflow, wrong ID,
 and old generations are rejected. Disconnect discards incomplete data. No
 cross-connection resume or compression is implemented.
 
+The later `write_without_response` extension applies to both PicPak and Photo
+v2. Companion chooses a smaller logical chunk when necessary to fit one ordinary
+write, respects iOS backpressure, and uses a correlated `photo_status` drain
+barrier before refilling after a timeout. Valid future packets are discarded
+without advancing the confirmed offset, allowing the missing data to be resent.
+See [the current transport and PicPak test guide](../ble-photo-throughput-testing.md)
+for negotiation, fallback and recovery details.
+
 Firmware Photo events use bounded NimBLE congestion retries instead of sleeping
 15 ms per notification fragment. Four packets still use four writes and four
-ACKs; ATT writes retain responses. This overlaps application ACK waits, without
+cumulative ACKs; ATT responses are retained only on the fallback path. This overlaps application ACK waits, without
 a measured speedup or power claim. Packed-byte RLE is deferred after the offline
 comparison in the [firmware protocol document](https://github.com/dmellok/tesserae-device-firmware/pull/49).
 

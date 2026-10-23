@@ -145,6 +145,108 @@ struct BluetoothPhotoV2Tests {
         #expect(transfer.nextPackets().count == 1)
     }
 
+    @Test(arguments: [
+        (192, 253, false, true, 192, false), // Old PicPak, ordinary MTU.
+        (192, 90, true, true, 57, true), // Smaller MTU, same v1 receiver contract.
+        (384, 253, true, true, 220, true),
+        (384, 244, true, true, 211, true),
+        (384, 512, true, true, 384, true), // Receiver maximum remains authoritative.
+        (384, 253, false, true, 220, false), // Old v2 avoids long writes too.
+        (192, 253, true, false, 192, false), // Stale/unsupported GATT property.
+        (192, 33, true, true, 192, false) // Tiny link retains reliable fragmentation.
+    ])
+    func sizesPhotoPacketsToTheConnection(chunk: Int, maximumWrite: Int, advertised: Bool,
+                                        characteristic: Bool, expected: Int, withoutResponse: Bool) throws {
+        let capabilities = BLEPhotoTransportCapabilities(chunkBytes: chunk, maxWindow: 4,
+                                                        writeWithoutResponse: advertised)
+        let selected = try capabilities.negotiate(maximumWriteWithoutResponse: maximumWrite,
+                                                 characteristicAllowsWriteWithoutResponse: characteristic)
+        #expect(selected.packetBytes == expected)
+        #expect(selected.usesWriteWithoutResponse == withoutResponse)
+        #expect(selected.windowSize == 4)
+        if withoutResponse { #expect(selected.packetBytes + 33 <= maximumWrite) }
+    }
+
+    @Test func transportRequiresExplicitTypedCapabilities() throws {
+        let original = try JSONDecoder().decode(BLEPhotoTransportCapabilities.self,
+                                               from: Data(#"{"chunk_bytes":192}"#.utf8))
+        #expect(try original.negotiate(maximumWriteWithoutResponse: 253,
+            characteristicAllowsWriteWithoutResponse: true) == BLEPhotoTransport(
+                packetBytes: 192, windowSize: 1, usesWriteWithoutResponse: false))
+        for json in [#"{"chunk_bytes":192,"max_window":true}"#,
+                     #"{"chunk_bytes":192,"write_without_response":1}"#] {
+            #expect(throws: (any Error).self) {
+                try JSONDecoder().decode(BLEPhotoTransportCapabilities.self, from: Data(json.utf8))
+            }
+        }
+        let oversized = BLEPhotoTransportCapabilities(chunkBytes: 192, maxWindow: 5, writeWithoutResponse: true)
+        #expect(throws: (any Error).self) {
+            try oversized.negotiate(maximumWriteWithoutResponse: 253, characteristicAllowsWriteWithoutResponse: true)
+        }
+    }
+
+    @Test func picPakDynamicWindowAndGapRecoveryPreserveAllBytes() throws {
+        let bytes = Data((0..<30_000).map { UInt8(truncatingIfNeeded: $0) })
+        let transport = try BLEPhotoTransportCapabilities(chunkBytes: 192, maxWindow: 4,
+            writeWithoutResponse: true).negotiate(maximumWriteWithoutResponse: 90,
+                                                 characteristicAllowsWriteWithoutResponse: true)
+        var transfer = try BLEPhotoTransfer(data: bytes, id: 1, transport: transport)
+        #expect(try transfer.acknowledge(0))
+        let initial = transfer.nextPackets()
+        #expect(initial.count == 4 && initial.allSatisfy { $0.count == 65 })
+        // The first packet arrived, the second was dropped, later ones cannot
+        // advance the receiver. A status barrier confirms the first 57 bytes.
+        #expect(try transfer.acknowledge(57))
+        #expect(transfer.nextPackets().count == 1)
+        #expect(throws: (any Error).self) { try transfer.resynchronize(58) }
+        #expect(throws: (any Error).self) { try transfer.resynchronize(342) }
+        try transfer.resynchronize(57)
+        var received = Data(initial[0].dropFirst(8))
+        while !transfer.waitingForReceipt {
+            let packets = transfer.nextPackets()
+            #expect(!packets.isEmpty && packets.count <= 4)
+            for packet in packets {
+                let start = packet.dropFirst(4).prefix(4).reduce(0) { ($0 << 8) | Int($1) }
+                #expect(start == received.count)
+                received.append(packet.dropFirst(8))
+            }
+            #expect(try transfer.acknowledge(received.count))
+        }
+        #expect(received == bytes)
+        #expect(transfer.retryPackets().isEmpty)
+    }
+
+    @Test func statusBarrierCanRecoverAllLostFinalAcknowledgements() throws {
+        let caps = try Self.capabilities(width: 32, height: 2, chunk: 3, window: 4)
+        var transfer = try BLEPhotoTransfer(data: Data(0..<16), id: 1, capabilities: caps)
+        #expect(try transfer.acknowledge(0))
+        #expect(transfer.nextPackets().count == 4)
+        try transfer.resynchronize(12)
+        #expect(transfer.nextPackets().count == 2)
+        try transfer.resynchronize(16)
+        #expect(transfer.waitingForReceipt)
+        #expect(transfer.nextPackets().isEmpty)
+    }
+
+    @Test func writeQueueHonorsPlatformBackpressureAndControlBarriers() throws {
+        var queue = BLEWriteQueue<Int>()
+        queue.append(Data([1]), to: 10, withoutResponse: false)
+        queue.append(Data([2]), to: 20, withoutResponse: true)
+        queue.append(Data([3]), to: 20, withoutResponse: true)
+        queue.append(Data([4]), to: 10, withoutResponse: false)
+        #expect(queue.next(canSendWithoutResponse: false)?.data == Data([1]))
+        #expect(queue.next(canSendWithoutResponse: true) == nil)
+        queue.completeResponse()
+        #expect(queue.next(canSendWithoutResponse: false) == nil)
+        #expect(queue.next(canSendWithoutResponse: true)?.data == Data([2]))
+        #expect(queue.next(canSendWithoutResponse: false) == nil)
+        #expect(queue.next(canSendWithoutResponse: true)?.data == Data([3]))
+        #expect(queue.next(canSendWithoutResponse: false)?.data == Data([4]))
+        #expect(!queue.isDrained)
+        queue.completeResponse()
+        #expect(queue.isDrained)
+    }
+
     @Test @MainActor func rasterPreservesTopAndBottomMarkers() throws {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1

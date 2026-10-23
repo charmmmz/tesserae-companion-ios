@@ -121,6 +121,10 @@ session; automatic server updates stay paused until Automatic is selected
 again. E1004, E1001, E1003 and Sticky profiles await hardware acceptance, and
 existing PicPak photo sending keeps its own protocol. See the
 [implementation and hardware test handoff](docs/plans/2026-10-21-ble-photo-v2-implementation.md).
+Photo transfers size their packets to the current connection and use a bounded
+write-without-response window only when firmware explicitly supports it. Older
+PicPak firmware keeps its acknowledged-write path. See the
+[PicPak throughput test guide](docs/ble-photo-throughput-testing.md).
 
 ## Your server, your data
 

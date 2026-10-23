@@ -45,6 +45,13 @@ capabilities.
 
 ### Changed
 
+- Bluetooth photo packets now fit the connection's ordinary-write capacity,
+  within the receiver's advertised limit. Updated PicPak and native Photo v2
+  firmware can opt into a four-packet write-without-response window with iOS
+  backpressure, cumulative acknowledgements and correlated status-based recovery.
+  Older firmware retains response writes and its advertised window; pixel
+  formats, photo keys and whole-image SHA-256 verification are unchanged.
+
 - Dashboard settings use compact field rows and separate pages for display,
   update, and appearance preferences. Field help and reset actions are available
   on demand; choice lists show selections once and keep Done within reach.

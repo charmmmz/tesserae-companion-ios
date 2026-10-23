@@ -50,6 +50,69 @@ struct BLEPhotoDeviceStatus: Equatable {
     }
 }
 
+/// Optional transport fields shared by authenticated Photo v1/v2 replies.
+/// chunk_bytes remains a receiver ceiling, independent of the connection MTU.
+struct BLEPhotoTransportCapabilities: Decodable {
+    let chunkBytes: Int
+    let maxWindow: Int?
+    let writeWithoutResponse: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case chunkBytes = "chunk_bytes", maxWindow = "max_window"
+        case writeWithoutResponse = "write_without_response"
+    }
+
+    func negotiate(maximumWriteWithoutResponse: Int,
+                   characteristicAllowsWriteWithoutResponse: Bool) throws -> BLEPhotoTransport {
+        guard (1...384).contains(chunkBytes), (1...4).contains(maxWindow ?? 1) else {
+            throw BLESetupProtocolError.invalidFrame
+        }
+        // 8-byte photo header + 4-byte fragment header + 21-byte AES-GCM envelope.
+        // Unlike the with-response limit (which can allow ATT long writes), this
+        // limit describes data that fits a single ordinary ATT write.
+        let singleWritePixels = maximumWriteWithoutResponse > 33 ? maximumWriteWithoutResponse - 33 : 0
+        return BLEPhotoTransport(
+            packetBytes: singleWritePixels > 0 ? min(chunkBytes, singleWritePixels) : chunkBytes,
+            windowSize: maxWindow ?? 1,
+            usesWriteWithoutResponse: writeWithoutResponse == true
+                && characteristicAllowsWriteWithoutResponse && singleWritePixels > 0
+        )
+    }
+}
+
+struct BLEPhotoTransport: Equatable {
+    let packetBytes: Int
+    let windowSize: Int
+    let usesWriteWithoutResponse: Bool
+}
+
+/// A single ordered queue preserves encrypted counters across control and photo
+/// characteristics. WWR consumes platform credit; response writes remain barriers.
+struct BLEWriteQueue<Destination> {
+    struct Frame {
+        let data: Data
+        let destination: Destination
+        let withoutResponse: Bool
+    }
+    private var pending: [Frame] = []
+    private(set) var inFlight: Frame?
+    var isDrained: Bool { pending.isEmpty && inFlight == nil }
+
+    mutating func append(_ data: Data, to destination: Destination, withoutResponse: Bool) {
+        pending.append(Frame(data: data, destination: destination, withoutResponse: withoutResponse))
+    }
+
+    mutating func next(canSendWithoutResponse: Bool) -> Frame? {
+        guard inFlight == nil, let next = pending.first,
+              !next.withoutResponse || canSendWithoutResponse else { return nil }
+        pending.removeFirst()
+        if !next.withoutResponse { inFlight = next }
+        return next
+    }
+
+    mutating func completeResponse() { inFlight = nil }
+}
+
 /// One bounded upload with cumulative acknowledgements. Original Photo v2
 /// firmware and PicPak keep a one-packet window unless explicitly negotiated.
 struct BLEPhotoTransfer {
@@ -59,22 +122,31 @@ struct BLEPhotoTransfer {
     let id: UInt32
     let data: Data
     let capabilities: BluetoothPhotoCapabilities?
+    let transport: BLEPhotoTransport
     private(set) var offset = 0
     private(set) var expectedOffset = 0
     private(set) var isAwaitingBegin = true
 
-    init(data: Data, id: UInt32, capabilities: BluetoothPhotoCapabilities? = nil) throws {
+    init(data: Data, id: UInt32, capabilities: BluetoothPhotoCapabilities? = nil,
+         transport: BLEPhotoTransport? = nil) throws {
         try capabilities?.validate()
+        let transport = transport ?? BLEPhotoTransport(
+            packetBytes: capabilities?.chunkBytes ?? Self.chunkBytes,
+            windowSize: capabilities?.maxWindow ?? 1, usesWriteWithoutResponse: false)
         guard data.count == (capabilities?.bytes ?? Self.byteCount), id != 0 else {
             throw BLESetupProtocolError.invalidFrame
         }
+        guard (1...(capabilities?.chunkBytes ?? Self.chunkBytes)).contains(transport.packetBytes),
+              (1...(capabilities?.maxWindow ?? (capabilities == nil ? 4 : 1))).contains(transport.windowSize)
+        else { throw BLESetupProtocolError.invalidFrame }
         self.data = data
         self.id = id
         self.capabilities = capabilities
+        self.transport = transport
     }
     var digest: String { Data(SHA256.hash(data: data)).hexString }
-    var windowSize: Int { capabilities?.maxWindow ?? 1 }
-    private var packetBytes: Int { capabilities?.chunkBytes ?? Self.chunkBytes }
+    var windowSize: Int { transport.windowSize }
+    var packetBytes: Int { transport.packetBytes }
     var outstandingPacketCount: Int { (expectedOffset - offset + packetBytes - 1) / packetBytes }
     var waitingForReceipt: Bool { !isAwaitingBegin && offset == data.count }
 
@@ -91,6 +163,17 @@ struct BLEPhotoTransfer {
         if value <= offset { return false }
         offset = value
         return true
+    }
+
+    /// Only called after photo_status has drained earlier device commands. A
+    /// cumulative ACK alone is not a barrier and must never rewind this cursor.
+    mutating func resynchronize(_ value: Int) throws {
+        guard !isAwaitingBegin, value >= offset, value <= expectedOffset,
+              value == data.count || value % packetBytes == 0 else {
+            throw BLESetupProtocolError.invalidFrame
+        }
+        offset = value
+        expectedOffset = value
     }
 
     /// Returns only new packets that fit the free window; a full window waits
