@@ -847,6 +847,22 @@
 "Yes" = "是";
 "0 updates only on push. An empty wake interval uses the display’s default." = "更新间隔为 0 时仅在推送时更新；唤醒间隔留空则沿用显示屏设置。";
 
+"Selections" = "选择";
+
+"Text" = "文字";
+
+"Numbers" = "数值";
+
+"Switches" = "开关";
+
+"Search Settings" = "搜索设置";
+
+"No matching settings." = "没有匹配的设置。";
+
+"Opens setting details." = "打开设置详情。";
+
+"Step" = "步长";
+
 "Bluetooth Mode" = "蓝牙模式";
 
 "Bluetooth Device" = "蓝牙设备";

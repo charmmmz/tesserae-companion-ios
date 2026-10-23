@@ -1,7 +1,7 @@
 import SwiftUI
 import TesseraeKit
 
-struct DashboardSettingChoicesView: View {
+struct DashboardSettingChoicesView<Details: View>: View {
   @Environment(AppModel.self) private var model
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   @Environment(\.dismiss) private var dismiss
@@ -11,6 +11,7 @@ struct DashboardSettingChoicesView: View {
   @Binding var labels: [DashboardSettingValue: String]
   let schemaRevision: String?
   let canEdit: Bool
+  @ViewBuilder let details: () -> Details
   @State private var query = ""
   @State private var choices: [DashboardSettingChoice] = []
   @State private var nextOffset: Int?
@@ -78,6 +79,7 @@ struct DashboardSettingChoicesView: View {
             .accessibilityIdentifier("dashboard-choices-more")
         }
       }
+      details()
     }
     .accessibilityIdentifier("dashboard-setting-choices")
     .safeAreaInset(edge: .bottom) {

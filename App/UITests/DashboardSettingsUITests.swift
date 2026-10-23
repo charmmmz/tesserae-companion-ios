@@ -100,13 +100,26 @@ final class DashboardSettingsUITests: XCTestCase {
     scrollTo(reminders, in: app)
     reminders.tap()
     XCTAssertFalse(app.staticTexts["Use widget default"].exists)
-    let options = app.buttons["dashboard-field-actions-demo-reminders-title"]
-    XCTAssertTrue(options.waitForExistence(timeout: 3))
-    options.tap()
-    app.buttons["About this setting"].tap()
+    XCTAssertFalse(app.textFields["Title"].exists)
+    XCTAssertTrue(app.staticTexts["Selections"].exists)
+    XCTAssertTrue(app.staticTexts["Text"].exists)
+    XCTAssertTrue(app.staticTexts["Numbers"].exists)
+    let title = app.buttons["dashboard-field-detail-demo-reminders-title"]
+    XCTAssertTrue(title.waitForExistence(timeout: 3))
+    let search = app.searchFields.firstMatch
+    XCTAssertTrue(search.waitForExistence(timeout: 3))
+    search.tap()
+    search.typeText("Title")
+    XCTAssertTrue(title.waitForExistence(timeout: 3))
+    XCTAssertFalse(app.buttons["dashboard-field-choices-demo-reminders-list"].exists)
+    title.tap()
     XCTAssertTrue(app.navigationBars["Title"].waitForExistence(timeout: 3))
-    app.buttons["Done"].tap()
-    XCTAssertTrue(app.textFields["Title"].waitForExistence(timeout: 3))
+    XCTAssertTrue(app.staticTexts["About this setting"].waitForExistence(timeout: 3))
+    XCTAssertTrue(app.buttons["Use widget default"].exists)
+    replaceText(app.textFields["Title"], with: "Edited title")
+    navigateBack(in: app)
+    XCTAssertTrue(title.waitForExistence(timeout: 3))
+    XCTAssertTrue(app.staticTexts["Edited title"].exists)
     let attachment = XCTAttachment(screenshot: app.screenshot())
     attachment.name = "Compact component settings"
     attachment.lifetime = .keepAlways
@@ -127,15 +140,27 @@ final class DashboardSettingsUITests: XCTestCase {
     XCTAssertTrue(work.waitForExistence(timeout: 4))
     work.tap()
     finishSelection(in: app)
+    let titleRow = app.buttons["dashboard-field-detail-demo-reminders-title"]
+    scrollTo(titleRow, in: app)
+    titleRow.tap()
     let title = app.textFields["Title"]
-    scrollTo(title, in: app)
+    XCTAssertTrue(title.waitForExistence(timeout: 3))
     replaceText(title, with: "Groceries for tonight")
+    navigateBack(in: app)
     navigateBack(in: app)
     XCTAssertTrue(app.buttons["dashboard-settings-save"].isEnabled)
 
     let album = app.buttons["dashboard-component-demo-album"]
     scrollTo(album, in: app)
     album.tap()
+    let showLabel = app.switches["Show label"]
+    scrollTo(showLabel, in: app)
+    XCTAssertEqual(showLabel.value as? String, "1")
+    showLabel.tap()
+    XCTAssertEqual(showLabel.value as? String, "0")
+    app.buttons["dashboard-field-detail-demo-album-show"].tap()
+    XCTAssertTrue(app.staticTexts["About this setting"].waitForExistence(timeout: 3))
+    navigateBack(in: app)
     app.buttons["dashboard-field-choices-demo-album-players"].tap()
     let up = app.buttons["dashboard-choice-up-media_player.kitchen"]
     XCTAssertTrue(up.waitForExistence(timeout: 4))
@@ -150,7 +175,10 @@ final class DashboardSettingsUITests: XCTestCase {
 
     scrollTo(reminders, in: app)
     reminders.tap()
+    XCTAssertTrue(app.staticTexts["Groceries for tonight"].waitForExistence(timeout: 3))
+    titleRow.tap()
     XCTAssertEqual(title.value as? String, "Groceries for tonight")
+    navigateBack(in: app)
     app.buttons["dashboard-field-choices-demo-reminders-list"].tap()
     XCTAssertTrue(app.staticTexts["Work"].firstMatch.waitForExistence(timeout: 4))
     finishSelection(in: app)
@@ -309,12 +337,14 @@ final class DashboardSettingsUITests: XCTestCase {
     XCTAssertTrue(name.isEnabled, "Grant Dashboard editing to this phone before running")
     replaceText(name, with: "Dashboard Settings Device QA Updated")
 
+    openSettingDetail("QA Message", in: app)
     let message = app.textFields["QA Message"]
-    scrollTo(message, in: app)
     replaceText(message, with: "Saved from iPhone")
+    navigateBack(in: app)
+    openSettingDetail("QA Number", in: app)
     let number = app.textFields["QA Number"]
-    scrollTo(number, in: app)
     replaceText(number, with: "23")
+    navigateBack(in: app)
     let enabled = app.switches["QA Enabled"]
     scrollTo(enabled, in: app)
     XCTAssertEqual(enabled.value as? String, "0")
@@ -330,10 +360,12 @@ final class DashboardSettingsUITests: XCTestCase {
     app.launch()
     openLiveFixture(app, id: fixtureID)
     XCTAssertEqual(name.value as? String, "Dashboard Settings Device QA Updated")
-    scrollTo(message, in: app)
+    openSettingDetail("QA Message", in: app)
     XCTAssertEqual(message.value as? String, "Saved from iPhone")
-    scrollTo(number, in: app)
+    navigateBack(in: app)
+    openSettingDetail("QA Number", in: app)
     XCTAssertEqual(number.value as? String, "23")
+    navigateBack(in: app)
     scrollTo(enabled, in: app)
     XCTAssertEqual(enabled.value as? String, "1")
     let screenshot = XCTAttachment(screenshot: app.screenshot())
@@ -354,6 +386,13 @@ final class DashboardSettingsUITests: XCTestCase {
     XCTAssertTrue(row.waitForExistence(timeout: 20), "Expected the unbound QA Dashboard")
     row.tap()
     XCTAssertTrue(app.textFields["dashboard-settings-name"].waitForExistence(timeout: 12))
+  }
+
+  private func openSettingDetail(_ label: String, in app: XCUIApplication) {
+    let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", label)).firstMatch
+    scrollTo(row, in: app)
+    row.tap()
+    XCTAssertTrue(app.navigationBars[label].waitForExistence(timeout: 4))
   }
 
   private func navigateBack(in app: XCUIApplication) {

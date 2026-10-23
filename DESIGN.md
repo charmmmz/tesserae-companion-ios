@@ -238,8 +238,12 @@ the server only accepted or published the render.
 
 On compatible servers, Dashboard names open native settings. Content fields
 are grouped by component; display bindings, update intervals and appearance
-have separate pages. Help, defaults, clear and reset actions appear on demand.
-Unsupported controls retain their stored values and link to the web editor.
+have separate pages. Component fields are searchable and grouped by control
+type (selections, text, numbers, switches, and web settings), preserving server
+order within each group. Rows show the title and current value; switches remain
+editable inline. Other edits, help, defaults, clear and reset actions live on
+the field's detail page. Unsupported controls retain their stored values and
+show the server's read-only reason alongside the web editor shortcut.
 
 A shared draft survives component and choice navigation. Ordered multiselect
 retains saved or unavailable choices, supports priority changes, and does not

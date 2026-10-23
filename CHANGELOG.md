@@ -49,6 +49,10 @@ capabilities.
 
 ### Changed
 
+- Dashboard component settings now show title/value rows, inline switches,
+  searchable groups by control type, and dedicated editing pages containing
+  help and reset actions. Read-only fields display the server's explanation.
+
 - Bluetooth photo packets now fit the connection's ordinary-write capacity,
   within the receiver's advertised limit. Updated PicPak and native Photo v2
   firmware can opt into a four-packet write-without-response window with iOS

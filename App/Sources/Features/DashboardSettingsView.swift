@@ -188,7 +188,7 @@ struct DashboardSettingsView: View {
               dashboardID: dashboardID, input: input, draft: binding,
               component: false, canEdit: canEdit,
               error: fieldErrors["inputs.\(input.name)"]
-                ?? input.fieldID.flatMap { fieldErrors["reset_fields.\($0)"] }
+                ?? input.fieldID.flatMap { fieldErrors["reset_fields.\($0)"] }, webURL: webURL
             )
             .id("\(input.id)|\(current.original.revision)")
           }
