@@ -67,6 +67,8 @@ struct DashboardSettingsView: View {
         }
       }
     }
+    .scrollContentBackground(.hidden)
+    .tesseraeScreenBackground()
     .scrollDismissesKeyboard(.interactively)
     .navigationTitle(dashboard?.name ?? String(localized: "Dashboard Settings"))
     .navigationBarTitleDisplayMode(.inline)
@@ -101,11 +103,10 @@ struct DashboardSettingsView: View {
             if isSaving {
               ProgressView().accessibilityLabel("Save")
             } else {
-              Label("Save", systemImage: "checkmark").labelStyle(.iconOnly)
+              Text("Save")
             }
           }
-          .buttonStyle(.borderedProminent)
-          .buttonBorderShape(.circle)
+          .fontWeight(.semibold)
           .accessibilityLabel("Save")
           .disabled(!dirty || !canEdit || conflict)
           .accessibilityIdentifier("dashboard-settings-save")

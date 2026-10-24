@@ -1,7 +1,11 @@
 # README screenshots
 
-Captured on 24 October 2026 from app source
+Unless noted below, captured on 24 October 2026 from app source
 [`79e6d18367e946b237cc0c14569781541d4c5a74`](https://github.com/charmmmz/tesserae-companion-ios/commit/79e6d18367e946b237cc0c14569781541d4c5a74).
+
+`dashboard-settings.png` was recaptured on the same date and simulator after the
+Dashboard settings paper-background and standard Save-button correction. That
+app change and its refreshed screenshot are committed together in Git history.
 
 - iPhone 18 Pro Simulator, iOS 27.0, English, light appearance.
 - Original 1206 × 2622 PNG captures; no resizing, compositing or image retouching.
@@ -14,7 +18,7 @@ Captured on 24 October 2026 from app source
 | --- | --- |
 | `displays.png` | Demo Mode → Displays |
 | `dashboards.png` | Demo Mode → Dashboards, expanded display groups |
-| `dashboard-settings.png` | Pantry → native settings, before editing |
+| `dashboard-settings.png` | Pantry → native settings, paper background and Save toolbar, before editing |
 | `lineup-editor.png` | New Manual Lineup, selected display and two Dashboards |
 | `gallery.png` | Library → family folder, square image grid |
 | `send-photo.png` | Send → Use Sample, centered Fill with framing controls |

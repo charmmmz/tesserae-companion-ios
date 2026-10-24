@@ -48,6 +48,11 @@ final class DashboardSettingsUITests: XCTestCase {
     XCTAssertTrue(preview.waitForExistence(timeout: 3))
     XCTAssertGreaterThan(preview.frame.height, 200)
     XCTAssertFalse(app.staticTexts["Preview and Push"].exists)
+    XCTAssertFalse(app.buttons["dashboard-settings-save"].isEnabled)
+    let overviewShot = XCTAttachment(screenshot: app.screenshot())
+    overviewShot.name = "Dashboard native settings"
+    overviewShot.lifetime = .keepAlways
+    add(overviewShot)
     let icon = app.buttons["dashboard-settings-icon"]
     scrollTo(icon, in: app)
     icon.tap()
@@ -64,6 +69,7 @@ final class DashboardSettingsUITests: XCTestCase {
     name.tap()
     name.typeText(" Updated")
     scrollToTop(in: app)
+    XCTAssertTrue(app.buttons["dashboard-settings-save"].isEnabled)
     XCTAssertFalse(app.buttons["dashboard-settings-push"].isEnabled)
     app.buttons["dashboard-settings-save"].tap()
     scrollToTop(in: app)
@@ -211,6 +217,10 @@ final class DashboardSettingsUITests: XCTestCase {
 
   func testComponentChoicesChineseLargeTextDarkLayout() {
     let app = openDashboard(layout: "list", chineseLargeText: true)
+    let overviewShot = XCTAttachment(screenshot: app.screenshot())
+    overviewShot.name = "Dashboard settings Chinese AX5 dark"
+    overviewShot.lifetime = .keepAlways
+    add(overviewShot)
     let album = app.buttons["dashboard-component-demo-album"]
     scrollTo(album, in: app)
     album.tap()
