@@ -15,6 +15,9 @@ SPEC = yaml.safe_load((ROOT / "app-v1.openapi.yaml").read_text())
 FIXTURES = ROOT / "Fixtures"
 
 CASES = {
+    "device-lookup-request.json": "DeviceLookupRequest",
+    "device-lookup-response.json": "DeviceLookupResponse",
+    "device-lookup-unmatched-response.json": "DeviceLookupResponse",
     "dashboard-settings-response.json": "DashboardSettingsResponse",
     "dashboard-settings-patch-request.json": "DashboardSettingsPatchRequest",
     "dashboard-component-settings-response.json": "DashboardSettingsResponse",
@@ -122,6 +125,7 @@ def test_openapi_shape_and_operation_ids_are_stable() -> None:
         "/api/app/v1/personal-data/status",
         "/api/app/v1/personal-data/{source_id}",
         "/api/app/v1/devices",
+        "/api/app/v1/devices/lookup",
         "/api/app/v1/devices/{device_id}/upcoming",
         "/api/app/v1/devices/{device_id}/preview",
         "/api/app/v1/dashboards",

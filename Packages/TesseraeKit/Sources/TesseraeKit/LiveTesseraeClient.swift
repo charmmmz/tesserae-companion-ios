@@ -152,6 +152,25 @@ public actor LiveTesseraeClient: TesseraeServing {
         return response.devices
     }
 
+    public func lookupDisplay(mac: String, instance: TesseraeInstance) async throws -> String? {
+        guard let mac = DeviceHardwareIdentity.normalizedMAC(mac) else { return nil }
+        let request = try await authenticatedRequest(
+            instance: instance,
+            path: ["devices", "lookup"],
+            method: "POST",
+            body: TesseraeJSON.encoder().encode(DeviceLookupRequest(mac: mac))
+        )
+        let response = try await response(for: request)
+        // An older server has no lookup route. Never infer a match from its list.
+        if response.statusCode == 404 || response.statusCode == 405 { return nil }
+        guard response.statusCode == 200 else { throw try serverError(from: response) }
+        do {
+            return try TesseraeJSON.decoder().decode(DeviceLookupResponse.self, from: response.data).deviceID
+        } catch {
+            throw TesseraeClientError.decoding(String(describing: error))
+        }
+    }
+
     public func fetchDeviceUpcoming(
         id: String,
         hours: Int?,

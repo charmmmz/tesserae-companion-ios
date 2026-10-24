@@ -14,7 +14,9 @@ capabilities.
 ### Added
 
 - Displays automatically associates authenticated Bluetooth records with the
-  current server's displays using a complete, unique Wi-Fi MAC address. Confirmed
+  current server's displays by submitting a complete Wi-Fi MAC already known
+  from Bluetooth to an authenticated lookup. Device lists do not expose MACs;
+  older servers retain manual association. Confirmed
   Bluetooth mode appears immediately. Device Details offers manual association
   only while a compatible record remains unassociated.
 

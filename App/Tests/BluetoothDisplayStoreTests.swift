@@ -8,10 +8,10 @@ import TesseraeKit
 struct BluetoothDisplayStoreTests {
     private let start = Date(timeIntervalSince1970: 1_700_000_000)
 
-    private func display(id: String = "panel", percent: Int? = 73, seen: Date? = nil, mac: String? = nil) -> DisplaySummary {
+    private func display(id: String = "panel", percent: Int? = 73, seen: Date? = nil) -> DisplaySummary {
         DisplaySummary(id: id, name: "Desk", kind: "test_panel", iconName: "display",
             panel: PanelProfile(width: 4, height: 2, gamut: "bwry_4", orientation: "landscape"),
-            freshness: .stale, lastSeenAt: seen, batteryPercent: percent, mac: mac)
+            freshness: .stale, lastSeenAt: seen, batteryPercent: percent)
     }
 
     @Test func recordsSurviveRestartAndUnconfirmedWorkCannotReplaceTheImage() throws {
@@ -148,8 +148,9 @@ struct BluetoothDisplayStoreTests {
         let info = try JSONDecoder().decode(BLESetupDeviceInfo.self, from: Data(#"{"protocol":2,"id":"picpak-f85b1b4fe844","sid":"01020304","connection_nonce":"000102030405060708090a0b0c0d0e0f","hardware":20,"model":"picpak_4_2","firmware":"0.9.10","mode":"maintenance"}"#.utf8))
         #expect(info.hardwareMAC == "f8:5b:1b:4f:e8:44")
         store.observe(deviceID: info.id, name: "Nearby", mode: nil, batteryMillivolts: nil, hardwareMAC: info.hardwareMAC)
-        let target = display(id: "renamed-red-frame", mac: "F8-5B-1B-4F-E8-44")
+        let target = display(id: "renamed-red-frame")
         store.observeServer(displays: [target], previews: [:], serverID: "home")
+        store.observeMACMatches(["f8:5b:1b:4f:e8:44": target.id], serverID: "home")
         #expect(!store.presentation(for: target, serverID: "home").isBluetooth)
         store.observe(deviceID: "picpak-f85b1b4fe844", name: "Nearby", mode: .bluetooth,
                       batteryMillivolts: 4100, at: start)
@@ -163,11 +164,12 @@ struct BluetoothDisplayStoreTests {
     @Test func MACAssociationRejectsAmbiguityAndRespectsManualOverrides() {
         let store = BluetoothDisplayStore(fileURL: nil)
         store.observe(deviceID: "picpak-f85b1b4fe844", name: "Frame", mode: .bluetooth, batteryMillivolts: nil)
-        let target = display(id: "red", mac: "f8:5b:1b:4f:e8:44")
-        let duplicate = display(id: "duplicate", mac: "f85b1b4fe844")
+        let target = display(id: "red")
+        let duplicate = display(id: "duplicate")
         store.observeServer(displays: [target, duplicate], previews: [:], serverID: "home")
         #expect(store.record(for: "red", serverID: "home") == nil)
         store.observeServer(displays: [target], previews: [:], serverID: "home")
+        store.observeMACMatches(["f8:5b:1b:4f:e8:44": "red"], serverID: "home")
         #expect(store.record(for: "red", serverID: "home")?.mode == .bluetooth)
         store.link(nil, to: "red", serverID: "home")
         #expect(store.record(for: "red", serverID: "home") == nil)
@@ -178,8 +180,9 @@ struct BluetoothDisplayStoreTests {
         ambiguous.observeServer(displays: [target], previews: [:], serverID: "home")
         for id in ["first", "second"] {
             ambiguous.observe(deviceID: id, name: "Frame", mode: .bluetooth, batteryMillivolts: nil,
-                              hardwareMAC: target.mac)
+                              hardwareMAC: "f8:5b:1b:4f:e8:44")
         }
+        ambiguous.observeMACMatches(["f8:5b:1b:4f:e8:44": "red"], serverID: "home")
         #expect(ambiguous.record(for: "red", serverID: "home") == nil)
     }
 
@@ -187,7 +190,9 @@ struct BluetoothDisplayStoreTests {
         let store = BluetoothDisplayStore(fileURL: nil)
         store.activeServerID = "home"
         store.observe(deviceID: "picpak-4fe844", name: "Red", mode: .bluetooth, batteryMillivolts: nil)
-        store.observeServer(displays: [display(id: "red", mac: "f8:5b:1b:4f:e8:44")], previews: [:], serverID: "home")
+        store.observeServer(displays: [display(id: "red")], previews: [:], serverID: "home")
+        #expect(store.knownHardwareMACs.isEmpty)
+        store.observeMACMatches(["f8:5b:1b:4f:e8:44": "red"], serverID: "home")
         #expect(store.record(for: "red", serverID: "home") == nil)
     }
 
@@ -195,7 +200,7 @@ struct BluetoothDisplayStoreTests {
         let store = BluetoothDisplayStore(fileURL: nil)
         store.activeServerID = "home"
         store.observe(deviceID: "native-panel", name: "Desk", mode: .bluetooth, batteryMillivolts: nil)
-        store.observeServer(displays: [display(id: "native-panel", mac: "f8:5b:1b:4f:e8:44")],
+        store.observeServer(displays: [display(id: "native-panel")],
                             previews: [:], serverID: "home")
         #expect(store.record(for: "native-panel", serverID: "home")?.mode == .bluetooth)
         #expect(store.record(for: "native-panel", serverID: "other") == nil)
@@ -210,12 +215,35 @@ struct BluetoothDisplayStoreTests {
         #expect(store.manualLinkCandidates(for: "legacy", serverID: "home").isEmpty)
 
         // Complete hardware evidence repairs a historical manual mismatch without deleting the record.
-        store.observeServer(displays: [display(id: "legacy", mac: "f8:5b:1b:4f:07:00")], previews: [:], serverID: "home")
+        store.observeServer(displays: [display(id: "legacy")], previews: [:], serverID: "home")
+        store.observeMACMatches(["f8:5b:1b:4f:07:00": "legacy"], serverID: "home")
         #expect(store.record(for: "legacy", serverID: "home")?.id == "picpak-f85b1b4f0700")
         #expect(store.manualLinkCandidates(for: "legacy", serverID: "home").isEmpty)
         store.link("picpak-f85b1b4fe844", to: "legacy", serverID: "home")
         #expect(store.record(for: "legacy", serverID: "home")?.id == "picpak-f85b1b4f0700")
         #expect(store.records.count == 2)
+    }
+
+    @Test func lookupEvidenceIsScopedAndDoesNotTrustLegacyServerMACs() throws {
+        let file = URL.temporaryDirectory.appending(path: UUID().uuidString + ".plist")
+        defer { try? FileManager.default.removeItem(at: file) }
+        let store = BluetoothDisplayStore(fileURL: file)
+        store.observe(deviceID: "picpak-f85b1b4fe844", name: "Red", mode: .bluetooth, batteryMillivolts: nil)
+        store.observeServer(displays: [display(id: "red")], previews: [:], serverID: "home")
+        store.observeMACMatches(["f8:5b:1b:00:00:01": "red"], serverID: "home")
+        #expect(store.record(for: "red", serverID: "home") == nil)
+        store.observeMACMatches(["f8:5b:1b:4f:e8:44": "deleted"], serverID: "home")
+        #expect(store.record(for: "red", serverID: "home") == nil)
+        store.observeMACMatches(["f8:5b:1b:4f:e8:44": "red"], serverID: "home")
+        #expect(store.record(for: "red", serverID: "home") != nil)
+        #expect(store.record(for: "red", serverID: "other") == nil)
+        store.observeMACMatches([:], serverID: "home")
+        #expect(store.record(for: "red", serverID: "home") == nil)
+
+        var plist = try #require(PropertyListSerialization.propertyList(from: Data(contentsOf: file), format: nil) as? [String: Any])
+        plist["servers"] = ["home": ["red": ["hardwareMAC": "f8:5b:1b:4f:e8:44"]]]
+        try PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0).write(to: file)
+        #expect(BluetoothDisplayStore(fileURL: file).record(for: "red", serverID: "home") == nil)
     }
 
     @Test func confirmedWiFiReclaimsPreviewButSleepingDisplaysKeepTheirState() throws {

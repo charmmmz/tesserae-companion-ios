@@ -107,6 +107,27 @@ final class AppModel {
         guard connectionSession == session else { throw CancellationError() }
     }
 
+    func resolveBluetoothDisplayAssociations(macs: [String]) async -> [String: String]? {
+        guard let instance = activeInstance, let session = connectionSession else { return nil }
+        let client = activeClient
+        let deviceIDs = Set(displays.map(\.id))
+        do {
+            var matches: [String: String] = [:]
+            for mac in macs {
+                try checkConnectionSession(session)
+                if let id = try await client.lookupDisplay(mac: mac, instance: instance), deviceIDs.contains(id) {
+                    matches[mac] = id
+                }
+            }
+            try checkConnectionSession(session)
+            let currentIDs = Set(displays.map(\.id))
+            return matches.filter { currentIDs.contains($0.value) }
+        } catch {
+            // Offline/authentication failure does not erase locally confirmed state.
+            return nil
+        }
+    }
+
     var activeInstance: TesseraeInstance?
     var connectionMode: ConnectionMode?
     var connectionHealth: ConnectionHealth = .restoring

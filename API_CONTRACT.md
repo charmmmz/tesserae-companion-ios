@@ -839,3 +839,18 @@ The shared examples include `dashboard-component-settings-response.json`,
 `dashboard-settings-choices-response.json`. They are copied directly from the
 server contract fixtures and decoded by the Kit tests alongside the older
 settings-only response.
+
+## Known-MAC Bluetooth association
+
+`POST /api/app/v1/devices/lookup` requires `devices:read` and accepts
+`{"mac":"f8:5b:1b:4f:e8:44"}`. The MAC must already be known from an authenticated
+Bluetooth record. The response is `{"device_id":"server-device-id"}`, or
+`{"device_id":null}` for unknown or ambiguous matches. This read-only lookup
+never claims a device, changes its configuration, or returns firmware tokens.
+MACs are not exposed by the device list; some firmware endpoints treat them as
+credentials. POST keeps the known MAC out of URL query logs.
+
+The app ignores legacy device-list MAC fields and only associates existing
+inventory IDs returned by this lookup. An older server's 404/405 means no
+automatic MAC match; canonical device IDs and explicit manual association
+remain available. Query cancellation or a server switch discards the result.

@@ -25,7 +25,9 @@ struct BluetoothDisplayRecord: Codable, Equatable, Identifiable {
 }
 
 struct DisplayServerRecord: Codable, Equatable {
-    var hardwareMAC: String?
+    // Only a lookup of a locally known BLE identity may populate this field.
+    // The different coding key deliberately ignores legacy server-enumerated MACs.
+    var associationMAC: String?
     var batteryPercent: Int?
     var batteryRecordedAt: Date?
     var lastSeenAt: Date?
@@ -70,7 +72,7 @@ final class BluetoothDisplayStore {
 
     func manualLinkCandidates(for displayID: String, serverID: String?) -> [BluetoothDisplayRecord] {
         guard let serverID, record(for: displayID, serverID: serverID) == nil else { return [] }
-        let mac = snapshot.servers[serverID]?[displayID]?.hardwareMAC
+        let mac = snapshot.servers[serverID]?[displayID]?.associationMAC
         return records.filter { candidate in
             let candidateMAC = hardwareMAC(for: candidate)
             return mac == nil || candidateMAC == nil || mac == candidateMAC
@@ -100,7 +102,7 @@ final class BluetoothDisplayStore {
         if let linkedID = snapshot.links[serverID]?[displayID] {
             return snapshot.records[linkedID] // Empty ID explicitly disables automatic association.
         }
-        let serverMAC = snapshot.servers[serverID]?[displayID]?.hardwareMAC
+        let serverMAC = snapshot.servers[serverID]?[displayID]?.associationMAC
         if let exact = snapshot.records[displayID], exact.observedServerIDs.contains(serverID),
            snapshot.links[serverID]?.contains(where: { $0.key != displayID && $0.value == exact.id }) != true {
             let bluetoothMAC = exact.hardwareMAC ?? DeviceHardwareIdentity.picPakMAC(bluetoothID: exact.id)
@@ -110,7 +112,7 @@ final class BluetoothDisplayStore {
         }
         if let mac = serverMAC {
             // Refuse ambiguous inventories or competing BLE identities, even if names agree.
-            guard snapshot.servers[serverID]?.values.filter({ $0.hardwareMAC == mac }).count == 1 else { return nil }
+            guard snapshot.servers[serverID]?.values.filter({ $0.associationMAC == mac }).count == 1 else { return nil }
             let matches = snapshot.records.values.filter {
                 ($0.hardwareMAC ?? DeviceHardwareIdentity.picPakMAC(bluetoothID: $0.id)) == mac
             }
@@ -125,7 +127,7 @@ final class BluetoothDisplayStore {
     func link(_ bluetoothID: String?, to displayID: String, serverID: String) {
         if let bluetoothID, snapshot.records[bluetoothID] == nil { return }
         if let bluetoothID, let record = snapshot.records[bluetoothID],
-           let mac = snapshot.servers[serverID]?[displayID]?.hardwareMAC,
+           let mac = snapshot.servers[serverID]?[displayID]?.associationMAC,
            let recordedMAC = hardwareMAC(for: record), mac != recordedMAC { return }
         var links = snapshot.links[serverID] ?? [:]
         if let bluetoothID {
@@ -201,16 +203,33 @@ final class BluetoothDisplayStore {
         serverID.flatMap { snapshot.servers[$0]?[displayID] }
     }
 
+    var knownHardwareMACs: [String] {
+        Array(Set(records.compactMap { hardwareMAC(for: $0) })).sorted()
+    }
+
+    /// Matching IDs contain no new hardware identity: each MAC came from our BLE records.
+    func observeMACMatches(_ matches: [String: String], serverID: String) {
+        var entries = snapshot.servers[serverID] ?? [:]
+        for id in entries.keys { entries[id]?.associationMAC = nil }
+        let known = Set(knownHardwareMACs)
+        let grouped = Dictionary(grouping: matches.filter { known.contains($0.key) }, by: { $0.value })
+        for (id, candidates) in grouped where candidates.count == 1 && entries[id] != nil {
+            entries[id]?.associationMAC = candidates.first?.key
+        }
+        snapshot.servers[serverID] = entries
+        discardConflictingLinks()
+        persist()
+    }
+
     func observeServer(displays: [DisplaySummary], previews: [String: PreviewImageState], serverID: String?, at date: Date = Date()) {
         guard let serverID else { return }
         var entries = snapshot.servers[serverID] ?? [:]
         let currentIDs = Set(displays.map(\.id))
         for id in Array(entries.keys) where !currentIDs.contains(id) {
-            entries[id]?.hardwareMAC = nil
+            entries[id]?.associationMAC = nil
         }
         for display in displays {
             var entry = entries[display.id] ?? DisplayServerRecord()
-            entry.hardwareMAC = DeviceHardwareIdentity.normalizedMAC(display.mac)
             let batteryDate = display.lastSeenAt ?? date
             if let percent = display.batteryPercent, (0...100).contains(percent),
                entry.batteryRecordedAt.map({ batteryDate >= $0 }) ?? true {
@@ -254,7 +273,7 @@ final class BluetoothDisplayStore {
         for serverID in Array(snapshot.links.keys) {
             for (displayID, bluetoothID) in snapshot.links[serverID] ?? [:] where !bluetoothID.isEmpty {
                 let record = snapshot.records[bluetoothID]
-                let mac = snapshot.servers[serverID]?[displayID]?.hardwareMAC
+                let mac = snapshot.servers[serverID]?[displayID]?.associationMAC
                 let recordedMAC = record.flatMap { hardwareMAC(for: $0) }
                 if record == nil || (mac != nil && recordedMAC != nil && mac != recordedMAC) {
                     snapshot.links[serverID]?.removeValue(forKey: displayID)

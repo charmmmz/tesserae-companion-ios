@@ -50,6 +50,51 @@ final class LiveTesseraeClientTests: XCTestCase {
         )
     }
 
+    func testKnownMACLookupIsAuthenticatedAndNeverPlacedInURL() async throws {
+        let transport = RecordingDeviceSetupTransport(response: TesseraeHTTPResponse(
+            data: Data(#"{"device_id":"red"}"#.utf8), statusCode: 200))
+        let credentials = InMemoryCredentialStore()
+        await credentials.save(token: "companion-secret", for: "home")
+        let client = LiveTesseraeClient(credentials: credentials,
+            identity: TesseraeClientIdentity(appVersion: "test", installationID: "test"), transport: transport)
+        let instance = TesseraeInstance(id: "home", name: "Home", baseURL: URL(string: "https://example.test/prefix")!,
+            serverVersion: "test", timezone: "UTC", webURL: "/")
+        let matched = try await client.lookupDisplay(mac: "F8-5B-1B-4F-E8-44", instance: instance)
+        XCTAssertEqual(matched, "red")
+        let captured = await transport.lastRequest()
+        let request = try XCTUnwrap(captured)
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.url?.path, "/prefix/api/app/v1/devices/lookup")
+        XCTAssertNil(request.url?.query)
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer companion-secret")
+        let body = try JSONSerialization.jsonObject(with: XCTUnwrap(request.httpBody)) as? [String: String]
+        XCTAssertEqual(body, ["mac": "f8:5b:1b:4f:e8:44"])
+    }
+
+    func testLookupUnknownAndOldServersCannotCreateAnAssociation() async throws {
+        for status in [200, 404, 405] {
+            let transport = RecordingDeviceSetupTransport(response: TesseraeHTTPResponse(
+                data: Data(#"{"device_id":null}"#.utf8), statusCode: status))
+            let credentials = InMemoryCredentialStore()
+            await credentials.save(token: "companion", for: "home")
+            let client = LiveTesseraeClient(credentials: credentials,
+                identity: TesseraeClientIdentity(appVersion: "test", installationID: "test"), transport: transport)
+            let instance = TesseraeInstance(id: "home", name: "Home", baseURL: URL(string: "https://example.test")!,
+                serverVersion: "test", timezone: "UTC", webURL: "/")
+            let match = try await client.lookupDisplay(mac: "f85b1b4fe844", instance: instance)
+            XCTAssertNil(match)
+        }
+        let transport = RecordingDeviceSetupTransport(response: TesseraeHTTPResponse(data: Data(), statusCode: 200))
+        let client = LiveTesseraeClient(credentials: InMemoryCredentialStore(),
+            identity: TesseraeClientIdentity(appVersion: "test", installationID: "test"), transport: transport)
+        let instance = TesseraeInstance(id: "home", name: "Home", baseURL: URL(string: "https://example.test")!,
+            serverVersion: "test", timezone: "UTC", webURL: "/")
+        let invalid = try await client.lookupDisplay(mac: "4fe844", instance: instance)
+        XCTAssertNil(invalid)
+        let request = await transport.lastRequest()
+        XCTAssertNil(request)
+    }
+
     func testFixtureServerVerticalSlice() async throws {
         guard
             let value = ProcessInfo.processInfo.environment["TESSERAE_FIXTURE_BASE_URL"],
@@ -97,6 +142,8 @@ final class LiveTesseraeClientTests: XCTestCase {
             for: session.instance.id
         )
 
+        let match = try await client.lookupDisplay(mac: "f85b1b4fe844", instance: session.instance)
+        XCTAssertEqual(match, "picpak-kitchen")
         let displays = try await client.fetchDisplays(instance: session.instance)
         let dashboards = try await client.fetchDashboards(instance: session.instance)
         XCTAssertEqual(displays.first?.id, "picpak-kitchen")

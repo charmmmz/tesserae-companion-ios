@@ -876,3 +876,12 @@ Release 1.0 is done only when:
   disclosures are complete;
 - the changelog, compatibility table, maintenance policy, and handover
   path are current.
+
+## Bluetooth display association
+
+Bluetooth records use full hardware MACs obtained from authenticated BLE info.
+To associate with a renamed server device, Companion submits only those known
+MACs to the scoped device lookup and accepts unique IDs already in the current
+inventory. Device lists neither provide nor persist MACs. Matching stays scoped
+to the active connection, rejects ambiguity, and respects explicit manual
+association overrides. Older servers retain the manual association path.

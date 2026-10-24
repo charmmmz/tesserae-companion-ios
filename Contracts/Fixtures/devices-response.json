@@ -2,7 +2,6 @@
   "devices": [
     {
       "id": "picpak-kitchen",
-      "mac": "f8:5b:1b:a1:b2:c3",
       "name": "Kitchen",
       "kind": "picpak",
       "icon": "device-tablet",

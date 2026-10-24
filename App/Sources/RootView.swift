@@ -1,8 +1,15 @@
 import SwiftUI
+import TesseraeKit
 
 private struct RootConnectionContext: Hashable {
     let revision: UUID
     let instanceID: String?
+}
+
+private struct BluetoothAssociationContext: Hashable {
+    let connection: RootConnectionContext
+    let displays: [DisplaySummary]
+    let macs: [String]
 }
 
 struct RootView: View {
@@ -19,6 +26,14 @@ struct RootView: View {
 
     private var connectionContext: RootConnectionContext {
         RootConnectionContext(revision: model.connectionRevision, instanceID: model.activeInstance?.id)
+    }
+
+    private var bluetoothAssociationContext: BluetoothAssociationContext {
+        BluetoothAssociationContext(
+            connection: connectionContext,
+            displays: model.displays,
+            macs: nearbyDevices.displayRecords.knownHardwareMACs
+        )
     }
 
     var body: some View {
@@ -75,6 +90,14 @@ struct RootView: View {
             await model.restoreConnectionIfNeeded()
             model.openWebIfRequested()
             synchronizeConnectionMessage()
+        }
+        .task(id: bluetoothAssociationContext) {
+            let context = bluetoothAssociationContext
+            guard let serverID = context.connection.instanceID,
+                  let matches = await model.resolveBluetoothDisplayAssociations(macs: context.macs),
+                  !Task.isCancelled, context == bluetoothAssociationContext else { return }
+            rememberServerDisplays()
+            nearbyDevices.displayRecords.observeMACMatches(matches, serverID: serverID)
         }
         .task(id: connectionContext) {
             await remindersBridgeModel.load(using: model)

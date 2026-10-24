@@ -354,6 +354,28 @@ struct ServerSessionIsolationTests {
         #expect(await fixture.transport.requestCount == 0)
     }
 
+    @Test("A late MAC lookup cannot cross cancellation, connection or inventory changes",
+          arguments: ["cancel", "switch", "deleted"])
+    func lateMACLookup(change: String) async throws {
+        let fixture = try await makeFixture(response: .init(
+            data: Data(#"{"device_id":"picpak-kitchen"}"#.utf8), statusCode: 200))
+        let demo = MockTesseraeClient(latency: .zero)
+        fixture.model.displays = try await demo.fetchDisplays(instance: oldInstance)
+        let request = Task {
+            await fixture.model.resolveBluetoothDisplayAssociations(macs: ["f8:5b:1b:4f:e8:44"])
+        }
+        await fixture.transport.gate.waitUntilStarted()
+        switch change {
+        case "cancel": request.cancel()
+        case "switch": await fixture.model.connectDemo()
+        default: fixture.model.displays = []
+        }
+        await fixture.transport.gate.release()
+        let result = await request.value
+        if change == "deleted" { #expect(result == [:]) }
+        else { #expect(result == nil) }
+    }
+
     private var oldInstance: TesseraeInstance {
         TesseraeInstance(id: "old-server", name: "Old server", baseURL: URL(string: "http://old.test")!,
                          serverVersion: "0.441.5", timezone: "UTC", webURL: "/")

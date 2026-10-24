@@ -281,6 +281,11 @@ public actor MockTesseraeClient: TesseraeServing {
         try await pause()
     }
 
+    public func lookupDisplay(mac: String, instance: TesseraeInstance) async throws -> String? {
+        try await pause()
+        return DeviceHardwareIdentity.normalizedMAC(mac) == "f8:5b:1b:a1:b2:c3" ? "picpak-kitchen" : nil
+    }
+
     public func fetchDisplays(instance: TesseraeInstance) async throws -> [DisplaySummary] {
         try await pause()
         return [
@@ -312,8 +317,7 @@ public actor MockTesseraeClient: TesseraeServing {
                     revision: "pending-demo-kitchen",
                     renderedAt: .now.addingTimeInterval(-30),
                     previewURL: "/api/app/v1/devices/picpak-kitchen/preview?revision=pending-demo-kitchen"
-                ),
-                mac: "f8:5b:1b:a1:b2:c3"
+                )
             ),
             DisplaySummary(
                 id: "e1004-desk",

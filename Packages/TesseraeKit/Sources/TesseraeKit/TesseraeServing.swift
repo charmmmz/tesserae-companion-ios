@@ -11,6 +11,7 @@ public protocol TesseraeServing: Sendable {
         instance: TesseraeInstance
     ) async throws -> FirmwareDevicePairing
     func fetchDisplays(instance: TesseraeInstance) async throws -> [DisplaySummary]
+    func lookupDisplay(mac: String, instance: TesseraeInstance) async throws -> String?
     func fetchDeviceUpcoming(
         id: String,
         hours: Int?,
@@ -174,6 +175,9 @@ public protocol TesseraeServing: Sendable {
 }
 
 public extension TesseraeServing {
+    /// Older implementations cannot establish a MAC association.
+    func lookupDisplay(mac: String, instance: TesseraeInstance) async throws -> String? { nil }
+
     func fetchDashboardSettingChoices(id: String, fieldID: String, query: String, limit: Int, offset: Int, schemaRevision: String? = nil, instance: TesseraeInstance) async throws -> DashboardSettingChoices {
         throw TesseraeClientError.unavailable
     }

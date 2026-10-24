@@ -205,6 +205,35 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+  /api/app/v1/devices/lookup:
+    post:
+      tags:
+      - Devices
+      operationId: lookupCompanionDevice
+      summary: Resolve a MAC already known from authenticated Bluetooth
+      description: Requires devices:read. Returns only a unique matching device ID,
+        or null for unknown/ambiguous identities. Never enumerates MACs, returns firmware
+        credentials, claims a device, or changes its state. The MAC is in the body to
+        avoid URL query logs. Older servers return 404 or 405.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceLookupRequest'
+      responses:
+        '200':
+          description: Unique match, or null.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceLookupResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /api/app/v1/devices/{device_id}/upcoming:
     parameters:
       - $ref: "#/components/parameters/DeviceID"
@@ -2509,6 +2538,27 @@ components:
         dashboard_name:
           type: string
           nullable: true
+    DeviceLookupRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - mac
+      properties:
+        mac:
+          type: string
+          minLength: 1
+          description: Complete MAC already obtained from authenticated Bluetooth; never
+            a broadcast suffix.
+    DeviceLookupResponse:
+      type: object
+      additionalProperties: false
+      required:
+      - device_id
+      properties:
+        device_id:
+          type: string
+          nullable: true
+          description: Unique matching server device ID, or null when unknown or ambiguous.
     Device:
       type: object
       additionalProperties: false
@@ -2516,11 +2566,6 @@ components:
       properties:
         id:
           type: string
-        mac:
-          description: Complete Wi-Fi MAC used to associate authenticated Bluetooth records.
-          type: string
-          nullable: true
-          pattern: '^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$'
         name:
           type: string
         kind:

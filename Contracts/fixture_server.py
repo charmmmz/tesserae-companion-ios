@@ -331,6 +331,17 @@ class FixtureRequestHandler(BaseHTTPRequestHandler):
 
         if not self.authorized():
             return
+        if path == "/api/app/v1/devices/lookup":
+            payload = self.read_json()
+            if not payload or set(payload) != {"mac"} or not isinstance(payload["mac"], str):
+                self.send_error_response(HTTPStatus.BAD_REQUEST, "invalid_request", "Supply a known MAC.")
+                return
+            mac = payload["mac"].lower().replace(":", "").replace("-", "")
+            self.send_fixture(
+                "device-lookup-response.json" if mac == "f85b1b4fe844"
+                else "device-lookup-unmatched-response.json"
+            )
+            return
         if path == "/api/app/v1/gallery/folders":
             payload = self.read_json()
             if payload is None:
