@@ -113,6 +113,10 @@ from the display's Bluetooth verification code. Confirm Wi-Fi credentials next.
 The firmware saves the destination after its connection checks pass, then
 restarts to register. PicPak maintenance continues to offer Wi-Fi repair only.
 
+PicPak Bluetooth setup, maintenance, and photo sending require firmware using
+its assigned hardware code `20`. Update both Companion and PicPak firmware;
+older PicPak firmware using code `11` is no longer recognized as PicPak.
+
 Experimental native Bluetooth photo sending uses capabilities reported by
 opted-in display firmware to select resolution and pixel format. Enter
 Maintenance, select Manual (Bluetooth) and authorize this phone, then close

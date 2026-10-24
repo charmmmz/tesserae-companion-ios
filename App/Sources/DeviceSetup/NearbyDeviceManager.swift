@@ -1244,10 +1244,10 @@ final class NearbyDeviceManager: NSObject {
         isLoadingPhotoCapabilities = false
     }
 
-    private func decodeAdvertisement(
-        peripheral: CBPeripheral,
+    static func decodeAdvertisement(
+        id: UUID,
         advertisementData: [String: Any],
-        rssi: NSNumber
+        rssi: Int
     ) -> NearbyTesseraeDevice? {
         guard
             let serviceData = advertisementData[CBAdvertisementDataServiceDataKey]
@@ -1267,9 +1267,9 @@ final class NearbyDeviceManager: NSObject {
             ? "Tesserae-\(suffix)"
             : advertisedName ?? "Tesserae-\(suffix)"
         return NearbyTesseraeDevice(
-            id: peripheral.identifier,
+            id: id,
             name: displayName,
-            rssi: rssi.intValue,
+            rssi: rssi,
             mode: advertisement.mode,
             // Preserve the advertised wire code for the subsequent device-info check.
             hardware: advertisement.hardware,
@@ -1296,10 +1296,10 @@ extension NearbyDeviceManager: @preconcurrency CBCentralManagerDelegate {
         advertisementData: [String: Any],
         rssi RSSI: NSNumber
     ) {
-        guard let device = decodeAdvertisement(
-            peripheral: peripheral,
+        guard let device = Self.decodeAdvertisement(
+            id: peripheral.identifier,
             advertisementData: advertisementData,
-            rssi: RSSI
+            rssi: RSSI.intValue
         ) else { return }
         let now = Date()
         if lastSeenScanGeneration[device.id] == scanGeneration,

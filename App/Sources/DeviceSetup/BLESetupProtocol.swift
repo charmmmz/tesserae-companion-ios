@@ -196,10 +196,10 @@ enum BLESetupHardware: Equatable, Sendable {
         case .waveshare133E6, .seeedEE05: 9
         case .wavesharePhotoPainter73: 10
         case .seeedEE03: 11
-        case .picPak42: 20
         case .paperMono: 12
         case .goodDisplay133: 18
         case .inkplate13: 19
+        case .picPak42: 20
         case .unknown(let code): code
         }
     }
