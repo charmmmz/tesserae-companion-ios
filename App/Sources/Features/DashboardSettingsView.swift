@@ -103,7 +103,7 @@ struct DashboardSettingsView: View {
             if isSaving {
               ProgressView().accessibilityLabel("Save")
             } else {
-              Text("Save")
+              Label("Save", systemImage: "checkmark").labelStyle(.iconOnly)
             }
           }
           .fontWeight(.semibold)
