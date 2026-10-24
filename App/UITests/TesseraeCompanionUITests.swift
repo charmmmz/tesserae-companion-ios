@@ -1622,11 +1622,49 @@ final class TesseraeCompanionUITests: XCTestCase {
         )
         XCTAssertEqual(lower.frame.width, cardWidth, accuracy: 1)
         XCTAssertEqual(lower.frame.minX, upper.frame.minX, accuracy: 1)
+        XCTAssertTrue(lower.isHittable, "Dropping a display must leave its card in the list.")
+        XCTAssertTrue(upper.isHittable)
+        XCTAssertFalse(app.staticTexts["Current Screen"].exists)
 
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "Reordered Display Cards"
         screenshot.lifetime = .keepAlways
         add(screenshot)
+
+        let draggedDisplayID = lower.identifier.replacingOccurrences(of: "display-card-", with: "")
+        lower.tap()
+        XCTAssertTrue(app.buttons["display-device-details-\(draggedDisplayID)"].waitForExistence(timeout: 3))
+    }
+
+    func testDisplayLongPressWithoutMovingDoesNotOpenDetails() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
+        app.launch()
+        let demo = app.buttons["Explore with Demo Data"]
+        XCTAssertTrue(demo.waitForExistence(timeout: 3))
+        demo.tap()
+
+        let kitchen = app.buttons["display-card-picpak-kitchen"]
+        let desk = app.buttons["display-card-e1004-desk"]
+        XCTAssertTrue(kitchen.waitForExistence(timeout: 3))
+        XCTAssertTrue(desk.waitForExistence(timeout: 3))
+        let originalPosition = kitchen.value as? String
+
+        kitchen.press(forDuration: 0.45)
+
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Display List After Long Press"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+
+        XCTAssertTrue(kitchen.isHittable, "Releasing a recognized long press must not open details.")
+        XCTAssertTrue(desk.isHittable)
+        XCTAssertEqual(kitchen.value as? String, originalPosition)
+        XCTAssertFalse(app.staticTexts["Current Screen"].exists)
+
+        kitchen.tap()
+        XCTAssertTrue(app.buttons["display-device-details-picpak-kitchen"].waitForExistence(timeout: 3))
     }
 
     func testDemoSendSupportsLinkActions() {

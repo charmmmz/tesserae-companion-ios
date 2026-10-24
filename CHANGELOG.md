@@ -108,6 +108,9 @@ capabilities.
 
 ### Fixed
 
+- Long-pressing or dragging a Display card to reorder it no longer opens its
+  details when released. A separate tap still opens the display normally.
+
 - Dashboard push and Lineup preview sheets keep a continuous background below
   the action button, removing the mismatched strip along the bottom edge.
 

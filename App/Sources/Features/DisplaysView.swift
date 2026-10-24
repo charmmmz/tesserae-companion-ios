@@ -503,6 +503,14 @@ private struct DisplayReorderLongPressGesture: UIGestureRecognizerRepresentable 
         ) -> Bool {
             true
         }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldBeRequiredToFailBy otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            // A card tap can open details only if its long press failed.
+            otherGestureRecognizer is UITapGestureRecognizer
+        }
     }
 
     let onBegan: (CGPoint) -> Void
@@ -519,7 +527,9 @@ private struct DisplayReorderLongPressGesture: UIGestureRecognizerRepresentable 
         let recognizer = UILongPressGestureRecognizer()
         recognizer.minimumPressDuration = 0.35
         recognizer.allowableMovement = 10
-        recognizer.cancelsTouchesInView = false
+        // Once a long press starts reordering, its release must not activate
+        // the card's details button. Short taps still pass through normally.
+        recognizer.cancelsTouchesInView = true
         recognizer.delaysTouchesBegan = false
         recognizer.delaysTouchesEnded = false
         recognizer.delegate = context.coordinator
