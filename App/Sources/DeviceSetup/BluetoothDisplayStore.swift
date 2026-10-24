@@ -7,6 +7,8 @@ struct BluetoothDisplayRecord: Codable, Equatable, Identifiable {
     let id: String
     var name: String
     var observedServerIDs: Set<String> = []
+    var hardwareMAC: String?
+    var hardwareKind: String?
     var mode: BLEScreenMode?
     var modeConfirmedAt: Date?
     var modeChangedAt: Date?
@@ -14,9 +16,16 @@ struct BluetoothDisplayRecord: Codable, Equatable, Identifiable {
     var batteryRecordedAt: Date?
     var previewPNG: Data?
     var photoReceivedAt: Date?
+
+    var photoSupersededByWiFi: Bool {
+        guard mode == .wifi else { return false }
+        guard let photoReceivedAt, let confirmedAt = modeConfirmedAt ?? modeChangedAt else { return true }
+        return confirmedAt >= photoReceivedAt
+    }
 }
 
 struct DisplayServerRecord: Codable, Equatable {
+    var hardwareMAC: String?
     var batteryPercent: Int?
     var batteryRecordedAt: Date?
     var lastSeenAt: Date?
@@ -25,7 +34,7 @@ struct DisplayServerRecord: Codable, Equatable {
 }
 
 /// Local evidence only. BLE advertisements, keys and server silence never establish a mode.
-/// Images are small previews of the encoded frame, saved only after photo_received.
+/// Images retain the original colours and sent crop, saved only after photo_received.
 @MainActor @Observable
 final class BluetoothDisplayStore {
     private struct Snapshot: Codable {
@@ -48,6 +57,10 @@ final class BluetoothDisplayStore {
         guard let fileURL, FileManager.default.fileExists(atPath: fileURL.path) else { return }
         do {
             snapshot = try PropertyListDecoder().decode(Snapshot.self, from: Data(contentsOf: fileURL))
+            let linksChanged = discardConflictingLinks()
+            // Migrate records saved by versions that waited for a changed server image.
+            let previewsChanged = discardSupersededPreviews()
+            if linksChanged || previewsChanged { persist() }
         } catch {
             storageError = String(localized: "Bluetooth records could not be read.")
         }
@@ -55,19 +68,65 @@ final class BluetoothDisplayStore {
 
     var records: [BluetoothDisplayRecord] { snapshot.records.values.sorted { $0.id < $1.id } }
 
+    func manualLinkCandidates(for displayID: String, serverID: String?) -> [BluetoothDisplayRecord] {
+        guard let serverID, record(for: displayID, serverID: serverID) == nil else { return [] }
+        let mac = snapshot.servers[serverID]?[displayID]?.hardwareMAC
+        return records.filter { candidate in
+            let candidateMAC = hardwareMAC(for: candidate)
+            return mac == nil || candidateMAC == nil || mac == candidateMAC
+        }
+    }
+
+    /// A cosmetic hint only; a partial broadcast suffix never establishes identity or mode.
+    func hardwareHint(code: UInt8, suffix: String) -> BLESetupHardware? {
+        guard suffix.utf8.count == 6 else { return nil }
+        let matches = records.filter {
+            hardwareMAC(for: $0)?.replacingOccurrences(of: ":", with: "").hasSuffix(suffix.lowercased()) == true
+        }
+        guard matches.count == 1, let match = matches.first,
+              let kind = match.hardwareKind ?? (DeviceHardwareIdentity.picPakMAC(bluetoothID: match.id) == nil ? nil : "picpak_4_2")
+        else { return nil }
+        let hardware = BLESetupHardware.resolve(code: code, model: kind)
+        if case .unknown = hardware { return nil }
+        return hardware
+    }
+
+    private func hardwareMAC(for record: BluetoothDisplayRecord) -> String? {
+        record.hardwareMAC ?? DeviceHardwareIdentity.picPakMAC(bluetoothID: record.id)
+    }
+
     func record(for displayID: String, serverID: String?) -> BluetoothDisplayRecord? {
         guard let serverID else { return nil }
         if let linkedID = snapshot.links[serverID]?[displayID] {
             return snapshot.records[linkedID] // Empty ID explicitly disables automatic association.
         }
-        guard let exact = snapshot.records[displayID], exact.observedServerIDs.contains(serverID),
-              snapshot.links[serverID]?.contains(where: { $0.key != displayID && $0.value == exact.id }) != true
-        else { return nil }
-        return exact
+        let serverMAC = snapshot.servers[serverID]?[displayID]?.hardwareMAC
+        if let exact = snapshot.records[displayID], exact.observedServerIDs.contains(serverID),
+           snapshot.links[serverID]?.contains(where: { $0.key != displayID && $0.value == exact.id }) != true {
+            let bluetoothMAC = exact.hardwareMAC ?? DeviceHardwareIdentity.picPakMAC(bluetoothID: exact.id)
+            // Native firmware already uses its canonical server ID over BLE.
+            // Preserve that path unless complete hardware identities conflict.
+            if serverMAC == nil || bluetoothMAC == nil || serverMAC == bluetoothMAC { return exact }
+        }
+        if let mac = serverMAC {
+            // Refuse ambiguous inventories or competing BLE identities, even if names agree.
+            guard snapshot.servers[serverID]?.values.filter({ $0.hardwareMAC == mac }).count == 1 else { return nil }
+            let matches = snapshot.records.values.filter {
+                ($0.hardwareMAC ?? DeviceHardwareIdentity.picPakMAC(bluetoothID: $0.id)) == mac
+            }
+            guard matches.count == 1, let match = matches.first,
+                  snapshot.links[serverID]?.contains(where: { $0.key != displayID && $0.value == match.id }) != true
+            else { return nil }
+            return match
+        }
+        return nil
     }
 
     func link(_ bluetoothID: String?, to displayID: String, serverID: String) {
         if let bluetoothID, snapshot.records[bluetoothID] == nil { return }
+        if let bluetoothID, let record = snapshot.records[bluetoothID],
+           let mac = snapshot.servers[serverID]?[displayID]?.hardwareMAC,
+           let recordedMAC = hardwareMAC(for: record), mac != recordedMAC { return }
         var links = snapshot.links[serverID] ?? [:]
         if let bluetoothID {
             for key in Array(links.keys) where links[key] == bluetoothID { links[key] = "" }
@@ -79,29 +138,47 @@ final class BluetoothDisplayStore {
         persist()
     }
 
-    func observe(deviceID: String, name: String, mode: BLEScreenMode?, batteryMillivolts: Int?, at date: Date = Date()) {
+    func observe(deviceID: String, name: String, mode: BLEScreenMode?, batteryMillivolts: Int?,
+                 hardwareMAC: String? = nil, hardwareKind: String? = nil, at date: Date = Date()) {
         var record = snapshot.records[deviceID] ?? BluetoothDisplayRecord(id: deviceID, name: name)
         record.name = name
+        if let hardwareKind { record.hardwareKind = hardwareKind }
+        if let mac = DeviceHardwareIdentity.normalizedMAC(hardwareMAC)
+            ?? DeviceHardwareIdentity.picPakMAC(bluetoothID: deviceID) {
+            record.hardwareMAC = mac
+        }
         if let activeServerID { record.observedServerIDs.insert(activeServerID) }
         if let mode {
-            // Re-reading the same mode must not reset the server-preview recovery boundary.
-            // A photo from older firmware may omit its mode: a later Wi-Fi
-            // confirmation then establishes a new boundary for that photo.
-            let confirmsWiFiAfterPhoto = mode == .wifi && record.photoReceivedAt.map {
-                $0 > (record.modeChangedAt ?? .distantPast)
-            } == true
-            if record.mode != mode || record.modeChangedAt == nil || confirmsWiFiAfterPhoto {
+            if record.mode != mode || record.modeChangedAt == nil {
                 record.modeChangedAt = date
             }
             record.modeConfirmedAt = date
             record.mode = mode
+            if mode == .wifi {
+                // Confirmed Wi-Fi selects server previews even when its image is unchanged.
+                record.previewPNG = nil
+                record.photoReceivedAt = nil
+            }
         }
         if let batteryMillivolts, (2500...5000).contains(batteryMillivolts) {
             record.batteryMillivolts = batteryMillivolts
             record.batteryRecordedAt = date
         }
         snapshot.records[deviceID] = record
+        discardConflictingLinks()
         persist()
+    }
+
+    private func discardSupersededPreviews() -> Bool {
+        var changed = false
+        for id in Array(snapshot.records.keys) {
+            guard let record = snapshot.records[id], record.previewPNG != nil,
+                  record.photoSupersededByWiFi else { continue }
+            snapshot.records[id]?.previewPNG = nil
+            snapshot.records[id]?.photoReceivedAt = nil
+            changed = true
+        }
+        return changed
     }
 
     func receivedPhoto(deviceID: String, previewPNG: Data, at date: Date = Date()) {
@@ -127,8 +204,13 @@ final class BluetoothDisplayStore {
     func observeServer(displays: [DisplaySummary], previews: [String: PreviewImageState], serverID: String?, at date: Date = Date()) {
         guard let serverID else { return }
         var entries = snapshot.servers[serverID] ?? [:]
+        let currentIDs = Set(displays.map(\.id))
+        for id in Array(entries.keys) where !currentIDs.contains(id) {
+            entries[id]?.hardwareMAC = nil
+        }
         for display in displays {
             var entry = entries[display.id] ?? DisplayServerRecord()
+            entry.hardwareMAC = DeviceHardwareIdentity.normalizedMAC(display.mac)
             let batteryDate = display.lastSeenAt ?? date
             if let percent = display.batteryPercent, (0...100).contains(percent),
                entry.batteryRecordedAt.map({ batteryDate >= $0 }) ?? true {
@@ -151,20 +233,41 @@ final class BluetoothDisplayStore {
             }
             entries[display.id] = entry
         }
-        if snapshot.servers[serverID] != entries {
-            snapshot.servers[serverID] = entries
-            persist()
+        let serverChanged = snapshot.servers[serverID] != entries
+        snapshot.servers[serverID] = entries
+        let linksChanged = discardConflictingLinks()
+        var previewsChanged = false
+        for display in displays {
+            guard var record = record(for: display.id, serverID: serverID), record.previewPNG != nil,
+                  !showsBluetoothPreview(record, displayID: display.id, serverID: serverID) else { continue }
+            record.previewPNG = nil
+            record.photoReceivedAt = nil
+            snapshot.records[record.id] = record
+            previewsChanged = true
         }
+        if serverChanged || linksChanged || previewsChanged { persist() }
+    }
+
+    @discardableResult
+    private func discardConflictingLinks() -> Bool {
+        var changed = false
+        for serverID in Array(snapshot.links.keys) {
+            for (displayID, bluetoothID) in snapshot.links[serverID] ?? [:] where !bluetoothID.isEmpty {
+                let record = snapshot.records[bluetoothID]
+                let mac = snapshot.servers[serverID]?[displayID]?.hardwareMAC
+                let recordedMAC = record.flatMap { hardwareMAC(for: $0) }
+                if record == nil || (mac != nil && recordedMAC != nil && mac != recordedMAC) {
+                    snapshot.links[serverID]?.removeValue(forKey: displayID)
+                    changed = true
+                }
+            }
+        }
+        return changed
     }
 
     func showsBluetoothPreview(_ record: BluetoothDisplayRecord?, displayID: String, serverID: String?) -> Bool {
         guard let record, record.previewPNG != nil else { return false }
-        guard record.mode == .wifi, let resumedAt = record.modeChangedAt,
-              let receivedAt = record.photoReceivedAt, resumedAt >= receivedAt,
-              let server = serverRecord(displayID: displayID, serverID: serverID),
-              let seenAt = server.lastSeenAt, seenAt > resumedAt,
-              let changedAt = server.previewChangedAt, changedAt > resumedAt else { return true }
-        return false
+        return !record.photoSupersededByWiFi
     }
 
     func presentation(for display: DisplaySummary, serverID: String?) -> DisplayBluetoothPresentation {
@@ -197,6 +300,11 @@ struct DisplayBluetoothPresentation {
     let usesLocalPreview: Bool
 
     var isBluetooth: Bool { record?.mode == .bluetooth }
+    func lastSeenAt(fallback: Date?) -> Date? {
+        guard isBluetooth, let record else { return server?.lastSeenAt ?? fallback }
+        return [record.modeConfirmedAt, record.batteryRecordedAt, record.photoReceivedAt]
+            .compactMap { $0 }.max()
+    }
     var batteryText: String {
         if let percent = server?.batteryPercent ?? fallbackPercent, (0...100).contains(percent) { return "\(percent)%" }
         return voltageText ?? "—"

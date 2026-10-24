@@ -3,6 +3,7 @@ import TesseraeKit
 
 struct DisplayHardwareBadge: View {
     let presentation: DisplayHardwarePresentation
+    var fallbackModelName = String(localized: "Custom display")
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -34,7 +35,7 @@ struct DisplayHardwareBadge: View {
     }
 
     private var modelLabel: some View {
-        Text(presentation.modelName ?? String(localized: "Custom display"))
+        Text(presentation.modelName ?? fallbackModelName)
             .font(.caption.weight(.medium))
             .foregroundStyle(.secondary)
     }
@@ -72,7 +73,7 @@ struct DisplayHardwareBadge: View {
     private var accessibilityLabel: String {
         [
             presentation.brand?.displayName,
-            presentation.modelName ?? String(localized: "Custom display"),
+            presentation.modelName ?? fallbackModelName,
         ]
         .compactMap { $0 }
         .joined(separator: ", ")

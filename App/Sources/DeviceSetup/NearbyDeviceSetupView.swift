@@ -44,9 +44,7 @@ struct NearbyDeviceSetupView: View {
     }
 
     private var hardwarePresentation: DisplayHardwarePresentation {
-        DisplayHardwarePresentation(
-            kind: nearby.deviceInfo?.model ?? device.hardware.catalogKind
-        )
+        nearby.hardwarePresentation(for: device)
     }
 
     private var manufacturerName: String {
@@ -206,7 +204,7 @@ struct NearbyDeviceSetupView: View {
                      ? "Ready to Set Up"
                      : "Maintenance Mode")
                     .font(.title2.bold())
-                DisplayHardwareBadge(presentation: hardwarePresentation)
+                DisplayHardwareBadge(presentation: hardwarePresentation, fallbackModelName: String(localized: "Nearby Display"))
             }
             Spacer(minLength: 0)
             if model.activeInstance == nil {
@@ -1057,9 +1055,7 @@ struct NearbyDisplaysView: View {
                         Button {
                             selectedDevice = device
                         } label: {
-                            let presentation = DisplayHardwarePresentation(
-                                kind: device.hardware.catalogKind
-                            )
+                            let presentation = nearby.hardwarePresentation(for: device)
 
                             HStack(spacing: 13) {
                                 Image(

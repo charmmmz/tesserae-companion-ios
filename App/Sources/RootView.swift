@@ -53,6 +53,10 @@ struct RootView: View {
         }
         .onChange(of: model.displays) { rememberServerDisplays() }
         .onChange(of: model.displayPreviews) { rememberServerDisplays() }
+        .onChange(of: nearbyDevices.screenMode) { _, mode in
+            guard mode == .wifi else { return }
+            Task { await model.refreshDisplays(showErrors: false) }
+        }
         .tesseraeMessageCenterInset()
         .sheet(isPresented: $serversPresented) {
             OnboardingView(isChoosingServer: true)

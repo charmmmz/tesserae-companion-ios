@@ -312,7 +312,8 @@ public actor MockTesseraeClient: TesseraeServing {
                     revision: "pending-demo-kitchen",
                     renderedAt: .now.addingTimeInterval(-30),
                     previewURL: "/api/app/v1/devices/picpak-kitchen/preview?revision=pending-demo-kitchen"
-                )
+                ),
+                mac: "f8:5b:1b:a1:b2:c3"
             ),
             DisplaySummary(
                 id: "e1004-desk",

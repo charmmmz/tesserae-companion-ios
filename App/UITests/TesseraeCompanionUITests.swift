@@ -299,6 +299,127 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertEqual(mode.value as? String, "Automatic (Wi-Fi)")
     }
 
+    func testNewPicPakHardwareCodeIdentifiesBeforeConnection() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_BLE"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_CODE_20"] = "1"
+        app.launch()
+        let nearby = app.buttons["onboarding-nearby-devices"]
+        XCTAssertTrue(nearby.waitForExistence(timeout: 5))
+        for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
+        nearby.tap()
+        app.buttons.containing(.staticText, identifier: "Tesserae-A1B2C3").firstMatch.tap()
+        let badge = app.descendants(matching: .any)["display-hardware-picPak"].firstMatch
+        XCTAssertTrue(badge.waitForExistence(timeout: 3))
+        XCTAssertTrue(badge.label.contains("PicPak 4.2"))
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "PicPak Code 20 Before Connection"
+        shot.lifetime = .keepAlways
+        add(shot)
+        app.buttons["Continue"].tap()
+        app.buttons["Enter 6-Digit Code"].tap()
+        XCTAssertTrue(app.buttons["nearby-screen-mode"].waitForExistence(timeout: 4))
+    }
+
+    func testPicPakMaintenanceAutomaticallyMarksMatchingServerDisplay() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_BLE"] = "1"
+        app.launch()
+        let nearby = app.buttons["onboarding-nearby-devices"]
+        XCTAssertTrue(nearby.waitForExistence(timeout: 5))
+        for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
+        nearby.tap()
+        app.buttons.containing(.staticText, identifier: "Tesserae-A1B2C3").firstMatch.tap()
+        let initialBadge = app.descendants(matching: .any)["display-hardware-picPak"].firstMatch
+        XCTAssertTrue(initialBadge.waitForExistence(timeout: 3))
+        XCTAssertTrue(initialBadge.label.contains("PicPak 4.2"))
+        XCTAssertFalse(app.staticTexts["Custom display"].exists)
+        app.buttons["Continue"].tap()
+        app.buttons["Enter 6-Digit Code"].tap()
+        let mode = app.buttons["nearby-screen-mode"]
+        XCTAssertTrue(mode.waitForExistence(timeout: 4))
+        mode.tap()
+        app.buttons["Manual (Bluetooth)"].tap()
+        XCTAssertEqual(mode.value as? String, "Manual (Bluetooth)")
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.navigationBars["Nearby Displays"].waitForExistence(timeout: 4))
+        app.navigationBars["Nearby Displays"].buttons.firstMatch.tap()
+        // Reopening a known device uses its remembered model before reconnecting.
+        nearby.tap()
+        app.buttons.containing(.staticText, identifier: "Tesserae-A1B2C3").firstMatch.tap()
+        let knownBadge = app.descendants(matching: .any)["display-hardware-picPak"].firstMatch
+        XCTAssertTrue(knownBadge.waitForExistence(timeout: 3))
+        XCTAssertTrue(knownBadge.label.contains("PicPak 4.2"))
+        app.buttons["Close"].tap()
+        app.navigationBars["Nearby Displays"].buttons.firstMatch.tap()
+        let demo = app.buttons["Explore with Demo Data"]
+        XCTAssertTrue(demo.waitForExistence(timeout: 4))
+        for _ in 0..<3 where !demo.isHittable { app.swipeUp() }
+        demo.tap()
+        let display = app.buttons["display-card-picpak-kitchen"]
+        XCTAssertTrue(display.waitForExistence(timeout: 8))
+        XCTAssertTrue(display.label.contains("Bluetooth Mode"))
+        display.tap()
+        XCTAssertFalse(app.staticTexts["Mode Confirmed"].exists)
+        XCTAssertFalse(app.staticTexts["Last Bluetooth Battery"].exists)
+        XCTAssertFalse(app.buttons["bluetooth-record-link-picpak-kitchen"].exists)
+        let details = app.buttons["display-device-details-picpak-kitchen"]
+        for _ in 0..<3 where !details.isHittable { app.swipeUp() }
+        details.tap()
+        XCTAssertEqual(details.value as? String, "Expanded")
+        XCTAssertFalse(app.buttons["bluetooth-record-link-picpak-kitchen"].exists)
+        XCTAssertFalse(app.buttons["Forget Bluetooth Record"].exists)
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Automatic MAC Association and Compact Details"
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
+    func testConfirmedWiFiRestoresServerPreviewWithoutANewServerImage() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_BLE"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_SAVED_BLUETOOTH_PHOTO"] = "1"
+        app.launch()
+        let nearby = app.buttons["onboarding-nearby-devices"]
+        XCTAssertTrue(nearby.waitForExistence(timeout: 5))
+        for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
+        nearby.tap()
+        app.buttons.containing(.staticText, identifier: "Tesserae-A1B2C3").firstMatch.tap()
+        app.buttons["Continue"].tap()
+        app.buttons["Enter 6-Digit Code"].tap()
+        let mode = app.buttons["nearby-screen-mode"]
+        XCTAssertTrue(mode.waitForExistence(timeout: 4))
+        XCTAssertEqual(mode.value as? String, "Manual (Bluetooth)")
+        mode.tap()
+        app.buttons["Automatic (Wi-Fi)"].tap()
+        XCTAssertEqual(mode.value as? String, "Automatic (Wi-Fi)")
+        app.buttons["Close"].tap()
+        app.navigationBars["Nearby Displays"].buttons.firstMatch.tap()
+        let demo = app.buttons["Explore with Demo Data"]
+        XCTAssertTrue(demo.waitForExistence(timeout: 4))
+        for _ in 0..<3 where !demo.isHittable { app.swipeUp() }
+        demo.tap()
+        let display = app.buttons["display-card-picpak-kitchen"]
+        XCTAssertTrue(display.waitForExistence(timeout: 8))
+        XCTAssertFalse(display.label.contains("Bluetooth Mode"))
+        let cardPreview = app.descendants(matching: .any)["display-preview-picpak-kitchen"].firstMatch
+        XCTAssertTrue(cardPreview.exists)
+        XCTAssertNotEqual(cardPreview.label, "Last Bluetooth Send")
+        display.tap()
+        let detailPreview = app.descendants(matching: .any)["display-detail-preview-picpak-kitchen"].firstMatch
+        XCTAssertTrue(detailPreview.waitForExistence(timeout: 3))
+        XCTAssertNotEqual(detailPreview.label, "Last Bluetooth Send")
+        XCTAssertFalse(app.buttons["bluetooth-record-link-picpak-kitchen"].exists)
+        XCTAssertFalse(app.buttons["Forget Bluetooth Record"].exists)
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Confirmed WiFi Uses Server Preview"
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
     func testPicPakPhotoSessionOpensSendSheetAndReceivesImage() {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
@@ -354,13 +475,12 @@ final class TesseraeCompanionUITests: XCTestCase {
         let display = app.buttons["display-card-picpak-kitchen"]
         XCTAssertTrue(display.waitForExistence(timeout: 8))
         display.tap()
-        let link = app.buttons["bluetooth-record-link-picpak-kitchen"]
-        for _ in 0..<4 where !link.isHittable { app.swipeUp() }
-        XCTAssertTrue(link.exists)
-        link.tap()
-        app.buttons["Tesserae-A1B2C3 · picpak-a1b2c3"].tap()
-        for _ in 0..<4 where !app.staticTexts["Last Bluetooth Send"].isHittable { app.swipeDown() }
-        XCTAssertTrue(app.staticTexts["Last Bluetooth Send"].exists)
+        // The full MAC associates the BLE record without opening the advanced picker.
+        XCTAssertFalse(app.buttons["bluetooth-record-link-picpak-kitchen"].exists)
+        XCTAssertTrue(app.staticTexts["Current Screen"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["Mode Confirmed"].exists)
+        XCTAssertFalse(app.staticTexts["Last Bluetooth Battery"].exists)
+        XCTAssertFalse(app.staticTexts["Bluetooth Record"].exists)
         let savedPreview = app.descendants(matching: .any)["display-detail-preview-picpak-kitchen"].firstMatch
         XCTAssertEqual(savedPreview.label, "Last Bluetooth Send")
         let savedShot = XCTAttachment(screenshot: app.screenshot())

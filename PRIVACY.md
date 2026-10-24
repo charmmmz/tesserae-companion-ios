@@ -9,6 +9,12 @@ SDK, analytics SDK, tracking, or telemetry.
 - Server addresses, display names, Dashboard names, Job summaries, and
   non-secret connection state remain on the device in the app's shared
   container.
+- Complete Wi-Fi MAC addresses from the paired server and authenticated Bluetooth
+  sessions are used locally to associate the same physical display. After a
+  confirmed Bluetooth photo send, a protected thumbnail with a maximum edge of
+  760 pixels retains the sent crop and original colours. The full original photo
+  is not retained for this record. These records stay on this phone or tablet and
+  are maintained automatically and cleared after a confirmed factory reset or app deletion.
 - The per-client Companion bearer token is stored in the iOS Keychain with a
   device-only accessibility class. It is not stored in UserDefaults or in the
   App Group container.
@@ -34,13 +40,14 @@ SDK, analytics SDK, tracking, or telemetry.
   with their ETags and does not write them to the App Group or photo library.
 - After authenticated Bluetooth diagnostics or a confirmed mode change, the
   app retains the mode and voltage locally. After verified photo reception, it
-  saves one preview per Bluetooth display, decoded from the transmitted pixels
+  saves one preview per Bluetooth display with the sent crop and original colours,
   with a maximum edge of 760 pixels, plus receipt time. These protected files
   live in the app's Application Support directory. Local display associations
   and last server-reported battery readings are also retained. They are not
-  uploaded to the server or photo library and remain until replaced, forgotten
-  from display details, or the app is removed. A factory-reset acknowledgement
-  clears that Bluetooth device's local record.
+  uploaded to the server or photo library. Confirmed Wi-Fi mode reclaims the
+  obsolete Bluetooth thumbnail without requiring the server image to change.
+  Other cached state is replaced by authenticated observations; app
+  deletion or a factory-reset acknowledgement clears the local record.
 - A photo whose upload is interrupted is stored with iOS file protection in
   the App Group so the containing app can retry it with the same idempotency
   key. It is deleted immediately after server acceptance or purged after 24

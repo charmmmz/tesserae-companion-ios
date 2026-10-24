@@ -21,7 +21,7 @@ struct BluetoothPhotoV2Tests {
         (UInt8(9), "Seeed_EE05_213_BWRY", .seeedEE05),
         (UInt8(9), "waveshare_133e6", .waveshare133E6),
         (UInt8(11), "Seeed_EE03", .seeedEE03),
-        (UInt8(11), "picpak_4_2", .picPak42),
+        (UInt8(20), "picpak_4_2", .picPak42),
         (UInt8(12), "PaperMono", .paperMono),
         (UInt8(18), "GoodDisplay_ESP32_133C02", .goodDisplay133),
         (UInt8(19), "Inkplate_13SPECTRA", .inkplate13)
@@ -34,7 +34,21 @@ struct BluetoothPhotoV2Tests {
         #expect(BLESetupHardware.resolve(code: 11, model: "future_panel") == .unknown(11))
         #expect(BLESetupHardware.resolve(code: 4, model: "picpak_4_2") == .unknown(4))
         #expect(BLESetupHardware.resolve(code: 11, model: "Seeed_EE03") != .picPak42)
+        #expect(BLESetupHardware.resolve(code: 20, model: "Seeed_EE03") == .unknown(20))
         #expect(BLESetupAdvertisement(serviceData: Data([2,2,11,0,0,1,0,0,0,1]))?.hardware == .unknown(11))
+    }
+
+    @Test(arguments: [UInt8(11), 20])
+    func picPakDiscoveryPreservesTheWireCodeForBothModes(code: UInt8) throws {
+        for flags: UInt8 in [2, 4] {
+            let advertisement = try #require(BLESetupAdvertisement(
+                serviceData: Data([2, flags, code, 0xA1, 0xB2, 0xC3, 1, 2, 3, 4])
+            ))
+            #expect(advertisement.hardware.rawValue == code)
+            #expect((advertisement.hardware == .picPak42) == (code == 20))
+            #expect(BLESetupHardware.resolve(code: code, model: "picpak_4_2") == (code == 20 ? .picPak42 : .unknown(11)))
+            #expect(advertisement.hardware == (code == 20 ? .picPak42 : .unknown(11)))
+        }
     }
 
     @Test func negotiatedTransferHasItsOwnSizeAndChunkBoundary() throws {

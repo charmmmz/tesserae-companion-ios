@@ -2516,6 +2516,11 @@ components:
       properties:
         id:
           type: string
+        mac:
+          description: Complete Wi-Fi MAC used to associate authenticated Bluetooth records.
+          type: string
+          nullable: true
+          pattern: '^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$'
         name:
           type: string
         kind:

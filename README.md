@@ -129,15 +129,22 @@ PicPak firmware keeps its acknowledged-write path. See the
 Companion keeps the last authenticated Bluetooth mode and battery voltage on
 this phone or tablet. Displays shows Bluetooth mode in place of Wi-Fi signal,
 retains the last server-reported battery percentage and its timestamp, and shows
-the last verified Bluetooth photo with its receipt time. The preview is decoded
-from the transmitted frame; receipt does not confirm physical screen refresh.
-After returning to Automatic, the local photo remains until a newer server
-heartbeat and changed server preview are observed. Records survive app restarts.
+the last verified Bluetooth photo. Its thumbnail preserves the sent crop and
+original colours before e-paper quantization; receipt does not confirm physical screen refresh.
+Servers providing a display's complete Wi-Fi MAC associate it automatically with
+authenticated Bluetooth records. Unassociated displays offer a one-time manual
+association inside Device Details when a unique hardware match is unavailable.
+Once the display confirms Automatic (Wi-Fi), Displays immediately returns to
+the server preview and reclaims the Bluetooth thumbnail, even if the server
+image is unchanged. Unconfirmed or failed mode changes retain the local photo.
+Records survive app restarts and sleeping displays retain their last known state.
 
-Exact device IDs associate automatically within the server where Bluetooth was
-used. If firmware reports different BLE and server IDs (including older PicPak),
-open the display details and choose **Bluetooth Record → Bluetooth Device** only
-after confirming the physical display. The record can be forgotten there.
+Matching canonical device IDs continue to associate within the server where
+Bluetooth was used. Complete MAC matching also supports differing BLE and server
+IDs, including PicPak, without a manual step. Associated displays hide the binding
+picker. Confirmed diagnostics and sends replace cached state, conflicting complete
+MAC evidence repairs obsolete manual associations, and confirmed factory reset
+clears the local record. No separate Forget Bluetooth Record action is needed.
 Earlier uncached photos cannot be recovered, and other phones' operations do
 not sync into this local record.
 

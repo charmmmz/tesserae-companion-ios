@@ -190,6 +190,18 @@ final class NearbyDeviceManager: NSObject {
     private(set) var isLoadingPhotoCapabilities = false
 
     var resolvedHardware: BLESetupHardware? { deviceInfo?.resolvedHardware }
+
+    func hardwarePresentation(for device: NearbyTesseraeDevice) -> DisplayHardwarePresentation {
+        if activeDevice?.suggestionSessionKey == device.suggestionSessionKey, let info = deviceInfo {
+            return DisplayHardwarePresentation(kind: info.model)
+        }
+        if device.mode == .photo, device.photoProtocol == .picPakV1,
+           device.hardware == .picPak42 {
+            return DisplayHardwarePresentation(kind: BLESetupHardware.picPak42.catalogKind)
+        }
+        let hint = displayRecords.hardwareHint(code: device.hardware.rawValue, suffix: device.hardwareSuffix)
+        return DisplayHardwarePresentation(kind: (hint ?? device.hardware).catalogKind)
+    }
     var supportsScreenMode: Bool {
         activeDevice?.mode == .maintenance
             && (resolvedHardware == .picPak42
@@ -262,6 +274,7 @@ final class NearbyDeviceManager: NSObject {
     private let isPicPakUIFixture = ProcessInfo.processInfo.environment[
         "TESSERAE_UI_TEST_PICPAK_BLE"
     ] == "1"
+    private let hasSavedPhotoUIFixture = ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_SAVED_BLUETOOTH_PHOTO"] == "1"
     private let isE1003UIFixture = ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_E1003_BLE"] == "1"
     private var isSetupUIFixture: Bool {
         isPicPakUIFixture || isE1003UIFixture || isUnifiedUIFixture
@@ -290,10 +303,17 @@ final class NearbyDeviceManager: NSObject {
                 name: "Tesserae-A1B2C3", rssi: -45, mode: isPhotoUIFixture ? .photo : .maintenance,
                 hardware: isE1003UIFixture ? .seeedReTerminalE1003
                     : isUnifiedUIFixture ? .seeedReTerminalE1004
-                    : isPhotoUIFixture ? .picPak42 : .unknown(11), hardwareSuffix: "A1B2C3",
+                    : .picPak42, hardwareSuffix: "A1B2C3",
                 sessionID: Data([1, 2, 3, 4]),
                 photoProtocol: isUnifiedUIFixture ? .tesseraeV2 : .picPakV1
             )]
+            if hasSavedPhotoUIFixture {
+                displayRecords.observe(deviceID: "picpak-f85b1ba1b2c3", name: "Kitchen",
+                                       mode: .bluetooth, batteryMillivolts: 3900)
+                let png = try! LocalBluetoothPhotoRenderer.previewPNG(
+                    rgba: Data([200, 70, 90, 255]), width: 1, height: 1)
+                displayRecords.receivedPhoto(deviceID: "picpak-f85b1ba1b2c3", previewPNG: png)
+            }
             return
         }
 #endif
@@ -401,7 +421,7 @@ final class NearbyDeviceManager: NSObject {
             resetConnectionState()
             activeDevice = device
             deviceInfo = BLESetupDeviceInfo(
-                protocol: 2, id: "picpak-a1b2c3", sid: "01020304",
+                protocol: 2, id: "picpak-f85b1ba1b2c3", sid: "01020304",
                 connectionNonce: "000102030405060708090a0b0c0d0e0f",
                 hardware: device.hardware.rawValue,
                 model: isE1003UIFixture ? "seeed_reterminal_e1003"
@@ -699,7 +719,7 @@ final class NearbyDeviceManager: NSObject {
                screenMode == nil {
                 event["screen_mode_error"] = true
             } else if isUnifiedUIFixture || !isE1003UIFixture {
-                event["screen_mode"] = screenMode?.rawValue ?? "wifi"
+                event["screen_mode"] = screenMode?.rawValue ?? (hasSavedPhotoUIFixture ? "bluetooth" : "wifi")
             }
             if let data = try? JSONSerialization.data(withJSONObject: event) {
                 try? handleEvent(data)
@@ -1093,7 +1113,8 @@ final class NearbyDeviceManager: NSObject {
     private func rememberDisplayStatus(mode: BLEScreenMode?, batteryMillivolts: Int? = nil) {
         guard let info = deviceInfo else { return }
         displayRecords.observe(deviceID: info.id, name: activeDevice?.name ?? info.model,
-                               mode: mode, batteryMillivolts: batteryMillivolts)
+                               mode: mode, batteryMillivolts: batteryMillivolts,
+                               hardwareMAC: info.hardwareMAC, hardwareKind: info.model)
     }
 
     func sendPhoto(_ data: Data, to device: NearbyTesseraeDevice, capabilityDigest: String?, previewPNG: Data? = nil) throws {
@@ -1239,7 +1260,7 @@ final class NearbyDeviceManager: NSObject {
         let legacyPhoto = serviceData[CBUUID(string: BLESetupProtocol.photoServiceUUID)] != nil
         let unifiedPhoto = serviceData[CBUUID(string: BLESetupProtocol.unifiedPhotoServiceUUID)] != nil
         guard (advertisement.mode == .photo) == (legacyPhoto || unifiedPhoto),
-              !legacyPhoto || advertisement.hardware.rawValue == 11 else { return nil }
+              !legacyPhoto || advertisement.hardware == .picPak42 else { return nil }
         let suffix = advertisement.hardwareSuffix
         let advertisedName = advertisementData[CBAdvertisementDataLocalNameKey] as? String
         let displayName = advertisedName?.hasPrefix("Tes-") == true
@@ -1250,7 +1271,8 @@ final class NearbyDeviceManager: NSObject {
             name: displayName,
             rssi: rssi.intValue,
             mode: advertisement.mode,
-            hardware: legacyPhoto ? .picPak42 : advertisement.hardware,
+            // Preserve the advertised wire code for the subsequent device-info check.
+            hardware: advertisement.hardware,
             hardwareSuffix: suffix,
             sessionID: advertisement.sessionID,
             photoProtocol: unifiedPhoto ? .tesseraeV2 : .picPakV1
@@ -1465,7 +1487,7 @@ extension NearbyDeviceManager: @preconcurrency CBPeripheralDelegate {
                     let unified = device.photoProtocol == .tesseraeV2
                     let validIdentity = unified
                         ? info.photo == 2 && info.family == "tesserae" && !(info.kind?.isEmpty ?? true)
-                        : info.hardware == 11 && info.model == "picpak_4_2"
+                        : info.resolvedHardware == .picPak42
                     let account = unified ? "tesserae-photo-v2:\(info.id)" : info.id
                     guard validIdentity, photoCharacteristic != nil,
                           let key = BLEPhotoKeyStore.read(account) else {

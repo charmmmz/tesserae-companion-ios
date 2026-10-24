@@ -794,7 +794,7 @@ private struct DisplayDetailView: View {
                     }
 
                     detailRow("Last Seen") {
-                        if let lastSeenAt = currentDisplay.lastSeenAt {
+                        if let lastSeenAt = local.lastSeenAt(fallback: currentDisplay.lastSeenAt) {
                             VStack(alignment: .trailing, spacing: 2) {
                                 Text(lastSeenAt, style: .relative)
                                 Text(
@@ -817,6 +817,9 @@ private struct DisplayDetailView: View {
                     detailRow("Battery") {
                         VStack(alignment: .trailing, spacing: 3) {
                             Text(local.batteryText)
+                            if let voltage = local.voltageText, voltage != local.batteryText {
+                                Text(voltage).font(.caption).foregroundStyle(.secondary)
+                            }
                             if let date = local.batteryDate {
                                 Text(date, format: .dateTime.month().day().hour().minute())
                                     .font(.caption2).foregroundStyle(.secondary)
@@ -824,33 +827,10 @@ private struct DisplayDetailView: View {
                         }
                     }
 
-                    if local.isBluetooth {
-                        if let date = local.record?.modeConfirmedAt {
-                            detailRow("Mode Confirmed") {
-                                Text(date, format: .dateTime.month().day().hour().minute())
-                            }
-                        }
-                        Text("Last confirmed on this device. Bluetooth may be disconnected while the display sleeps.")
-                            .font(.footnote).foregroundStyle(.secondary)
-                    } else {
+                    if !local.isBluetooth {
                         detailRow("Signal") {
                             Text(currentDisplay.rssiDBM.map { "\($0) dBm" } ?? String(localized: "Not reported"))
                         }
-                    }
-                    if let voltage = local.voltageText, let date = local.record?.batteryRecordedAt {
-                        detailRow("Last Bluetooth Battery") {
-                            VStack(alignment: .trailing, spacing: 3) {
-                                Text(voltage)
-                                Text(date, format: .dateTime.month().day().hour().minute())
-                                    .font(.caption2).foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
-
-                if !nearby.displayRecords.records.isEmpty {
-                    detailCard("Bluetooth Record", systemImage: "link") {
-                        BluetoothRecordLinkView(displayID: currentDisplay.id)
                     }
                 }
 
@@ -1207,12 +1187,7 @@ private struct DisplayDetailView: View {
 
     private var screenCarouselCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if local.usesLocalPreview {
-                Label("Last Bluetooth Send", systemImage: "photo")
-                    .font(.headline)
-            } else {
-                screenPageHeader
-            }
+            screenPageHeader
 
             TabView(selection: Binding(get: { visibleScreenPage }, set: { selectedScreenPage = $0 })) {
                 currentScreenPreview
@@ -1231,12 +1206,6 @@ private struct DisplayDetailView: View {
                 "display-screen-carousel-\(currentDisplay.id)"
             )
 
-            if local.usesLocalPreview, let date = local.record?.photoReceivedAt {
-                Text(date, format: .dateTime.year().month().day().hour().minute())
-                    .font(.caption).foregroundStyle(.secondary)
-                Text("The display confirmed receipt. Screen refresh completion is not reported.")
-                    .font(.footnote).foregroundStyle(.secondary)
-            }
             if currentDisplay.pendingRender != nil && !local.isBluetooth && !local.usesLocalPreview {
                 screenPageIndicator
             }
@@ -1260,7 +1229,7 @@ private struct DisplayDetailView: View {
 
     private var screenPageHeader: some View {
         ZStack(alignment: .leading) {
-            Label(local.isBluetooth ? String(localized: "Last Server Preview") : String(localized: "Current Screen"), systemImage: "display")
+            Label(local.isBluetooth && !local.usesLocalPreview ? String(localized: "Last Server Preview") : String(localized: "Current Screen"), systemImage: "display")
                 .font(.headline)
                 .opacity(visibleScreenPage == .current ? 1 : 0)
                 .accessibilityHidden(visibleScreenPage != .current)
@@ -1428,6 +1397,8 @@ private struct DisplayDetailView: View {
 }
 
 private struct DisplayDeviceDetails: View {
+    @Environment(AppModel.self) private var model
+    @Environment(NearbyDeviceManager.self) private var nearby
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let display: DisplaySummary
     @State private var isExpanded = false
@@ -1482,6 +1453,11 @@ private struct DisplayDeviceDetails: View {
 
                 detailRow("Colour Gamut") {
                     Text(display.gamutLabel)
+                }
+
+                if !nearby.displayRecords.manualLinkCandidates(for: display.id, serverID: model.activeInstance?.id).isEmpty {
+                    Divider()
+                    BluetoothRecordLinkView(displayID: display.id)
                 }
             }
         }

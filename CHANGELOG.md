@@ -13,6 +13,11 @@ capabilities.
 
 ### Added
 
+- Displays automatically associates authenticated Bluetooth records with the
+  current server's displays using a complete, unique Wi-Fi MAC address. Confirmed
+  Bluetooth mode appears immediately. Device Details offers manual association
+  only while a compatible record remains unassociated.
+
 - Displays retains the last confirmed Bluetooth mode, battery readings, and
   verified Bluetooth photo preview locally across app restarts. Details show
   timestamps and allow explicit association when BLE and server IDs differ.
@@ -49,15 +54,26 @@ capabilities.
 
 ### Changed
 
-- Bluetooth photo previews retain the original colours and the exact sent crop,
-  rather than showing the e-paper's quantized pixels. Only confirmed sends replace
-  the saved thumbnail. Existing processed previews update after the next send.
-
 - Nearby Setup & Maintenance keeps a concise entry guide visible alongside
   discovered displays, with Refresh Button and PicPak Button timings, the
   20-second hold limit, code scanning, and session timeout and exit instructions
   in English and Chinese.
 
+- Bluetooth records are maintained automatically: newer confirmed state replaces
+  old state, confirmed Wi-Fi mode restores server previews and reclaims Bluetooth
+  thumbnails even when the server image is unchanged,
+  and a confirmed factory reset clears the record. Associated displays no longer
+  show a binding picker or Forget Bluetooth Record button. Conflicting full MAC
+  evidence repairs stale manual associations without discarding device state.
+- Nearby maintenance uses remembered authenticated model information for a unique
+  hardware hint. Ambiguous broadcasts show Nearby Display until identified,
+  instead of labelling a known PicPak as Custom display.
+
+- Bluetooth photo previews retain the original colours and the exact sent crop,
+  rather than showing the e-paper's quantized pixels. Only confirmed sends replace
+  the saved thumbnail. Existing processed previews update after the next send.
+- Display details reuse Status, Last Seen and Battery for Bluetooth information;
+  duplicate Bluetooth fields and explanatory blocks have been removed.
 - Dashboard component settings now show title/value rows, inline switches,
   searchable groups by control type, and dedicated editing pages containing
   help and reset actions. Read-only fields display the server's explanation.
@@ -114,6 +130,10 @@ capabilities.
 
 - Long-pressing or dragging a Display card to reorder it no longer opens its
   details when released. A separate tap still opens the display normally.
+
+- Switching a display back to confirmed Wi-Fi mode immediately restores its
+  server preview, including when that image has not changed. Existing stale
+  Bluetooth thumbnails are reclaimed automatically on app launch.
 
 - Dashboard push and Lineup preview sheets keep a continuous background below
   the action button, removing the mismatched strip along the bottom edge.

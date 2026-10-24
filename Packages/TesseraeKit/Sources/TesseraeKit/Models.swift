@@ -471,6 +471,7 @@ public struct PendingRender: Codable, Hashable, Sendable {
 
 public struct DisplaySummary: Codable, Identifiable, Hashable, Sendable {
     public let id: String
+    public let mac: String?
     public let name: String
     public let kind: String
     public let iconName: String
@@ -497,9 +498,11 @@ public struct DisplaySummary: Codable, Identifiable, Hashable, Sendable {
         firmwareVersion: String? = nil,
         capabilitySupport: [String: DeviceCapabilitySupport]? = nil,
         hasPendingRender: Bool? = nil,
-        pendingRender: PendingRender? = nil
+        pendingRender: PendingRender? = nil,
+        mac: String? = nil
     ) {
         self.id = id
+        self.mac = mac
         self.name = name
         self.kind = kind
         self.iconName = iconName
@@ -516,6 +519,7 @@ public struct DisplaySummary: Codable, Identifiable, Hashable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case id
+        case mac
         case name
         case kind
         case iconName = "icon"

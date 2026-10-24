@@ -8,10 +8,10 @@ import TesseraeKit
 struct BluetoothDisplayStoreTests {
     private let start = Date(timeIntervalSince1970: 1_700_000_000)
 
-    private func display(id: String = "panel", percent: Int? = 73, seen: Date? = nil) -> DisplaySummary {
+    private func display(id: String = "panel", percent: Int? = 73, seen: Date? = nil, mac: String? = nil) -> DisplaySummary {
         DisplaySummary(id: id, name: "Desk", kind: "test_panel", iconName: "display",
             panel: PanelProfile(width: 4, height: 2, gamut: "bwry_4", orientation: "landscape"),
-            freshness: .stale, lastSeenAt: seen, batteryPercent: percent)
+            freshness: .stale, lastSeenAt: seen, batteryPercent: percent, mac: mac)
     }
 
     @Test func recordsSurviveRestartAndUnconfirmedWorkCannotReplaceTheImage() throws {
@@ -65,7 +65,7 @@ struct BluetoothDisplayStoreTests {
         #expect(store.presentation(for: display(percent: nil), serverID: "other").batteryText == "—")
     }
 
-    @Test func wifiNeedsBothANewerHeartbeatAndAChangedServerPreview() {
+    @Test func confirmedWiFiImmediatelyRestoresServerPreviewEvenWhenUnchanged() {
         let store = BluetoothDisplayStore(fileURL: nil)
         store.activeServerID = "home"
         func preview(_ token: String) -> [String: PreviewImageState] {
@@ -74,17 +74,24 @@ struct BluetoothDisplayStoreTests {
         store.observeServer(displays: [display(seen: start)], previews: preview("old"), serverID: "home", at: start)
         store.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: nil, at: start)
         store.receivedPhoto(deviceID: "panel", previewPNG: Data([2]), at: start)
+        #expect(store.presentation(for: display(), serverID: "home").usesLocalPreview)
+        // No acknowledged mode change: interrupted or failed work keeps the photo.
+        store.observe(deviceID: "panel", name: "Desk", mode: nil, batteryMillivolts: nil,
+                      at: start.addingTimeInterval(1))
+        #expect(store.presentation(for: display(), serverID: "home").usesLocalPreview)
         let resumed = start.addingTimeInterval(30)
         store.observe(deviceID: "panel", name: "Desk", mode: .wifi, batteryMillivolts: nil, at: resumed)
         func usesLocal() -> Bool { store.presentation(for: display(), serverID: "home").usesLocalPreview }
+        #expect(!usesLocal()) // No new heartbeat, image change or subsequent server fetch required.
+        #expect(store.record(for: "panel", serverID: "home")?.previewPNG == nil)
         store.observeServer(displays: [display(seen: start)], previews: preview("old"), serverID: "home", at: resumed.addingTimeInterval(1))
-        #expect(usesLocal())
+        #expect(!usesLocal())
         store.observeServer(displays: [display(seen: start)], previews: preview("new"), serverID: "home", at: resumed.addingTimeInterval(2))
-        #expect(usesLocal())
+        #expect(!usesLocal())
         store.observeServer(displays: [display(seen: resumed.addingTimeInterval(3))], previews: preview("new"), serverID: "home", at: resumed.addingTimeInterval(3))
         #expect(!usesLocal())
         store.observe(deviceID: "panel", name: "Desk", mode: .wifi, batteryMillivolts: nil, at: resumed.addingTimeInterval(10))
-        #expect(!usesLocal()) // Same-mode readback does not move the recovery boundary.
+        #expect(!usesLocal())
         #expect(store.record(for: "panel", serverID: "home")?.modeConfirmedAt == resumed.addingTimeInterval(10))
         // Missing or older heartbeat fields cannot bring an obsolete Bluetooth image back.
         store.observeServer(displays: [display(seen: nil)], previews: [:], serverID: "home")
@@ -95,7 +102,7 @@ struct BluetoothDisplayStoreTests {
         store.receivedPhoto(deviceID: "panel", previewPNG: Data([3]), at: resumed.addingTimeInterval(20))
         #expect(usesLocal())
         store.observe(deviceID: "panel", name: "Desk", mode: .wifi, batteryMillivolts: nil, at: resumed.addingTimeInterval(25))
-        #expect(usesLocal())
+        #expect(!usesLocal())
         store.observeServer(displays: [display(seen: resumed.addingTimeInterval(30))], previews: preview("newer"),
                             serverID: "home", at: resumed.addingTimeInterval(30))
         #expect(!usesLocal())
@@ -103,40 +110,152 @@ struct BluetoothDisplayStoreTests {
         #expect(store.record(for: "panel", serverID: "home") == nil)
     }
 
-    @Test func previewsDecodeQuantizedColorsAndPicPakBottomUpRows() throws {
-        let caps = try BluetoothPhotoV2Tests.capabilities()
-        let png = try LocalBluetoothPhotoRenderer.previewPNG(frame: Data([0x1b, 0xe4]), capabilities: caps)
-        #expect(try pixels(png) == [0,0,0,255, 255,255,255,255, 255,255,0,255, 255,0,0,255,
-                                    255,0,0,255, 255,255,0,255, 255,255,255,255, 0,0,0,255])
-        var frame = Data(repeating: 0, count: 30000)
-        frame.replaceSubrange(0..<100, with: repeatElement(UInt8(0xff), count: 100))
-        let legacy = try LocalBluetoothPhotoRenderer.previewPNG(frame: frame, capabilities: nil)
-        let decoded = try pixels(legacy)
-        #expect(Array(decoded.prefix(4)) == [0,0,0,255])
-        #expect(Array(decoded.suffix(4)) == [255,0,0,255])
+    @Test(arguments: [false, true])
+    func startupReclaimsOldWiFiThumbnailsButPreservesLaterPhotos(photoAfterWiFi: Bool) throws {
+        let file = URL.temporaryDirectory.appending(path: UUID().uuidString + ".plist")
+        defer { try? FileManager.default.removeItem(at: file) }
+        let store = BluetoothDisplayStore(fileURL: file)
+        store.activeServerID = "home"
+        store.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: 3900, at: start)
+        store.receivedPhoto(deviceID: "panel", previewPNG: Data([2]), at: start)
+        // Reproduce an on-disk record created before the Wi-Fi cache fix.
+        var plist = try #require(PropertyListSerialization.propertyList(from: Data(contentsOf: file), format: nil) as? [String: Any])
+        var records = try #require(plist["records"] as? [String: [String: Any]])
+        var record = try #require(records["panel"])
+        record["mode"] = "wifi"
+        record["modeConfirmedAt"] = start.addingTimeInterval(30)
+        record["modeChangedAt"] = start.addingTimeInterval(30)
+        record["photoReceivedAt"] = photoAfterWiFi ? start.addingTimeInterval(40) : start
+        records["panel"] = record
+        plist["records"] = records
+        try PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0).write(to: file)
+
+        let restored = BluetoothDisplayStore(fileURL: file)
+        let value = restored.presentation(for: display(), serverID: "home")
+        #expect(value.usesLocalPreview == photoAfterWiFi)
+        #expect((value.record?.previewPNG != nil) == photoAfterWiFi)
+        #expect(value.record?.mode == .wifi)
+        #expect(value.record?.batteryMillivolts == 3900)
+        let reloaded = BluetoothDisplayStore(fileURL: file)
+        #expect(reloaded.presentation(for: display(), serverID: "home").usesLocalPreview == photoAfterWiFi)
     }
 
-    @Test func previewOmitsHiddenColumnsAndRejectsTruncatedFrames() throws {
-        let original = try BluetoothPhotoV2Tests.capabilities()
-        var json = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(original)) as? [String: Any])
-        json["visible_width"] = 2
-        json["x_offset"] = 1
-        let caps = try JSONDecoder().decode(BluetoothPhotoCapabilities.self, from: JSONSerialization.data(withJSONObject: json))
-        let png = try LocalBluetoothPhotoRenderer.previewPNG(frame: Data([0x1b, 0x1b]), capabilities: caps)
-        #expect(try pixels(png) == [255,255,255,255, 255,255,0,255, 255,255,255,255, 255,255,0,255])
-        #expect(throws: BluetoothPhotoError.invalidPixels) {
-            try LocalBluetoothPhotoRenderer.previewPNG(frame: Data([0x1b]), capabilities: caps)
+    @Test func fullMACAutomaticallyAssociatesAndMarksOnlyConfirmedBluetoothMode() throws {
+        let file = URL.temporaryDirectory.appending(path: UUID().uuidString + ".plist")
+        defer { try? FileManager.default.removeItem(at: file) }
+        let store = BluetoothDisplayStore(fileURL: file)
+        // A maintenance session may happen before connecting to a server.
+        let info = try JSONDecoder().decode(BLESetupDeviceInfo.self, from: Data(#"{"protocol":2,"id":"picpak-f85b1b4fe844","sid":"01020304","connection_nonce":"000102030405060708090a0b0c0d0e0f","hardware":20,"model":"picpak_4_2","firmware":"0.9.10","mode":"maintenance"}"#.utf8))
+        #expect(info.hardwareMAC == "f8:5b:1b:4f:e8:44")
+        store.observe(deviceID: info.id, name: "Nearby", mode: nil, batteryMillivolts: nil, hardwareMAC: info.hardwareMAC)
+        let target = display(id: "renamed-red-frame", mac: "F8-5B-1B-4F-E8-44")
+        store.observeServer(displays: [target], previews: [:], serverID: "home")
+        #expect(!store.presentation(for: target, serverID: "home").isBluetooth)
+        store.observe(deviceID: "picpak-f85b1b4fe844", name: "Nearby", mode: .bluetooth,
+                      batteryMillivolts: 4100, at: start)
+        #expect(store.presentation(for: target, serverID: "home").isBluetooth)
+        #expect(store.presentation(for: target, serverID: "home").lastSeenAt(fallback: nil) == start)
+        #expect(store.record(for: target.id, serverID: "other") == nil)
+        let restored = BluetoothDisplayStore(fileURL: file)
+        #expect(restored.presentation(for: target, serverID: "home").isBluetooth)
+    }
+
+    @Test func MACAssociationRejectsAmbiguityAndRespectsManualOverrides() {
+        let store = BluetoothDisplayStore(fileURL: nil)
+        store.observe(deviceID: "picpak-f85b1b4fe844", name: "Frame", mode: .bluetooth, batteryMillivolts: nil)
+        let target = display(id: "red", mac: "f8:5b:1b:4f:e8:44")
+        let duplicate = display(id: "duplicate", mac: "f85b1b4fe844")
+        store.observeServer(displays: [target, duplicate], previews: [:], serverID: "home")
+        #expect(store.record(for: "red", serverID: "home") == nil)
+        store.observeServer(displays: [target], previews: [:], serverID: "home")
+        #expect(store.record(for: "red", serverID: "home")?.mode == .bluetooth)
+        store.link(nil, to: "red", serverID: "home")
+        #expect(store.record(for: "red", serverID: "home") == nil)
+        store.link("picpak-f85b1b4fe844", to: "different", serverID: "elsewhere")
+        #expect(store.record(for: "red", serverID: "home") == nil)
+
+        let ambiguous = BluetoothDisplayStore(fileURL: nil)
+        ambiguous.observeServer(displays: [target], previews: [:], serverID: "home")
+        for id in ["first", "second"] {
+            ambiguous.observe(deviceID: id, name: "Frame", mode: .bluetooth, batteryMillivolts: nil,
+                              hardwareMAC: target.mac)
         }
+        #expect(ambiguous.record(for: "red", serverID: "home") == nil)
     }
 
-    private func pixels(_ png: Data) throws -> [UInt8] {
-        let image = try #require(UIImage(data: png)?.cgImage)
-        var bytes = [UInt8](repeating: 0, count: image.width * image.height * 4)
-        let context = try #require(CGContext(data: &bytes, width: image.width, height: image.height,
-            bitsPerComponent: 8, bytesPerRow: image.width * 4, space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue))
-        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
-        return bytes
+    @Test func shortMACSuffixCannotAutomaticallyAssociate() {
+        let store = BluetoothDisplayStore(fileURL: nil)
+        store.activeServerID = "home"
+        store.observe(deviceID: "picpak-4fe844", name: "Red", mode: .bluetooth, batteryMillivolts: nil)
+        store.observeServer(displays: [display(id: "red", mac: "f8:5b:1b:4f:e8:44")], previews: [:], serverID: "home")
+        #expect(store.record(for: "red", serverID: "home") == nil)
+    }
+
+    @Test func canonicalServerIDsRemainCompatibleWithNativeFirmware() {
+        let store = BluetoothDisplayStore(fileURL: nil)
+        store.activeServerID = "home"
+        store.observe(deviceID: "native-panel", name: "Desk", mode: .bluetooth, batteryMillivolts: nil)
+        store.observeServer(displays: [display(id: "native-panel", mac: "f8:5b:1b:4f:e8:44")],
+                            previews: [:], serverID: "home")
+        #expect(store.record(for: "native-panel", serverID: "home")?.mode == .bluetooth)
+        #expect(store.record(for: "native-panel", serverID: "other") == nil)
+    }
+
+    @Test func bindingControlsDisappearAfterAssociationAndRejectConflictingMACs() {
+        let store = BluetoothDisplayStore(fileURL: nil)
+        store.observe(deviceID: "picpak-f85b1b4fe844", name: "Red", mode: .bluetooth, batteryMillivolts: nil)
+        store.observe(deviceID: "picpak-f85b1b4f0700", name: "Blue", mode: .bluetooth, batteryMillivolts: nil)
+        #expect(store.manualLinkCandidates(for: "legacy", serverID: "home").count == 2)
+        store.link("picpak-f85b1b4fe844", to: "legacy", serverID: "home")
+        #expect(store.manualLinkCandidates(for: "legacy", serverID: "home").isEmpty)
+
+        // Complete hardware evidence repairs a historical manual mismatch without deleting the record.
+        store.observeServer(displays: [display(id: "legacy", mac: "f8:5b:1b:4f:07:00")], previews: [:], serverID: "home")
+        #expect(store.record(for: "legacy", serverID: "home")?.id == "picpak-f85b1b4f0700")
+        #expect(store.manualLinkCandidates(for: "legacy", serverID: "home").isEmpty)
+        store.link("picpak-f85b1b4fe844", to: "legacy", serverID: "home")
+        #expect(store.record(for: "legacy", serverID: "home")?.id == "picpak-f85b1b4f0700")
+        #expect(store.records.count == 2)
+    }
+
+    @Test func confirmedWiFiReclaimsPreviewButSleepingDisplaysKeepTheirState() throws {
+        let file = URL.temporaryDirectory.appending(path: UUID().uuidString + ".plist")
+        defer { try? FileManager.default.removeItem(at: file) }
+        let store = BluetoothDisplayStore(fileURL: file)
+        store.activeServerID = "home"
+        let oldPreview = PreviewImageState(data: Data([1]), eTag: "old", phase: .ready)
+        store.observeServer(displays: [display(seen: start)], previews: ["panel": oldPreview], serverID: "home", at: start)
+        store.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: 3900, at: start)
+        store.receivedPhoto(deviceID: "panel", previewPNG: Data([2]), at: start)
+        let later = start.addingTimeInterval(60 * 60 * 24 * 30)
+        store.observeServer(displays: [display(seen: start)], previews: ["panel": oldPreview], serverID: "home", at: later)
+        #expect(store.record(for: "panel", serverID: "home")?.previewPNG == Data([2]))
+        #expect(store.record(for: "panel", serverID: "home")?.mode == .bluetooth)
+
+        store.observe(deviceID: "panel", name: "Desk", mode: .wifi, batteryMillivolts: nil, at: later)
+        let restored = BluetoothDisplayStore(fileURL: file)
+        #expect(restored.record(for: "panel", serverID: "home")?.mode == .wifi)
+        #expect(restored.record(for: "panel", serverID: "home")?.previewPNG == nil)
+        #expect(restored.record(for: "panel", serverID: "home")?.photoReceivedAt == nil)
+        restored.remove(deviceID: "panel")
+        #expect(restored.records.isEmpty)
+        #expect(restored.record(for: "panel", serverID: "home") == nil)
+    }
+
+    @Test func rememberedHardwareIsOnlyAUniquePresentationHint() {
+        let store = BluetoothDisplayStore(fileURL: nil)
+        #expect(store.hardwareHint(code: 20, suffix: "4FE844") == nil)
+        store.observe(deviceID: "picpak-f85b1b4fe844", name: "Red", mode: nil, batteryMillivolts: nil)
+        #expect(store.hardwareHint(code: 20, suffix: "4FE844") == .picPak42)
+        #expect(store.hardwareHint(code: 8, suffix: "4FE844") == nil)
+        #expect(store.records.first?.mode == nil)
+        #expect(store.record(for: "unrelated", serverID: "home") == nil)
+        store.observe(deviceID: "picpak-aabbcc4fe844", name: "Other", mode: nil, batteryMillivolts: nil)
+        #expect(store.hardwareHint(code: 20, suffix: "4FE844") == nil)
+        let ee03 = BluetoothDisplayStore(fileURL: nil)
+        ee03.observe(deviceID: "ee03", name: "Seeed", mode: nil, batteryMillivolts: nil,
+            hardwareMAC: "f8:5b:1b:4f:e8:44", hardwareKind: "seeed_ee03")
+        #expect(ee03.hardwareHint(code: 11, suffix: "4FE844") == .seeedEE03)
     }
 
     @Test func originalThumbnailPreservesColoursRowsAndBoundedSize() throws {
