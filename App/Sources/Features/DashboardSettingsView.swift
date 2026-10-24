@@ -153,9 +153,7 @@ struct DashboardSettingsView: View {
             pushTarget = dashboard
           } label: {
             Label("Push", systemImage: "paperplane.fill")
-              .labelStyle(.iconOnly)
-              .font(.body.weight(.semibold))
-              .frame(width: 44, height: 44)
+              .tesseraeIconActionLabel()
               .background(.regularMaterial, in: Circle())
               .shadow(color: .black.opacity(0.12), radius: 3, y: 2)
           }

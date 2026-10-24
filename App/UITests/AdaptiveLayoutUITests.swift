@@ -145,6 +145,13 @@ final class AdaptiveLayoutUITests: XCTestCase {
         let push = app.buttons["Push to Kitchen"]
         XCTAssertTrue(push.waitForExistence(timeout: 5))
         XCTAssertTrue(push.isEnabled)
+        let cancel = app.buttons["Cancel"]
+        let web = app.descendants(matching: .any)["dashboard-open-web"].firstMatch
+        for action in [cancel, web] {
+            XCTAssertTrue(action.isHittable)
+            XCTAssertGreaterThanOrEqual(action.frame.width, 44 - 0.01)
+            XCTAssertGreaterThanOrEqual(action.frame.height, 44 - 0.01)
+        }
         capture("Dashboard push modal", app: app)
         XCUIDevice.shared.orientation = .landscapeLeft
         XCTAssertTrue(push.isEnabled)

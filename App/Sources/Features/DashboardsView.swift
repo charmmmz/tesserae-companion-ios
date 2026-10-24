@@ -1132,15 +1132,12 @@ struct DashboardPreviewActionSheet: View {
             Button("Cancel", systemImage: "xmark") {
                 dismiss()
             }
-            .labelStyle(.iconOnly)
             .tesseraeModalChromeButtonStyle()
-            .controlSize(.large)
             .disabled(isSubmitting)
             Spacer()
             if let webURL {
                 Link(destination: webURL) {
                     Label("Open in Tesserae", systemImage: "safari")
-                        .labelStyle(.iconOnly)
                 }
                 .tesseraeModalChromeButtonStyle()
                 .accessibilityIdentifier("dashboard-open-web")

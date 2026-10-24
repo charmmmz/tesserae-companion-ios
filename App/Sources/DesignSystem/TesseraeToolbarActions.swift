@@ -9,7 +9,7 @@ struct TesseraeToolbarActions<Actions: View>: ToolbarContent {
     var body: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
             // One item keeps all actions in the same native capsule.
-            HStack(spacing: 4) {
+            HStack(spacing: TesseraeActionMetrics.spacing) {
                 actions
             }
             .labelStyle(.iconOnly)
@@ -26,11 +26,8 @@ private struct TesseraeToolbarButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 20))
-            .imageScale(.medium)
+            .tesseraeIconActionLabel()
             .foregroundStyle(isEnabled ? TesseraeTheme.accent : .secondary)
-            .frame(width: 44, height: 44)
-            .contentShape(Rectangle())
             .opacity(configuration.isPressed ? 0.5 : 1)
     }
 }

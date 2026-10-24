@@ -217,7 +217,10 @@ final class LineupsUITests: XCTestCase {
         selectionScreenshot.name = "Lineup Dashboard selection paper background"
         selectionScreenshot.lifetime = .keepAlways
         add(selectionScreenshot)
-        app.navigationBars["Dashboards"].buttons.firstMatch.tap()
+        let selectionDone = app.buttons["lineup-editor-dashboards-done"]
+        XCTAssertGreaterThanOrEqual(selectionDone.frame.width, 44 - 0.01)
+        XCTAssertGreaterThanOrEqual(selectionDone.frame.height, 44 - 0.01)
+        selectionDone.tap()
 
         let saveButton = app.buttons["lineup-editor-save"]
         XCTAssertTrue(saveButton.isEnabled)
@@ -290,6 +293,9 @@ final class LineupsUITests: XCTestCase {
         app.buttons["lineup-editor-displays"].tap()
         app.buttons["lineup-editor-display-picpak-kitchen"].tap()
         app.buttons["lineup-editor-display-e1004-desk"].tap()
+        let selectionDone = app.buttons["lineup-editor-displays-done"]
+        XCTAssertGreaterThanOrEqual(selectionDone.frame.width, 44 - 0.01)
+        XCTAssertGreaterThanOrEqual(selectionDone.frame.height, 44 - 0.01)
         let targets = XCTAttachment(screenshot: app.screenshot())
         targets.name = "Daily target overrides"
         targets.lifetime = .keepAlways
@@ -350,6 +356,9 @@ final class LineupsUITests: XCTestCase {
         app.buttons["lineup-editor-duration-photo-frame"].tap()
         XCTAssertTrue(app.pickerWheels.firstMatch.waitForExistence(timeout: 2))
         app.pickerWheels.element(boundBy: 1).adjust(toPickerWheelValue: "10 min")
+        let durationDone = app.buttons["lineup-duration-done"]
+        XCTAssertGreaterThanOrEqual(durationDone.frame.width, 44 - 0.01)
+        XCTAssertGreaterThanOrEqual(durationDone.frame.height, 44 - 0.01)
         attachEditor(app, name: "Duration sheet — compact, dark")
         app.buttons["Done"].tap()
         XCTAssertTrue(app.buttons["lineup-editor-duration-photo-frame"].label.contains("10 minutes"))
@@ -468,6 +477,10 @@ final class LineupsUITests: XCTestCase {
         duration.tap()
         XCTAssertTrue(app.pickerWheels.firstMatch.waitForExistence(timeout: 2))
         app.pickerWheels.element(boundBy: 0).adjust(toPickerWheelValue: "48 hr")
+        let durationDone = app.buttons["lineup-duration-done"]
+        XCTAssertTrue(durationDone.isHittable)
+        XCTAssertGreaterThanOrEqual(durationDone.frame.width, 44 - 0.01)
+        XCTAssertGreaterThanOrEqual(durationDone.frame.height, 44 - 0.01)
         attachEditor(app, name: "Duration sheet — accessibility text, 48 hours")
         app.buttons["Done"].tap()
         app.buttons["lineup-editor-save"].tap()

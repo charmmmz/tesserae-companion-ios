@@ -436,7 +436,6 @@ private struct LineupEditorView: View {
                     Task { await save() }
                 }
                 .labelStyle(.iconOnly)
-                .fontWeight(.semibold)
                 .disabled(isLoading || isSaving || !draft.isValid)
                 .accessibilityHint(draft.validationMessage ?? "")
                 .accessibilityIdentifier("lineup-editor-save")
@@ -994,7 +993,7 @@ private struct LineupDisplayPicker: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if allowsDashboardBindings {
-                ToolbarItem(placement: .confirmationAction) {
+                TesseraeToolbarActions {
                     Button("Done", systemImage: "checkmark") { dismiss() }
                         .labelStyle(.iconOnly)
                         .accessibilityIdentifier("lineup-editor-displays-done")
@@ -1246,7 +1245,7 @@ private struct LineupDashboardPicker: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if !isSingleSelection {
-                ToolbarItem(placement: .confirmationAction) {
+                TesseraeToolbarActions {
                     Button("Done", systemImage: "checkmark") { dismiss() }
                         .labelStyle(.iconOnly)
                         .accessibilityIdentifier("lineup-editor-dashboards-done")
@@ -1254,6 +1253,7 @@ private struct LineupDashboardPicker: View {
             }
         }
         .searchable(text: $query, prompt: "Search Dashboards")
+        .searchPresentationToolbarBehavior(.avoidHidingContent)
         .tesseraeHapticFeedback(trigger: hapticEvent)
     }
 
@@ -1348,10 +1348,8 @@ private struct LineupDwellEditor: View {
                         .accessibilityAddTraits(.isHeader)
                     Spacer(minLength: 0)
                     Button("Done", systemImage: "checkmark") { dismiss() }
-                        .labelStyle(.iconOnly)
-                        .fontWeight(.semibold)
                         .tesseraeModalChromeButtonStyle()
-                        .controlSize(.large)
+                        .accessibilityIdentifier("lineup-duration-done")
                 }
 
                 Text("Time on screen")
@@ -1369,6 +1367,7 @@ private struct LineupDwellEditor: View {
             }
         }
         .scrollBounceBehavior(.basedOnSize)
+        .tesseraeScreenBackground()
         .presentationDetents([.height(contentHeight)])
         .accessibilityIdentifier("lineup-duration-sheet")
     }

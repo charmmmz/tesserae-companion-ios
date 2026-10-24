@@ -84,31 +84,23 @@ struct DashboardSettingChoicesView<Details: View>: View {
     .scrollContentBackground(.hidden)
     .tesseraeScreenBackground()
     .accessibilityIdentifier("dashboard-setting-choices")
-    .safeAreaInset(edge: .bottom) {
-      HStack {
-        Spacer()
-        Button("Done", systemImage: "checkmark") { dismiss() }
-          .labelStyle(.iconOnly)
-          .buttonStyle(.borderedProminent)
-          .controlSize(.large)
-          .accessibilityIdentifier("dashboard-choices-done")
-      }
-      .accessibilityElement(children: .contain)
-      .padding(.horizontal).padding(.vertical, 10)
-      .background(.bar)
-    }
     .navigationTitle(input.label)
     .navigationBarTitleDisplayMode(.inline)
     .searchable(
       text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Choices"
     )
+    .searchPresentationToolbarBehavior(.avoidHidingContent)
     .toolbar {
       TesseraeToolbarActions {
         Button {
           Task { await load(offset: 0) }
         } label: {
           Label("Refresh Choices", systemImage: "arrow.clockwise")
-        }.disabled(isLoading)
+        }
+        .disabled(isLoading)
+        .accessibilityIdentifier("dashboard-choices-refresh")
+        Button("Done", systemImage: "checkmark") { dismiss() }
+          .accessibilityIdentifier("dashboard-choices-done")
       }
     }
     .task(id: query) {

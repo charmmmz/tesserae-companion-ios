@@ -7,6 +7,10 @@ For SwiftUI work, follow the UI conventions in `DESIGN.md` and reuse
   `TesseraeRootToolbar`, which adds the shared Send and Settings actions.
   Do not create separate trailing toolbar items, local button sizing, or custom
   capsule backgrounds in feature views.
+- Pushed selection pages use the same capsule, including single Done actions.
+  Custom sheet-header icons use `.tesseraeModalChromeButtonStyle()`; preview
+  overlays use `.tesseraeIconActionLabel()` so Dynamic Type cannot overflow
+  their action targets. These shared helpers own sizing and icon styling.
 - Keep native Back and modal Cancel/Done in their semantic placements. Use
   accessible SF Symbol labels for simple Save/Done, Cancel/Close, Back, and Add
   actions. Keep complex operations and destructive confirmations descriptive.

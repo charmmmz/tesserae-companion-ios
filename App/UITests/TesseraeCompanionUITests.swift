@@ -94,6 +94,9 @@ final class TesseraeCompanionUITests: XCTestCase {
         add(recoveryShot)
         app.buttons["offline-nearby-devices"].tap()
         XCTAssertTrue(app.navigationBars["Nearby Displays"].waitForExistence(timeout: 3))
+        let nearbyDone = app.buttons["nearby-displays-done"]
+        XCTAssertTrue(nearbyDone.isHittable)
+        XCTAssertGreaterThan(nearbyDone.frame.midX, app.frame.midX)
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "Offline Bluetooth maintenance"
         shot.lifetime = .keepAlways

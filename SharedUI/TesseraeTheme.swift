@@ -186,6 +186,12 @@ struct ReorderDragPreview<Icon: View>: View {
     }
 }
 
+enum TesseraeActionMetrics {
+    static let iconSize: CGFloat = 20
+    static let targetSize: CGFloat = 44
+    static let spacing: CGFloat = 4
+}
+
 private struct TesseraeScreenBackdrop: View {
     var body: some View {
         TesseraeTheme.background
@@ -214,8 +220,27 @@ extension View {
         modifier(TesseraeScreenBackgroundModifier())
     }
 
+    func tesseraeIconActionLabel() -> some View {
+        labelStyle(.iconOnly)
+            .font(.system(size: TesseraeActionMetrics.iconSize))
+            .imageScale(.medium)
+            .frame(width: TesseraeActionMetrics.targetSize, height: TesseraeActionMetrics.targetSize)
+            .contentShape(Rectangle())
+    }
+
     @ViewBuilder
     func tesseraeModalChromeButtonStyle() -> some View {
+        modalChromeButtonStyle()
+            .labelStyle(.iconOnly)
+            .font(.system(size: TesseraeActionMetrics.iconSize))
+            .imageScale(.medium)
+            .controlSize(.large)
+            .frame(minWidth: TesseraeActionMetrics.targetSize, minHeight: TesseraeActionMetrics.targetSize)
+            .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private func modalChromeButtonStyle() -> some View {
 #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
             buttonStyle(.glass)

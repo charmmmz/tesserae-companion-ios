@@ -64,6 +64,10 @@ capabilities.
 - Page action capsules share one DesignSystem component across root and detail
   pages, including Dashboard settings, display details, Library folders and
   Lineups. Icons, touch targets, spacing and disabled states stay consistent.
+- Dashboard choice and Lineup selection pages use the shared action capsule.
+  Duration sheets use the paper backdrop, modal header icons share sizing, and
+  Dashboard preview actions keep their symbols inside the target at large text
+  sizes. Nearby Displays puts Done in the standard confirmation position.
 
 - Nearby Setup & Maintenance keeps a concise entry guide visible alongside
   discovered displays, with Refresh Button and PicPak Button timings, the

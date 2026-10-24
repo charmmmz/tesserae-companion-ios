@@ -47,6 +47,9 @@ final class DashboardSettingsUITests: XCTestCase {
     let preview = app.descendants(matching: .any)["dashboard-settings-preview"].firstMatch
     XCTAssertTrue(preview.waitForExistence(timeout: 3))
     XCTAssertGreaterThan(preview.frame.height, 200)
+    let previewPush = app.buttons["dashboard-settings-push"]
+    XCTAssertEqual(previewPush.frame.width, 44, accuracy: 0.5)
+    XCTAssertEqual(previewPush.frame.height, 44, accuracy: 0.5)
     XCTAssertFalse(app.staticTexts["Preview and Push"].exists)
     XCTAssertFalse(app.buttons["dashboard-settings-save"].isEnabled)
     let more = app.buttons["dashboard-settings-more"]
@@ -193,6 +196,7 @@ final class DashboardSettingsUITests: XCTestCase {
     XCTAssertTrue(search.waitForExistence(timeout: 4))
     search.tap()
     search.typeText("Work")
+    XCTAssertTrue(app.buttons["dashboard-choices-done"].isHittable)
     let work = app.buttons["dashboard-choice-work"]
     XCTAssertTrue(work.waitForExistence(timeout: 4))
     work.tap()
@@ -253,6 +257,9 @@ final class DashboardSettingsUITests: XCTestCase {
 
   func testComponentChoicesChineseLargeTextDarkLayout() {
     let app = openDashboard(layout: "list", chineseLargeText: true)
+    let previewPush = app.buttons["dashboard-settings-push"]
+    XCTAssertEqual(previewPush.frame.width, 44, accuracy: 0.5)
+    XCTAssertEqual(previewPush.frame.height, 44, accuracy: 0.5)
     let overviewShot = XCTAttachment(screenshot: app.screenshot())
     overviewShot.name = "Dashboard settings Chinese AX5 dark"
     overviewShot.lifetime = .keepAlways
@@ -272,10 +279,20 @@ final class DashboardSettingsUITests: XCTestCase {
     XCTAssertTrue(move.isHittable && move.isEnabled)
     move.tap()
     XCTAssertFalse(move.isEnabled)
+    let refresh = app.buttons["dashboard-choices-refresh"]
+    let done = app.buttons["dashboard-choices-done"]
+    for action in [refresh, done] {
+      XCTAssertTrue(action.isHittable)
+      XCTAssertGreaterThanOrEqual(action.frame.width, 44 - 0.01)
+      XCTAssertGreaterThanOrEqual(action.frame.height, 44 - 0.01)
+    }
+    XCTAssertEqual(refresh.frame.midY, done.frame.midY, accuracy: 0.5)
     let attachment = XCTAttachment(screenshot: app.screenshot())
     attachment.name = "Chinese AX5 dark component choices"
     attachment.lifetime = .keepAlways
     add(attachment)
+    done.tap()
+    XCTAssertTrue(app.buttons["dashboard-field-choices-demo-album-players"].waitForExistence(timeout: 3))
   }
 
   /// Uses only unbound, disposable copies and the phone's existing pairing.

@@ -220,6 +220,13 @@ check rejects direct trailing `ToolbarItem`/`ToolbarItemGroup` declarations outs
 the shared component. Relevant simulator flows and screenshot inspection still
 verify appearance and behavior.
 
+Pushed selection pages follow the same rule, grouping Refresh and Done in the
+trailing capsule. Custom sheet-header actions use
+`.tesseraeModalChromeButtonStyle()` for consistent native chrome and minimum
+44-point targets; ordinary sheets, including the Lineup duration picker, keep
+the paper backdrop. Preview-overlay actions use `.tesseraeIconActionLabel()`
+to preserve their target and symbol sizes at accessibility text sizes.
+
 ### Explicitly out of scope for release 1.0
 
 - full Canvas/Dashboard layout or source-code editing;

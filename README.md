@@ -34,8 +34,8 @@ Tesserae Companion connects directly to your own Tesserae server, with a built-i
   <tr>
     <td align="center"><a href="docs/images/readme/displays.png"><img src="docs/images/readme/displays.png" width="220" alt="Displays overview with hardware, battery, Wi-Fi status, and quick actions"></a></td>
     <td align="center"><a href="docs/images/readme/dashboards.png"><img src="docs/images/readme/dashboards.png" width="220" alt="Saved Dashboards grouped by display with preview and push actions"></a></td>
-    <td align="center"><a href="docs/images/readme/dashboard-native-settings.png"><img src="docs/images/readme/dashboard-native-settings.png" width="220" alt="Native Dashboard settings with paper background, the shared More and Save capsule, preview, and configuration controls"></a></td>
-    <td align="center"><a href="docs/images/readme/lineup-editor.png"><img src="docs/images/readme/lineup-editor.png" width="220" alt="Native Lineup editor with icon actions, a target display, and selected Dashboards"></a></td>
+    <td align="center"><a href="docs/images/readme/dashboard-settings-actions.png"><img src="docs/images/readme/dashboard-settings-actions.png" width="220" alt="Native Dashboard settings with paper background, shared actions, preview, and configuration controls"></a></td>
+    <td align="center"><a href="docs/images/readme/lineup-editor-actions.png"><img src="docs/images/readme/lineup-editor-actions.png" width="220" alt="Native Lineup editor with consistent icon actions, a target display, and selected Dashboards"></a></td>
   </tr>
   <tr>
     <td align="center"><sub><strong>Displays</strong><br>Status and current content</sub></td>
@@ -63,7 +63,7 @@ Tesserae Companion connects directly to your own Tesserae server, with a built-i
 <table>
   <tr>
     <td align="center"><a href="docs/images/readme/dashboard-components.png"><img src="docs/images/readme/dashboard-components.png" width="220" alt="Dashboard widget settings grouped into selections, text, and numbers"></a></td>
-    <td align="center"><a href="docs/images/readme/lineup-selection.png"><img src="docs/images/readme/lineup-selection.png" width="220" alt="Lineup Dashboard selection with two saved Dashboards in playback order"></a></td>
+    <td align="center"><a href="docs/images/readme/lineup-selection-actions.png"><img src="docs/images/readme/lineup-selection-actions.png" width="220" alt="Lineup Dashboard selection with shared Done action and two saved Dashboards in playback order"></a></td>
     <td align="center"><a href="docs/images/readme/offline-album.png"><img src="docs/images/readme/offline-album.png" width="220" alt="Offline Album review with a photo summary and display readiness checks"></a></td>
     <td align="center"><a href="docs/images/readme/gallery-upload-details.png"><img src="docs/images/readme/gallery-upload-details.png" width="220" alt="Photo upload details grouped by Gallery folder"></a></td>
   </tr>
@@ -72,6 +72,14 @@ Tesserae Companion connects directly to your own Tesserae server, with a built-i
     <td align="center"><sub><strong>Lineup selection</strong><br>Choose and order content</sub></td>
     <td align="center"><sub><strong>Offline Albums</strong><br>Review display readiness</sub></td>
     <td align="center"><sub><strong>Uploads</strong><br>Follow individual photos</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><a href="docs/images/readme/dashboard-choices.png"><img src="docs/images/readme/dashboard-choices.png" width="220" alt="Dashboard choices with ordered selections and a shared Refresh and Done capsule"></a></td>
+    <td colspan="2" align="center"><a href="docs/images/readme/lineup-duration.png"><img src="docs/images/readme/lineup-duration.png" width="220" alt="Lineup duration picker with consistent Done action and dark paper background"></a></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><sub><strong>Choice settings</strong><br>Select and prioritize values</sub></td>
+    <td colspan="2" align="center"><sub><strong>Duration picker</strong><br>Set time on screen</sub></td>
   </tr>
 </table>
 
