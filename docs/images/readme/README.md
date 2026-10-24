@@ -5,10 +5,13 @@ Unless noted below, captured on 24 October 2026 from app source
 
 `lineup-editor.png` and `bluetooth-maintenance.png` use the simple-action icons
 from [`45f6c07f013e60c8ad3946a6ed7c7e0d6ad4b3db`](https://github.com/charmmmz/tesserae-companion-ios/commit/45f6c07f013e60c8ad3946a6ed7c7e0d6ad4b3db).
-The four editing-detail screenshots show the nested-page paper background fix;
-`dashboard-settings.png` shows the shared More/Save capsule. These captures were
-made on the same date and simulator and are committed with their UI corrections
-in Git history.
+The four editing-detail screenshots show the nested-page paper background fix.
+`dashboard-native-settings.png` and `gallery-folder-actions.png` were recaptured
+from [`a23a2cff10e79796d5020341ad181f17dc7c70c9`](https://github.com/charmmmz/tesserae-companion-ios/commit/a23a2cff10e79796d5020341ad181f17dc7c70c9)
+after extracting the shared toolbar component into DesignSystem. Both the README
+thumbnail and its link use the new filenames instead of reusing the older image
+URLs. These captures were made on the same date and simulator; their source
+changes and screenshot refreshes are recorded in Git history.
 
 - iPhone 18 Pro Simulator, iOS 27.0, English, light appearance.
 - Original 1206 × 2622 PNG captures; no resizing, compositing or image retouching.
@@ -21,9 +24,9 @@ in Git history.
 | --- | --- |
 | `displays.png` | Demo Mode → Displays |
 | `dashboards.png` | Demo Mode → Dashboards, expanded display groups |
-| `dashboard-settings.png` | Pantry → native settings, shared More/Save capsule, before editing |
+| `dashboard-native-settings.png` | Pantry → native settings, shared More/Save capsule, before editing |
 | `lineup-editor.png` | New Manual Lineup, icon actions, selected display and two Dashboards |
-| `gallery.png` | Library → family folder, square image grid |
+| `gallery-folder-actions.png` | Library → family folder, square image grid and shared More/Add capsule |
 | `send-photo.png` | Send → Use Sample, centered Fill with framing controls |
 | `activity.png` | Demo Mode → Activity |
 | `bluetooth-maintenance.png` | Simulated PicPak → authenticated Maintenance, current battery status |
@@ -47,5 +50,7 @@ xcrun simctl status_bar <simulator-udid> clear
 XCTest captures can be exported with `xcrun xcresulttool export attachments`.
 Keep sample content visibly distinct from live personal data, avoid keyboards,
 transient sheets and mid-gesture frames, and verify each selected image before
-replacing the files. See the root [README](../../../README.md) for server and
+replacing the files. Give visibly changed captures a new descriptive filename,
+update both `href` and `src` in the root README, and remove unused older assets.
+See the root [README](../../../README.md) for server and
 firmware capability requirements.
