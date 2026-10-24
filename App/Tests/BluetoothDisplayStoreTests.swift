@@ -20,7 +20,7 @@ struct BluetoothDisplayStoreTests {
         let file = directory.appending(path: "records.plist")
         let store = BluetoothDisplayStore(fileURL: file)
         store.activeServerID = "home"
-        store.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: 3900, at: start)
+        store.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: 3900, batteryPercent: 65, at: start)
         let png = try LocalBluetoothPhotoRenderer.previewPNG(rgba: Data([20, 100, 180, 255]), width: 1, height: 1)
         store.receivedPhoto(deviceID: "panel", previewPNG: png, at: start)
         // New diagnostics, missing battery values, and an empty preview cannot erase the last received image.
@@ -31,6 +31,8 @@ struct BluetoothDisplayStoreTests {
         #expect(record.mode == .bluetooth)
         #expect(record.modeConfirmedAt == start)
         #expect(record.batteryMillivolts == 3900)
+        #expect(record.batteryPercent == 65)
+        #expect(record.batteryPercentRecordedAt == start)
         #expect(record.previewPNG == png)
         #expect(record.photoReceivedAt == start)
         #expect(restored.storageError == nil)
@@ -63,6 +65,73 @@ struct BluetoothDisplayStoreTests {
         #expect(value.batteryDate == start)
         #expect(value.voltageText != nil)
         #expect(store.presentation(for: display(percent: nil), serverID: "other").batteryText == "—")
+    }
+
+    @Test func latestPercentageWinsAcrossTransportsAndVoltageOnlyRepliesDoNotRefreshIt() {
+        let store = BluetoothDisplayStore(fileURL: nil)
+        store.activeServerID = "home"
+        store.observeServer(displays: [display(seen: start)], previews: [:], serverID: "home", at: start)
+        let bleDate = start.addingTimeInterval(20)
+        store.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: 3900,
+                      batteryPercent: 65, at: bleDate)
+        func value() -> DisplayBluetoothPresentation {
+            // Even a non-cached server fallback cannot override the more recent BLE sample.
+            store.presentation(for: display(percent: 90, seen: start.addingTimeInterval(-10)), serverID: "home")
+        }
+        #expect(value().batteryText == "65%")
+        #expect(value().batteryDate == bleDate)
+        let wifiDate = start.addingTimeInterval(40)
+        store.observeServer(displays: [display(percent: 60, seen: wifiDate)], previews: [:], serverID: "home")
+        #expect(value().batteryText == "60%")
+        #expect(value().batteryDate == wifiDate)
+        store.observe(deviceID: "panel", name: "Desk", mode: nil, batteryMillivolts: 4200,
+                      batteryPercent: 100, at: start.addingTimeInterval(10))
+        #expect(store.record(for: "panel", serverID: "home")?.batteryPercent == 65)
+        store.observe(deviceID: "panel", name: "Desk", mode: nil, batteryMillivolts: 3800,
+                      at: start.addingTimeInterval(60))
+        #expect(value().batteryText == "60%")
+        #expect(value().batteryDate == wifiDate)
+        #expect(value().record?.batteryPercentRecordedAt == bleDate)
+        #expect(value().record?.batteryMillivolts == 3800)
+    }
+
+    @Test func pollingAnUndatedServerPercentageDoesNotMakeItNewerThanBluetooth() {
+        let store = BluetoothDisplayStore(fileURL: nil)
+        store.activeServerID = "home"
+        store.observeServer(displays: [display()], previews: [:], serverID: "home", at: start)
+        store.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: 3900,
+                      batteryPercent: 65, at: start.addingTimeInterval(20))
+        store.observeServer(displays: [display()], previews: [:], serverID: "home", at: start.addingTimeInterval(40))
+        let result = store.presentation(for: display(), serverID: "home")
+        #expect(result.batteryText == "65%")
+        #expect(result.batteryDate == start.addingTimeInterval(20))
+        #expect(store.serverRecord(displayID: "panel", serverID: "home")?.batteryRecordedAt == nil)
+        // First seeing an undated cache after the BLE measurement also cannot outrank it.
+        store.observeServer(displays: [display(percent: 90)], previews: [:], serverID: "other", at: start.addingTimeInterval(60))
+        store.link("panel", to: "panel", serverID: "other")
+        #expect(store.presentation(for: display(percent: 90), serverID: "other").batteryText == "65%")
+    }
+
+    @Test func voltageOnlyFirmwareKeepsVoltageInDetailsWithoutInventingPercentage() {
+        let store = BluetoothDisplayStore(fileURL: nil)
+        store.activeServerID = "home"
+        store.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: 3900, at: start)
+        let result = store.presentation(for: display(percent: nil), serverID: "home")
+        #expect(result.batteryText == "—")
+        #expect(result.voltageText != nil)
+        #expect(result.batteryDate == start)
+    }
+
+    @Test func anUndatedPercentageCannotBorrowTheVoltageMeasurementTime() {
+        let store = BluetoothDisplayStore(fileURL: nil)
+        store.activeServerID = "home"
+        store.observeServer(displays: [display()], previews: [:], serverID: "home", at: start)
+        store.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: 3900,
+                      at: start.addingTimeInterval(20))
+        let result = store.presentation(for: display(), serverID: "home")
+        #expect(result.batteryText == "73%")
+        #expect(result.batteryDate == nil)
+        #expect(result.voltageText != nil)
     }
 
     @Test func confirmedWiFiImmediatelyRestoresServerPreviewEvenWhenUnchanged() {

@@ -449,7 +449,12 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Image Fit"].exists)
         let deviceInfo = app.buttons["ble-photo-device-info"]
         XCTAssertTrue(deviceInfo.exists)
-        XCTAssertTrue(app.staticTexts["Battery voltage: 3.90 V"].exists)
+        XCTAssertTrue(app.staticTexts["Battery: 65%"].exists)
+        let voltage = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "3.90 V")).firstMatch
+        XCTAssertFalse(voltage.exists)
+        deviceInfo.tap()
+        XCTAssertTrue(voltage.waitForExistence(timeout: 2))
+        deviceInfo.tap()
         XCTAssertTrue(app.staticTexts["Refresh speed: 5 s"].exists)
         deviceInfo.tap()
         let infoShot = XCTAttachment(screenshot: app.screenshot())
@@ -600,6 +605,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.buttons["ble-photo-start"].tap()
         XCTAssertTrue(app.navigationBars["Send Photo over Bluetooth"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.navigationBars["Send to PicPak"].exists)
+        XCTAssertTrue(app.staticTexts["Battery: 65%"].exists)
         let resolution = app.descendants(matching: .any)["ble-photo-resolution"].firstMatch
         XCTAssertTrue(resolution.waitForExistence(timeout: 3))
         if e1003 {

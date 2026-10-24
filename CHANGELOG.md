@@ -13,6 +13,11 @@ capabilities.
 
 ### Added
 
+- Bluetooth battery status uses device-reported percentages in photo and
+  maintenance views. Displays selects the newest dated percentage from Bluetooth
+  or server status; polling cached server values does not refresh their age.
+  Voltage remains in device details, and missing percentages remain unknown.
+
 - Displays automatically associates authenticated Bluetooth records with the
   current server's displays by submitting a complete Wi-Fi MAC already known
   from Bluetooth to an authenticated lookup. Device lists do not expose MACs;

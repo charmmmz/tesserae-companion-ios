@@ -14,6 +14,8 @@ struct BluetoothDisplayRecord: Codable, Equatable, Identifiable {
     var modeChangedAt: Date?
     var batteryMillivolts: Int?
     var batteryRecordedAt: Date?
+    var batteryPercent: Int?
+    var batteryPercentRecordedAt: Date?
     var previewPNG: Data?
     var photoReceivedAt: Date?
 
@@ -141,7 +143,8 @@ final class BluetoothDisplayStore {
     }
 
     func observe(deviceID: String, name: String, mode: BLEScreenMode?, batteryMillivolts: Int?,
-                 hardwareMAC: String? = nil, hardwareKind: String? = nil, at date: Date = Date()) {
+                 batteryPercent: Int? = nil, hardwareMAC: String? = nil, hardwareKind: String? = nil,
+                 at date: Date = Date()) {
         var record = snapshot.records[deviceID] ?? BluetoothDisplayRecord(id: deviceID, name: name)
         record.name = name
         if let hardwareKind { record.hardwareKind = hardwareKind }
@@ -162,9 +165,15 @@ final class BluetoothDisplayStore {
                 record.photoReceivedAt = nil
             }
         }
-        if let batteryMillivolts, (2500...5000).contains(batteryMillivolts) {
+        if let batteryMillivolts, (2500...5000).contains(batteryMillivolts),
+           record.batteryRecordedAt.map({ date >= $0 }) ?? true {
             record.batteryMillivolts = batteryMillivolts
             record.batteryRecordedAt = date
+        }
+        if let batteryPercent, (0...100).contains(batteryPercent),
+           record.batteryPercentRecordedAt.map({ date >= $0 }) ?? true {
+            record.batteryPercent = batteryPercent
+            record.batteryPercentRecordedAt = date
         }
         snapshot.records[deviceID] = record
         discardConflictingLinks()
@@ -230,13 +239,13 @@ final class BluetoothDisplayStore {
         }
         for display in displays {
             var entry = entries[display.id] ?? DisplayServerRecord()
-            let batteryDate = display.lastSeenAt ?? date
-            if let percent = display.batteryPercent, (0...100).contains(percent),
-               entry.batteryRecordedAt.map({ batteryDate >= $0 }) ?? true {
-                if entry.batteryPercent != percent || (display.lastSeenAt != nil && entry.batteryRecordedAt != display.lastSeenAt) {
-                    entry.batteryRecordedAt = display.lastSeenAt ?? date
-                }
+            // Unknown sample times stay unknown. Poll time is not measurement time.
+            let acceptsBattery = display.lastSeenAt.map { incoming in
+                entry.batteryRecordedAt.map { incoming >= $0 } ?? true
+            } ?? (entry.batteryRecordedAt == nil)
+            if let percent = display.batteryPercent, (0...100).contains(percent), acceptsBattery {
                 entry.batteryPercent = percent
+                entry.batteryRecordedAt = display.lastSeenAt
             }
             // Restored or incomplete server snapshots must not erase newer evidence.
             if let seenAt = display.lastSeenAt, entry.lastSeenAt.map({ seenAt > $0 }) ?? true {
@@ -321,18 +330,29 @@ struct DisplayBluetoothPresentation {
     var isBluetooth: Bool { record?.mode == .bluetooth }
     func lastSeenAt(fallback: Date?) -> Date? {
         guard isBluetooth, let record else { return server?.lastSeenAt ?? fallback }
-        return [record.modeConfirmedAt, record.batteryRecordedAt, record.photoReceivedAt]
+        return [record.modeConfirmedAt, record.batteryRecordedAt, record.batteryPercentRecordedAt, record.photoReceivedAt]
             .compactMap { $0 }.max()
     }
     var batteryText: String {
-        if let percent = server?.batteryPercent ?? fallbackPercent, (0...100).contains(percent) { return "\(percent)%" }
-        return voltageText ?? "—"
+        latestBattery.map { "\($0.percent)%" } ?? "—"
+    }
+    private var latestBattery: (percent: Int, date: Date?)? {
+        var latest: (percent: Int, date: Date?)?
+        // Prefer the authenticated local sample on a timestamp tie.
+        for (percent, date) in [(record?.batteryPercent, record?.batteryPercentRecordedAt),
+                                (server?.batteryPercent, server?.batteryRecordedAt),
+                                (fallbackPercent, fallbackBatteryDate)] {
+            guard let percent, (0...100).contains(percent) else { continue }
+            if let current = latest, (date ?? .distantPast) <= (current.date ?? .distantPast) { continue }
+            latest = (percent, date)
+        }
+        return latest
     }
     var voltageText: String? {
         record?.batteryMillivolts.map { (Double($0) / 1000).formatted(.number.precision(.fractionLength(2))) + " V" }
     }
     var batteryDate: Date? {
-        if server?.batteryPercent != nil || fallbackPercent != nil { return server?.batteryRecordedAt ?? fallbackBatteryDate }
+        if let reading = latestBattery { return reading.date }
         return record?.batteryRecordedAt
     }
     var preview: PreviewImageState? {

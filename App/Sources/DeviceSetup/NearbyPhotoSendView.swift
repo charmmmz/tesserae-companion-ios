@@ -255,10 +255,8 @@ struct NearbyPhotoSendView: View {
                 if let firmware = nearby.deviceInfo?.firmware {
                     LabeledContent("Firmware", value: firmware)
                 }
-                if nearby.photoDeviceStatus?.batteryMillivolts != nil {
-                    Text("Battery measured when PicPak woke up.")
-                        .font(.caption).foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                if let voltage = nearby.photoDeviceStatus?.voltageText {
+                    LabeledContent("Voltage", value: voltage)
                 }
             }
             .font(.footnote)
@@ -278,7 +276,7 @@ struct NearbyPhotoSendView: View {
     private var deviceStatusLabels: some View {
         if let battery = nearby.photoDeviceStatus?.batteryText {
             Label(battery, systemImage: "battery.100")
-                .accessibilityLabel("Battery voltage: \(battery)")
+                .accessibilityLabel("Battery: \(battery)")
         }
         if nearby.photoDeviceStatus?.lowBattery == true {
             Label("Low Battery", systemImage: "exclamationmark.battery")
