@@ -1,3 +1,4 @@
+import CoreBluetooth
 import Foundation
 import Testing
 import UIKit
@@ -21,7 +22,7 @@ struct BluetoothPhotoV2Tests {
         (UInt8(9), "Seeed_EE05_213_BWRY", .seeedEE05),
         (UInt8(9), "waveshare_133e6", .waveshare133E6),
         (UInt8(11), "Seeed_EE03", .seeedEE03),
-        (UInt8(11), "picpak_4_2", .picPak42),
+        (UInt8(20), "picpak_4_2", .picPak42),
         (UInt8(12), "PaperMono", .paperMono),
         (UInt8(18), "GoodDisplay_ESP32_133C02", .goodDisplay133),
         (UInt8(19), "Inkplate_13SPECTRA", .inkplate13)
@@ -31,10 +32,48 @@ struct BluetoothPhotoV2Tests {
     }
 
     @Test func unknownAndMismatchedModelsNeverGetPicPakControls() {
+        #expect(BLESetupHardware.resolve(code: 11, model: "picpak_4_2") == .unknown(11))
         #expect(BLESetupHardware.resolve(code: 11, model: "future_panel") == .unknown(11))
         #expect(BLESetupHardware.resolve(code: 4, model: "picpak_4_2") == .unknown(4))
         #expect(BLESetupHardware.resolve(code: 11, model: "Seeed_EE03") != .picPak42)
+        #expect(BLESetupHardware.resolve(code: 20, model: "Seeed_EE03") == .unknown(20))
+        #expect(BLESetupHardware.resolve(code: 20, model: "picpak_future_panel") == .unknown(20))
         #expect(BLESetupAdvertisement(serviceData: Data([2,2,11,0,0,1,0,0,0,1]))?.hardware == .unknown(11))
+    }
+
+    @MainActor
+    @Test(arguments: [NearbyDeviceMode.setup, .maintenance, .photo])
+    func picPakDiscoveryUsesAssignedCodeForConnectedIdentity(mode: NearbyDeviceMode) throws {
+        let service = mode == .photo ? BLESetupProtocol.photoServiceUUID : BLESetupProtocol.serviceUUID
+        let flags: UInt8 = mode == .photo ? 4 : mode == .maintenance ? 2 : 1
+        let device = try #require(NearbyDeviceManager.decodeAdvertisement(
+            id: UUID(),
+            advertisementData: [CBAdvertisementDataServiceDataKey: [
+                CBUUID(string: service): Data([2, flags, 20, 0xA1, 0xB2, 0xC3, 1, 2, 3, 4])
+            ]],
+            rssi: -50
+        ))
+        #expect(device.mode == mode)
+        #expect(device.hardware == .picPak42)
+        let info = BLESetupDeviceInfo(
+            protocol: 2, id: "picpak-test", sid: "01020304",
+            connectionNonce: "000102030405060708090a0b0c0d0e0f",
+            hardware: 20, model: "picpak_4_2", firmware: "test", mode: mode.rawValue
+        )
+        #expect(info.hardware == device.hardware.rawValue)
+        #expect(info.resolvedHardware == .picPak42)
+    }
+
+    @MainActor
+    @Test(arguments: [UInt8(4), 11, 12, 19, 21])
+    func picPakPhotoServiceRejectsOtherAndLegacyHardwareCodes(code: UInt8) {
+        #expect(NearbyDeviceManager.decodeAdvertisement(
+            id: UUID(),
+            advertisementData: [CBAdvertisementDataServiceDataKey: [
+                CBUUID(string: BLESetupProtocol.photoServiceUUID): Data([2, 4, code, 0, 0, 1, 1, 2, 3, 4])
+            ]],
+            rssi: -50
+        ) == nil)
     }
 
     @Test func negotiatedTransferHasItsOwnSizeAndChunkBoundary() throws {

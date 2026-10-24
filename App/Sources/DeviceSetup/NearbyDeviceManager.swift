@@ -290,7 +290,7 @@ final class NearbyDeviceManager: NSObject {
                 name: "Tesserae-A1B2C3", rssi: -45, mode: isPhotoUIFixture ? .photo : .maintenance,
                 hardware: isE1003UIFixture ? .seeedReTerminalE1003
                     : isUnifiedUIFixture ? .seeedReTerminalE1004
-                    : isPhotoUIFixture ? .picPak42 : .unknown(11), hardwareSuffix: "A1B2C3",
+                    : .picPak42, hardwareSuffix: "A1B2C3",
                 sessionID: Data([1, 2, 3, 4]),
                 photoProtocol: isUnifiedUIFixture ? .tesseraeV2 : .picPakV1
             )]
@@ -1223,10 +1223,10 @@ final class NearbyDeviceManager: NSObject {
         isLoadingPhotoCapabilities = false
     }
 
-    private func decodeAdvertisement(
-        peripheral: CBPeripheral,
+    static func decodeAdvertisement(
+        id: UUID,
         advertisementData: [String: Any],
-        rssi: NSNumber
+        rssi: Int
     ) -> NearbyTesseraeDevice? {
         guard
             let serviceData = advertisementData[CBAdvertisementDataServiceDataKey]
@@ -1239,18 +1239,18 @@ final class NearbyDeviceManager: NSObject {
         let legacyPhoto = serviceData[CBUUID(string: BLESetupProtocol.photoServiceUUID)] != nil
         let unifiedPhoto = serviceData[CBUUID(string: BLESetupProtocol.unifiedPhotoServiceUUID)] != nil
         guard (advertisement.mode == .photo) == (legacyPhoto || unifiedPhoto),
-              !legacyPhoto || advertisement.hardware.rawValue == 11 else { return nil }
+              !legacyPhoto || advertisement.hardware == .picPak42 else { return nil }
         let suffix = advertisement.hardwareSuffix
         let advertisedName = advertisementData[CBAdvertisementDataLocalNameKey] as? String
         let displayName = advertisedName?.hasPrefix("Tes-") == true
             ? "Tesserae-\(suffix)"
             : advertisedName ?? "Tesserae-\(suffix)"
         return NearbyTesseraeDevice(
-            id: peripheral.identifier,
+            id: id,
             name: displayName,
-            rssi: rssi.intValue,
+            rssi: rssi,
             mode: advertisement.mode,
-            hardware: legacyPhoto ? .picPak42 : advertisement.hardware,
+            hardware: advertisement.hardware,
             hardwareSuffix: suffix,
             sessionID: advertisement.sessionID,
             photoProtocol: unifiedPhoto ? .tesseraeV2 : .picPakV1
@@ -1274,10 +1274,10 @@ extension NearbyDeviceManager: @preconcurrency CBCentralManagerDelegate {
         advertisementData: [String: Any],
         rssi RSSI: NSNumber
     ) {
-        guard let device = decodeAdvertisement(
-            peripheral: peripheral,
+        guard let device = Self.decodeAdvertisement(
+            id: peripheral.identifier,
             advertisementData: advertisementData,
-            rssi: RSSI
+            rssi: RSSI.intValue
         ) else { return }
         let now = Date()
         if lastSeenScanGeneration[device.id] == scanGeneration,
@@ -1465,7 +1465,7 @@ extension NearbyDeviceManager: @preconcurrency CBPeripheralDelegate {
                     let unified = device.photoProtocol == .tesseraeV2
                     let validIdentity = unified
                         ? info.photo == 2 && info.family == "tesserae" && !(info.kind?.isEmpty ?? true)
-                        : info.hardware == 11 && info.model == "picpak_4_2"
+                        : info.resolvedHardware == .picPak42
                     let account = unified ? "tesserae-photo-v2:\(info.id)" : info.id
                     guard validIdentity, photoCharacteristic != nil,
                           let key = BLEPhotoKeyStore.read(account) else {
