@@ -40,6 +40,7 @@ struct NearbyDeviceDiagnostics: Equatable, Sendable {
     let firmware: String
     let model: String
     let batteryMillivolts: Int
+    let batteryPercent: Int?
     let freeHeapBytes: Int
     let resetReason: Int
     let isWiFiConfigured: Bool
@@ -55,7 +56,9 @@ struct NearbyDeviceDiagnostics: Equatable, Sendable {
     init(event: [String: Any]) {
         firmware = event["firmware"] as? String ?? "—"
         model = event["model"] as? String ?? "—"
-        batteryMillivolts = event["battery_mv"] as? Int ?? 0
+        let battery = BLEBatteryReading(event: event)
+        batteryMillivolts = battery.millivolts ?? 0
+        batteryPercent = battery.percent
         freeHeapBytes = event["free_heap"] as? Int ?? 0
         resetReason = event["reset_reason"] as? Int ?? 0
         isWiFiConfigured = event["wifi_configured"] as? Bool ?? false
@@ -709,7 +712,7 @@ final class NearbyDeviceManager: NSObject {
         case "diagnostics":
             var event: [String: Any] = [
                 "event": "diagnostics", "firmware": deviceInfo?.firmware ?? "0.9.3",
-                "model": deviceInfo?.model ?? "picpak_4_2", "battery_mv": 3900,
+                "model": deviceInfo?.model ?? "picpak_4_2", "battery_mv": 3900, "battery_pct": 65,
                 "wifi_configured": true, "server_configured": true,
                 "ssid": "Home Wi-Fi",
             ]
@@ -744,7 +747,7 @@ final class NearbyDeviceManager: NSObject {
         case "photo_info":
             var info: [String: Any] = ["event": "photo_info", "version": 1, "width": 400, "height": 300,
                                  "bytes": 30000, "chunk_bytes": 192, "format": BLEPhotoTransfer.format,
-                                 "battery_mv": 3900, "low_battery": false,
+                                 "battery_mv": 3900, "battery_pct": 65, "low_battery": false,
                                  "refresh_speed": "5s", "screen_mode": "bluetooth"]
             if isFastPhotoUIFixture {
                 info["max_window"] = 4
@@ -759,7 +762,8 @@ final class NearbyDeviceManager: NSObject {
                 "visible_width": width, "visible_height": height, "x_offset": 0,
                 "format": isE1003UIFixture ? "gray4-msb" : "spectra6-msb",
                 "stride": width / 2, "bytes": width * height / 2, "chunk_bytes": 384, "max_window": 4,
-                "digest": String(repeating: "a", count: 64), "row_order": "top_down", "lifecycle": "manual"])
+                "digest": String(repeating: "a", count: 64), "row_order": "top_down", "lifecycle": "manual",
+                "battery_mv": 3900, "battery_pct": 65])
         case "photo_begin":
             fixturePhotoReceivedOffset = 0
             fixturePhotoPacketOffsets = []
@@ -870,7 +874,8 @@ final class NearbyDeviceManager: NSObject {
         case "diagnostics":
             diagnostics = NearbyDeviceDiagnostics(event: object)
             screenMode = diagnostics?.screenMode
-            rememberDisplayStatus(mode: screenMode, batteryMillivolts: diagnostics?.batteryMillivolts)
+            rememberDisplayStatus(mode: screenMode, batteryMillivolts: diagnostics?.batteryMillivolts,
+                                  batteryPercent: diagnostics?.batteryPercent)
             screenModeNeedsReadback = false
             photoAuthorized = photoKeyAccount.map { BLEPhotoKeyStore.read($0) != nil } ?? false
             refreshSpeedSetting.receiveDiagnostics(
@@ -893,7 +898,9 @@ final class NearbyDeviceManager: NSObject {
             guard capabilities.kind == deviceInfo?.kind else { throw BLESetupProtocolError.unexpectedDevice }
             // The device's format declaration is authoritative, never its BLE number.
             photoCapabilities = capabilities
-            rememberDisplayStatus(mode: .bluetooth)
+            photoDeviceStatus = BLEPhotoDeviceStatus(event: object)
+            rememberDisplayStatus(mode: .bluetooth, batteryMillivolts: photoDeviceStatus?.batteryMillivolts,
+                                  batteryPercent: photoDeviceStatus?.batteryPercent)
             photoTransportCapabilities = try JSONDecoder().decode(BLEPhotoTransportCapabilities.self, from: data)
             isLoadingPhotoCapabilities = false
             photoTimeoutTask?.cancel()
@@ -939,7 +946,8 @@ final class NearbyDeviceManager: NSObject {
             photoTransportCapabilities = try JSONDecoder().decode(BLEPhotoTransportCapabilities.self,
                 from: JSONSerialization.data(withJSONObject: object))
             photoDeviceStatus = BLEPhotoDeviceStatus(event: object)
-            rememberDisplayStatus(mode: photoDeviceStatus?.screenMode, batteryMillivolts: photoDeviceStatus?.batteryMillivolts)
+            rememberDisplayStatus(mode: photoDeviceStatus?.screenMode, batteryMillivolts: photoDeviceStatus?.batteryMillivolts,
+                                  batteryPercent: photoDeviceStatus?.batteryPercent)
             photoTimeoutTask?.cancel()
             connectionState = .ready
             statusMessage = nil
@@ -1110,10 +1118,10 @@ final class NearbyDeviceManager: NSObject {
         sendCommand(["op": "set_screen_mode", "value": mode.rawValue, "request": request])
     }
 
-    private func rememberDisplayStatus(mode: BLEScreenMode?, batteryMillivolts: Int? = nil) {
+    private func rememberDisplayStatus(mode: BLEScreenMode?, batteryMillivolts: Int? = nil, batteryPercent: Int? = nil) {
         guard let info = deviceInfo else { return }
         displayRecords.observe(deviceID: info.id, name: activeDevice?.name ?? info.model,
-                               mode: mode, batteryMillivolts: batteryMillivolts,
+                               mode: mode, batteryMillivolts: batteryMillivolts, batteryPercent: batteryPercent,
                                hardwareMAC: info.hardwareMAC, hardwareKind: info.model)
     }
 

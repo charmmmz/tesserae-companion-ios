@@ -1,4 +1,5 @@
 import XCTest
+import Testing
 import UIKit
 import TesseraeKit
 @testable import Tesserae_Companion
@@ -7,12 +8,14 @@ final class BLEPhotoTests: XCTestCase {
     func testPhotoStatusParsesFirmwareReplyWithoutChangingTransferContract() throws {
         let data = Data("""
         {"event":"photo_info","version":1,"width":400,"height":300,"bytes":30000,
-         "chunk_bytes":192,"format":"picpak-bwry2-bottom-up","battery_mv":3900,
+         "chunk_bytes":192,"format":"picpak-bwry2-bottom-up","battery_mv":3900,"battery_pct":65,
          "low_battery":false,"refresh_speed":"5s","screen_mode":"bluetooth"}
         """.utf8)
         let event = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let status = BLEPhotoDeviceStatus(event: event)
         XCTAssertEqual(status.batteryMillivolts, 3900)
+        XCTAssertEqual(status.batteryPercent, 65)
+        XCTAssertEqual(status.batteryText, "65%")
         XCTAssertEqual(status.lowBattery, false)
         XCTAssertEqual(status.refreshSpeed, .fiveSeconds)
         XCTAssertEqual(status.screenMode, .bluetooth)
@@ -134,5 +137,32 @@ final class BLEPhotoTests: XCTestCase {
         let right = try PicPakPhotoEncoder.raster(image: halves, fit: .fill,
                                                  framing: .init(focusX: 1, focusY: 0.5, zoom: 1))
         XCTAssertEqual(try PicPakPhotoEncoder.encode(rgba: right), Data(count: 30000))
+    }
+}
+
+struct BLEBatteryReadingTests {
+    @Test(arguments: [0, 65, 100])
+    func photoAndDiagnosticsUseTheSameDevicePercentage(percent: Int) {
+        let event: [String: Any] = ["battery_mv": 3900, "battery_pct": percent]
+        let photo = BLEPhotoDeviceStatus(event: event)
+        #expect(photo.batteryPercent == percent)
+        #expect(photo.batteryText == "\(percent)%")
+        #expect(photo.voltageText != nil)
+        #expect(NearbyDeviceDiagnostics(event: event).batteryPercent == percent)
+    }
+
+    @Test(arguments: ["null", "true", "-1", "101", "65.5", "\"65\""])
+    func invalidPercentagesStayUnknown(jsonValue: String) throws {
+        let data = Data("{\"battery_mv\":3900,\"battery_pct\":\(jsonValue)}".utf8)
+        let event = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(BLEPhotoDeviceStatus(event: event).batteryPercent == nil)
+        #expect(NearbyDeviceDiagnostics(event: event).batteryPercent == nil)
+        #expect(BLEPhotoDeviceStatus(event: event).batteryMillivolts == 3900)
+    }
+
+    @Test func missingPercentageIsNotDerivedFromVoltageAndGaugePercentageCanStandAlone() {
+        #expect(BLEPhotoDeviceStatus(event: ["battery_mv": 3900]).batteryText == nil)
+        #expect(BLEPhotoDeviceStatus(event: ["battery_pct": 65]).batteryText == "65%")
+        #expect(BLEPhotoDeviceStatus(event: ["battery_pct": 0]).batteryText == "0%")
     }
 }

@@ -499,10 +499,11 @@ struct NearbyDeviceSetupView: View {
                     LabeledContent("Firmware", value: diagnostics.firmware)
                     LabeledContent(
                         "Battery",
-                        value: diagnostics.batteryMillivolts > 0
-                            ? String(format: "%.2f V", Double(diagnostics.batteryMillivolts) / 1000)
-                            : "—"
+                        value: diagnostics.batteryPercent.map { "\($0)%" } ?? "—"
                     )
+                    if diagnostics.batteryMillivolts > 0 {
+                        LabeledContent("Voltage", value: String(format: "%.2f V", Double(diagnostics.batteryMillivolts) / 1000))
+                    }
                     if isPicPakMaintenance,
                        let speed = nearby.refreshSpeedSetting.confirmedValue {
                         Picker(selection: Binding(

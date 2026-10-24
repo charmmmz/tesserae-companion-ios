@@ -17,22 +17,37 @@ enum BLEPhotoState: Equatable {
     case idle, sending, received
 }
 
+/// Battery values are device estimates; never infer charge from a generic curve here.
+struct BLEBatteryReading: Equatable, Sendable {
+    let millivolts: Int?
+    let percent: Int?
+
+    init(event: [String: Any]) {
+        millivolts = Self.integer(event["battery_mv"], in: 2500...5000)
+        percent = Self.integer(event["battery_pct"], in: 0...100)
+    }
+
+    private static func integer(_ value: Any?, in range: ClosedRange<Int>) -> Int? {
+        guard let number = value as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID(),
+              range.contains(number.intValue),
+              number.doubleValue == Double(number.intValue) else { return nil }
+        return number.intValue
+    }
+}
+
 /// Optional status from authenticated photo_info. Older firmware can omit it.
 struct BLEPhotoDeviceStatus: Equatable {
     let batteryMillivolts: Int?
+    let batteryPercent: Int?
     let lowBattery: Bool?
     let refreshSpeed: BLERefreshSpeed?
     let screenMode: BLEScreenMode?
 
     init(event: [String: Any]) {
-        if let mv = event["battery_mv"] as? NSNumber,
-           CFGetTypeID(mv) != CFBooleanGetTypeID(),
-           (2500...5000).contains(mv.doubleValue),
-           mv.doubleValue == Double(mv.intValue) {
-            batteryMillivolts = mv.intValue
-        } else {
-            batteryMillivolts = nil
-        }
+        let battery = BLEBatteryReading(event: event)
+        batteryMillivolts = battery.millivolts
+        batteryPercent = battery.percent
         if batteryMillivolts != nil, let low = event["low_battery"] as? NSNumber,
            CFGetTypeID(low) == CFBooleanGetTypeID() {
             lowBattery = low.boolValue
@@ -44,6 +59,10 @@ struct BLEPhotoDeviceStatus: Equatable {
     }
 
     var batteryText: String? {
+        batteryPercent.map { "\($0)%" }
+    }
+
+    var voltageText: String? {
         batteryMillivolts.map {
             (Double($0) / 1000).formatted(.number.precision(.fractionLength(2))) + " V"
         }
