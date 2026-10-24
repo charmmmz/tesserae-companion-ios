@@ -3,45 +3,29 @@ import UIKit
 import TesseraeKit
 
 enum LocalBluetoothPhotoRenderer {
-    /// Decode the wire pixels rather than retaining the original photo. This includes
-    /// quantization, visible-column cropping, and PicPak's bottom-up row order.
+    /// Thumbnail the same composed pixels that are sent, before ink quantization.
     @MainActor
-    static func previewPNG(frame: Data, capabilities c: BluetoothPhotoCapabilities?) throws -> Data {
-        if let c { try c.validate() }
-        let sourceWidth = c?.visibleWidth ?? PicPakPhotoEncoder.width
-        let sourceHeight = c?.visibleHeight ?? PicPakPhotoEncoder.height
-        let format = c?.format ?? .bwry2
-        let stride = c?.stride ?? PicPakPhotoEncoder.width / 4
-        guard frame.count == (c?.bytes ?? BLEPhotoTransfer.byteCount) else { throw BluetoothPhotoError.invalidPixels }
-        let scale = min(1, 760.0 / Double(max(sourceWidth, sourceHeight)))
-        let width = max(1, Int(Double(sourceWidth) * scale))
-        let height = max(1, Int(Double(sourceHeight) * scale))
-        let bpp = format.bitsPerPixel
-        let palette = Dictionary(uniqueKeysWithValues: format.palette.map { ($0.code, ($0.red, $0.green, $0.blue)) })
-        var rgba = Data(count: width * height * 4)
-        try rgba.withUnsafeMutableBytes { (pixels: UnsafeMutableRawBufferPointer) in
-            try frame.withUnsafeBytes { (bytes: UnsafeRawBufferPointer) in
-                for y in 0..<height {
-                    let sy = min(sourceHeight - 1, y * sourceHeight / height)
-                    let row = c == nil ? sourceHeight - 1 - sy : sy
-                    for x in 0..<width {
-                        let sx = min(sourceWidth - 1, x * sourceWidth / width) + (c?.xOffset ?? 0)
-                        let byte = bytes[row * stride + sx / (8 / bpp)]
-                        let shift = 8 - bpp * (sx % (8 / bpp) + 1)
-                        let code = (byte >> shift) & UInt8((1 << bpp) - 1)
-                        guard let ink = palette[code] else { throw BluetoothPhotoError.invalidPixels }
-                        let p = (y * width + x) * 4
-                        pixels[p] = ink.0; pixels[p + 1] = ink.1; pixels[p + 2] = ink.2; pixels[p + 3] = 255
-                    }
-                }
-            }
-        }
-        guard let provider = CGDataProvider(data: rgba as CFData),
+    static func previewPNG(rgba: Data, width: Int, height: Int) throws -> Data {
+        guard width > 0, height > 0, width <= 8192, height <= 8192,
+              rgba.count == width * height * 4,
+              let provider = CGDataProvider(data: rgba as CFData),
               let image = CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32,
-                                  bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue),
-                                  provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent),
-              let png = UIImage(cgImage: image).pngData() else { throw BluetoothPhotoError.invalidPixels }
+                  bytesPerRow: width * 4, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                  bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
+                      .union(.byteOrder32Big),
+                  provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent)
+        else { throw BluetoothPhotoError.invalidPixels }
+        let scale = min(1, 760.0 / Double(max(width, height)))
+        let size = CGSize(width: max(1, Int(Double(width) * scale)),
+                          height: max(1, Int(Double(height) * scale)))
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        format.preferredRange = .standard
+        let thumbnail = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            UIImage(cgImage: image).draw(in: CGRect(origin: .zero, size: size))
+        }
+        guard let png = thumbnail.pngData() else { throw BluetoothPhotoError.invalidPixels }
         return png
     }
 

@@ -21,7 +21,7 @@ struct BluetoothDisplayStoreTests {
         let store = BluetoothDisplayStore(fileURL: file)
         store.activeServerID = "home"
         store.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: 3900, at: start)
-        let png = try LocalBluetoothPhotoRenderer.previewPNG(frame: Data(repeating: 0x1b, count: 30000), capabilities: nil)
+        let png = try LocalBluetoothPhotoRenderer.previewPNG(rgba: Data([20, 100, 180, 255]), width: 1, height: 1)
         store.receivedPhoto(deviceID: "panel", previewPNG: png, at: start)
         // New diagnostics, missing battery values, and an empty preview cannot erase the last received image.
         store.observe(deviceID: "panel", name: "Desk", mode: nil, batteryMillivolts: 0, at: start.addingTimeInterval(1))
@@ -126,6 +126,57 @@ struct BluetoothDisplayStoreTests {
         #expect(try pixels(png) == [255,255,255,255, 255,255,0,255, 255,255,255,255, 255,255,0,255])
         #expect(throws: BluetoothPhotoError.invalidPixels) {
             try LocalBluetoothPhotoRenderer.previewPNG(frame: Data([0x1b]), capabilities: caps)
+        }
+    }
+
+    private func pixels(_ png: Data) throws -> [UInt8] {
+        let image = try #require(UIImage(data: png)?.cgImage)
+        var bytes = [UInt8](repeating: 0, count: image.width * image.height * 4)
+        let context = try #require(CGContext(data: &bytes, width: image.width, height: image.height,
+            bitsPerComponent: 8, bytesPerRow: image.width * 4, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue))
+        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        return bytes
+    }
+
+    @Test func originalThumbnailPreservesColoursRowsAndBoundedSize() throws {
+        let rgba = Data([20, 100, 180, 255, 80, 160, 220, 255,
+                         50, 120, 190, 255, 90, 170, 230, 255])
+        let png = try LocalBluetoothPhotoRenderer.previewPNG(rgba: rgba, width: 2, height: 2)
+        #expect(try pixels(png) == Array(rgba))
+        let large = try LocalBluetoothPhotoRenderer.previewPNG(
+            rgba: Data(repeating: 255, count: 1600 * 1200 * 4), width: 1600, height: 1200)
+        let image = try #require(UIImage(data: large)?.cgImage)
+        #expect(image.width == 760)
+        #expect(image.height == 570)
+        #expect(throws: BluetoothPhotoError.invalidPixels) {
+            try LocalBluetoothPhotoRenderer.previewPNG(rgba: Data([0]), width: 2, height: 2)
+        }
+    }
+
+    @Test func thumbnailMatchesTheSentFillCropAndFitBorders() throws {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let source = UIGraphicsImageRenderer(size: CGSize(width: 800, height: 300), format: format).image { ctx in
+            UIColor(red: 0.1, green: 0.4, blue: 0.7, alpha: 1).setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 800, height: 300))
+            UIColor(red: 0.3, green: 0.6, blue: 0.8, alpha: 1).setFill()
+            ctx.fill(CGRect(x: 400, y: 0, width: 400, height: 300))
+        }
+        for fit: ImageFitMode in [.fill, .fit] {
+            let rgba = try PicPakPhotoEncoder.raster(image: source, fit: fit, framing: ImageFraming(focusX: 0.8, focusY: 0.5, zoom: 1))
+            let png = try LocalBluetoothPhotoRenderer.previewPNG(rgba: rgba, width: 400, height: 300)
+            #expect(try pixels(png) == Array(rgba))
+            let decoded = try pixels(png)
+            if fit == .fit {
+                #expect(Array(decoded.prefix(4)) == [255, 255, 255, 255])
+            } else {
+                // Right-focused Fill excludes the blue left half of the original.
+                #expect((70...85).contains(Int(decoded[0])))
+                #expect((145...165).contains(Int(decoded[1])))
+                #expect((195...215).contains(Int(decoded[2])))
+            }
         }
     }
 

@@ -359,20 +359,23 @@ struct NearbyPhotoSendView: View {
             defer { preparing = false; framing.resumeEditing() }
             do {
                 let data: Data
+                let rgba: Data
                 let capabilities = isUnifiedPhoto ? nearby.photoCapabilities : nil
                 if isUnifiedPhoto {
                     guard let capabilities, nearby.connectionState == .ready else {
                         throw BLESetupProtocolError.unsupportedVersion
                     }
-                    let rgba = try LocalBluetoothPhotoRenderer.raster(image: image, fit: fit,
+                    rgba = try LocalBluetoothPhotoRenderer.raster(image: image, fit: fit,
                         framing: framing.framing(for: aspect), capabilities: capabilities)
                     data = try await LocalBluetoothPhotoRenderer.encode(rgba: rgba, capabilities: capabilities)
                 } else {
-                    let rgba = try PicPakPhotoEncoder.raster(image: image, fit: fit, framing: framing.framing(for: aspect))
+                    rgba = try PicPakPhotoEncoder.raster(image: image, fit: fit, framing: framing.framing(for: aspect))
                     data = try await Task.detached(priority: .userInitiated) { try PicPakPhotoEncoder.encode(rgba: rgba) }.value
                 }
                 try Task.checkCancellation()
-                let preview = try LocalBluetoothPhotoRenderer.previewPNG(frame: data, capabilities: capabilities)
+                let preview = try LocalBluetoothPhotoRenderer.previewPNG(rgba: rgba,
+                    width: capabilities?.visibleWidth ?? PicPakPhotoEncoder.width,
+                    height: capabilities?.visibleHeight ?? PicPakPhotoEncoder.height)
                 try nearby.sendPhoto(data, to: device, capabilityDigest: capabilities?.digest, previewPNG: preview)
             } catch { if !Task.isCancelled { localError = error.localizedDescription } }
         }

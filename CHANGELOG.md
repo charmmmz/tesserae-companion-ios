@@ -49,6 +49,10 @@ capabilities.
 
 ### Changed
 
+- Bluetooth photo previews retain the original colours and the exact sent crop,
+  rather than showing the e-paper's quantized pixels. Only confirmed sends replace
+  the saved thumbnail. Existing processed previews update after the next send.
+
 - Nearby Setup & Maintenance keeps a concise entry guide visible alongside
   discovered displays, with Refresh Button and PicPak Button timings, the
   20-second hold limit, code scanning, and session timeout and exit instructions
