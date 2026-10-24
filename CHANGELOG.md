@@ -108,6 +108,11 @@ capabilities.
 
 ### Fixed
 
+- PicPak Bluetooth discovery and photo connections require its assigned hardware
+  code 20, keeping Seeed EE03's code 11 separate. Update both Companion and
+  PicPak firmware; older PicPak firmware using code 11 is no longer recognized
+  as PicPak.
+
 - Dashboard push and Lineup preview sheets keep a continuous background below
   the action button, removing the mismatched strip along the bottom edge.
 

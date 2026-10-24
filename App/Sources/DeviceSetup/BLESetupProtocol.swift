@@ -159,8 +159,8 @@ struct BLESetupAdvertisement: Equatable, Sendable {
     }
 }
 
-/// Broadcast codes are hints. Codes 8, 9 and 11 have conflicting legacy
-/// assignments; only connected device info may resolve their hardware identity.
+/// Broadcast codes are hints. Codes 8 and 9 have conflicting legacy reservations;
+/// connected device info confirms identity. PicPak requires its assigned code 20.
 enum BLESetupHardware: Equatable, Sendable {
     case seeedReTerminalE1001, seeedReTerminalE1002, seeedReTerminalE1003, seeedReTerminalE1004
     case seeedEE02, seeedEE03, seeedEE0475, seeedEE0473E6, seeedEE05, seeedSticky
@@ -177,6 +177,7 @@ enum BLESetupHardware: Equatable, Sendable {
         case 5: self = .seeedEE02
         case 6: self = .seeedEE0475
         case 7: self = .seeedEE0473E6
+        case 20: self = .picPak42
         default: self = .unknown(rawValue)
         }
     }
@@ -193,10 +194,11 @@ enum BLESetupHardware: Equatable, Sendable {
         case .seeedXIAO75, .seeedSticky: 8
         case .waveshare133E6, .seeedEE05: 9
         case .wavesharePhotoPainter73: 10
-        case .picPak42, .seeedEE03: 11
+        case .seeedEE03: 11
         case .paperMono: 12
         case .goodDisplay133: 18
         case .inkplate13: 19
+        case .picPak42: 20
         case .unknown(let code): code
         }
     }

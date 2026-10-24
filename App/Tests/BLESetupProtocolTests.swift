@@ -109,11 +109,11 @@ final class BLESetupProtocolTests: XCTestCase {
 
     func testPicPakAdvertisementUsesMaintenanceHardwareCatalog() throws {
         let advertisement = try XCTUnwrap(BLESetupAdvertisement(
-            serviceData: Data([2, 0x02, 11, 0xA1, 0xB2, 0xC3, 1, 2, 3, 4])
+            serviceData: Data([2, 0x02, 20, 0xA1, 0xB2, 0xC3, 1, 2, 3, 4])
         ))
         XCTAssertEqual(advertisement.mode, .maintenance)
-        XCTAssertEqual(advertisement.hardware, .unknown(11))
-        XCTAssertEqual(BLESetupHardware.resolve(code: 11, model: "picpak_4_2"), .picPak42)
+        XCTAssertEqual(advertisement.hardware, .picPak42)
+        XCTAssertEqual(BLESetupHardware.resolve(code: 20, model: "picpak_4_2"), .picPak42)
     }
 
     func testRefreshSpeedDiagnosticsDecodeSupportedValuesWithoutNetwork() {
