@@ -1129,10 +1129,12 @@ struct DashboardPreviewActionSheet: View {
 
     private var sheetActions: some View {
         HStack {
-            Button("Cancel") {
+            Button("Cancel", systemImage: "xmark") {
                 dismiss()
             }
+            .labelStyle(.iconOnly)
             .tesseraeModalChromeButtonStyle()
+            .controlSize(.large)
             .disabled(isSubmitting)
             Spacer()
             if let webURL {

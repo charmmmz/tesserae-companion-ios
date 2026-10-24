@@ -81,6 +81,7 @@ struct DashboardSettingsView: View {
             confirmDiscard = true
           } label: {
             Label("Back", systemImage: "chevron.left")
+              .labelStyle(.iconOnly)
           }.disabled(isSaving)
         }
       }

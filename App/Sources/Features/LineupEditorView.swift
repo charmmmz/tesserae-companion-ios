@@ -211,9 +211,10 @@ struct LineupCreateFlow: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
+                    Button("Cancel", systemImage: "xmark") {
                         if session.canExit(to: .close) { exit(.close) }
                     }
+                    .labelStyle(.iconOnly)
                     .disabled(session.isSaving)
                 }
             }
@@ -423,16 +424,18 @@ private struct LineupEditorView: View {
                         Label("Back", systemImage: "chevron.left")
                             .labelStyle(.iconOnly)
                     } else {
-                        Text("Cancel")
+                        Label("Cancel", systemImage: "xmark")
+                            .labelStyle(.iconOnly)
                     }
                 }
                 .disabled(isSaving)
                 .accessibilityIdentifier("lineup-editor-exit")
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button(saveTitle) {
+                Button(saveTitle, systemImage: "checkmark") {
                     Task { await save() }
                 }
+                .labelStyle(.iconOnly)
                 .fontWeight(.semibold)
                 .disabled(isLoading || isSaving || !draft.isValid)
                 .accessibilityHint(draft.validationMessage ?? "")
@@ -990,7 +993,8 @@ private struct LineupDisplayPicker: View {
         .toolbar {
             if allowsDashboardBindings {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    Button("Done", systemImage: "checkmark") { dismiss() }
+                        .labelStyle(.iconOnly)
                         .accessibilityIdentifier("lineup-editor-displays-done")
                 }
             }
@@ -1239,7 +1243,8 @@ private struct LineupDashboardPicker: View {
         .toolbar {
             if !isSingleSelection {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    Button("Done", systemImage: "checkmark") { dismiss() }
+                        .labelStyle(.iconOnly)
                         .accessibilityIdentifier("lineup-editor-dashboards-done")
                 }
             }
@@ -1338,9 +1343,11 @@ private struct LineupDwellEditor: View {
                         .font(.headline)
                         .accessibilityAddTraits(.isHeader)
                     Spacer(minLength: 0)
-                    Button("Done") { dismiss() }
+                    Button("Done", systemImage: "checkmark") { dismiss() }
+                        .labelStyle(.iconOnly)
                         .fontWeight(.semibold)
                         .tesseraeModalChromeButtonStyle()
+                        .controlSize(.large)
                 }
 
                 Text("Time on screen")

@@ -81,7 +81,8 @@ struct RootView: View {
                 NearbyDisplaysView()
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
-                            Button("Done") { nearbyPresented = false }
+                            Button("Done", systemImage: "checkmark") { nearbyPresented = false }
+                                .labelStyle(.iconOnly)
                         }
                     }
             }

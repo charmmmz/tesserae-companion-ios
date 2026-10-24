@@ -194,7 +194,8 @@ struct OnboardingView: View {
             .toolbar {
                 if isChoosingServer {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") { dismiss() }
+                        Button("Cancel", systemImage: "xmark") { dismiss() }
+                            .labelStyle(.iconOnly)
                     }
                 }
             }
@@ -286,10 +287,11 @@ private struct ManualConnectionView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
+                    Button("Cancel", systemImage: "xmark") {
                         connectionTask?.cancel()
                         dismiss()
                     }
+                    .labelStyle(.iconOnly)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Connect") {

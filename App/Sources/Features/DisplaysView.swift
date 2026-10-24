@@ -141,6 +141,7 @@ struct DisplaysView: View {
                             Button("Displays", systemImage: "chevron.backward") {
                                 lineupsPresented = false
                             }
+                            .labelStyle(.iconOnly)
                             .accessibilityIdentifier("lineups-back-to-displays")
                         }
                     }

@@ -1504,12 +1504,14 @@ private struct GalleryCreateFolderView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel", systemImage: "xmark") { dismiss() }
+                        .labelStyle(.iconOnly)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Create") {
+                    Button("Create", systemImage: "plus") {
                         Task { await create() }
                     }
+                    .labelStyle(.iconOnly)
                     .disabled(trimmedName.isEmpty || isSaving)
                 }
             }
@@ -1907,9 +1909,10 @@ struct GalleryUploadDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
+                    Button("Done", systemImage: "checkmark") {
                         dismiss()
                     }
+                    .labelStyle(.iconOnly)
                 }
             }
         }

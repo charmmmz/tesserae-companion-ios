@@ -1597,9 +1597,10 @@ private struct LineupTargetSelectionSheet: View {
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
+                    Button("Done", systemImage: "checkmark") {
                         dismiss()
                     }
+                    .labelStyle(.iconOnly)
                 }
             }
         }

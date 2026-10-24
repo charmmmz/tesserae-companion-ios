@@ -182,6 +182,13 @@ without overwriting the saved preference. Resizing cancels an unfinished display
 reorder without committing it. BLE connection ownership remains in NearbyDeviceManager;
 window changes do not initiate a new connection. No server API changes are required.
 
+Simple toolbar, modal and completion actions use SF Symbols with native button
+chrome: checkmark for Save/Done/confirming a new Lineup, xmark for Cancel/Close,
+and a chevron for Back. New Folder uses plus. The localized action title remains
+the accessibility name when the visible label is icon-only. Connect, Review,
+Send/Retry, Select All and destructive confirmations retain descriptive text.
+Changing a label does not change permissions, disabled states or draft protection.
+
 ### Explicitly out of scope for release 1.0
 
 - full Canvas/Dashboard layout or source-code editing;

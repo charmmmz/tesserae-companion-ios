@@ -743,7 +743,8 @@ private struct ShareComposerView: View {
             .toolbar {
                 if model.phase == .failed && model.snapshot == nil {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") { model.complete() }
+                        Button("Done", systemImage: "checkmark") { model.complete() }
+                            .labelStyle(.iconOnly)
                     }
                 } else if model.phase == .succeeded {
                     ToolbarItem(placement: .confirmationAction) {
@@ -753,7 +754,8 @@ private struct ShareComposerView: View {
                     }
                 } else {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") { model.cancel() }
+                        Button("Cancel", systemImage: "xmark") { model.cancel() }
+                            .labelStyle(.iconOnly)
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         sendToolbarButton

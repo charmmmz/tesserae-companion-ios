@@ -146,7 +146,8 @@ struct SettingsView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    Button("Done", systemImage: "checkmark") { dismiss() }
+                        .labelStyle(.iconOnly)
                 }
             }
             .alert(

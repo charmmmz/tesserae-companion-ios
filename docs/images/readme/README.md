@@ -4,8 +4,11 @@ Unless noted below, captured on 24 October 2026 from app source
 [`79e6d18367e946b237cc0c14569781541d4c5a74`](https://github.com/charmmmz/tesserae-companion-ios/commit/79e6d18367e946b237cc0c14569781541d4c5a74).
 
 `dashboard-settings.png` was recaptured on the same date and simulator with the
-paper background and an icon-only Save action. The icon correction and its
-refreshed screenshot are committed together in Git history.
+paper background and icon-only Save action from
+[`0aa9aa02956c6d47742ee1ff9ae67b2604694782`](https://github.com/charmmmz/tesserae-companion-ios/commit/0aa9aa02956c6d47742ee1ff9ae67b2604694782).
+`lineup-editor.png` and `bluetooth-maintenance.png` were refreshed after the
+remaining simple actions adopted icons; those images and their UI corrections
+are committed together in Git history.
 
 - iPhone 18 Pro Simulator, iOS 27.0, English, light appearance.
 - Original 1206 × 2622 PNG captures; no resizing, compositing or image retouching.
@@ -19,11 +22,11 @@ refreshed screenshot are committed together in Git history.
 | `displays.png` | Demo Mode → Displays |
 | `dashboards.png` | Demo Mode → Dashboards, expanded display groups |
 | `dashboard-settings.png` | Pantry → native settings, paper background and icon toolbar, before editing |
-| `lineup-editor.png` | New Manual Lineup, selected display and two Dashboards |
+| `lineup-editor.png` | New Manual Lineup, icon actions, selected display and two Dashboards |
 | `gallery.png` | Library → family folder, square image grid |
 | `send-photo.png` | Send → Use Sample, centered Fill with framing controls |
 | `activity.png` | Demo Mode → Activity |
-| `bluetooth-maintenance.png` | Simulated PicPak → authenticated Maintenance |
+| `bluetooth-maintenance.png` | Simulated PicPak → authenticated Maintenance, current battery status |
 
 To refresh, build the app and use its demo journey or the corresponding existing
 UI flows in `App/UITests/`. Set a consistent simulator status bar before capturing:

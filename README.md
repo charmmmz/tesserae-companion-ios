@@ -35,7 +35,7 @@ Tesserae Companion connects directly to your own Tesserae server, with a built-i
     <td align="center"><a href="docs/images/readme/displays.png"><img src="docs/images/readme/displays.png" width="220" alt="Displays overview with hardware, battery, Wi-Fi status, and quick actions"></a></td>
     <td align="center"><a href="docs/images/readme/dashboards.png"><img src="docs/images/readme/dashboards.png" width="220" alt="Saved Dashboards grouped by display with preview and push actions"></a></td>
     <td align="center"><a href="docs/images/readme/dashboard-settings.png"><img src="docs/images/readme/dashboard-settings.png" width="220" alt="Native Dashboard settings with paper background, icon toolbar, preview, and configuration controls"></a></td>
-    <td align="center"><a href="docs/images/readme/lineup-editor.png"><img src="docs/images/readme/lineup-editor.png" width="220" alt="Native Lineup editor with a target display and selected Dashboards"></a></td>
+    <td align="center"><a href="docs/images/readme/lineup-editor.png"><img src="docs/images/readme/lineup-editor.png" width="220" alt="Native Lineup editor with icon actions, a target display, and selected Dashboards"></a></td>
   </tr>
   <tr>
     <td align="center"><sub><strong>Displays</strong><br>Status and current content</sub></td>

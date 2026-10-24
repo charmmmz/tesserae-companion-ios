@@ -85,8 +85,10 @@ struct DashboardSettingChoicesView<Details: View>: View {
     .safeAreaInset(edge: .bottom) {
       HStack {
         Spacer()
-        Button("Done") { dismiss() }
+        Button("Done", systemImage: "checkmark") { dismiss() }
+          .labelStyle(.iconOnly)
           .buttonStyle(.borderedProminent)
+          .controlSize(.large)
           .accessibilityIdentifier("dashboard-choices-done")
       }
       .accessibilityElement(children: .contain)

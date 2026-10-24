@@ -280,7 +280,7 @@ struct OfflineAlbumEditorView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(preflight == nil ? "Cancel" : "Back") {
+                    Button {
                         if preflight == nil {
                             updateDirtyState()
                             if session.canExit(to: .close) { dismiss() }
@@ -288,6 +288,12 @@ struct OfflineAlbumEditorView: View {
                             self.preflight = nil
                             replaceConflicts = false
                         }
+                    } label: {
+                        Label(
+                            preflight == nil ? String(localized: "Cancel") : String(localized: "Back"),
+                            systemImage: preflight == nil ? "xmark" : "chevron.left"
+                        )
+                        .labelStyle(.iconOnly)
                     }
                     .disabled(isWorking)
                     .accessibilityIdentifier("offline-album-exit")
@@ -295,13 +301,20 @@ struct OfflineAlbumEditorView: View {
 
                 if preflight != nil || shouldShowReview {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button(preflight == nil ? "Review" : "Save") {
+                        Button {
                             Task {
                                 if preflight == nil {
                                     await runPreflight()
                                 } else {
                                     await save()
                                 }
+                            }
+                        } label: {
+                            if preflight == nil {
+                                Text("Review")
+                            } else {
+                                Label("Save", systemImage: "checkmark")
+                                    .labelStyle(.iconOnly)
                             }
                         }
                         .disabled(

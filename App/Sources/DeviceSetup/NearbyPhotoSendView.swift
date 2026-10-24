@@ -177,7 +177,8 @@ struct NearbyPhotoSendView: View {
                         if let error = nearby.displayRecords.storageError {
                             Text(error).font(.footnote).foregroundStyle(TesseraeTheme.warning)
                         }
-                        Button("Done") { close() }
+                        Button("Done", systemImage: "checkmark") { close() }
+                            .labelStyle(.iconOnly)
                             .buttonStyle(.borderedProminent)
                             .tint(TesseraeTheme.accentFill).controlSize(.large)
                             .foregroundStyle(.white)

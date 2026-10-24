@@ -87,11 +87,12 @@ struct NearbyDeviceSetupView: View {
                     ToolbarItem(placement: .cancellationAction) {
                         Group {
                             if device.mode == .maintenance && (screen == .wifi || screen == .server) {
-                                Button("Cancel") {
+                                Button("Cancel", systemImage: "xmark") {
                                     changingServer = false
                                     serverPairingCode = ""
                                     screen = .maintenance
                                 }
+                                .labelStyle(.iconOnly)
                             } else {
                                 Button {
                                     closeSheet()
@@ -131,7 +132,8 @@ struct NearbyDeviceSetupView: View {
                 .ignoresSafeArea()
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") { scannerPresented = false }
+                        Button("Cancel", systemImage: "xmark") { scannerPresented = false }
+                            .labelStyle(.iconOnly)
                             .foregroundStyle(.white)
                     }
                 }
@@ -722,11 +724,12 @@ struct NearbyDeviceSetupView: View {
                 .lineLimit(nil)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer()
-            Button("Done") {
+            Button("Done", systemImage: "checkmark") {
                 nearby.dismissSuggestion(for: device)
                 nearby.disconnect()
                 dismiss()
             }
+            .labelStyle(.iconOnly)
             .buttonStyle(.borderedProminent)
             .tint(TesseraeTheme.accentFill)
             .foregroundStyle(.white)
@@ -757,9 +760,10 @@ struct NearbyDeviceSetupView: View {
                 .fixedSize(horizontal: false, vertical: true)
             if nearby.connectionState == .restarting {
                 Spacer()
-                Button("Done") {
+                Button("Done", systemImage: "checkmark") {
                     closeSheet()
                 }
+                .labelStyle(.iconOnly)
                 .buttonStyle(.borderedProminent)
                 .tint(TesseraeTheme.accentFill)
                 .foregroundStyle(.white)

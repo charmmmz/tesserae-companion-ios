@@ -240,6 +240,7 @@ struct SendComposerSheet: View {
                         Button("Close", systemImage: "xmark") {
                             close()
                         }
+                        .labelStyle(.iconOnly)
                         .disabled(submission.isSubmitting)
                         .accessibilityIdentifier("root-send-close")
                     }

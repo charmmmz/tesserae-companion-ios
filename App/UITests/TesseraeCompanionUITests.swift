@@ -1096,6 +1096,16 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertEqual(libraryToolbar.width, displaysToolbar.width, accuracy: 0.5)
         XCTAssertEqual(libraryToolbar.minX, displaysToolbar.minX, accuracy: 0.5)
 
+        app.buttons["gallery-create-folder"].tap()
+        XCTAssertTrue(app.navigationBars["New Folder"].waitForExistence(timeout: 3))
+        let createFolder = app.buttons["Create"]
+        XCTAssertFalse(createFolder.isEnabled)
+        app.textFields["Family photos"].tap()
+        app.textFields["Family photos"].typeText("Snapshots")
+        XCTAssertTrue(createFolder.isEnabled)
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(settings.waitForExistence(timeout: 3))
+
         app.buttons["Dashboards"].firstMatch.tap()
         XCTAssertTrue(settings.waitForExistence(timeout: 2))
         XCTAssertTrue(settings.isHittable)
@@ -1149,6 +1159,15 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(needsAttention.waitForExistence(timeout: 3))
         needsAttention.tap()
         XCTAssertEqual(app.buttons["activity-filter"].value as? String, "Needs Attention")
+
+        settings.tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
+        let settingsScreenshot = XCTAttachment(screenshot: app.screenshot())
+        settingsScreenshot.name = "Settings icon actions"
+        settingsScreenshot.lifetime = .keepAlways
+        add(settingsScreenshot)
+        app.buttons["Done"].tap()
+        XCTAssertTrue(settings.waitForExistence(timeout: 3))
     }
 
     func testDashboardGroupCollapseAndExpand() {
@@ -1981,6 +2000,8 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.buttons["lineup-card-kitchen-deck"].tap()
         XCTAssertTrue(app.switches["lineup-enabled-on"].waitForExistence(timeout: 4))
         try audit("lineup detail")
+        app.tabBars.firstMatch.buttons["图库"].tap()
+        XCTAssertTrue(app.buttons["root-send-action"].waitForExistence(timeout: 4))
         app.buttons["root-send-action"].tap()
         XCTAssertTrue(app.buttons["root-send-close"].waitForExistence(timeout: 4))
         try audit("send")
