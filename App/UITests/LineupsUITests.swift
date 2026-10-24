@@ -205,6 +205,10 @@ final class LineupsUITests: XCTestCase {
                 "lineup-editor-selected-dashboard-pantry"
             ].exists
         )
+        let selectionScreenshot = XCTAttachment(screenshot: app.screenshot())
+        selectionScreenshot.name = "Lineup Dashboard selection paper background"
+        selectionScreenshot.lifetime = .keepAlways
+        add(selectionScreenshot)
         app.navigationBars["Dashboards"].buttons.firstMatch.tap()
 
         let saveButton = app.buttons["lineup-editor-save"]

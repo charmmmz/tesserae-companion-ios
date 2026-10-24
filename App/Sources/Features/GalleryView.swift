@@ -1500,6 +1500,8 @@ private struct GalleryCreateFolderView: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .tesseraeScreenBackground()
             .navigationTitle("New Folder")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1905,6 +1907,8 @@ struct GalleryUploadDetailView: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .tesseraeScreenBackground()
             .navigationTitle("Upload Details")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

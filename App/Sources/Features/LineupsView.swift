@@ -1584,6 +1584,8 @@ private struct LineupTargetSelectionSheet: View {
                     .accessibilityIdentifier("lineup-target-\(deviceID)")
                 }
             }
+            .scrollContentBackground(.hidden)
+            .tesseraeScreenBackground()
             .navigationTitle("Targets")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -81,6 +81,8 @@ struct DashboardSettingChoicesView<Details: View>: View {
       }
       details()
     }
+    .scrollContentBackground(.hidden)
+    .tesseraeScreenBackground()
     .accessibilityIdentifier("dashboard-setting-choices")
     .safeAreaInset(edge: .bottom) {
       HStack {

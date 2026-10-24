@@ -253,7 +253,8 @@ the field's detail page. Unsupported controls retain their stored values and
 show the server's read-only reason alongside the web editor shortcut.
 
 Dashboard Settings opens with a large preview and an overlaid push button at
-the top right. Saving uses an accessible checkmark toolbar button. The icon
+the top right. More and the accessible Save checkmark use the root-page toolbar
+capsule, with equal 44-point targets and a muted disabled Save state. The icon
 picker renders the same Phosphor glyphs as Dashboard cards, including the
 existing icon when it is outside the curated choices.
 
@@ -358,6 +359,13 @@ and Share Extension use the same light and dark appearances. The app's
 | Warning | `#805808` | `#D9B45A` |
 | Danger | `#B8352A` | `#E58474` |
 | Information / progress | `#2B4E9B` | `#7C9BE0` |
+
+Ordinary screens, sheets and nested settings use the adaptive paper background.
+Forms and Lists hide their system scroll background and apply
+`tesseraeScreenBackground()`, including navigation destinations and selection
+pages. Native grouped rows keep their semantic fills; custom icon-picker tiles
+use the surface and accent-soft tokens. Full-screen photo viewers use a black
+viewing canvas, and device previews preserve the content's original colours.
 
 Brand foreground is for links, selection, and app identity. It has at least
 4.5:1 contrast against the paper, card, recessed, and soft selection surfaces.

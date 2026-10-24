@@ -60,11 +60,16 @@ final class AlbumsAndActivityUITests: XCTestCase {
         let target = app.buttons["offline-album-target-e1004-desk"]
         XCTAssertTrue(target.waitForExistence(timeout: 3))
         target.tap()
+        let reviewSave = app.buttons["offline-album-review-save"]
+        reviewSave.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["offline-album-review"].waitForExistence(timeout: 3))
+        attach(app, name: "Album readiness paper background")
+        app.buttons["offline-album-exit"].tap()
+        XCTAssertTrue(app.textFields["offline-album-name"].waitForExistence(timeout: 3))
         openPhotoOrder(app)
         app.buttons["offline-album-folder-order"].tap()
         app.navigationBars["Photo Order"].buttons.firstMatch.tap()
 
-        let reviewSave = app.buttons["offline-album-review-save"]
         reviewSave.tap()
         XCTAssertTrue(app.descendants(matching: .any)["offline-album-review"].waitForExistence(timeout: 3))
         attach(app, name: "Album review")

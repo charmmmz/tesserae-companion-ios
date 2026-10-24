@@ -988,6 +988,8 @@ private struct LineupDisplayPicker: View {
                 )
             }
         }
+        .scrollContentBackground(.hidden)
+        .tesseraeScreenBackground()
         .navigationTitle("Displays")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -1238,6 +1240,8 @@ private struct LineupDashboardPicker: View {
             }
 
         }
+        .scrollContentBackground(.hidden)
+        .tesseraeScreenBackground()
         .navigationTitle("Dashboards")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

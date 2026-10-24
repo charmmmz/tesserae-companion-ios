@@ -49,6 +49,16 @@ final class DashboardSettingsUITests: XCTestCase {
     XCTAssertGreaterThan(preview.frame.height, 200)
     XCTAssertFalse(app.staticTexts["Preview and Push"].exists)
     XCTAssertFalse(app.buttons["dashboard-settings-save"].isEnabled)
+    let more = app.buttons["dashboard-settings-more"]
+    let saveButton = app.buttons["dashboard-settings-save"]
+    XCTAssertTrue(more.waitForExistence(timeout: 3))
+    for button in [more, saveButton] {
+      XCTAssertGreaterThanOrEqual(button.frame.width, 44 - 0.01)
+      XCTAssertGreaterThanOrEqual(button.frame.height, 44 - 0.01)
+    }
+    XCTAssertEqual(more.frame.width, saveButton.frame.width, accuracy: 0.5)
+    XCTAssertEqual(more.frame.midY, saveButton.frame.midY, accuracy: 0.5)
+    XCTAssertLessThanOrEqual(more.frame.maxX, saveButton.frame.minX + 0.5)
     let overviewShot = XCTAttachment(screenshot: app.screenshot())
     overviewShot.name = "Dashboard native settings"
     overviewShot.lifetime = .keepAlways
@@ -71,6 +81,10 @@ final class DashboardSettingsUITests: XCTestCase {
     scrollToTop(in: app)
     XCTAssertTrue(app.buttons["dashboard-settings-save"].isEnabled)
     XCTAssertFalse(app.buttons["dashboard-settings-push"].isEnabled)
+    let toolbarShot = XCTAttachment(screenshot: app.screenshot())
+    toolbarShot.name = "Dashboard settings unsaved toolbar"
+    toolbarShot.lifetime = .keepAlways
+    add(toolbarShot)
     app.buttons["dashboard-settings-save"].tap()
     scrollToTop(in: app)
     XCTAssertTrue(app.staticTexts["Settings saved"].waitForExistence(timeout: 4))
@@ -103,6 +117,20 @@ final class DashboardSettingsUITests: XCTestCase {
 
   func testCompactSettingsHierarchyAndFieldDetails() {
     let app = openDashboard()
+    for (identifier, title) in [
+      ("dashboard-settings-displays", "Displays"),
+      ("dashboard-settings-appearance", "Appearance"),
+    ] {
+      let preference = app.buttons[identifier]
+      scrollTo(preference, in: app)
+      preference.tap()
+      XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 3))
+      let screenshot = XCTAttachment(screenshot: app.screenshot())
+      screenshot.name = "Dashboard \(title) paper background"
+      screenshot.lifetime = .keepAlways
+      add(screenshot)
+      navigateBack(in: app)
+    }
     let updates = app.buttons["dashboard-settings-updates"]
     scrollTo(updates, in: app)
     XCTAssertFalse(app.textFields["dashboard-settings-refresh-minutes"].exists)
@@ -125,6 +153,10 @@ final class DashboardSettingsUITests: XCTestCase {
     XCTAssertTrue(app.staticTexts["Selections"].exists)
     XCTAssertTrue(app.staticTexts["Text"].exists)
     XCTAssertTrue(app.staticTexts["Numbers"].exists)
+    let componentShot = XCTAttachment(screenshot: app.screenshot())
+    componentShot.name = "Dashboard component paper background"
+    componentShot.lifetime = .keepAlways
+    add(componentShot)
     let title = app.buttons["dashboard-field-detail-demo-reminders-title"]
     XCTAssertTrue(title.waitForExistence(timeout: 3))
     let search = app.searchFields.firstMatch
@@ -137,6 +169,10 @@ final class DashboardSettingsUITests: XCTestCase {
     XCTAssertTrue(app.navigationBars["Title"].waitForExistence(timeout: 3))
     XCTAssertTrue(app.staticTexts["About this setting"].waitForExistence(timeout: 3))
     XCTAssertTrue(app.buttons["Use widget default"].exists)
+    let fieldShot = XCTAttachment(screenshot: app.screenshot())
+    fieldShot.name = "Dashboard field paper background"
+    fieldShot.lifetime = .keepAlways
+    add(fieldShot)
     replaceText(app.textFields["Title"], with: "Edited title")
     navigateBack(in: app)
     XCTAssertTrue(title.waitForExistence(timeout: 3))

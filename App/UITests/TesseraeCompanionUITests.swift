@@ -919,6 +919,10 @@ final class TesseraeCompanionUITests: XCTestCase {
         )
         XCTAssertTrue(app.staticTexts["family"].exists)
         XCTAssertTrue(app.staticTexts["2 of 5 finished"].exists)
+        let detailsScreenshot = XCTAttachment(screenshot: app.screenshot())
+        detailsScreenshot.name = "Upload details paper background"
+        detailsScreenshot.lifetime = .keepAlways
+        add(detailsScreenshot)
         app.buttons["Done"].tap()
         XCTAssertTrue(capsule.waitForExistence(timeout: 2))
     }
@@ -1098,6 +1102,10 @@ final class TesseraeCompanionUITests: XCTestCase {
 
         app.buttons["gallery-create-folder"].tap()
         XCTAssertTrue(app.navigationBars["New Folder"].waitForExistence(timeout: 3))
+        let folderScreenshot = XCTAttachment(screenshot: app.screenshot())
+        folderScreenshot.name = "New Folder paper background"
+        folderScreenshot.lifetime = .keepAlways
+        add(folderScreenshot)
         let createFolder = app.buttons["Create"]
         XCTAssertFalse(createFolder.isEnabled)
         app.textFields["Family photos"].tap()

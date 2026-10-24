@@ -85,7 +85,7 @@ struct DashboardSettingsView: View {
           }.disabled(isSaving)
         }
       }
-      ToolbarItem(placement: .topBarTrailing) {
+      TesseraeRootToolbar(showsGlobalActions: false) {
         Menu {
           Button("Reload Settings", systemImage: "arrow.clockwise") { requestReload() }
             .disabled(isSaving || isLoading)
@@ -95,8 +95,7 @@ struct DashboardSettingsView: View {
         } label: {
           Label("More", systemImage: "ellipsis")
         }
-      }
-      ToolbarItem(placement: .confirmationAction) {
+        .accessibilityIdentifier("dashboard-settings-more")
         if draft?.original.canEdit == true {
           Button {
             Task { await save() }
@@ -107,7 +106,6 @@ struct DashboardSettingsView: View {
               Label("Save", systemImage: "checkmark").labelStyle(.iconOnly)
             }
           }
-          .fontWeight(.semibold)
           .accessibilityLabel("Save")
           .disabled(!dirty || !canEdit || conflict)
           .accessibilityIdentifier("dashboard-settings-save")
@@ -179,6 +177,8 @@ struct DashboardSettingsView: View {
     Section("Preferences") {
       NavigationLink {
         Form { displaySettings.disabled(!canEdit) }
+          .scrollContentBackground(.hidden)
+          .tesseraeScreenBackground()
           .navigationTitle("Displays").navigationBarTitleDisplayMode(.inline)
       } label: {
         Label("Displays", systemImage: "display")
@@ -186,6 +186,8 @@ struct DashboardSettingsView: View {
       .accessibilityIdentifier("dashboard-settings-displays")
       NavigationLink {
         Form { cadenceSettings.disabled(!canEdit) }
+          .scrollContentBackground(.hidden)
+          .tesseraeScreenBackground()
           .navigationTitle("Updates").navigationBarTitleDisplayMode(.inline)
       } label: {
         Label("Updates", systemImage: "arrow.triangle.2.circlepath")
@@ -193,6 +195,8 @@ struct DashboardSettingsView: View {
       .accessibilityIdentifier("dashboard-settings-updates")
       NavigationLink {
         Form { appearanceSettings.disabled(!canEdit) }
+          .scrollContentBackground(.hidden)
+          .tesseraeScreenBackground()
           .navigationTitle("Appearance").navigationBarTitleDisplayMode(.inline)
       } label: {
         Label("Appearance", systemImage: "paintpalette")
@@ -512,7 +516,7 @@ private struct DashboardIconPicker: View {
             .padding(12)
             .background(
               selection == icon.id
-                ? Color.accentColor.opacity(0.12) : Color(.secondarySystemGroupedBackground),
+                ? TesseraeTheme.accentSoft : TesseraeTheme.surface,
               in: .rect(cornerRadius: 16)
             )
             .overlay(alignment: .topTrailing) {
@@ -531,7 +535,7 @@ private struct DashboardIconPicker: View {
       }
       .padding()
     }
-    .background(Color(.systemGroupedBackground))
+    .tesseraeScreenBackground()
     .navigationTitle("Icon").navigationBarTitleDisplayMode(.inline)
   }
 }

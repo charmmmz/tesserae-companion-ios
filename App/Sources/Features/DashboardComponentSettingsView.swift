@@ -58,6 +58,8 @@ struct DashboardComponentSettingsView: View {
         }
       }
     }
+    .scrollContentBackground(.hidden)
+    .tesseraeScreenBackground()
     .searchable(
       text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Settings"
     )
@@ -256,6 +258,8 @@ private struct DashboardSettingDetailView: View {
           }
           details
         }
+        .scrollContentBackground(.hidden)
+        .tesseraeScreenBackground()
         .scrollDismissesKeyboard(.interactively)
       }
     }

@@ -454,6 +454,8 @@ struct OfflineAlbumEditorView: View {
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .tesseraeScreenBackground()
         .accessibilityIdentifier("offline-album-setup")
     }
 
@@ -505,6 +507,8 @@ struct OfflineAlbumEditorView: View {
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .tesseraeScreenBackground()
         .accessibilityIdentifier("offline-album-review")
     }
 
@@ -848,6 +852,8 @@ private struct OfflineAlbumPhotoOrderView: View {
                 .accessibilityIdentifier("offline-album-folder-order")
             }
         }
+        .scrollContentBackground(.hidden)
+        .tesseraeScreenBackground()
         .environment(\.editMode, $editMode)
         .navigationTitle("Photo Order")
         .navigationBarTitleDisplayMode(.inline)

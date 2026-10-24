@@ -34,7 +34,7 @@ Tesserae Companion connects directly to your own Tesserae server, with a built-i
   <tr>
     <td align="center"><a href="docs/images/readme/displays.png"><img src="docs/images/readme/displays.png" width="220" alt="Displays overview with hardware, battery, Wi-Fi status, and quick actions"></a></td>
     <td align="center"><a href="docs/images/readme/dashboards.png"><img src="docs/images/readme/dashboards.png" width="220" alt="Saved Dashboards grouped by display with preview and push actions"></a></td>
-    <td align="center"><a href="docs/images/readme/dashboard-settings.png"><img src="docs/images/readme/dashboard-settings.png" width="220" alt="Native Dashboard settings with paper background, icon toolbar, preview, and configuration controls"></a></td>
+    <td align="center"><a href="docs/images/readme/dashboard-settings.png"><img src="docs/images/readme/dashboard-settings.png" width="220" alt="Native Dashboard settings with paper background, shared More and Save toolbar, preview, and configuration controls"></a></td>
     <td align="center"><a href="docs/images/readme/lineup-editor.png"><img src="docs/images/readme/lineup-editor.png" width="220" alt="Native Lineup editor with icon actions, a target display, and selected Dashboards"></a></td>
   </tr>
   <tr>
@@ -56,6 +56,26 @@ Tesserae Companion connects directly to your own Tesserae server, with a built-i
     <td align="center"><sub><strong>Bluetooth</strong><br>Maintain nearby displays</sub></td>
   </tr>
 </table>
+
+<details>
+<summary>More native editing screens</summary>
+
+<table>
+  <tr>
+    <td align="center"><a href="docs/images/readme/dashboard-components.png"><img src="docs/images/readme/dashboard-components.png" width="220" alt="Dashboard widget settings grouped into selections, text, and numbers"></a></td>
+    <td align="center"><a href="docs/images/readme/lineup-selection.png"><img src="docs/images/readme/lineup-selection.png" width="220" alt="Lineup Dashboard selection with two saved Dashboards in playback order"></a></td>
+    <td align="center"><a href="docs/images/readme/offline-album.png"><img src="docs/images/readme/offline-album.png" width="220" alt="Offline Album review with a photo summary and display readiness checks"></a></td>
+    <td align="center"><a href="docs/images/readme/gallery-upload-details.png"><img src="docs/images/readme/gallery-upload-details.png" width="220" alt="Photo upload details grouped by Gallery folder"></a></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><strong>Widget settings</strong><br>Edit individual controls</sub></td>
+    <td align="center"><sub><strong>Lineup selection</strong><br>Choose and order content</sub></td>
+    <td align="center"><sub><strong>Offline Albums</strong><br>Review display readiness</sub></td>
+    <td align="center"><sub><strong>Uploads</strong><br>Follow individual photos</sub></td>
+  </tr>
+</table>
+
+</details>
 
 Screenshots show the current development build on an iPhone simulator, using
 demo content and simulated Bluetooth devices. Available

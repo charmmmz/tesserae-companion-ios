@@ -60,11 +60,13 @@ struct TesseraeRootToolbar<ContextAction: View>: ToolbarContent {
 }
 
 private struct TesseraeRootToolbarButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 20))
             .imageScale(.medium)
-            .foregroundStyle(TesseraeTheme.accent)
+            .foregroundStyle(isEnabled ? TesseraeTheme.accent : .secondary)
             .frame(width: 44, height: 44)
             .contentShape(Rectangle())
             .opacity(configuration.isPressed ? 0.5 : 1)
