@@ -44,6 +44,14 @@ final class LineupsUITests: XCTestCase {
 
         lineupCard.tap()
 
+        let actions = [app.buttons["lineup-edit"], app.buttons["lineup-more-menu"]]
+        XCTAssertTrue(actions[0].waitForExistence(timeout: 3))
+        for action in actions {
+            XCTAssertGreaterThanOrEqual(action.frame.width, 44 - 0.01)
+            XCTAssertGreaterThanOrEqual(action.frame.height, 44 - 0.01)
+        }
+        XCTAssertEqual(actions[0].frame.midY, actions[1].frame.midY, accuracy: 0.5)
+
         let enabledControl = app.switches["lineup-enabled-on"]
         XCTAssertTrue(enabledControl.waitForExistence(timeout: 3))
         XCTAssertTrue(enabledControl.isEnabled)

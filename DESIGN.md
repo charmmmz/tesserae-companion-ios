@@ -189,6 +189,37 @@ the accessibility name when the visible label is icon-only. Connect, Review,
 Send/Retry, Select All and destructive confirmations retain descriptive text.
 Changing a label does not change permissions, disabled states or draft protection.
 
+### Shared page actions
+
+Every page uses `TesseraeToolbarActions` from `App/Sources/DesignSystem` for its
+trailing actions. `TesseraeRootToolbar` composes it with global Send and Settings.
+The component owns the single native capsule, icon-only labels, 44 × 44-point
+targets, 4-point spacing, symbol sizing, accent tint, and muted disabled state.
+Feature views supply action semantics and availability; they do not override
+button style, font, size, or capsule background.
+
+```swift
+.toolbar {
+    TesseraeToolbarActions {
+        Menu {
+            // Descriptive secondary operations.
+        } label: {
+            Label("More", systemImage: "ellipsis")
+        }
+        Button("Save", systemImage: "checkmark") { save() }
+            .disabled(!hasChanges || isSaving)
+    }
+}
+```
+
+Keep native Back and modal cancellation/confirmation actions in their semantic
+placements on opposite sides. Complex operations retain text. New ordinary
+pages use the paper background, including nested Forms and Lists. These defaults
+also apply to subsequent agent work through `AGENTS.md`; the UI conventions CI
+check rejects direct trailing `ToolbarItem`/`ToolbarItemGroup` declarations outside
+the shared component. Relevant simulator flows and screenshot inspection still
+verify appearance and behavior.
+
 ### Explicitly out of scope for release 1.0
 
 - full Canvas/Dashboard layout or source-code editing;

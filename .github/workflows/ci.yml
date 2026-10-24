@@ -10,6 +10,13 @@ permissions:
   contents: read
 
 jobs:
+  ui-conventions:
+    name: UI conventions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: python3 Scripts/check_ui_conventions.py
+
   contract:
     name: OpenAPI contract
     runs-on: ubuntu-latest

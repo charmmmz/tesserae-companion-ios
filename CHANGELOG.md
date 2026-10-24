@@ -61,6 +61,10 @@ capabilities.
 
 ### Changed
 
+- Page action capsules share one DesignSystem component across root and detail
+  pages, including Dashboard settings, display details, Library folders and
+  Lineups. Icons, touch targets, spacing and disabled states stay consistent.
+
 - Nearby Setup & Maintenance keeps a concise entry guide visible alongside
   discovered displays, with Refresh Button and PicPak Button timings, the
   20-second hold limit, code scanning, and session timeout and exit instructions

@@ -1095,10 +1095,37 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertFalse(app.buttons["clear-local-activity"].exists)
         let displaysToolbar = checkToolbar(contextID: "manage-lineups", name: "Displays Root Toolbar")
 
+        app.buttons["display-card-picpak-kitchen"].tap()
+        XCTAssertTrue(app.buttons["root-send-action"].waitForExistence(timeout: 3))
+        XCTAssertEqual(app.buttons.matching(identifier: "root-settings").count, 1)
+        for action in [app.buttons["root-send-action"], settings] {
+            XCTAssertGreaterThanOrEqual(action.frame.width, 44 - 0.01)
+            XCTAssertGreaterThanOrEqual(action.frame.height, 44 - 0.01)
+        }
+        let displayDetailShot = XCTAttachment(screenshot: app.screenshot())
+        displayDetailShot.name = "Display detail shared toolbar"
+        displayDetailShot.lifetime = .keepAlways
+        add(displayDetailShot)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+
         app.buttons["Library"].firstMatch.tap()
         let libraryToolbar = checkToolbar(contextID: "gallery-create-folder", name: "Library Root Toolbar")
         XCTAssertEqual(libraryToolbar.width, displaysToolbar.width, accuracy: 0.5)
         XCTAssertEqual(libraryToolbar.minX, displaysToolbar.minX, accuracy: 0.5)
+
+        app.buttons["gallery-folder-folder_family"].tap()
+        let folderActions = [app.buttons["gallery-grid-options"], app.buttons["gallery-add-photos"]]
+        XCTAssertTrue(folderActions[0].waitForExistence(timeout: 3))
+        for action in folderActions {
+            XCTAssertGreaterThanOrEqual(action.frame.width, 44 - 0.01)
+            XCTAssertGreaterThanOrEqual(action.frame.height, 44 - 0.01)
+        }
+        XCTAssertEqual(folderActions[0].frame.midY, folderActions[1].frame.midY, accuracy: 0.5)
+        let folderShot = XCTAttachment(screenshot: app.screenshot())
+        folderShot.name = "Library folder shared toolbar"
+        folderShot.lifetime = .keepAlways
+        add(folderShot)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
 
         app.buttons["gallery-create-folder"].tap()
         XCTAssertTrue(app.navigationBars["New Folder"].waitForExistence(timeout: 3))

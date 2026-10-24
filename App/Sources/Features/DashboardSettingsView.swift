@@ -85,7 +85,7 @@ struct DashboardSettingsView: View {
           }.disabled(isSaving)
         }
       }
-      TesseraeRootToolbar(showsGlobalActions: false) {
+      TesseraeToolbarActions {
         Menu {
           Button("Reload Settings", systemImage: "arrow.clockwise") { requestReload() }
             .disabled(isSaving || isLoading)

@@ -17,6 +17,7 @@
 		07FCF32DF59628F960A2736E /* PhotoSubjectAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09B9A585A1539B7342FE714 /* PhotoSubjectAnalyzer.swift */; };
 		0C0D109EF327D44C0755AC62 /* LineupsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30CBA6B44083893EBB93FB17 /* LineupsView.swift */; };
 		143245C898273ABCE60115A5 /* BluetoothRecordLinkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A943DAE9D38DCF3EF959A54 /* BluetoothRecordLinkView.swift */; };
+		17D2FCCE924BA07994FAEE09 /* TesseraeToolbarActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF4E6E91B23A87DC7A195340 /* TesseraeToolbarActions.swift */; };
 		1BB2212ACD6F5E42950AD62F /* AdaptiveComposerLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 982ACAB2004BA498F82E4AA0 /* AdaptiveComposerLayout.swift */; };
 		1E5FF7A01F07A246FF6E813F /* LineupsAppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80F13F36D4E7990EF0B890C3 /* LineupsAppModelTests.swift */; };
 		28315FF4BF85AAE536A42F85 /* TesseraePanelImagePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 135374B71848FF0E87F4A6D3 /* TesseraePanelImagePreview.swift */; };
@@ -208,6 +209,7 @@
 		AD032CACF5897CDEDECD5C5F /* AdaptiveLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdaptiveLayoutTests.swift; sourceTree = "<group>"; };
 		AD24891D7CDB0886913F3675 /* AppShortcuts.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = AppShortcuts.xcstrings; sourceTree = "<group>"; };
 		AEF28EF26B0AF20FD40F858C /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		AF4E6E91B23A87DC7A195340 /* TesseraeToolbarActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TesseraeToolbarActions.swift; sourceTree = "<group>"; };
 		B285D6042818DD9ECF798800 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		B2A5670FEC5BD4923C95159E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		B5E57290EA4C5631004E3156 /* SendSubmissionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendSubmissionTests.swift; sourceTree = "<group>"; };
@@ -299,6 +301,7 @@
 			children = (
 				36574431BF8F9CAB78DF3088 /* DisplayHardwareBadge.swift */,
 				025F289A1CFEF8C9B59D15E0 /* PhosphorDashboardIcon.swift */,
+				AF4E6E91B23A87DC7A195340 /* TesseraeToolbarActions.swift */,
 			);
 			path = DesignSystem;
 			sourceTree = "<group>";
@@ -729,6 +732,7 @@
 				4B98C3F8FFCE806E85BF0034 /* TesseraeIntents.swift in Sources */,
 				28315FF4BF85AAE536A42F85 /* TesseraePanelImagePreview.swift in Sources */,
 				EDA7DAFA44340F1BDCBE5FCB /* TesseraeTheme.swift in Sources */,
+				17D2FCCE924BA07994FAEE09 /* TesseraeToolbarActions.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

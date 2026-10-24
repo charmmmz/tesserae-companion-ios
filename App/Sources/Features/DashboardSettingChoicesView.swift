@@ -103,7 +103,7 @@ struct DashboardSettingChoicesView<Details: View>: View {
       text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Choices"
     )
     .toolbar {
-      ToolbarItem(placement: .topBarTrailing) {
+      TesseraeToolbarActions {
         Button {
           Task { await load(offset: 0) }
         } label: {

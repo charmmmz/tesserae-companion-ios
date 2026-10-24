@@ -365,7 +365,7 @@ private struct GalleryFolderView: View {
         .navigationTitle(folder?.name ?? "Library")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
+            TesseraeToolbarActions {
                 Menu {
                     Picker("Grid Style", selection: $gridModeValue) {
                         Label("Square Photo Grid", systemImage: "square.grid.3x3")
@@ -413,7 +413,7 @@ private struct GalleryFolderView: View {
                         )
                     }
                 } label: {
-                    Label("Grid Options", systemImage: "ellipsis.circle")
+                    Label("Grid Options", systemImage: "ellipsis")
                 }
                 .accessibilityIdentifier("gallery-grid-options")
 

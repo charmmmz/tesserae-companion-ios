@@ -842,9 +842,8 @@ private struct DisplayDetailView: View {
         .navigationTitle(currentDisplay.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                TesseraeSendToolbarButton()
-                TesseraeSettingsToolbarButton()
+            TesseraeRootToolbar {
+                EmptyView()
             }
         }
         .task(

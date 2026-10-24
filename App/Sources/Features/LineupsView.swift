@@ -203,7 +203,7 @@ struct LineupsView: View {
         .navigationTitle("Lineups")
         .toolbar {
             if model.supportsLineupAuthoring {
-                ToolbarItem(placement: .topBarTrailing) {
+                TesseraeToolbarActions {
                     Button("Create Lineup", systemImage: "plus") {
                         beginCreatingLineup()
                     }
@@ -625,19 +625,16 @@ private struct LineupDetailView: View {
         .navigationTitle(lineup?.name ?? String(localized: "Lineup"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if let lineup,
-               lineup.nativeEditable,
-               model.supportsLineupAuthoring
-            {
-                ToolbarItem(placement: .topBarTrailing) {
+            TesseraeToolbarActions {
+                if let lineup,
+                   lineup.nativeEditable,
+                   model.supportsLineupAuthoring
+                {
                     Button("Edit", systemImage: "pencil") {
                         beginEditingLineup()
                     }
                     .accessibilityIdentifier("lineup-edit")
                 }
-            }
-
-            ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     if let lineup,
                        let destination = webURL(for: lineup)

@@ -65,6 +65,12 @@ observed result.
 
 ## Adaptive UI checks
 
+Page actions use the shared `TesseraeToolbarActions` capsule; root pages use
+`TesseraeRootToolbar`. Follow the [UI conventions in DESIGN.md](DESIGN.md#shared-page-actions)
+for new pages, including paper backgrounds and accessible icon actions.
+Run `python3 Scripts/check_ui_conventions.py` before submitting UI changes.
+CI rejects independently declared trailing toolbar items in feature views.
+
 Run `AdaptiveLayoutUITests` on an ordinary iPhone, an iPad, and iPhone Duo.
 Turning an ordinary iPhone must leave the app in portrait; iPad and Duo keep
 their system window adaptation. Run the long-display-name tests on iPhone to

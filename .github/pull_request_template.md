@@ -14,6 +14,7 @@
 - [ ] `swift test --package-path Packages/TesseraeKit`
 - [ ] iOS Simulator build
 - [ ] Relevant simulator UI test
+- [ ] UI changes follow `DESIGN.md` and `python3 Scripts/check_ui_conventions.py` passes
 - [ ] Physical iPhone/display evidence attached when claimed
 
 ## Safety
