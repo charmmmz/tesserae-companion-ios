@@ -24,265 +24,200 @@
   <a href="PRIVACY.md">Privacy</a>
 </p>
 
-## Made for everyday display tasks
+## Your displays, from your iPhone or iPad
+
+Check what is showing, adjust a Dashboard, send a photo, or manage a Lineup.
+Tesserae Companion connects directly to your own Tesserae server, with a built-in
+**Demo Mode** for exploring the app before pairing.
 
 <table>
   <tr>
-    <td align="center"><a href="docs/images/readme/pairing.png"><img src="docs/images/readme/pairing.png" width="220" alt="Manual Tesserae server pairing form"></a></td>
-    <td align="center"><a href="docs/images/readme/displays.png"><img src="docs/images/readme/displays.png" width="220" alt="Displays screen showing two connected e-paper displays"></a></td>
-    <td align="center"><a href="docs/images/readme/send-photo.png"><img src="docs/images/readme/send-photo.png" width="220" alt="Send screen editing a photo for selected displays"></a></td>
-    <td align="center"><a href="docs/images/readme/activity.png"><img src="docs/images/readme/activity.png" width="220" alt="Activity screen showing recently published photos and dashboards"></a></td>
+    <td align="center"><a href="docs/images/readme/displays.png"><img src="docs/images/readme/displays.png" width="220" alt="Displays overview with hardware, battery, Wi-Fi status, and quick actions"></a></td>
+    <td align="center"><a href="docs/images/readme/dashboards.png"><img src="docs/images/readme/dashboards.png" width="220" alt="Saved Dashboards grouped by display with preview and push actions"></a></td>
+    <td align="center"><a href="docs/images/readme/dashboard-settings.png"><img src="docs/images/readme/dashboard-settings.png" width="220" alt="Native Dashboard settings with preview, metadata, and component controls"></a></td>
+    <td align="center"><a href="docs/images/readme/lineup-editor.png"><img src="docs/images/readme/lineup-editor.png" width="220" alt="Native Lineup editor with a target display and selected Dashboards"></a></td>
   </tr>
   <tr>
-    <td align="center"><sub><strong>Pairing</strong><br>Connect directly to your server</sub></td>
-    <td align="center"><sub><strong>Displays</strong><br>See status and what is showing</sub></td>
-    <td align="center"><sub><strong>Send</strong><br>Fit, fill, and frame photos</sub></td>
-    <td align="center"><sub><strong>Activity</strong><br>Follow sends and retry content</sub></td>
+    <td align="center"><sub><strong>Displays</strong><br>Status and current content</sub></td>
+    <td align="center"><sub><strong>Dashboards</strong><br>Browse, preview, and push</sub></td>
+    <td align="center"><sub><strong>Native settings</strong><br>Edit content and appearance</sub></td>
+    <td align="center"><sub><strong>Lineups</strong><br>Choose targets and playback</sub></td>
   </tr>
   <tr>
-    <td align="center"><a href="docs/images/readme/dashboards.png"><img src="docs/images/readme/dashboards.png" width="220" alt="Dashboards screen with previews and Push actions"></a></td>
-    <td align="center"><a href="docs/images/readme/share-sheet.png"><img src="docs/images/readme/share-sheet.png" width="220" alt="Share Sheet composer sending a photo to selected Tesserae displays"></a></td>
-    <td align="center"><a href="docs/images/readme/lineup-create.png"><img src="docs/images/readme/lineup-create.png" width="220" alt="New Lineup guide for choosing Daily, Keep Fresh, Cycle, or Manual behavior"></a></td>
-    <td align="center"><a href="docs/images/readme/lineup-editor.png"><img src="docs/images/readme/lineup-editor.png" width="220" alt="Lineup editor showing its name, target display, and ordered dashboards"></a></td>
+    <td align="center"><a href="docs/images/readme/gallery.png"><img src="docs/images/readme/gallery.png" width="220" alt="Photo Library showing a square grid of sample images"></a></td>
+    <td align="center"><a href="docs/images/readme/send-photo.png"><img src="docs/images/readme/send-photo.png" width="220" alt="Photo composer with a display-aware preview and Auto Frame controls"></a></td>
+    <td align="center"><a href="docs/images/readme/activity.png"><img src="docs/images/readme/activity.png" width="220" alt="Activity showing recent content and send outcomes"></a></td>
+    <td align="center"><a href="docs/images/readme/bluetooth-maintenance.png"><img src="docs/images/readme/bluetooth-maintenance.png" width="220" alt="Authenticated Bluetooth maintenance for a supported PicPak display"></a></td>
   </tr>
   <tr>
-    <td align="center"><sub><strong>Dashboards</strong><br>Preview and push saved content</sub></td>
-    <td align="center"><sub><strong>Share Sheet</strong><br>Send from other iOS apps</sub></td>
-    <td align="center"><sub><strong>New Lineup</strong><br>Choose how playback should behave</sub></td>
-    <td align="center"><sub><strong>Edit Lineup</strong><br>Update targets and Dashboard order</sub></td>
+    <td align="center"><sub><strong>Library</strong><br>Browse and send saved photos</sub></td>
+    <td align="center"><sub><strong>Photo framing</strong><br>Compose for each display</sub></td>
+    <td align="center"><sub><strong>Activity</strong><br>Follow sends and retry</sub></td>
+    <td align="center"><sub><strong>Bluetooth</strong><br>Maintain nearby displays</sub></td>
   </tr>
 </table>
 
-Tesserae Companion keeps frequent display interactions close at hand while
-leaving authoring and administration in Tesserae's web interface.
+Screenshots show the current development build on an iPhone simulator, using
+demo content and simulated Bluetooth devices. Available
+controls depend on your server and firmware; the TestFlight build may differ.
 
-- Monitor display health and preview current or upcoming content.
-- Browse, preview, and push saved Dashboards.
-- Inspect and control server-managed Lineups.
-- Browse server-managed Gallery folders in a pinch-zoomable square or
-  original-ratio photo grid, add photos, and hand existing images into Send.
-- Send photos, image URLs, and webpage snapshots with display-aware layouts.
-- Use Auto Frame in photo Fill previews to keep detected faces and subjects
-  in view, then adjust by dragging or pinching if needed.
-- Share an image or link to Tesserae directly from other iOS apps.
-- Run common display actions from Shortcuts.
-- Bridge selected Apple Reminders data with explicit permission and retention
-  controls.
+## What you can do
 
-### Auto Frame
+- **Displays:** check freshness, battery and Wi-Fi information, and preview
+  current or pending content. Confirmed Bluetooth mode, battery readings and
+  received-photo previews remain available locally across app restarts.
+- **Dashboards:** browse and push saved content. On compatible servers, edit
+  names, icons, display bindings, appearance, declared inputs and individual
+  widget settings. Saves preserve other content and keep Push as a separate action.
+- **Lineups:** create and edit Daily, Keep Fresh, Cycle and Manual playback on
+  servers with Lineup authoring support, or inspect and control existing Lineups.
+- **Library:** browse Gallery folders in square or original-ratio photo grids,
+  adjust the grid density, upload photos and send a saved image. Supported
+  displays can also use server-managed Offline Albums.
+- **Send and Share:** send photos, image URLs and webpage snapshots; frame images
+  for each display; share from other iOS apps; or run common actions in Shortcuts.
+- **Personal Data:** opt in to selected Apple Reminders lists or Apple Health
+  summaries, with independent permissions and server retention settings.
 
-Choose a photo and a display in **Fill**. Auto Frame applies once when the
-preview is ready, with up to **2×** zoom for smaller subjects (within the server's
-limit). Each preview aspect ratio gets its own composition. Drag, pinch, or
-reset to centered Fill; those edits stay in place until you tap the wand again.
-The gesture hint bar keeps its frosted style and fits its icons and zoom level
-in a compact, centered bar. A green wand marks an automatic composition; dragging,
-pinching, or resetting clears the highlight. Tap the wand to run Auto Frame again.
-The hand is a gesture cue without a popup. Icons and the zoom level have even
-visual gaps despite their different widths.
-Long-press the wand for details when its status badge shows a warning.
-It keeps detected faces together when they fit, and aims to show as much
-of other subjects as possible, allowing partial crops. If faces cannot all fit,
-use Fit or Blur to show the whole photo.
+Dashboard creation, Canvas layout and code editing, plugin installation and
+server administration remain in Tesserae's web interface.
 
-Auto Frame works in Send and the Share Sheet when the server advertises image
-framing support. Analysis runs locally with Apple Vision on iOS 18 or later
-and does not require Apple Intelligence. Once a Share send has been queued,
-its composition and targets remain fixed for retries.
-Shared photos start with Fill when no saved layout preference exists.
+### Photo framing
 
-### Offline access and Bluetooth maintenance
+Use **Fill** and Auto Frame to compose around detected faces and subjects, then
+adjust by dragging or pinching. Each preview aspect ratio keeps its own framing;
+manual edits stay in place until you run Auto Frame again. Use Fit or Blur when
+you want the whole image visible.
 
-Saved screens appear before the server reconnects. The connection check has an
-eight-second deadline; **Other Servers** and **Bluetooth Maintenance** are available
-throughout the attempt and after a failure. Server discovery also offers manual
-address entry when no server is found. A failed new pairing keeps the old pairing.
-Other Servers is also available in Settings.
+Analysis runs locally with Apple Vision on iOS 18 or later and does not require
+Apple Intelligence. Framing works in Send and the Share Sheet when the server
+advertises support. Queued Share sends keep their chosen composition and targets
+for retries.
 
-Nearby Setup & Maintenance is available from onboarding without pairing. Local
-Bluetooth diagnostics, restart, and Wi-Fi repair do not require the app to reach
-a Tesserae server. Wi-Fi repair retains the display's saved server URL and token;
-the firmware still performs its normal connection checks. Registering a new
-display requires a reachable paired server to issue its registration code.
+### Bluetooth and offline access
 
-For supported Tesserae firmware displays, Maintenance also offers **Change
-Server**. Choose the server connected in Companion to request a registration
-code automatically, or enter another server's HTTP(S) address and six-digit
-device pairing code. This code comes from the destination server; it is separate
-from the display's Bluetooth verification code. Confirm Wi-Fi credentials next.
-The firmware saves the destination after its connection checks pass, then
-restarts to register. PicPak maintenance continues to offer Wi-Fi repair only.
+Cached screens appear while Companion reconnects. **Other Servers** and
+**Bluetooth Maintenance** remain available when your server cannot be reached.
+On supported firmware, nearby Bluetooth setup, diagnostics, restart and Wi-Fi
+repair work without a server connection. Wi-Fi repair retains the display's
+saved server settings. New device registration still needs a reachable server.
 
-PicPak Bluetooth setup, maintenance, and photo sending require firmware using
-its assigned hardware code `20`. Update both Companion and PicPak firmware;
-older PicPak firmware using code `11` is no longer recognized as PicPak.
+Supported Tesserae firmware also offers **Change Server**; PicPak maintenance
+offers Wi-Fi repair. PicPak requires its assigned hardware code **20**—older
+firmware using code 11 must be updated.
 
-Experimental native Bluetooth photo sending uses capabilities reported by
-opted-in display firmware to select resolution and pixel format. Enter
-Maintenance, select Manual (Bluetooth) and authorize this phone, then close
-Maintenance to restart. Press the display's button to open a local photo
-session; automatic server updates stay paused until Automatic is selected
-again. E1004, E1001, E1003 and Sticky profiles await hardware acceptance, and
-existing PicPak photo sending keeps its own protocol. See the
-[implementation and hardware test handoff](docs/plans/2026-10-21-ble-photo-v2-implementation.md).
-Photo transfers size their packets to the current connection and use a bounded
-write-without-response window only when firmware explicitly supports it. Older
-PicPak firmware keeps its acknowledged-write path. See the
-[PicPak throughput test guide](docs/ble-photo-throughput-testing.md).
+For automatic association with a differently named server device, Companion
+submits a full MAC already obtained from authenticated Bluetooth and receives
+only a matching device ID. It does not read MACs from the server's device list.
+Older servers keep manual association in Device Details. Saved observations
+stay local to this phone or tablet; another phone's operations do not sync into
+them. A received photo does not confirm a physical e-paper refresh.
 
-Companion keeps the last authenticated Bluetooth mode and battery voltage on
-this phone or tablet. Displays shows Bluetooth mode in place of Wi-Fi signal,
-retains the last server-reported battery percentage and its timestamp, and shows
-the last verified Bluetooth photo. Its thumbnail preserves the sent crop and
-original colours before e-paper quantization; receipt does not confirm physical screen refresh.
-Servers providing a display's complete Wi-Fi MAC associate it automatically with
-authenticated Bluetooth records. Unassociated displays offer a one-time manual
-association inside Device Details when a unique hardware match is unavailable.
-Once the display confirms Automatic (Wi-Fi), Displays immediately returns to
-the server preview and reclaims the Bluetooth thumbnail, even if the server
-image is unchanged. Unconfirmed or failed mode changes retain the local photo.
-Records survive app restarts and sleeping displays retain their last known state.
+PicPak Bluetooth photo sending uses its established protocol. The negotiated
+photo protocol for E1004, E1001, E1003 and Sticky remains experimental and
+requires compatible opt-in firmware and hardware acceptance. See the
+[Bluetooth photo handoff](docs/plans/2026-10-21-ble-photo-v2-implementation.md) and
+[PicPak throughput guide](docs/ble-photo-throughput-testing.md).
 
-Matching canonical device IDs continue to associate within the server where
-Bluetooth was used. Complete MAC matching also supports differing BLE and server
-IDs, including PicPak, without a manual step. Associated displays hide the binding
-picker. Confirmed diagnostics and sends replace cached state, conflicting complete
-MAC evidence repairs obsolete manual associations, and confirmed factory reset
-clears the local record. No separate Forget Bluetooth Record action is needed.
-Earlier uncached photos cannot be recovered, and other phones' operations do
-not sync into this local record.
+## Get started
+
+1. Install [TestFlight](https://apps.apple.com/app/testflight/id899247664) and
+   [join the beta](https://testflight.apple.com/join/gjQar3TK).
+2. Explore **Demo Mode**, or discover your Tesserae server on the local network.
+   You can also enter its address manually.
+3. Pair using the Companion pairing code shown by Tesserae.
+4. Grant optional editing or personal-data permissions only for the features
+   you want to use.
+
+Requires **iOS / iPadOS 18 or later** and a Tesserae server exposing the scoped
+`/api/app/v1` Companion API. The app connects directly to your server; there is
+no separate Companion cloud account. English and Simplified Chinese are included.
+
+### Server and firmware support
+
+Features are enabled by the server's advertised capabilities rather than by
+assuming every Tesserae installation offers the same API.
+
+| Feature | What it needs |
+| --- | --- |
+| Dashboard settings and widget editing | `dashboard_settings`, plus `dashboard_component_settings` for individual fields; an explicit optional `dashboards:write` grant to save |
+| Lineup editing | `lineup_authoring` and the corresponding edit permission |
+| Gallery and Offline Albums | The corresponding Gallery/Album capabilities and supported device firmware |
+| Reminders and Health | The matching personal-data capability, iOS permission and an explicit choice to sync |
+| Bluetooth setup, maintenance and photos | Firmware implementing the relevant Bluetooth protocol; available actions come from its reported capabilities |
+
+The server additions for native Dashboard editing ([Tesserae #382](https://github.com/dmellok/tesserae/pull/382))
+and known-MAC association ([#381](https://github.com/dmellok/tesserae/pull/381)) are
+under review as of **24 October 2026**. Their presence in this app's demo does
+not establish availability in a released server. See
+[COMPATIBILITY.md](COMPATIBILITY.md) for capability gates and validation records.
 
 ## Your server, your data
 
-The app connects directly to your own Tesserae server. There is no separate
-Companion cloud account, and the built-in demo journey works without a server
-when you just want to explore the interface.
+Reminders and Health bridges are opt-in. Companion uploads the limited snapshots
+needed by the selected widgets; it does not upload a complete Reminders or
+Health database. In **Settings → Personal Data → Reminders / Health → Keep Synced
+Data**, choose 1, 2 (default), 7, 30 or 90 days, or **Never**, then sync to apply.
+Longer retention and Never require the server's `personal_data_retention` capability.
 
-Personal-data bridges are opt-in. Selected Reminders lists stay on the iPhone;
-only the minimal snapshot needed by Tesserae is uploaded. See
-[PRIVACY.md](PRIVACY.md) for data flow, storage, permissions, and draft App
-Store privacy details.
-
-In **Settings → Personal Data → Reminders / Health → Keep Synced Data**, choose
-1, 2 (default), 7, 30, or 90 days, or **Never**, then sync to apply. The setting
-belongs to this phone's source on the selected server and applies to every widget
-using it. Never suits a fridge inventory that should remain until changed.
-Longer periods and Never require a server advertising `personal_data_retention`.
-A stale label still means the data has not refreshed for 24 hours; it does not
-hide or delete a snapshot before its chosen deadline.
-
-## Get the beta
-
-1. Install [TestFlight](https://apps.apple.com/app/testflight/id899247664) on
-   your iPhone.
-2. [Join the Tesserae Companion beta](https://testflight.apple.com/join/gjQar3TK).
-3. Open the app and discover a Tesserae server on your local network, or enter
-   its address manually.
-4. Pair with the code shown by Tesserae.
-
-Tesserae Companion requires iOS 18 or later. The core app expects a Tesserae
-server with the scoped `/api/app/v1` surface; optional features are shown only
-when the server advertises their capabilities. The current compatibility and
-physical-validation record lives in [COMPATIBILITY.md](COMPATIBILITY.md).
-
-## Product scope
-
-The native app focuses on quick household interactions: Displays, Dashboards,
-Lineups, Send, Activity, Share Sheet, Shortcuts, and privacy-controlled personal
-data bridges.
-
-Dashboard creation, Canvas editing, plugins, themes, schedules, rotations,
-firmware, and advanced device management remain in Tesserae's web UI. The
-planned first App Store release is 1.0.0; the public build is currently an
-external TestFlight beta.
+Retention belongs to this phone's source on the selected server. A stale label
+after 24 hours does not itself hide or delete the snapshot before its chosen
+deadline. See [PRIVACY.md](PRIVACY.md) for permissions, storage and data flow.
 
 ## Development
 
-The repository contains a native Swift 6 and SwiftUI application generated with
-[XcodeGen](https://github.com/yonaskolb/XcodeGen). `TesseraeKit` owns the shared
-models, Keychain boundary, and HTTP transport.
-
-```text
-App/
-├── Sources/
-│   ├── Features/
-│   └── DesignSystem/
-└── Resources/
-Packages/
-└── TesseraeKit/
-    ├── Sources/TesseraeKit/
-    └── Tests/TesseraeKitTests/
-ShareExtension/
-Contracts/
-project.yml
-```
-
-Use Xcode 16.4 or later (27.1 for iPhone Duo) to build; the minimum deployment target remains iOS 18.
+The app uses Swift 6 and SwiftUI. Use Xcode 16.4 or later; iPhone Duo development
+requires Xcode 27.1 and its runtime. The deployment minimum remains iOS 18.
 Ordinary iPhones use portrait; iPad and Duo layouts adapt to the available window.
-Generate and open the Xcode project:
+
+| Location | Contents |
+| --- | --- |
+| `App/` | Native app, resources, unit tests and UI tests |
+| `Packages/TesseraeKit/` | Shared models, HTTP transport, credentials and package tests |
+| `ShareExtension/`, `SharedUI/` | Share composer and shared photo-framing UI |
+| `Contracts/` | OpenAPI contract, fixtures, checks and local fixture server |
+| `project.yml` | [XcodeGen](https://github.com/yonaskolb/XcodeGen) project source |
 
 ```sh
 xcodegen generate
 open TesseraeCompanion.xcodeproj
 ```
 
-Run the Swift package and OpenAPI fixture tests:
+Run the package and contract checks:
 
 ```sh
 swift test --package-path Packages/TesseraeKit
-python -m pytest Contracts
+python3 -m venv .venv
+.venv/bin/pip install -r Contracts/requirements.txt
+.venv/bin/python -m pytest Contracts
 ```
 
-Run the stateful local contract server for the manual-connection and UI-test
-journeys:
-
-```sh
-python3 Contracts/fixture_server.py --port 8765
-```
-
-Then connect to `http://127.0.0.1:8765` with any six-digit pairing code. This
-fixture is development infrastructure, not a Tesserae server.
-
-The app includes Simplified Chinese resources, privacy manifests, and an
-embedded Share Extension. English remains the development language. Automatic
-signing is configured for the maintainer's Apple Developer team; Xcode must be
-signed into that team before it can create development provisioning profiles.
+For local development, `python3 Contracts/fixture_server.py --port 8765` serves
+a stateful fixture at `http://127.0.0.1:8765` with any six-digit pairing code.
+It is development infrastructure, not a Tesserae server. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for simulator checks and signing setup.
 
 ## Documentation
 
 | Document | Purpose |
 | --- | --- |
-| [DESIGN.md](DESIGN.md) | Product, UX, architecture, and acceptance criteria |
-| [API_CONTRACT.md](API_CONTRACT.md) | Companion server contract and ownership boundaries |
-| [Contracts/app-v1.openapi.yaml](Contracts/app-v1.openapi.yaml) | Machine-readable API contract |
+| [DESIGN.md](DESIGN.md) | Product, UX and architecture |
+| [API_CONTRACT.md](API_CONTRACT.md) / [OpenAPI](Contracts/app-v1.openapi.yaml) | Server contract and ownership boundaries |
 | [COMPATIBILITY.md](COMPATIBILITY.md) | Capability gates and validation evidence |
-| [PRIVACY.md](PRIVACY.md) | Local data flow, retention, and permissions |
-| [TESTFLIGHT_CHECKLIST.md](TESTFLIGHT_CHECKLIST.md) | Beta release checks |
-| [TESTFLIGHT_NOTES.md](TESTFLIGHT_NOTES.md) | Tester guidance and beta metadata |
-| [CHANGELOG.md](CHANGELOG.md) | Notable user-visible changes |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution and contract-change workflow |
+| [PRIVACY.md](PRIVACY.md) | Permissions, storage and retention |
+| [TESTFLIGHT_CHECKLIST.md](TESTFLIGHT_CHECKLIST.md) / [TESTFLIGHT_NOTES.md](TESTFLIGHT_NOTES.md) | Release checks and beta guidance |
+| [CHANGELOG.md](CHANGELOG.md) | User-visible changes |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Development and contribution workflow |
 | [SECURITY.md](SECURITY.md) | Security reporting |
-| [ATTRIBUTION.md](ATTRIBUTION.md) | Tesserae name, mark, and upstream boundaries |
+| [ATTRIBUTION.md](ATTRIBUTION.md) | Tesserae name, mark and upstream boundaries |
 
-Contract changes should be discussed with the Tesserae maintainer and recorded
-in the API contract before the app depends on them. A proposed API is not a
-compatibility guarantee until the matching Tesserae release and minimum server
-version are documented.
+## Licence and project boundary
 
-## Repository boundary
+Tesserae Companion is maintained separately from the Tesserae server because it
+has its own Xcode, signing, App Store and release lifecycle. Tesserae's maintainer
+has designated it as the official iOS app and permitted use of the name and mark
+within the boundaries in [ATTRIBUTION.md](ATTRIBUTION.md).
 
-The iOS app lives in this repository because it has a separate Xcode, signing,
-App Store, issue, and release lifecycle from the Tesserae server. The Tesserae
-repository owns the server implementation, server-facing OpenAPI integration,
-and server contract tests.
-
-Tesserae's maintainer has designated **Tesserae Companion** as the official iOS
-app and granted permission to use the Tesserae name and mark subject to the
-boundaries in [ATTRIBUTION.md](ATTRIBUTION.md).
-
-## Licence
-
-Tesserae Companion's original code and documentation are available under the
-[Apache License 2.0](LICENSE). Tesserae is a separate project under
-AGPL-3.0-or-later; this client licence does not change the Tesserae server's
-licence or grant additional rights to its name and marks.
+The app's original code and documentation use [Apache License 2.0](LICENSE).
+Tesserae is a separate project under AGPL-3.0-or-later; the client licence does
+not change the server's licence or grant additional rights to its name or marks.
