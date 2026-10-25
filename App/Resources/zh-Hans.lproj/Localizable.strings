@@ -905,3 +905,19 @@
 "This removes the saved mode, voltage, and photo preview from this device." = "这会从本机删除保存的模式、电压和照片预览。";
 
 "Bluetooth" = "蓝牙";
+
+/* Inline video and Live Photo frame selection */
+"Choose a photo or video" = "选择照片或视频";
+"Loading photo or video…" = "正在载入照片或视频…";
+"Live Photo" = "实况照片";
+"Choose Frame" = "换一帧";
+"Hide Frames" = "收起";
+"Live Photo · Key Photo" = "实况照片 · 主图";
+"Loading frames…" = "正在载入画面…";
+"Key" = "主图";
+"Key Photo" = "主图";
+"Restore Key Photo" = "恢复主图";
+"%@ seconds" = "%@ 秒";
+"This item's video could not be loaded. Your current photo is unchanged." = "无法载入动态画面，当前照片已保留。";
+"This video does not contain a readable picture." = "无法读取这个视频的画面。";
+"This frame could not be prepared. Try another moment." = "无法处理这一帧，请选择其他画面。";

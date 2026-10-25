@@ -73,6 +73,22 @@ Companion release.
 | V1-10 | Read-only previews | Lazily show the latest full display composition and cached Dashboard visuals when the server advertises `previews`; retain aspect-correct placeholders otherwise. |
 | V1-11 | Canonical Activity | When the server advertises `history`, merge canonical push History, composition thumbnails, pagination, and resend into Activity without adding another top-level tab. |
 
+### Video and Live Photo frame selection
+
+The in-app Send and nearby Bluetooth composers accept photos, videos, and Live
+Photos through the system Photos picker. A video adds a thumbnail timeline
+directly below the existing display preview. Dragging selects a still image;
+the existing framing and Send actions remain the completion path. There is no
+separate editor or frame-confirmation step.
+
+Live Photos initially use their supplied primary photo. Choose Frame expands
+the same timeline and loads the paired video only then; Key Photo restores the
+original still image. Only the selected
+still image enters the existing delivery protocol. Decoding is bounded to the
+target size, respects video orientation, and normalizes HDR frames to SDR.
+Pending or superseded frame requests cannot be submitted; changing a frame
+preserves manual framing and invalidates old subject analysis.
+
 ### Post-1.0 photo framing roadmap
 
 Manual photo composition is split into independently reviewable layers:

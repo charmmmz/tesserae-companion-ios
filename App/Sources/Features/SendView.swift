@@ -22,8 +22,11 @@ struct SendView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var previewHeight: CGFloat = 276
     @State private var source: SendSource = .photo
-    @State private var pickerItem: PhotosPickerItem?
-    @State private var loadedPickerItem: PhotosPickerItem?
+    @State private var pickerItem: MediaPickerSelection?
+    @State private var loadedPickerItem: MediaPickerSelection?
+    @State private var mediaFrames = MediaFrameSession()
+    @State private var appliedMediaSourceID: UUID?
+    @State private var appliedMediaRevision: UUID?
     @State private var initialImageWasPrepared = false
     @State private var isPhotoPickerPresented = false
     @State private var imageData: Data?
@@ -92,6 +95,21 @@ struct SendView: View {
         .task(id: pickerItem) {
             if let pickerItem, pickerItem != loadedPickerItem { await load(pickerItem) }
         }
+        .onChange(of: mediaFrames.outputRevision) { _, _ in applyMediaFrame() }
+        .onDisappear { mediaFrames.cancelWork() }
+        .onAppear { if mediaFrames.isExpanded { mediaFrames.expand() } }
+        #if DEBUG
+        .task {
+            if let value = ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_MEDIA"] {
+                do {
+                    let source = try await MediaFrameFixtures.source(kind: value == "live" ? .livePhoto : .video)
+                    try Task.checkCancellation()
+                    mediaFrames.adopt(source)
+                    applyMediaFrame()
+                } catch { if !Task.isCancelled { model.lastError = error.localizedDescription } }
+            }
+        }
+        #endif
         .task(id: initialImage?.id) {
             if !initialImageWasPrepared, imageData == nil, let initialImage {
                 await prepareInitialImage(initialImage)
@@ -101,10 +119,9 @@ struct SendView: View {
             framingSession.updateAutomaticContext(context, data: imageData)
         }
         .onChange(of: model.activeInstance?.id) { framingSession.discardAnalysis() }
-        .photosPicker(
+        .mediaLibraryPicker(
             isPresented: $isPhotoPickerPresented,
-            selection: $pickerItem,
-            matching: .images
+            selection: $pickerItem
         )
         .tesseraeScreenBackground()
         .tesseraeHapticFeedback(trigger: hapticEvent)
@@ -112,7 +129,7 @@ struct SendView: View {
 
     private var submitButton: some View {
         Button {
-            guard !submission.isSubmitting else { return }
+            guard !submission.isSubmitting, sourceIsReady, !selectedDeviceIDs.isEmpty, !isSending else { return }
             framingSession.freeze()
             submission.isSubmitting = true
             let submittedSource = source
@@ -264,6 +281,8 @@ struct SendView: View {
 
             if model.connectionMode == .demo {
                 Button("Use Sample") {
+                    mediaFrames.clear()
+                    appliedMediaSourceID = nil
                     imageLoadRevision = UUID()
                     isPreparingImage = false
                     let renderer = UIGraphicsImageRenderer(
@@ -310,9 +329,15 @@ struct SendView: View {
     }
 
     private var previewTitle: some View {
-        Text("Preview")
-            .font(.headline)
-            .accessibilityIdentifier("send-preview-title")
+        HStack(spacing: 8) {
+            Text("Preview")
+                .font(.headline)
+                .accessibilityIdentifier("send-preview-title")
+            if isPreparingImage {
+                ProgressView().controlSize(.small)
+                    .accessibilityLabel("Loading photo or video…")
+            }
+        }
     }
 
     @ViewBuilder
@@ -352,7 +377,7 @@ struct SendView: View {
                     maximumFramingZoom: maximumFramingZoom,
                     onCanvasTap: choosePhotoFromPreview,
                     prioritizesFramingGesture: prioritizesFramingGesture,
-                    framingEditingEnabled: !framingSession.isFrozen,
+                    framingEditingEnabled: !framingSession.isFrozen && !mediaFrames.isBusy && !isPreparingImage,
                     onAutoFrame: canAutoFrame ? { autoFrame() } : nil,
                     isAutoFraming: framingSession.isAnalyzing,
                     autoFramingFeedback: framingSession.feedback,
@@ -386,9 +411,10 @@ struct SendView: View {
                 .frame(height: previewHeight, alignment: .top)
             }
 
+            MediaFrameControls(session: mediaFrames, isSending: submission.isSubmitting || isPreparingImage)
             previewFooter
         }
-        .frame(height: dynamicTypeSize.isAccessibilitySize ? nil : previewSlotHeight)
+        .frame(height: dynamicTypeSize.isAccessibilitySize || mediaFrames.hasTimeline ? nil : previewSlotHeight)
     }
 
     private var previewFooter: some View {
@@ -558,8 +584,9 @@ struct SendView: View {
     }
 
     private var imageSelectionLabel: String {
-        imageData == nil
-            ? String(localized: "Choose one still image")
+        if isPreparingImage { return String(localized: "Loading photo or video…") }
+        return imageData == nil
+            ? String(localized: "Choose a photo or video")
             : String(localized: "Image ready")
     }
 
@@ -572,7 +599,8 @@ struct SendView: View {
     private var sourceIsReady: Bool {
         switch source {
         case .photo:
-            imageData != nil && !isPreparingImage
+            imageData != nil && !isPreparingImage && !mediaFrames.isBusy
+                && (mediaFrames.source == nil || appliedMediaRevision == mediaFrames.outputRevision)
         case .link:
             linkURL != nil && supportedLinkKinds.contains(linkKind)
         }
@@ -670,7 +698,7 @@ struct SendView: View {
     }
 
     private var canAutoFrame: Bool {
-        framingEditorIsActive && !selectedDeviceIDs.isEmpty && !isPreparingImage
+        framingEditorIsActive && !selectedDeviceIDs.isEmpty && !isPreparingImage && !mediaFrames.isBusy
     }
 
     private var automaticFramingContext: PhotoFramingSession.AutomaticContext {
@@ -794,23 +822,38 @@ struct SendView: View {
         }
     }
 
-    private func load(_ item: PhotosPickerItem?) async {
+    private func load(_ item: MediaPickerSelection?) async {
         guard let item else { return }
-        let revision = beginImageLoad()
+        let revision = UUID()
+        imageLoadRevision = revision
+        isPreparingImage = true
         defer { if imageLoadRevision == revision { isPreparingImage = false } }
         do {
-            guard let data = try await item.loadTransferable(type: Data.self) else {
-                throw UploadImagePreparationError.decoding
-            }
-            let fallbackContentType = item.supportedContentTypes
-                .compactMap(\.preferredMIMEType)
-                .first ?? "image/jpeg"
+            let source = try await item.load(maximumPixelSize: imagePreparationMaxEdge)
             guard imageLoadRevision == revision, !Task.isCancelled else { return }
-            try await finishImageLoad(data: data, contentType: fallbackContentType, revision: revision)
-            if imageLoadRevision == revision, !Task.isCancelled { loadedPickerItem = item }
+            mediaFrames.adopt(source)
+            applyMediaFrame()
+            loadedPickerItem = item
         } catch {
             guard imageLoadRevision == revision, !Task.isCancelled else { return }
             model.lastError = error.localizedDescription
+        }
+    }
+
+    private func applyMediaFrame() {
+        guard appliedMediaRevision != mediaFrames.outputRevision else { return }
+        guard let prepared = mediaFrames.output, let source = mediaFrames.source else { return }
+        appliedMediaRevision = mediaFrames.outputRevision
+        imageData = prepared.data
+        imageContentType = prepared.contentType
+        previewImage = UIImage(data: prepared.data)
+        if appliedMediaSourceID != source.id {
+            resetImageFramingState()
+            appliedMediaSourceID = source.id
+        } else {
+            framingSession.discardAnalysis()
+            imageRevision = UUID()
+            imageSendAttempt = nil
         }
     }
 

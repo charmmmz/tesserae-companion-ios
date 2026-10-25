@@ -19,8 +19,10 @@
 		143245C898273ABCE60115A5 /* BluetoothRecordLinkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A943DAE9D38DCF3EF959A54 /* BluetoothRecordLinkView.swift */; };
 		17D2FCCE924BA07994FAEE09 /* TesseraeToolbarActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF4E6E91B23A87DC7A195340 /* TesseraeToolbarActions.swift */; };
 		1BB2212ACD6F5E42950AD62F /* AdaptiveComposerLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 982ACAB2004BA498F82E4AA0 /* AdaptiveComposerLayout.swift */; };
+		1DB64B0843105823C25C7E1D /* MediaFrameFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F9E787492913D7809CB9565 /* MediaFrameFixtures.swift */; };
 		1E5FF7A01F07A246FF6E813F /* LineupsAppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80F13F36D4E7990EF0B890C3 /* LineupsAppModelTests.swift */; };
 		28315FF4BF85AAE536A42F85 /* TesseraePanelImagePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 135374B71848FF0E87F4A6D3 /* TesseraePanelImagePreview.swift */; };
+		2CAD41B5926767175B4C39E5 /* MediaFrameTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 895ED3887D8E6C731D22A34C /* MediaFrameTests.swift */; };
 		2DB239AB23E1BEDF30BF73EA /* PhosphorRegularGlyphs.json in Resources */ = {isa = PBXBuildFile; fileRef = 5CCA51F737B4F27E6617E7E4 /* PhosphorRegularGlyphs.json */; };
 		3046E3D5594FAAD50F5E1467 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = DF8B7156D9BACE5476E42EA4 /* Localizable.strings */; };
 		32C275E911084C055C34BDE2 /* NearbyPhotoSendView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D7BED370DEE63230A06B774 /* NearbyPhotoSendView.swift */; };
@@ -29,6 +31,7 @@
 		364139BE7274398A4FB6A50C /* BLEPhotoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B78EBE8F9EA638D2B8BE520 /* BLEPhotoTests.swift */; };
 		38605E56F3B8C7C1F8A4B499 /* LineupEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEABAD3353BA2EB74A7FFD23 /* LineupEditorView.swift */; };
 		38FFA83B75C8B09B8F32AE6E /* TesseraeCompanionApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BC6F53F178D10E050100D5A /* TesseraeCompanionApp.swift */; };
+		3DBE5D592C10BB22642CBCE5 /* MediaFrameSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7900B085EB33F558356A1E91 /* MediaFrameSession.swift */; };
 		3F29C92C8E5B97327E3D0265 /* DisplaysView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6B1174AA85BE4EB711F746F /* DisplaysView.swift */; };
 		46A5F3DD86C95C5254635D25 /* LocalBluetoothPhotoRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F99101E3410A2CB4183DCF85 /* LocalBluetoothPhotoRenderer.swift */; };
 		4965F159C43AD0172327ED86 /* LineupEditingStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58AAE4A00D19C74A3DD7E7FC /* LineupEditingStateTests.swift */; };
@@ -38,6 +41,7 @@
 		4F402A0069B78FDE2256EE9F /* TesseraePanelImagePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 135374B71848FF0E87F4A6D3 /* TesseraePanelImagePreview.swift */; };
 		4F63438E4356B972B7A4600D /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EA5F074B206DD2FF54C9767 /* RootView.swift */; };
 		50F233622A7FB17CD2295534 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF3B64DA50FECFA7A4514489 /* ShareViewController.swift */; };
+		52A094652F5155293AC441D8 /* MediaFrameFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F9E787492913D7809CB9565 /* MediaFrameFixtures.swift */; };
 		55164D3148D6678C5CB03FCD /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 216C90508EC6D953751E6523 /* InfoPlist.strings */; };
 		5596E1C8503BD33C89F3ED03 /* SendSubmissionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5E57290EA4C5631004E3156 /* SendSubmissionTests.swift */; };
 		56C7CF9DC0CBA6DC2FE131BD /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B285D6042818DD9ECF798800 /* AppModel.swift */; };
@@ -56,19 +60,23 @@
 		69E964DA91CB8FFDFC343170 /* HealthSnapshotFactoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 259C8594008E905790574F3A /* HealthSnapshotFactoryTests.swift */; };
 		6C45BF99D82AB95DD6A2B979 /* DashboardComponentSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 392FCC1E3CDA7DF07E4B4444 /* DashboardComponentSettingsView.swift */; };
 		6FD2A3368ED54597304902DB /* PhosphorDashboardIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 025F289A1CFEF8C9B59D15E0 /* PhosphorDashboardIcon.swift */; };
+		703F9F08922478161818C5F4 /* MediaFrameUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 218B25F959EFE5BB383228CF /* MediaFrameUITests.swift */; };
 		7640D052F916B7D073F4D161 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = DA70B355A13002C7B64EA149 /* Localizable.strings */; };
 		7878E69E20C0262F96387CA4 /* AdaptiveComposerLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 982ACAB2004BA498F82E4AA0 /* AdaptiveComposerLayout.swift */; };
 		78BD5F20FF35935BF1ED6F68 /* DeviceSetupQRScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 426B2AE06E8492AEE89F8943 /* DeviceSetupQRScanner.swift */; };
 		7947C5ABEA598A1D59C57C68 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8FE0A6BC06BC1C26FD5AD93A /* Assets.xcassets */; };
 		7C7957F03F775B5E9B059BE2 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B2A5670FEC5BD4923C95159E /* PrivacyInfo.xcprivacy */; };
+		808C497AB18FB6FAC1ED23F9 /* MediaFrameControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEF048F26620C2F5266E0267 /* MediaFrameControls.swift */; };
 		80FF4272E3D31DF51A6245B8 /* DashboardSettingsAppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 348EE5DFDB46CEDFD1DBFFEE /* DashboardSettingsAppModelTests.swift */; };
 		86913487D95BFCE535E7C38C /* AlbumsAndActivityUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B1C7C0CE5B9420ECC69B548 /* AlbumsAndActivityUITests.swift */; };
+		8C920FF8FAAF6F167EB28756 /* MediaLibraryPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E080EF75EAC8A0C7863578B /* MediaLibraryPicker.swift */; };
 		916CBD8751A5A4B3F64FA338 /* AdaptiveLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD032CACF5897CDEDECD5C5F /* AdaptiveLayoutTests.swift */; };
 		923B54BBAA318026F2C29769 /* PreviewArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61AF530D779237A174E117C6 /* PreviewArtwork.swift */; };
 		947C66D335E39949AED8C112 /* PicPakPhotoEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A4080F0A169BC5BCBF484AC /* PicPakPhotoEncoder.swift */; };
 		989E27DFBE6C6AC369525233 /* MessageCenterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 878F2E4D47D31218D70ED033 /* MessageCenterTests.swift */; };
 		9AC2C9AD316705D104BC71AC /* ActivityPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A5B1ACBB0D226BC89B9674D /* ActivityPresentationTests.swift */; };
 		A33C850BFA53E3B5066F3D30 /* PhotoFramingGesture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EA333FF9332F6E7F0A3AAEA /* PhotoFramingGesture.swift */; };
+		A372DBF29C5725B419393279 /* MediaLibraryPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E080EF75EAC8A0C7863578B /* MediaLibraryPicker.swift */; };
 		A39325FC03A45BD076B23270 /* TesseraeCompanionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F7B082A4F4C920F49545310 /* TesseraeCompanionUITests.swift */; };
 		A822986A4CCE386F6A7ED1D5 /* SetupNetworkStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20D62C46FB3E95326C7B906 /* SetupNetworkStore.swift */; };
 		A9C1333F5B8DEEBBCBECCF92 /* BLEPhotoProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13FE9A7CF2AD8318230B5311 /* BLEPhotoProtocol.swift */; };
@@ -84,6 +92,7 @@
 		CB4BA3CC542CA597567043D8 /* FittedPreviewLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A04E5CC172EAC80A6C24F75 /* FittedPreviewLayout.swift */; };
 		D72F7AB7540DAF09C2FDB102 /* DashboardSettingsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7D732F7AB479072C4C94DA1 /* DashboardSettingsUITests.swift */; };
 		D934305BF70255B473EC70FA /* NearbyDeviceSetupError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BEB87772E7D7FCDD812DDC7 /* NearbyDeviceSetupError.swift */; };
+		D943B9172BE411B2829664A6 /* MediaFrameControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEF048F26620C2F5266E0267 /* MediaFrameControls.swift */; };
 		DD74E53D9A1746A291D53C1E /* BluetoothDisplayStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC4C4A40304AB2ED5571D5F3 /* BluetoothDisplayStoreTests.swift */; };
 		DF2314E330D5BC6AA639C723 /* TesseraeShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 6F532D2BC8A0893B35702D88 /* TesseraeShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		DF677F561B92558755B27EBF /* PhotoFramingSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90C9F22206234BD938D1E5B1 /* PhotoFramingSession.swift */; };
@@ -94,6 +103,7 @@
 		E8F9020298F307760D7FA918 /* ConnectionRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6BCE92FAB7DF4093DAAE45D /* ConnectionRecoveryTests.swift */; };
 		EA4319DF19D558471BAF8B4D /* PhotoFramingGesture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EA333FF9332F6E7F0A3AAEA /* PhotoFramingGesture.swift */; };
 		EDA7DAFA44340F1BDCBE5FCB /* TesseraeTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD8060E9227692A0914DB946 /* TesseraeTheme.swift */; };
+		EEC2E5BFD4520294884FAA73 /* MediaFrameSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7900B085EB33F558356A1E91 /* MediaFrameSession.swift */; };
 		EF027BEE001DABA6D3E84627 /* BLESetupProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD5EEF99A30C18C07C717772 /* BLESetupProtocolTests.swift */; };
 		F0209EEDC79E28C76F13B892 /* AppConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DABD7AC708239FDC0621487 /* AppConfiguration.swift */; };
 		F2B69015E438D0D45B00B241 /* DashboardsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA9D7AD75F28CF202A22080E /* DashboardsView.swift */; };
@@ -155,6 +165,7 @@
 		1D7BED370DEE63230A06B774 /* NearbyPhotoSendView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearbyPhotoSendView.swift; sourceTree = "<group>"; };
 		1F84E715D6D8755E7AB565AE /* BluetoothDisplayStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothDisplayStore.swift; sourceTree = "<group>"; };
 		216C90508EC6D953751E6523 /* InfoPlist.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = InfoPlist.strings; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
+		218B25F959EFE5BB383228CF /* MediaFrameUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaFrameUITests.swift; sourceTree = "<group>"; };
 		2580AD3D2102823CA75A8E12 /* GalleryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalleryView.swift; sourceTree = "<group>"; };
 		259C8594008E905790574F3A /* HealthSnapshotFactoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSnapshotFactoryTests.swift; sourceTree = "<group>"; };
 		271B9F3DFFE13D8E98289FA3 /* HealthBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthBridge.swift; sourceTree = "<group>"; };
@@ -167,9 +178,11 @@
 		392FCC1E3CDA7DF07E4B4444 /* DashboardComponentSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardComponentSettingsView.swift; sourceTree = "<group>"; };
 		3A4080F0A169BC5BCBF484AC /* PicPakPhotoEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PicPakPhotoEncoder.swift; sourceTree = "<group>"; };
 		3A943DAE9D38DCF3EF959A54 /* BluetoothRecordLinkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothRecordLinkView.swift; sourceTree = "<group>"; };
+		3F9E787492913D7809CB9565 /* MediaFrameFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaFrameFixtures.swift; sourceTree = "<group>"; };
 		426B2AE06E8492AEE89F8943 /* DeviceSetupQRScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceSetupQRScanner.swift; sourceTree = "<group>"; };
 		431BEA456C9FDD3620503327 /* NearbyDeviceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearbyDeviceManager.swift; sourceTree = "<group>"; };
 		49B49CB5FE65FF3DC08A0081 /* ReminderSnapshotFactoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderSnapshotFactoryTests.swift; sourceTree = "<group>"; };
+		4E080EF75EAC8A0C7863578B /* MediaLibraryPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaLibraryPicker.swift; sourceTree = "<group>"; };
 		4EA5F074B206DD2FF54C9767 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		4F548F3379CFFB93726CD704 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		5333E93CB84BC09DA290748E /* SetupNetworkStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupNetworkStoreTests.swift; sourceTree = "<group>"; };
@@ -184,10 +197,12 @@
 		6BD9BF482144BDCB753B7EF6 /* PreviewImageState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewImageState.swift; sourceTree = "<group>"; };
 		6DABD7AC708239FDC0621487 /* AppConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfiguration.swift; sourceTree = "<group>"; };
 		6F532D2BC8A0893B35702D88 /* TesseraeShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = TesseraeShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		7900B085EB33F558356A1E91 /* MediaFrameSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaFrameSession.swift; sourceTree = "<group>"; };
 		7F7B082A4F4C920F49545310 /* TesseraeCompanionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TesseraeCompanionUITests.swift; sourceTree = "<group>"; };
 		80F13F36D4E7990EF0B890C3 /* LineupsAppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineupsAppModelTests.swift; sourceTree = "<group>"; };
 		834AF00906D63D9F2A468C94 /* DisplayHardwareBadgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayHardwareBadgeTests.swift; sourceTree = "<group>"; };
 		878F2E4D47D31218D70ED033 /* MessageCenterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCenterTests.swift; sourceTree = "<group>"; };
+		895ED3887D8E6C731D22A34C /* MediaFrameTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaFrameTests.swift; sourceTree = "<group>"; };
 		8CBD8BCA89698A1281940F5D /* RemindersBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersBridge.swift; sourceTree = "<group>"; };
 		8FE0A6BC06BC1C26FD5AD93A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		90014E225C2AB46EE0CA6530 /* RemindersBridgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersBridgeView.swift; sourceTree = "<group>"; };
@@ -230,6 +245,7 @@
 		E4901B9808092D465184CABA /* GalleryViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalleryViewTests.swift; sourceTree = "<group>"; };
 		E726D6EBD2787B7CEED6CC14 /* PhotoFramingSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoFramingSessionTests.swift; sourceTree = "<group>"; };
 		EEABAD3353BA2EB74A7FFD23 /* LineupEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineupEditorView.swift; sourceTree = "<group>"; };
+		EEF048F26620C2F5266E0267 /* MediaFrameControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaFrameControls.swift; sourceTree = "<group>"; };
 		F1964C9534AA2D6526D1275E /* TesseraeCompanionUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = TesseraeCompanionUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F6BCE92FAB7DF4093DAAE45D /* ConnectionRecoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionRecoveryTests.swift; sourceTree = "<group>"; };
 		F7D732F7AB479072C4C94DA1 /* DashboardSettingsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardSettingsUITests.swift; sourceTree = "<group>"; };
@@ -264,6 +280,7 @@
 				0B1C7C0CE5B9420ECC69B548 /* AlbumsAndActivityUITests.swift */,
 				F7D732F7AB479072C4C94DA1 /* DashboardSettingsUITests.swift */,
 				CCAC4A35BBC2B83469A3411C /* LineupsUITests.swift */,
+				218B25F959EFE5BB383228CF /* MediaFrameUITests.swift */,
 				7F7B082A4F4C920F49545310 /* TesseraeCompanionUITests.swift */,
 			);
 			path = UITests;
@@ -331,6 +348,7 @@
 				259C8594008E905790574F3A /* HealthSnapshotFactoryTests.swift */,
 				58AAE4A00D19C74A3DD7E7FC /* LineupEditingStateTests.swift */,
 				80F13F36D4E7990EF0B890C3 /* LineupsAppModelTests.swift */,
+				895ED3887D8E6C731D22A34C /* MediaFrameTests.swift */,
 				878F2E4D47D31218D70ED033 /* MessageCenterTests.swift */,
 				AAFCA560C45DA2EA689FF7D5 /* OfflineAlbumEditingTests.swift */,
 				E726D6EBD2787B7CEED6CC14 /* PhotoFramingSessionTests.swift */,
@@ -416,6 +434,10 @@
 			children = (
 				982ACAB2004BA498F82E4AA0 /* AdaptiveComposerLayout.swift */,
 				9A04E5CC172EAC80A6C24F75 /* FittedPreviewLayout.swift */,
+				EEF048F26620C2F5266E0267 /* MediaFrameControls.swift */,
+				3F9E787492913D7809CB9565 /* MediaFrameFixtures.swift */,
+				7900B085EB33F558356A1E91 /* MediaFrameSession.swift */,
+				4E080EF75EAC8A0C7863578B /* MediaLibraryPicker.swift */,
 				2EA333FF9332F6E7F0A3AAEA /* PhotoFramingGesture.swift */,
 				90C9F22206234BD938D1E5B1 /* PhotoFramingSession.swift */,
 				D09B9A585A1539B7342FE714 /* PhotoSubjectAnalyzer.swift */,
@@ -618,9 +640,9 @@
 			projectRoot = "";
 			targets = (
 				9432DA2869BF47821B1E91E8 /* TesseraeCompanion */,
-				A98D2993617B8AE8AD8A7FDA /* TesseraeCompanionTests */,
-				2E0E36907526CC0D16BA5050 /* TesseraeCompanionUITests */,
 				BF8FA7A603C51A901CE3496C /* TesseraeShare */,
+				2E0E36907526CC0D16BA5050 /* TesseraeCompanionUITests */,
+				A98D2993617B8AE8AD8A7FDA /* TesseraeCompanionTests */,
 			);
 		};
 /* End PBXProject section */
@@ -659,6 +681,10 @@
 			files = (
 				7878E69E20C0262F96387CA4 /* AdaptiveComposerLayout.swift in Sources */,
 				CB4BA3CC542CA597567043D8 /* FittedPreviewLayout.swift in Sources */,
+				D943B9172BE411B2829664A6 /* MediaFrameControls.swift in Sources */,
+				52A094652F5155293AC441D8 /* MediaFrameFixtures.swift in Sources */,
+				3DBE5D592C10BB22642CBCE5 /* MediaFrameSession.swift in Sources */,
+				A372DBF29C5725B419393279 /* MediaLibraryPicker.swift in Sources */,
 				EA4319DF19D558471BAF8B4D /* PhotoFramingGesture.swift in Sources */,
 				5A01B168EA0272D1154E06BA /* PhotoFramingSession.swift in Sources */,
 				07FCF32DF59628F960A2736E /* PhotoSubjectAnalyzer.swift in Sources */,
@@ -676,6 +702,7 @@
 				86913487D95BFCE535E7C38C /* AlbumsAndActivityUITests.swift in Sources */,
 				D72F7AB7540DAF09C2FDB102 /* DashboardSettingsUITests.swift in Sources */,
 				B3B4F023539326701EB077DF /* LineupsUITests.swift in Sources */,
+				703F9F08922478161818C5F4 /* MediaFrameUITests.swift in Sources */,
 				A39325FC03A45BD076B23270 /* TesseraeCompanionUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -709,6 +736,10 @@
 				0C0D109EF327D44C0755AC62 /* LineupsView.swift in Sources */,
 				46A5F3DD86C95C5254635D25 /* LocalBluetoothPhotoRenderer.swift in Sources */,
 				6934735274B0175C7C2D2AF8 /* MainTabView.swift in Sources */,
+				808C497AB18FB6FAC1ED23F9 /* MediaFrameControls.swift in Sources */,
+				1DB64B0843105823C25C7E1D /* MediaFrameFixtures.swift in Sources */,
+				EEC2E5BFD4520294884FAA73 /* MediaFrameSession.swift in Sources */,
+				8C920FF8FAAF6F167EB28756 /* MediaLibraryPicker.swift in Sources */,
 				BEF54278387345E5B5961B61 /* NearbyDeviceManager.swift in Sources */,
 				D934305BF70255B473EC70FA /* NearbyDeviceSetupError.swift in Sources */,
 				F5A9B1BCAF561B0C8E8ACB3C /* NearbyDeviceSetupView.swift in Sources */,
@@ -754,6 +785,7 @@
 				69E964DA91CB8FFDFC343170 /* HealthSnapshotFactoryTests.swift in Sources */,
 				4965F159C43AD0172327ED86 /* LineupEditingStateTests.swift in Sources */,
 				1E5FF7A01F07A246FF6E813F /* LineupsAppModelTests.swift in Sources */,
+				2CAD41B5926767175B4C39E5 /* MediaFrameTests.swift in Sources */,
 				989E27DFBE6C6AC369525233 /* MessageCenterTests.swift in Sources */,
 				F962394A38E0D5CACF8D6536 /* OfflineAlbumEditingTests.swift in Sources */,
 				68F3F911C34454CFAB4148D2 /* PhotoFramingSessionTests.swift in Sources */,

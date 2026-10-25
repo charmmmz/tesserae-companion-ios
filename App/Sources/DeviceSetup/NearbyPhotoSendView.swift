@@ -22,10 +22,13 @@ struct NearbyPhotoSendView: View {
     private var isUnifiedPhoto: Bool { device.photoProtocol == .tesseraeV2 }
     @State private var hasStarted = false
     @State private var didConnect = false
-    @State private var loadedSelection: PhotosPickerItem?
+    @State private var loadedSelection: MediaPickerSelection?
+    @State private var mediaFrames = MediaFrameSession()
+    @State private var appliedMediaSourceID: UUID?
+    @State private var appliedMediaRevision: UUID?
     @State private var deviceDetailsExpanded = false
     @State private var photoPickerPresented = false
-    @State private var selection: PhotosPickerItem?
+    @State private var selection: MediaPickerSelection?
     @State private var previewHeight: CGFloat = 250
     @State private var image: UIImage?
     @State private var imageData: Data?
@@ -42,7 +45,10 @@ struct NearbyPhotoSendView: View {
         isUnifiedPhoto ? String(localized: "Send Photo over Bluetooth") : String(localized: "Send to PicPak")
     }
     private var aspect: PanelAspectRatio { PanelAspectRatio(panel: panel) }
-    private var busy: Bool { preparing || nearby.photoState == .sending }
+    private var busy: Bool {
+        preparing || mediaFrames.isBusy || nearby.photoState == .sending
+            || (mediaFrames.source != nil && appliedMediaRevision != mediaFrames.outputRevision)
+    }
     private var canEditFraming: Bool { image != nil && fit == .fill }
     private var phase: Phase {
         guard hasStarted else { return .invitation }
@@ -84,7 +90,10 @@ struct NearbyPhotoSendView: View {
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(32)
         .interactiveDismissDisabled(busy)
-        .photosPicker(isPresented: $photoPickerPresented, selection: $selection, matching: .images)
+        .mediaLibraryPicker(isPresented: $photoPickerPresented, selection: $selection)
+        .onChange(of: mediaFrames.outputRevision) { _, _ in applyMediaFrame() }
+        .onDisappear { mediaFrames.cancelWork() }
+        .onAppear { if mediaFrames.isExpanded { mediaFrames.expand() } }
         .task(id: hasStarted) {
             // Discovery only offers the invitation. Connect once the user chooses Send.
             guard hasStarted, !didConnect else { return }
@@ -100,6 +109,14 @@ struct NearbyPhotoSendView: View {
                     UIColor.black.setFill(); c.fill(CGRect(x: 240, y: 100, width: 100, height: 100))
                 }
                 imageData = image?.pngData()
+            }
+            if let value = ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_MEDIA"] {
+                do {
+                    let source = try await MediaFrameFixtures.source(kind: value == "live" ? .livePhoto : .video)
+                    try Task.checkCancellation()
+                    mediaFrames.adopt(source)
+                    applyMediaFrame()
+                } catch { if !Task.isCancelled { localError = error.localizedDescription } }
             }
 #endif
         }
@@ -217,7 +234,7 @@ struct NearbyPhotoSendView: View {
 
             TesseraePanelImagePreview(
                 image: image, panel: panel, fit: fit, maximumCanvasHeight: previewHeight,
-                emptyTitle: preparing ? "Loading photo…" : "Choose a photo",
+                emptyTitle: preparing ? "Loading photo or video…" : "Choose a photo or video",
                 accessibilityIdentifier: "ble-photo-preview",
                 imageAccessibilityIdentifier: "ble-photo-image",
                 framing: canEditFraming ? Binding(
@@ -235,6 +252,8 @@ struct NearbyPhotoSendView: View {
                 onFramingInteraction: { framing.userDidInteract(with: aspect) }
             )
             .accessibilityHint(canEditFraming ? "Drag to reposition the photo and pinch to zoom." : "Tap to choose a photo.")
+
+            MediaFrameControls(session: mediaFrames, isSending: preparing || nearby.photoState == .sending)
 
             Label("\(device.name) · \(panel.width) × \(panel.height)", systemImage: "rectangle.on.rectangle")
                 .accessibilityIdentifier("ble-photo-resolution")
@@ -327,26 +346,30 @@ struct NearbyPhotoSendView: View {
         guard let selection, selection != loadedSelection else { return }
         preparing = true
         localError = nil
-        image = nil
-        imageData = nil
-        framing.replaceImage()
         do {
-            guard let data = try await selection.loadTransferable(type: Data.self) else {
-                throw UploadImagePreparationError.decoding
-            }
             let maximumPixelSize = max(1536, panel.width, panel.height)
-            let prepared = try await Task.detached(priority: .userInitiated) {
-                try UploadImagePreparer.prepare(data: data, fallbackContentType: "image/jpeg", maximumPixelSize: maximumPixelSize)
-            }.value
+            let source = try await selection.load(maximumPixelSize: maximumPixelSize)
             try Task.checkCancellation()
             loadedSelection = selection
-            imageData = prepared.data
-            image = UIImage(data: prepared.data)
-            framing.requestAutomatically(data: prepared.data, aspect: aspect, maximumZoom: 4)
+            mediaFrames.adopt(source)
+            applyMediaFrame()
         } catch {
             if !Task.isCancelled { localError = error.localizedDescription }
         }
         if !Task.isCancelled { preparing = false }
+    }
+
+    private func applyMediaFrame() {
+        guard appliedMediaRevision != mediaFrames.outputRevision else { return }
+        guard let prepared = mediaFrames.output, let source = mediaFrames.source else { return }
+        appliedMediaRevision = mediaFrames.outputRevision
+        imageData = prepared.data
+        image = UIImage(data: prepared.data)
+        if appliedMediaSourceID != source.id {
+            framing.replaceImage()
+            appliedMediaSourceID = source.id
+        } else { framing.discardAnalysis() }
+        framing.requestAutomatically(data: prepared.data, aspect: aspect, maximumZoom: 4)
     }
 
     private func send() {
