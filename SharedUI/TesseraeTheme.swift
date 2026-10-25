@@ -279,9 +279,9 @@ struct TesseraeDisplaySelectionRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(.vertical, 6)
         .frame(minHeight: 44)
         .contentShape(Rectangle())
-        .padding(.vertical, 6)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(name)
         .accessibilityValue(resolution)

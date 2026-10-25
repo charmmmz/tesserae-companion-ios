@@ -14,6 +14,12 @@ captures accompany the full UI conventions audit. The source revision and captur
 refreshes are recorded in Git history. Changed captures use new filenames for
 both README thumbnails and their links.
 
+`send-photo-compact-displays.png` was refreshed on 25 October 2026 from the
+working tree based on `9dbba3c`, including the compact display-selection spacing
+fix. It is the original `Photo composer compact targets` attachment from
+`AdaptiveLayoutUITests.testPhotoFramingSurvivesDeviceTurn`, captured after resetting
+the demo framing to 1.0×.
+
 - iPhone 18 Pro Simulator, iOS 27.0, English, light appearance except the dark
   duration picker.
 - Original 1206 × 2622 PNG captures; no resizing, compositing or image retouching.
@@ -29,7 +35,7 @@ both README thumbnails and their links.
 | `dashboard-settings-actions.png` | Pantry → native settings, shared actions and bounded Push icon, before editing |
 | `lineup-editor-actions.png` | New Manual Lineup, native icon actions, selected display and two Dashboards |
 | `gallery-folder-actions.png` | Library → family folder, square image grid and shared More/Add capsule |
-| `send-photo.png` | Send → Use Sample, centered Fill with framing controls |
+| `send-photo-compact-displays.png` | Send → Use Sample → reset framing, centered Fill at 1.0× with compact display selection |
 | `activity.png` | Demo Mode → Activity |
 | `bluetooth-maintenance.png` | Simulated PicPak → authenticated Maintenance, current battery status |
 | `dashboard-components.png` | Pantry → Demo Reminders settings, before searching or editing a field |

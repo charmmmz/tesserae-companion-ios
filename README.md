@@ -45,7 +45,7 @@ Tesserae Companion connects directly to your own Tesserae server, with a built-i
   </tr>
   <tr>
     <td align="center"><a href="docs/images/readme/gallery-folder-actions.png"><img src="docs/images/readme/gallery-folder-actions.png" width="220" alt="Photo Library showing a square grid of sample images and shared folder action capsule"></a></td>
-    <td align="center"><a href="docs/images/readme/send-photo.png"><img src="docs/images/readme/send-photo.png" width="220" alt="Photo composer with a display-aware preview and Auto Frame controls"></a></td>
+    <td align="center"><a href="docs/images/readme/send-photo-compact-displays.png"><img src="docs/images/readme/send-photo-compact-displays.png" width="220" alt="Photo composer with a display-aware preview and Auto Frame controls"></a></td>
     <td align="center"><a href="docs/images/readme/activity.png"><img src="docs/images/readme/activity.png" width="220" alt="Activity showing recent content and send outcomes"></a></td>
     <td align="center"><a href="docs/images/readme/bluetooth-maintenance.png"><img src="docs/images/readme/bluetooth-maintenance.png" width="220" alt="Authenticated Bluetooth maintenance for a supported PicPak display"></a></td>
   </tr>

@@ -523,32 +523,34 @@ struct SendView: View {
                 }
                 .frame(maxWidth: .infinity)
             } else {
-                ForEach(model.sortedDisplays) { display in
-                    Button {
-                        if selectedDeviceIDs.contains(display.id) {
-                            selectedDeviceIDs.remove(display.id)
-                            if previewDeviceID == display.id,
-                               let remainingPreview = model.sortedDisplays.first(
-                                   where: {
-                                       selectedDeviceIDs.contains($0.id)
-                                   }
-                               ) {
-                                previewDeviceID = remainingPreview.id
+                VStack(spacing: 0) {
+                    ForEach(model.sortedDisplays) { display in
+                        Button {
+                            if selectedDeviceIDs.contains(display.id) {
+                                selectedDeviceIDs.remove(display.id)
+                                if previewDeviceID == display.id,
+                                   let remainingPreview = model.sortedDisplays.first(
+                                       where: {
+                                           selectedDeviceIDs.contains($0.id)
+                                       }
+                                   ) {
+                                    previewDeviceID = remainingPreview.id
+                                }
+                            } else {
+                                selectedDeviceIDs.insert(display.id)
+                                previewDeviceID = display.id
                             }
-                        } else {
-                            selectedDeviceIDs.insert(display.id)
-                            previewDeviceID = display.id
+                            hapticEvent.trigger(.selection)
+                        } label: {
+                            TesseraeDisplaySelectionRow(
+                                name: display.name,
+                                resolution: "\(display.panel.width)×\(display.panel.height)",
+                                isSelected: selectedDeviceIDs.contains(display.id)
+                            )
                         }
-                        hapticEvent.trigger(.selection)
-                    } label: {
-                        TesseraeDisplaySelectionRow(
-                            name: display.name,
-                            resolution: "\(display.panel.width)×\(display.panel.height)",
-                            isSelected: selectedDeviceIDs.contains(display.id)
-                        )
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("send-display-\(display.id)")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("send-display-\(display.id)")
                 }
             }
         }

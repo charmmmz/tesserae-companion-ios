@@ -291,6 +291,15 @@ final class AdaptiveLayoutUITests: XCTestCase {
         let before = zoom.label
         let target = app.descendants(matching: .any)["send-preview-display-picker"].label
         capture("Photo composer initial", app: app)
+        let kitchen = app.buttons["send-display-picpak-kitchen"]
+        let desk = app.buttons["send-display-e1004-desk"]
+        reveal(kitchen, app: app)
+        reveal(desk, app: app)
+        XCTAssertEqual(kitchen.frame.height, 44, accuracy: 1)
+        XCTAssertEqual(desk.frame.height, 44, accuracy: 1)
+        let rows = [kitchen.frame, desk.frame].sorted { $0.minY < $1.minY }
+        XCTAssertEqual(rows[1].minY - rows[0].maxY, 0, accuracy: 1)
+        capture("Compact display selection", app: app)
         XCUIDevice.shared.orientation = .landscapeLeft
         XCTAssertEqual(zoom.label, before)
         XCTAssertEqual(app.descendants(matching: .any)["send-preview-display-picker"].label, target)
@@ -298,5 +307,10 @@ final class AdaptiveLayoutUITests: XCTestCase {
         XCUIDevice.shared.orientation = .portrait
         XCTAssertEqual(zoom.label, before)
         capture("Photo composer portrait", app: app)
+        let reset = app.buttons["send-framing-reset"]
+        reveal(reset, app: app)
+        reset.tap()
+        XCTAssertEqual(zoom.label, "1.0×")
+        capture("Photo composer compact targets", app: app)
     }
 }
