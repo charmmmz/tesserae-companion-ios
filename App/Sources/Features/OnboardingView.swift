@@ -175,6 +175,7 @@ struct OnboardingView: View {
                 }
             }
             .scrollBounceBehavior(.basedOnSize)
+            .tesseraeMessageCenter()
             .onGeometryChange(for: CGFloat.self) { geometry in
                 // Keep the chrome allowance independent of the sheet's position.
                 max(64, ceil(geometry.safeAreaInsets.top))

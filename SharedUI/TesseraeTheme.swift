@@ -538,7 +538,7 @@ final class TesseraeMessageCenter {
 }
 
 private struct TesseraeMessageCenterHost: View {
-    let topPadding: CGFloat
+    let bottomPadding: CGFloat
     @Environment(TesseraeMessageCenter.self) private var center
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hostID = UUID()
@@ -550,12 +550,13 @@ private struct TesseraeMessageCenterHost: View {
                let message = center.currentMessage
             {
                 presentedMessage(message)
-                    .padding(.top, topPadding)
+                    .padding(.bottom, bottomPadding)
                     .id(message.id)
                     .transition(messageTransition)
             }
         }
         .frame(maxWidth: .infinity)
+        .frame(height: center.isActiveHost(id: hostID) && center.currentMessage != nil ? nil : 0)
         .animation(.easeOut(duration: 0.18), value: center.currentMessage?.id)
         .tesseraeHapticFeedback(trigger: hapticEvent)
         .onAppear {
@@ -581,7 +582,7 @@ private struct TesseraeMessageCenterHost: View {
 
     private var messageTransition: AnyTransition {
         guard !reduceMotion else { return .opacity }
-        return .opacity.combined(with: .scale(scale: 0.97, anchor: .top))
+        return .opacity.combined(with: .scale(scale: 0.97, anchor: .bottom))
     }
 
     @ViewBuilder
@@ -598,6 +599,7 @@ private struct TesseraeMessageCenterHost: View {
             .accessibilityIdentifier(message.accessibilityIdentifier ?? message.id)
         } else {
             capsule(message, showsDisclosure: false)
+                .allowsHitTesting(message.action != nil)
                 .accessibilityElement(children: message.action == nil ? .combine : .contain)
                 .accessibilityLabel(
                     Text(message.accessibilityText ?? message.text)
@@ -673,24 +675,35 @@ private struct TesseraeMessageCenterHost: View {
     }
 }
 
-private struct TesseraeMessageCenterInsetModifier: ViewModifier {
-    let topPadding: CGFloat
+private struct TesseraeMessageCenterModifier: ViewModifier {
+    let bottomPadding: CGFloat
+    @Environment(TesseraeMessageCenter.self) private var center
+    @State private var messageHeight: CGFloat = 0
+
+    private var reservesContentSpace: Bool {
+        guard let message = center.currentMessage else { return false }
+        if case .persistent = message.lifetime { return true }
+        return message.tapAction != nil || message.action != nil
+    }
 
     func body(content: Content) -> some View {
-        // Reserve actual layout space outside navigation containers. A safe-area
-        // inset alone can still overlap their toolbar on compact presentations.
-        VStack(spacing: 0) {
-            TesseraeMessageCenterHost(topPadding: topPadding)
-                .padding(.horizontal, 16)
-            content
-        }
-        .tesseraeScreenBackground()
+        content
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                Color.clear.frame(height: reservesContentSpace ? messageHeight : 0)
+            }
+            .overlay(alignment: .bottom) {
+                TesseraeMessageCenterHost(bottomPadding: bottomPadding)
+                    .padding(.horizontal, 16)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                        messageHeight = height
+                    }
+            }
     }
 }
 
 extension View {
-    func tesseraeMessageCenterInset(topPadding: CGFloat = 8) -> some View {
-        modifier(TesseraeMessageCenterInsetModifier(topPadding: topPadding))
+    func tesseraeMessageCenter(bottomPadding: CGFloat = 12) -> some View {
+        modifier(TesseraeMessageCenterModifier(bottomPadding: bottomPadding))
     }
 }
 

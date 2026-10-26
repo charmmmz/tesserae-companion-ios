@@ -64,6 +64,7 @@ struct RootView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .tesseraeScreenBackground()
+                .tesseraeMessageCenter()
             } else if model.activeInstance == nil {
                 OnboardingView()
             } else {
@@ -88,7 +89,6 @@ struct RootView: View {
             guard mode == .wifi else { return }
             Task { await model.refreshDisplays(showErrors: false) }
         }
-        .tesseraeMessageCenterInset()
         .sheet(isPresented: $serversPresented) {
             OnboardingView(isChoosingServer: true)
         }

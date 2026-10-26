@@ -891,6 +891,13 @@ final class TesseraeCompanionUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
+        app.launch()
+        app.buttons["Explore with Demo Data"].tap()
+        XCTAssertTrue(app.navigationBars["Displays"].waitForExistence(timeout: 5))
+        let originalNavigationFrame = app.navigationBars["Displays"].frame
+        let originalLayout = XCTAttachment(screenshot: app.screenshot())
+        originalLayout.name = "Gallery Layout Without Message"; originalLayout.lifetime = .keepAlways; add(originalLayout)
+        app.terminate()
         app.launchEnvironment["TESSERAE_UI_TEST_GALLERY_UPLOAD_CAPSULE"] = "1"
         app.launch()
 
@@ -905,10 +912,19 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertFalse(app.navigationBars["Upload Details"].exists)
         let sendAction = app.buttons["root-send-action"]
         XCTAssertTrue(sendAction.exists)
-        XCTAssertLessThan(capsule.frame.midY, app.frame.height * 0.2)
         XCTAssertGreaterThan(sendAction.frame.midX, app.frame.midX)
         XCTAssertTrue(sendAction.isHittable)
         XCTAssertFalse(capsule.frame.intersects(sendAction.frame))
+        let navigationFrame = app.navigationBars["Displays"].frame
+        XCTAssertEqual(navigationFrame.minY, originalNavigationFrame.minY, accuracy: 1)
+        XCTAssertEqual(navigationFrame.height, originalNavigationFrame.height, accuracy: 1)
+        XCTAssertGreaterThanOrEqual(capsule.frame.minY, navigationFrame.maxY)
+        let tabBar = app.tabBars.firstMatch
+        XCTAssertTrue(tabBar.exists)
+        XCTAssertGreaterThan(capsule.frame.midY, app.frame.midY)
+        XCTAssertLessThanOrEqual(capsule.frame.maxY, tabBar.frame.minY)
+        let geometry = XCTAttachment(string: "capsule=\(capsule.frame)\nnavigationBefore=\(originalNavigationFrame)\nnavigationDuring=\(navigationFrame)")
+        geometry.name = "Gallery Upload Capsule Geometry"; geometry.lifetime = .keepAlways; add(geometry)
 
         let capsuleScreenshot = XCTAttachment(screenshot: app.screenshot())
         capsuleScreenshot.name = "Gallery Upload Capsule"

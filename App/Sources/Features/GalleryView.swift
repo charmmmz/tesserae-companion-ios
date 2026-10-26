@@ -494,6 +494,7 @@ private struct GalleryFolderView: View {
             )
         }
         .tesseraeScreenBackground()
+        .tesseraeMessageCenter()
     }
 
     private func beginAddingPhotos() {
@@ -820,6 +821,7 @@ private struct GalleryImageView: View {
             SendComposerSheet(initialImage: draft) { sendDraft = nil }
         }
         .tesseraeScreenBackground()
+        .tesseraeMessageCenter()
     }
 
     private var previewImages: [String: UIImage] {

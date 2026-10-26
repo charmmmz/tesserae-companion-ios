@@ -193,9 +193,12 @@ framing, target selection and submission state above adaptive regions. On iOS
 systems use a two-column layout. Compact and accessibility layouts remain scrollable.
 
 Root actions use system toolbars; the Send sheet offers Close without a Settings
-shortcut. Message capsules reserve safe-area space so
-they do not cover navigation actions. Gallery density follows the available width
-without overwriting the saved preference. Resizing cancels an unfinished display
+shortcut. Message hosts belong to page content inside navigation containers,
+including modal stacks. Capsules float at the bottom safe area, above tab bars
+when present. Transient confirmations do not move content. Persistent/actionable
+messages reserve their measured height at the bottom of page content. Navigation
+titles and toolbars stay fixed. Gallery density follows the available width without
+overwriting the saved preference. Resizing cancels an unfinished display
 reorder without committing it. BLE connection ownership remains in NearbyDeviceManager;
 window changes do not initiate a new connection. No server API changes are required.
 

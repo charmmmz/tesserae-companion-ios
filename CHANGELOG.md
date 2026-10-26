@@ -71,6 +71,9 @@ capabilities.
 
 ### Changed
 
+- Message capsules share the bottom safe area above tab bars. Brief confirmations
+  float; persistent or actionable messages reserve content space without moving titles.
+
 - Page action capsules share one DesignSystem component across root and detail
   pages, including Dashboard settings, display details, Library folders and
   Lineups. Icons, touch targets, spacing and disabled states stay consistent.

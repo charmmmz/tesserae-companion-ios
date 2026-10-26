@@ -181,6 +181,7 @@ struct DashboardsView: View {
     var body: some View {
         NavigationStack {
             dashboardList
+                .tesseraeMessageCenter()
                 .navigationTitle("Dashboards")
                 .navigationDestination(item: $settingsDashboardID) { id in
                     DashboardSettingsView(dashboardID: id)

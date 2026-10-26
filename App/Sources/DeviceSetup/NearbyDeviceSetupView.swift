@@ -1156,6 +1156,7 @@ struct NearbyDisplaysView: View {
         .tesseraeScreenBackground()
         .navigationTitle("Nearby Displays")
         .navigationBarTitleDisplayMode(.inline)
+        .tesseraeMessageCenter()
         .onAppear {
             nearby.startScanning()
             if let instanceID = model.activeInstance?.id {

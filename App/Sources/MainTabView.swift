@@ -197,6 +197,7 @@ struct MainTabView: View {
         NavigationStack {
             content()
                 .navigationTitle(title)
+                .tesseraeMessageCenter()
         }
     }
 }
@@ -212,6 +213,7 @@ struct SendComposerSheet: View {
     var body: some View {
         NavigationStack {
             SendView(initialImage: initialImage, prioritizesFramingGesture: true, submission: submission)
+                .tesseraeMessageCenter()
                 .navigationTitle("Send")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -225,7 +227,6 @@ struct SendComposerSheet: View {
                     }
                 }
         }
-        .tesseraeMessageCenterInset()
         .frame(idealWidth: 960, idealHeight: 760)
         .presentationSizing(.fitted)
         .presentationDetents([.large])

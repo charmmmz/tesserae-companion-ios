@@ -136,6 +136,7 @@ struct SettingsView: View {
             .frame(maxWidth: 820)
             .frame(maxWidth: .infinity)
             .tesseraeScreenBackground()
+            .tesseraeMessageCenter()
             .onChange(of: hapticFeedbackEnabled) { _, isEnabled in
                 TesseraeHapticSettings.isEnabled = isEnabled
             }
