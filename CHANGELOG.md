@@ -11,6 +11,12 @@ capabilities.
 
 ## [Unreleased]
 
+### Fixed
+
+- Xcode 16.4 builds keep AVFoundation track objects inside a nonisolated metadata
+  operation and create Bluetooth/Share state inside its main-actor initializer,
+  avoiding strict-concurrency errors and Swift 6.1 default-argument compiler crashes.
+
 ### Added
 
 - Share Sheet discovers authorized nearby Bluetooth displays in the existing

@@ -84,10 +84,10 @@ private final class ShareComposerModel: ObservableObject {
     private let client: any TesseraeServing
     private let protectDismissal: (Bool) -> Void
 
-    init(extensionContext: NSExtensionContext?, mediaFrames: MediaFrameSession = MediaFrameSession(),
+    init(extensionContext: NSExtensionContext?, mediaFrames: MediaFrameSession? = nil,
          protectDismissal: @escaping (Bool) -> Void) {
         self.extensionContext = extensionContext
-        self.mediaFrames = mediaFrames
+        self.mediaFrames = mediaFrames ?? MediaFrameSession()
         self.protectDismissal = protectDismissal
 
         let appGroup = Bundle.main.object(

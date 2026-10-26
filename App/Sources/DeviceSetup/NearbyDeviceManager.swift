@@ -299,8 +299,8 @@ final class NearbyDeviceManager: NSObject {
         return "\(nsError.domain)(\(nsError.code)): \(nsError.localizedDescription)"
     }
 
-    init(displayRecords: BluetoothDisplayStore = BluetoothDisplayStore(), photoSharingOnly: Bool = false) {
-        self.displayRecords = displayRecords
+    init(displayRecords savedRecords: BluetoothDisplayStore? = nil, photoSharingOnly: Bool = false) {
+        self.displayRecords = savedRecords ?? BluetoothDisplayStore()
         self.photoSharingOnly = photoSharingOnly
         super.init()
 #if DEBUG
