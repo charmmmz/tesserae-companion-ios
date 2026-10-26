@@ -17,7 +17,8 @@ import XCTest
         }
     }
 
-    private func launch(_ kind: String, largeText: Bool = false) -> XCUIApplication {
+    private func launch(_ kind: String, largeText: Bool = false, bluetooth: Bool = false,
+                        systemShare: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         if !kind.isEmpty { app.launchEnvironment["TESSERAE_UI_TEST_MEDIA"] = kind }
@@ -25,14 +26,22 @@ import XCTest
             app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
                                     "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
         }
+        if bluetooth {
+            app.launchEnvironment["TESSERAE_UI_TEST_BLUETOOTH_SHARE"] = "1"
+            app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_BLE"] = "1"
+            app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_PHOTO"] = "1"
+        }
+        if systemShare { app.launchEnvironment["TESSERAE_UI_TEST_SYSTEM_SHARE"] = "1" }
         app.launch()
-        let demo = app.buttons[largeText ? "使用演示数据体验" : "Explore with Demo Data"]
-        XCTAssertTrue(demo.waitForExistence(timeout: 8))
-        for _ in 0..<5 where !demo.isHittable { app.swipeUp() }
-        demo.tap()
-        let send = app.buttons["root-send-action"].firstMatch
-        XCTAssertTrue(send.waitForExistence(timeout: 12))
-        send.tap()
+        if !bluetooth {
+            let demo = app.buttons[largeText ? "使用演示数据体验" : "Explore with Demo Data"]
+            XCTAssertTrue(demo.waitForExistence(timeout: 8))
+            for _ in 0..<5 where !demo.isHittable { app.swipeUp() }
+            demo.tap()
+            let send = app.buttons["root-send-action"].firstMatch
+            XCTAssertTrue(send.waitForExistence(timeout: 12))
+            send.tap()
+        }
         return app
     }
 
@@ -118,7 +127,41 @@ import XCTest
         reveal(app.buttons["send-submit"], in: app)
     }
 
+    func testBluetoothSendsSelectedVideoFrame() {
+        let app = launch("video", bluetooth: true)
+        let frames = timeline(app)
+        XCTAssertTrue(frames.waitForExistence(timeout: 12))
+        reveal(frames, in: app)
+        scrub(frames)
+        let device = app.buttons["share-display-nearby:00000000-0000-0000-0000-000000000011"]
+        reveal(device, in: app)
+        device.tap()
+        let send = app.buttons["share-send"]
+        XCTAssertTrue(send.waitForExistence(timeout: 8))
+        reveal(send, in: app)
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: send)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 8), .completed)
+        send.tap()
+        XCTAssertTrue(app.staticTexts["share-test-complete"].waitForExistence(timeout: 15))
+    }
 
+    func testSystemVideoShareExposesSameInlineTimeline() {
+        let app = launch("video", bluetooth: true, systemShare: true)
+        let open = app.buttons["Open System Share Sheet"]
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: open)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 12), .completed)
+        open.tap()
+        let activity = app.cells["Tesserae"]
+        XCTAssertTrue(activity.waitForExistence(timeout: 10))
+        activity.tap()
+        XCTAssertTrue(app.staticTexts["Displays"].waitForExistence(timeout: 12))
+        XCTAssertFalse(app.segmentedControls["share-destination-picker"].exists)
+        let frames = timeline(app)
+        XCTAssertTrue(frames.waitForExistence(timeout: 12))
+        reveal(frames, in: app)
+        scrub(frames)
+        capture("System Video Share Inline Timeline", app: app)
+    }
 
     func testNearbyBluetoothSelectsAndSendsVideoFrame() {
         let app = XCUIApplication()

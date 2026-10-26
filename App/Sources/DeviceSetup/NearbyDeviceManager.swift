@@ -164,6 +164,8 @@ struct NearbyConnectionLifecycle {
 @Observable
 final class NearbyDeviceManager: NSObject {
     let displayRecords: BluetoothDisplayStore
+    /// Share extensions may reconnect to authorized photo sessions, never pair or configure.
+    let photoSharingOnly: Bool
     private struct PendingConnection {
         let device: NearbyTesseraeDevice
         let peripheral: CBPeripheral
@@ -180,6 +182,7 @@ final class NearbyDeviceManager: NSObject {
     private(set) var connectionState: NearbyDeviceConnectionState = .idle
     private(set) var statusMessage: String?
     private(set) var isScanning = false
+    private(set) var bluetoothUnavailableMessage: String?
 
     private(set) var screenMode: BLEScreenMode?
     private(set) var isSavingScreenMode = false
@@ -296,8 +299,9 @@ final class NearbyDeviceManager: NSObject {
         return "\(nsError.domain)(\(nsError.code)): \(nsError.localizedDescription)"
     }
 
-    init(displayRecords: BluetoothDisplayStore = BluetoothDisplayStore()) {
+    init(displayRecords: BluetoothDisplayStore = BluetoothDisplayStore(), photoSharingOnly: Bool = false) {
         self.displayRecords = displayRecords
+        self.photoSharingOnly = photoSharingOnly
         super.init()
 #if DEBUG
         if isSetupUIFixture {
@@ -326,6 +330,7 @@ final class NearbyDeviceManager: NSObject {
     func updateApplicationActivity(_ isActive: Bool) {
         appIsActive = isActive
         if isActive {
+            if !photoSharingOnly { displayRecords.importSharedPhotoReceipts() }
             startScanning()
         } else {
             stopScanning()
@@ -349,7 +354,7 @@ final class NearbyDeviceManager: NSObject {
         scanGeneration &+= 1
         scanStartedAt = Date()
         central.scanForPeripherals(
-            withServices: [CBUUID(string: BLESetupProtocol.serviceUUID),
+            withServices: (photoSharingOnly ? [] : [CBUUID(string: BLESetupProtocol.serviceUUID)]) + [
                            CBUUID(string: BLESetupProtocol.photoServiceUUID),
                            CBUUID(string: BLESetupProtocol.unifiedPhotoServiceUUID)],
             options: [CBCentralManagerScanOptionAllowDuplicatesKey: true]
@@ -419,8 +424,16 @@ final class NearbyDeviceManager: NSObject {
     }
 
     func connect(to device: NearbyTesseraeDevice, qrCode: BLESetupQRCode?) {
+        guard !photoSharingOnly || (device.mode == .photo && qrCode == nil) else {
+            fail(String(localized: "Open Tesserae Companion to pair or configure this display."))
+            return
+        }
 #if DEBUG
         if isSetupUIFixture {
+            if photoSharingOnly && ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_PHOTO_UNAUTHORIZED"] == "1" {
+                fail(String(localized: "Open Tesserae Companion to authorize this phone, then choose Manual (Bluetooth) on the display."))
+                return
+            }
             resetConnectionState()
             activeDevice = device
             deviceInfo = BLESetupDeviceInfo(
@@ -772,6 +785,7 @@ final class NearbyDeviceManager: NSObject {
             receiveFixtureEvent(["event": "photo_status", "id": command["id"] ?? 0,
                                  "request": command["request"] ?? 0, "offset": fixturePhotoReceivedOffset])
         case "photo_end":
+            if ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_SKIP_PHOTO_RECEIPT"] == "1" { return }
             receiveFixtureEvent(["event": "photo_received", "id": command["id"] ?? 0])
         case "set_refresh_speed":
             guard let value = command["value"] as? String,
@@ -1122,7 +1136,8 @@ final class NearbyDeviceManager: NSObject {
         guard let info = deviceInfo else { return }
         displayRecords.observe(deviceID: info.id, name: activeDevice?.name ?? info.model,
                                mode: mode, batteryMillivolts: batteryMillivolts, batteryPercent: batteryPercent,
-                               hardwareMAC: info.hardwareMAC, hardwareKind: info.model)
+                               hardwareMAC: info.hardwareMAC, hardwareKind: info.model,
+                               peripheralID: activeDevice?.id)
     }
 
     func sendPhoto(_ data: Data, to device: NearbyTesseraeDevice, capabilityDigest: String?, previewPNG: Data? = nil) throws {
@@ -1291,6 +1306,14 @@ final class NearbyDeviceManager: NSObject {
 extension NearbyDeviceManager: @preconcurrency CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         trace("central state=\(central.state.rawValue)")
+        switch central.state {
+        case .poweredOn: bluetoothUnavailableMessage = nil
+        case .poweredOff: bluetoothUnavailableMessage = String(localized: "Turn on Bluetooth to find nearby displays.")
+        case .unauthorized: bluetoothUnavailableMessage = String(localized: "Allow Bluetooth access for Tesserae Companion in Settings.")
+        case .unsupported: bluetoothUnavailableMessage = String(localized: "Bluetooth is not available on this device.")
+        case .unknown, .resetting: bluetoothUnavailableMessage = String(localized: "Bluetooth is getting ready…")
+        @unknown default: bluetoothUnavailableMessage = String(localized: "Bluetooth is not available right now.")
+        }
         if central.state == .poweredOn {
             startScanning()
         } else {
@@ -1309,6 +1332,7 @@ extension NearbyDeviceManager: @preconcurrency CBCentralManagerDelegate {
             advertisementData: advertisementData,
             rssi: RSSI.intValue
         ) else { return }
+        guard !photoSharingOnly || device.mode == .photo else { return }
         let now = Date()
         if lastSeenScanGeneration[device.id] == scanGeneration,
            let lastSeen = lastSeenAt[device.id],

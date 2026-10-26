@@ -25,6 +25,8 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Find and send photos to nearby Tesserae displays already authorized in the app.</string>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionAttributes</key>
@@ -32,6 +34,8 @@
 			<key>NSExtensionActivationRule</key>
 			<dict>
 				<key>NSExtensionActivationSupportsImageWithMaxCount</key>
+				<integer>1</integer>
+				<key>NSExtensionActivationSupportsMovieWithMaxCount</key>
 				<integer>1</integer>
 				<key>NSExtensionActivationSupportsWebURLWithMaxCount</key>
 				<integer>1</integer>
@@ -48,5 +52,9 @@
 	<string>group.com.charmmmz.tesseraecompanion</string>
 	<key>TesseraeKeychainAccessGroup</key>
 	<string>$(AppIdentifierPrefix)com.charmmmz.tesseraecompanion.shared</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Phosphor.ttf</string>
+	</array>
 </dict>
 </plist>

@@ -86,3 +86,23 @@
 "Show the whole image over a blurred edge-to-edge background." = "完整显示图片，并使用模糊背景铺满显示屏。";
 "Stretch the image to the display, changing its proportions." = "拉伸图片以铺满显示屏，图片比例会改变。";
 "Keep the image at its prepared pixel size and clip or pad around it." = "保持处理后的像素尺寸，必要时裁剪或在周围留白。";
+
+/* Inline video and Live Photo frame selection */
+"Choose Frame" = "换一帧";
+"Live Photo" = "实况照片";
+"Hide Frames" = "收起";
+"Live Photo · Key Photo" = "实况照片 · 主图";
+"Loading frames…" = "正在载入画面…";
+"Key" = "主图";
+"Key Photo" = "主图";
+"Restore Key Photo" = "恢复主图";
+"%@ seconds" = "%@ 秒";
+"This item's video could not be loaded. Your current photo is unchanged." = "无法载入动态画面，当前照片已保留。";
+"This video does not contain a readable picture." = "无法读取这个视频的画面。";
+"This frame could not be prepared. Try another moment." = "无法处理这一帧，请选择其他画面。";
+
+// Unified share display selection
+"Bluetooth" = "蓝牙";
+"Nearby" = "附近";
+"Not nearby" = "不在附近";
+"Bluetooth devices could not be shared with the Share Sheet." = "无法向分享页面同步蓝牙设备信息。";

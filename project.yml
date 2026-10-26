@@ -18,6 +18,8 @@ targets:
     sources:
       - path: App/Sources
       - path: SharedUI
+      # The Debug host exercises the production share composer instead of a second UI.
+      - path: ShareExtension/Sources
       - path: App/Resources
         excludes:
           - Info.plist
@@ -76,6 +78,16 @@ targets:
     sources:
       - path: ShareExtension/Sources
       - path: SharedUI
+      - path: App/Sources/DeviceSetup/NearbyDeviceManager.swift
+      - path: App/Sources/DeviceSetup/BLESetupProtocol.swift
+      - path: App/Sources/DeviceSetup/BLEPhotoProtocol.swift
+      - path: App/Sources/DeviceSetup/BluetoothDisplayStore.swift
+      - path: App/Sources/DeviceSetup/LocalBluetoothPhotoRenderer.swift
+      - path: App/Sources/DeviceSetup/PicPakPhotoEncoder.swift
+      - path: App/Sources/PreviewImageState.swift
+      - path: App/Sources/DesignSystem/PhosphorDashboardIcon.swift
+      - path: App/Resources/Phosphor
+        buildPhase: resources
       - path: ShareExtension/Resources
         excludes:
           - Info.plist
@@ -85,9 +97,12 @@ targets:
       path: ShareExtension/Resources/Info.plist
       properties:
         CFBundleDisplayName: Send to Tesserae
+        UIAppFonts:
+          - Phosphor.ttf
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSLocalNetworkUsageDescription: Connect to your paired Tesserae server to send this shared item.
+        NSBluetoothAlwaysUsageDescription: Find and send photos to nearby Tesserae displays already authorized in the app.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         TesseraeAppGroupIdentifier: group.com.charmmmz.tesseraecompanion
@@ -98,6 +113,7 @@ targets:
           NSExtensionAttributes:
             NSExtensionActivationRule:
               NSExtensionActivationSupportsImageWithMaxCount: 1
+              NSExtensionActivationSupportsMovieWithMaxCount: 1
               NSExtensionActivationSupportsWebURLWithMaxCount: 1
     dependencies:
       - package: TesseraeKit

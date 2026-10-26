@@ -161,7 +161,15 @@ struct TesseraeCompanionApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
+            Group {
+#if DEBUG
+                if ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_BLUETOOTH_SHARE"] == "1" {
+                    BluetoothShareTestHost()
+                } else { RootView() }
+#else
+                RootView()
+#endif
+            }
                 .environment(model)
                 .environment(remindersBridgeModel)
                 .environment(healthBridgeModel)

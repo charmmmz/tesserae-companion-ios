@@ -11,7 +11,9 @@ final class ShareViewController: UIViewController {
         // folded presentations, which use the same scrollable composer.
         preferredContentSize = CGSize(width: 960, height: 760)
 
-        let model = ShareComposerModel(extensionContext: extensionContext)
+        let model = ShareComposerModel(extensionContext: extensionContext) { [weak self] busy in
+            self?.isModalInPresentation = busy
+        }
         let host = UIHostingController(rootView: ShareComposerView(model: model))
         addChild(host)
         host.view.translatesAutoresizingMaskIntoConstraints = false
@@ -55,7 +57,15 @@ private final class ShareComposerModel: ObservableObject {
     @Published var sharedURL: URL?
     @Published var linkKind: LinkPushKind = .webpage
     @Published var errorMessage: String?
+    @Published private(set) var bluetoothSession: BluetoothShareSession?
+    @Published private(set) var bluetoothTargetID: String?
+    @Published private(set) var bluetoothIsBusy = false
     let framingSession = PhotoFramingSession()
+    let mediaFrames: MediaFrameSession
+#if DEBUG
+    private var testCompletion: (() -> Void)?
+#endif
+    private var appliedMediaRevision: UUID?
 
     private weak var extensionContext: NSExtensionContext?
     private var imageData: Data?
@@ -72,9 +82,13 @@ private final class ShareComposerModel: ObservableObject {
     private let activityThumbnails: any ActivityThumbnailStoring
     private let credentials: any CredentialStoring
     private let client: any TesseraeServing
+    private let protectDismissal: (Bool) -> Void
 
-    init(extensionContext: NSExtensionContext?) {
+    init(extensionContext: NSExtensionContext?, mediaFrames: MediaFrameSession = MediaFrameSession(),
+         protectDismissal: @escaping (Bool) -> Void) {
         self.extensionContext = extensionContext
+        self.mediaFrames = mediaFrames
+        self.protectDismissal = protectDismissal
 
         let appGroup = Bundle.main.object(
             forInfoDictionaryKey: "TesseraeAppGroupIdentifier"
@@ -130,17 +144,116 @@ private final class ShareComposerModel: ObservableObject {
     }
 
     var canSend: Bool {
-        phase == .ready
+        (phase == .ready || (phase == .failed && bluetoothTargetID == nil))
+            && !mediaFrames.isBusy
+            && (mediaFrames.source == nil || appliedMediaRevision == mediaFrames.outputRevision)
             && (
                 contentKind == .image && imageData != nil
                     || contentKind == .link && sharedURL != nil
             )
-            && !selectedDeviceIDs.isEmpty
-            && snapshot != nil
+            && (bluetoothTargetID != nil
+                ? bluetoothSession?.canSend == true
+                : !selectedDeviceIDs.isEmpty && snapshot != nil)
+    }
+
+    var sendTargets: [ShareDisplayTarget] {
+        guard let bluetoothSession else {
+            return displays.map { .init(id: $0.id, name: $0.name, display: $0, record: nil, nearby: nil) }
+        }
+        return ShareDisplayTarget.catalog(displays: displays, serverID: snapshot?.activeInstance.id,
+            records: bluetoothSession.nearby.displayRecords, nearby: bluetoothSession.devices)
+    }
+
+    var bluetoothTarget: ShareDisplayTarget? { sendTargets.first { $0.id == bluetoothTargetID } }
+    var previewPanel: PanelProfile? {
+        if let bluetoothTarget {
+            if bluetoothSession?.nearby.connectionState == .ready { return bluetoothSession?.panel }
+            return bluetoothTarget.panel
+        }
+        return previewDisplay?.panel
+    }
+    var previewName: String? { bluetoothTarget?.name ?? previewDisplay?.name }
+
+    func select(_ target: ShareDisplayTarget) {
+        guard !isBusy, !mediaFrames.isBusy, !framingSession.isFrozen else { return }
+        errorMessage = nil
+        if target.isBluetooth {
+            selectedDeviceIDs = []
+            if bluetoothTargetID == target.id, bluetoothSession?.failure == nil {
+                bluetoothTargetID = nil
+                bluetoothSession?.changeDisplay()
+            } else {
+                bluetoothTargetID = target.id
+                if let device = target.nearby { bluetoothSession?.select(device) }
+                else { bluetoothSession?.changeDisplay() }
+            }
+        } else {
+            if bluetoothTargetID != nil { bluetoothSession?.changeDisplay() }
+            bluetoothTargetID = nil
+            if selectedDeviceIDs.contains(target.id) { selectedDeviceIDs.remove(target.id) }
+            else { selectedDeviceIDs.insert(target.id); previewDeviceID = target.id }
+        }
+        if !fitModes.contains(fit) { fit = .fill }
+    }
+
+    func reconcileBluetoothSelection() {
+        guard let session = bluetoothSession, bluetoothTargetID != nil, !isBusy else { return }
+        // Once authenticated info supplies a full identity, fold a discovery row into its saved row.
+        if bluetoothTarget == nil, let id = session.selectedDevice?.id,
+           let resolved = sendTargets.first(where: { $0.nearby?.id == id }) {
+            bluetoothTargetID = resolved.id
+        }
+        if let device = bluetoothTarget?.nearby,
+           session.selectedDevice?.id != device.id {
+            session.select(device)
+        }
+    }
+
+    func sendBluetooth() {
+        guard canSend, bluetoothTargetID != nil, let session = bluetoothSession,
+              let image = previewImage, let panel = previewPanel else { return }
+        phase = .submitting
+        framingSession.freeze()
+        errorMessage = nil
+        protectDismissal(true)
+        session.send(image: image, fit: fit,
+            framing: framingSession.framing(for: PanelAspectRatio(panel: panel)),
+            preparationChanged: setBluetoothBusy)
+    }
+
+    var sharedImageData: Data? { imageData }
+    var isBusy: Bool { bluetoothIsBusy || phase == .submitting }
+
+    func setBluetoothBusy(_ busy: Bool) {
+        bluetoothIsBusy = busy
+        if !busy, phase == .submitting, let failure = bluetoothSession?.failure {
+            phase = .ready
+            errorMessage = failure
+            framingSession.resumeEditing()
+        }
+        protectDismissal(isBusy)
+    }
+
+    func bluetoothSent() {
+        phase = .succeeded
+        complete()
+    }
+
+    func applyMediaFrame() {
+        guard phase != .submitting, !framingSession.isFrozen,
+              appliedMediaRevision != mediaFrames.outputRevision,
+              let image = mediaFrames.output else { return }
+        appliedMediaRevision = mediaFrames.outputRevision
+        imageData = image.data
+        previewImage = UIImage(data: image.data)
+        contentType = image.contentType
+        fileName = "shared-photo.\(image.fileExtension)"
+        framingSession.discardAnalysis()
     }
 
     func autoFrame(aspect: PanelAspectRatio) {
-        guard phase == .ready, framingEditorIsActive, !selectedDeviceIDs.isEmpty,
+        guard phase == .ready, framingEditorIsActive,
+              !selectedDeviceIDs.isEmpty || bluetoothTargetID != nil,
               let imageData else { return }
         framingSession.request(data: imageData, aspect: aspect, maximumZoom: maximumFramingZoom)
     }
@@ -148,8 +261,8 @@ private final class ShareComposerModel: ObservableObject {
     var automaticFramingContext: PhotoFramingSession.AutomaticContext {
         .init(
             imageID: framingSession.imageID, instanceID: snapshot?.activeInstance.id,
-            aspect: previewDisplay.map { PanelAspectRatio(panel: $0.panel) },
-            targetIDs: selectedDeviceIDs, maximumZoom: maximumFramingZoom,
+            aspect: previewPanel.map(PanelAspectRatio.init(panel:)),
+            targetIDs: bluetoothTargetID.map { [$0] } ?? selectedDeviceIDs, maximumZoom: maximumFramingZoom,
             isReady: phase == .ready && framingEditorIsActive
         )
     }
@@ -173,11 +286,11 @@ private final class ShareComposerModel: ObservableObject {
     }
 
     var supportsImageFraming: Bool {
-        snapshot?.capabilities?.supportsImageFraming == true
+        bluetoothTargetID != nil || snapshot?.capabilities?.supportsImageFraming == true
     }
 
     var maximumFramingZoom: Double {
-        max(snapshot?.capabilities?.limits.imageFramingMaxZoom ?? 1, 1)
+        bluetoothTargetID != nil ? 4 : max(snapshot?.capabilities?.limits.imageFramingMaxZoom ?? 1, 1)
     }
 
     var framingEditorIsActive: Bool {
@@ -188,6 +301,7 @@ private final class ShareComposerModel: ObservableObject {
     }
 
     var fitModes: [ImageFitMode] {
+        if bluetoothTargetID != nil { return [.fill, .fit] }
         let advertised = snapshot?.capabilities?.limits.imageFitModes
             ?? ImageFitMode.legacyModes
         let modes = ImageFitMode.allCases.filter(advertised.contains)
@@ -201,28 +315,23 @@ private final class ShareComposerModel: ObservableObject {
 
     func load() async {
         do {
-            try await queueStore.purge(
+            try? await queueStore.purge(
                 expiredBefore: Date().addingTimeInterval(-24 * 60 * 60)
             )
-            try await linkQueueStore.purge(
+            try? await linkQueueStore.purge(
                 expiredBefore: Date().addingTimeInterval(-24 * 60 * 60)
             )
-            guard let snapshot = try await stateStore.load() else {
-                throw ShareComposerError.notPaired
+            // Bluetooth photo sharing is independent of server pairing and reachability.
+            if let saved = try? await stateStore.load(),
+               (try? await credentials.token(for: saved.activeInstance.id)) != nil {
+                snapshot = saved
             }
-            guard try await credentials.token(
-                for: snapshot.activeInstance.id
-            ) != nil else {
-                throw ShareComposerError.notPaired
-            }
-            guard !snapshot.displays.isEmpty else {
-                throw ShareComposerError.noDisplays
-            }
-
+            let snapshot = self.snapshot
             let availableLinkKinds = LinkPushKind.allCases.filter {
-                snapshot.capabilities?.supports($0) == true
+                snapshot?.capabilities?.supports($0) == true
             }
             if let url = try await loadSharedURLIfPresent() {
+                guard snapshot != nil else { throw ShareComposerError.notPaired }
                 guard !availableLinkKinds.isEmpty else {
                     throw ShareComposerError.linkUnsupported
                 }
@@ -232,20 +341,11 @@ private final class ShareComposerModel: ObservableObject {
                     ? .webpage
                     : availableLinkKinds[0]
             } else {
-                let displayMaxEdge = snapshot.displays
+                let displayMaxEdge = snapshot?.displays
                     .map { max($0.panel.width, $0.panel.height) }
                     .max() ?? 2_048
-                let preparationMaxEdge = min(
-                    displayMaxEdge,
-                    snapshot.capabilities?.limits.imageMaxEdge ?? displayMaxEdge
-                )
                 let loaded = try await loadSharedImage(
-                    maximumPixelSize: preparationMaxEdge
-                )
-                try validate(
-                    data: loaded.data,
-                    contentType: loaded.contentType,
-                    capabilities: snapshot.capabilities
+                    maximumPixelSize: max(2_048, displayMaxEdge)
                 )
                 imageData = loaded.data
                 framingSession.replaceImage()
@@ -254,9 +354,13 @@ private final class ShareComposerModel: ObservableObject {
                 fileName = loaded.fileName
                 contentKind = .image
                 fit = .fill
+                bluetoothSession = BluetoothShareSession()
+                bluetoothSession?.start()
             }
-
-            self.snapshot = snapshot
+            guard let snapshot else {
+                phase = .ready
+                return
+            }
             let savedPreferences = try? await sendPreferences.preferences(
                 for: snapshot.activeInstance.id
             )
@@ -271,6 +375,11 @@ private final class ShareComposerModel: ObservableObject {
             previewDeviceID = snapshot.displays.first {
                 selectedDeviceIDs.contains($0.id)
             }?.id
+            if let preferredBluetooth = sendTargets.first(where: { selectedDeviceIDs.contains($0.id) && $0.isBluetooth }) {
+                selectedDeviceIDs = []
+                bluetoothTargetID = preferredBluetooth.id
+                if let device = preferredBluetooth.nearby { bluetoothSession?.select(device) }
+            }
             if let preferredFit = savedPreferences?.imageFitMode,
                fitModes.contains(preferredFit)
             {
@@ -289,11 +398,15 @@ private final class ShareComposerModel: ObservableObject {
         guard
             let snapshot,
             phase == .ready || phase == .failed,
+            !mediaFrames.isBusy,
+            mediaFrames.source == nil || appliedMediaRevision == mediaFrames.outputRevision,
             !selectedDeviceIDs.isEmpty
         else {
             return
         }
         phase = .submitting
+        protectDismissal(true)
+        defer { protectDismissal(false) }
         if contentKind == .image { framingSession.freeze() }
         errorMessage = nil
         failedRequestRetained = false
@@ -305,8 +418,18 @@ private final class ShareComposerModel: ObservableObject {
             switch contentKind {
             case .image:
                 guard let imageData else { return }
+                let maximumPixelSize = snapshot.capabilities?.limits.imageMaxEdge
+                    ?? snapshot.displays.map { max($0.panel.width, $0.panel.height) }.max() ?? 2_048
+                let sourceType = contentType
+                let prepared = try await Task.detached(priority: .userInitiated) {
+                    try UploadImagePreparer.prepare(data: imageData, fallbackContentType: sourceType,
+                                                   maximumPixelSize: maximumPixelSize)
+                }.value
+                try validate(data: prepared.data, contentType: prepared.contentType, capabilities: snapshot.capabilities)
+                contentType = prepared.contentType
+                fileName = "shared-photo.\(prepared.fileExtension)"
                 let outcome = try await submitImages(
-                    imageData,
+                    prepared.data,
                     targetGroups: imageTargetGroups,
                     snapshot: snapshot
                 )
@@ -554,7 +677,7 @@ private final class ShareComposerModel: ObservableObject {
     }
 
     func savePreferences() async {
-        guard let snapshot, !selectedDeviceIDs.isEmpty else { return }
+        guard bluetoothTargetID == nil, let snapshot, !selectedDeviceIDs.isEmpty else { return }
         try? await sendPreferences.save(
             CompanionSendPreferences(
                 instanceID: snapshot.activeInstance.id,
@@ -565,12 +688,21 @@ private final class ShareComposerModel: ObservableObject {
     }
 
     func complete() {
+        mediaFrames.cancelWork()
+        protectDismissal(false)
         framingSession.discardAnalysis()
+        bluetoothSession?.stop()
+#if DEBUG
+        if let testCompletion { testCompletion(); return }
+#endif
         extensionContext?.completeRequest(returningItems: nil)
     }
 
     func cancel() {
+        mediaFrames.cancelWork()
+        guard !isBusy else { return }
         framingSession.discardAnalysis()
+        bluetoothSession?.stop()
         extensionContext?.cancelRequest(
             withError: ShareComposerError.cancelled
         )
@@ -581,6 +713,7 @@ private final class ShareComposerModel: ObservableObject {
             throw ShareComposerError.noSharedItem
         }
         let providers = items.flatMap { $0.attachments ?? [] }
+        if providers.contains(where: { $0.hasItemConformingToTypeIdentifier(UTType.movie.identifier) }) { return nil }
         guard let provider = providers.first(where: {
             $0.hasItemConformingToTypeIdentifier(UTType.url.identifier)
         }) else {
@@ -629,8 +762,18 @@ private final class ShareComposerModel: ObservableObject {
         }
         guard let provider = providers.first(where: {
             $0.hasItemConformingToTypeIdentifier(UTType.image.identifier)
+                || $0.hasItemConformingToTypeIdentifier(UTType.movie.identifier)
         }) else {
             throw ShareComposerError.noSharedItem
+        }
+
+        let selection = MediaPickerSelection(provider: provider)
+        if selection.kind != .photo {
+            let source = try await selection.load(maximumPixelSize: maximumPixelSize)
+            mediaFrames.adopt(source)
+            appliedMediaRevision = mediaFrames.outputRevision
+            let prepared = source.primaryImage
+            return (prepared.data, prepared.contentType, "shared-photo.\(prepared.fileExtension)")
         }
 
         let type = provider.registeredTypeIdentifiers
@@ -640,13 +783,33 @@ private final class ShareComposerModel: ObservableObject {
             from: provider,
             typeIdentifier: type.identifier
         )
-        let prepared = try await Task.detached(priority: .userInitiated) {
-            try UploadImagePreparer.prepare(
-                data: data,
-                fallbackContentType: type.preferredMIMEType ?? "image/jpeg",
-                maximumPixelSize: maximumPixelSize
-            )
-        }.value
+        let prepared: PreparedUploadImage
+        do {
+            prepared = try await Task.detached(priority: .userInitiated) {
+                try UploadImagePreparer.prepare(
+                    data: data,
+                    fallbackContentType: type.preferredMIMEType ?? "image/jpeg",
+                    maximumPixelSize: maximumPixelSize
+                )
+            }.value
+        } catch UploadImagePreparationError.decoding {
+            // UIKit share sources may vend an archived UIImage rather than image-file bytes.
+            let pixels = try await withCheckedThrowingContinuation {
+                (continuation: CheckedContinuation<Data, Error>) in
+                provider.loadItem(forTypeIdentifier: type.identifier, options: nil) { object, error in
+                    if let image = object as? UIImage, let data = image.pngData() {
+                        continuation.resume(returning: data)
+                    } else if let url = object as? URL, url.isFileURL {
+                        do { continuation.resume(returning: try Data(contentsOf: url)) }
+                        catch { continuation.resume(throwing: error) }
+                    } else { continuation.resume(throwing: error ?? ShareComposerError.noImage) }
+                }
+            }
+            prepared = try await Task.detached(priority: .userInitiated) {
+                try UploadImagePreparer.prepare(data: pixels, fallbackContentType: "image/png",
+                                               maximumPixelSize: maximumPixelSize)
+            }.value
+        }
         return (
             prepared.data,
             prepared.contentType,
@@ -701,6 +864,53 @@ private final class ShareComposerModel: ObservableObject {
     }
 }
 
+#if DEBUG
+extension ShareComposerModel {
+    static func fixture(image: UIImage, data: Data, mediaFrames: MediaFrameSession,
+                        onBusy: @escaping (Bool) -> Void, onSent: @escaping () -> Void) -> ShareComposerModel {
+        let model = ShareComposerModel(extensionContext: nil, mediaFrames: mediaFrames, protectDismissal: onBusy)
+        model.imageData = data
+        model.previewImage = image
+        model.contentKind = .image
+        model.fit = .fill
+        model.phase = .ready
+        model.testCompletion = onSent
+        let records = BluetoothDisplayStore(fileURL: nil)
+        let nearby = NearbyDeviceManager(displayRecords: records, photoSharingOnly: true)
+        if ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_UNIFIED_SHARE_TARGETS"] == "1",
+           let device = nearby.nearbyDevices.first {
+            let instance = TesseraeInstance(id: "share-test", name: "Test Server",
+                baseURL: URL(string: "http://127.0.0.1")!, serverVersion: "test", timezone: "UTC", webURL: "/")
+            records.activeServerID = instance.id
+            records.observe(deviceID: "picpak-f85b1ba1b2c3", name: "Kitchen", mode: .bluetooth,
+                batteryMillivolts: nil, peripheralID: device.id)
+            let panel = PanelProfile(width: 400, height: 300, gamut: "bwry_4", orientation: "landscape")
+            model.snapshot = CompanionSnapshot(activeInstance: instance, capabilities: nil, displays: [
+                DisplaySummary(id: "picpak-f85b1ba1b2c3", name: "Kitchen", kind: "picpak_4_2", iconName: "display",
+                    panel: panel, freshness: .stale),
+                DisplaySummary(id: "living-room", name: "Living Room", kind: "test_panel", iconName: "display",
+                    panel: panel, freshness: .stale)
+            ], dashboards: [], jobs: [])
+        }
+        model.bluetoothSession = BluetoothShareSession(nearby: nearby)
+        model.bluetoothSession?.start()
+        model.applyMediaFrame()
+        return model
+    }
+}
+
+/// Hosts the production share composer, so fixture tests exercise its actual selection and send actions.
+struct ShareComposerTestView: View {
+    @StateObject private var model: ShareComposerModel
+    init(image: UIImage, imageData: Data, mediaFrames: MediaFrameSession,
+         onBusyChange: @escaping (Bool) -> Void, onSent: @escaping () -> Void) {
+        _model = StateObject(wrappedValue: .fixture(image: image, data: imageData, mediaFrames: mediaFrames,
+            onBusy: onBusyChange, onSent: onSent))
+    }
+    var body: some View { ShareComposerView(model: model) }
+}
+#endif
+
 private struct ImageSubmissionOutcome {
     let jobs: [PushJob]
     let firstError: (any Error)?
@@ -711,14 +921,15 @@ private struct ShareComposerView: View {
     @State private var previewHeight: CGFloat = 220
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var hapticEvent = TesseraeHapticEvent()
+    @Environment(\.scenePhase) private var scenePhase
 
-    var body: some View {
+    private var page: some View {
         NavigationStack {
             Group {
                 switch model.phase {
                 case .loading:
                     ProgressView("Loading shared item…")
-                case .failed where model.snapshot == nil:
+                case .failed where model.contentKind == nil:
                     ContentUnavailableView(
                         "Open Tesserae Companion",
                         systemImage: "iphone.and.arrow.forward",
@@ -741,7 +952,7 @@ private struct ShareComposerView: View {
             )
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
-                if model.phase == .failed && model.snapshot == nil {
+                if model.phase == .failed && model.contentKind == nil {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Done", systemImage: "checkmark") { model.complete() }
                             .labelStyle(.iconOnly)
@@ -756,18 +967,50 @@ private struct ShareComposerView: View {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Cancel", systemImage: "xmark") { model.cancel() }
                             .labelStyle(.iconOnly)
+                            .disabled(model.isBusy)
+                            .accessibilityIdentifier("share-cancel")
                     }
-                    ToolbarItem(placement: .confirmationAction) {
-                        sendToolbarButton
+                    if model.contentKind != nil {
+                        ToolbarItem(placement: .confirmationAction) {
+                            sendToolbarButton
+                        }
                     }
                 }
             }
         }
+    }
+
+    private var bluetoothPage: some View {
+        page
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
             previewHeight = composerCanvasHeight(in: size)
         }
         .tint(TesseraeTheme.accent)
+        .interactiveDismissDisabled(model.isBusy)
         .tesseraeHapticFeedback(trigger: hapticEvent)
+        .onDisappear {
+            model.mediaFrames.cancelWork()
+            model.bluetoothSession?.stop()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            model.bluetoothSession?.nearby.updateApplicationActivity(phase == .active)
+        }
+        .onChange(of: model.sendTargets) { _, _ in model.reconcileBluetoothSelection() }
+        .onChange(of: model.bluetoothSession?.isBusy) { _, busy in model.setBluetoothBusy(busy == true) }
+        .onChange(of: model.bluetoothSession?.failure) { _, _ in
+            model.setBluetoothBusy(model.bluetoothSession?.isBusy == true)
+        }
+        .onChange(of: model.bluetoothSession?.nearby.photoState) { _, state in
+            if state == .received, model.bluetoothTargetID != nil, model.phase == .submitting {
+                model.bluetoothSent()
+            }
+        }
+    }
+
+    var body: some View {
+        bluetoothPage
+        .onChange(of: model.mediaFrames.outputRevision) { _, _ in model.applyMediaFrame() }
+        .onAppear { if model.mediaFrames.isExpanded { model.mediaFrames.expand() } }
         .onChange(of: model.automaticFramingContext, initial: true) { _, context in
             model.updateAutomaticFraming(context)
         }
@@ -797,11 +1040,13 @@ private struct ShareComposerView: View {
             contentCard
         } controls: {
             displaysCard
-                .disabled(model.framingSession.isFrozen)
+                .disabled(model.framingSession.isFrozen || model.mediaFrames.isBusy)
             layoutCard
-                .disabled(model.framingSession.isFrozen)
+                .disabled(model.framingSession.isFrozen || model.mediaFrames.isBusy)
 
-            if let errorMessage = model.errorMessage {
+            bluetoothStatus
+
+            if let errorMessage = model.errorMessage, model.bluetoothTargetID == nil {
                 Label(errorMessage, systemImage: "exclamationmark.triangle")
                     .font(.footnote)
                     .foregroundStyle(TesseraeTheme.danger)
@@ -813,13 +1058,18 @@ private struct ShareComposerView: View {
 
     private var sendToolbarButton: some View {
         Button {
+            guard !model.mediaFrames.isBusy, model.canSend || model.phase == .failed else { return }
+            if model.bluetoothTargetID != nil {
+                model.sendBluetooth()
+                return
+            }
             if model.contentKind == .image { model.framingSession.freeze() }
             let groups = outgoingImageTargetGroups
             Task {
                 await model.send(imageTargetGroups: groups)
             }
         } label: {
-            if model.phase == .submitting {
+            if model.isBusy {
                 ProgressView()
                     .tint(.white)
                     .controlSize(.small)
@@ -831,12 +1081,42 @@ private struct ShareComposerView: View {
         .buttonStyle(.borderedProminent)
         .tint(TesseraeTheme.accentFill)
         .foregroundStyle(.white)
-        .disabled(model.phase == .submitting || (!model.canSend && model.phase != .failed))
+        .accessibilityIdentifier("share-send")
+        .disabled(model.isBusy || model.mediaFrames.isBusy || !model.canSend)
         .accessibilityLabel(
             model.phase == .submitting
                 ? "Sending"
                 : model.phase == .failed ? "Retry" : "Send"
         )
+    }
+
+    @ViewBuilder private var bluetoothStatus: some View {
+        if model.bluetoothTargetID != nil, let session = model.bluetoothSession {
+            if let failure = session.failure {
+                Label(failure, systemImage: "exclamationmark.triangle")
+                    .font(.footnote).foregroundStyle(TesseraeTheme.danger).tesseraeCard()
+                    .accessibilityIdentifier("share-bluetooth-error")
+            } else if let message = session.nearby.bluetoothUnavailableMessage {
+                Label(message, systemImage: "exclamationmark.triangle")
+                    .font(.footnote).foregroundStyle(TesseraeTheme.warning).tesseraeCard()
+            } else if session.isBusy {
+                VStack(alignment: .leading, spacing: 10) {
+                    if session.isPreparing { ProgressView("Preparing photo…") }
+                    else {
+                        ProgressView(value: session.nearby.photoProgress) {
+                            Text(session.nearby.photoProgress >= 1 ? "Waiting for display confirmation…" : "Sending photo…")
+                        }
+                    }
+                }
+                .tesseraeCard()
+            } else if model.bluetoothTarget?.nearby == nil {
+                Text("Not nearby")
+                    .font(.footnote).foregroundStyle(.secondary).tesseraeCard()
+            } else if session.nearby.connectionState != .ready {
+                ProgressView(session.nearby.statusMessage ?? String(localized: "Connecting securely…"))
+                    .tesseraeCard()
+            }
+        }
     }
 
     @ViewBuilder
@@ -859,10 +1139,10 @@ private struct ShareComposerView: View {
             Text("Preview")
                 .font(.headline)
 
-            if let previewDisplay = model.previewDisplay {
+            if let panel = model.previewPanel {
                 TesseraePanelImagePreview(
                     image: model.previewImage,
-                    panel: previewDisplay.panel,
+                    panel: panel,
                     fit: model.fit,
                     maximumCanvasHeight: previewHeight,
                     emptyTitle: String(localized: "Loading shared image…"),
@@ -871,7 +1151,7 @@ private struct ShareComposerView: View {
                     framing: previewImageFramingBinding,
                     maximumFramingZoom: model.maximumFramingZoom,
                     prioritizesFramingGesture: true,
-                    framingEditingEnabled: !model.framingSession.isFrozen,
+                    framingEditingEnabled: !model.framingSession.isFrozen && !model.mediaFrames.isBusy,
                     onAutoFrame: model.framingEditorIsActive ? { autoFrame() } : nil,
                     isAutoFraming: model.framingSession.isAnalyzing,
                     autoFramingFeedback: model.framingSession.feedback,
@@ -879,7 +1159,7 @@ private struct ShareComposerView: View {
                 )
                 .accessibilityLabel("Display image preview")
                 .accessibilityValue(
-                    previewAccessibilityValue(panel: previewDisplay.panel)
+                    previewAccessibilityValue(panel: panel)
                 )
                 .accessibilityHint(
                     model.framingEditorIsActive && !model.framingSession.isFrozen
@@ -889,13 +1169,15 @@ private struct ShareComposerView: View {
 
                 previewTargetPicker
             } else {
-                ContentUnavailableView {
-                    Label("No display selected", systemImage: "rectangle.slash")
-                } description: {
-                    Text("Select a display to preview its panel shape.")
+                if let image = model.previewImage {
+                    Image(uiImage: image).resizable().scaledToFit()
+                        .frame(maxWidth: .infinity, maxHeight: previewHeight)
+                        .accessibilityLabel("Shared photo")
                 }
-                .frame(maxWidth: .infinity, minHeight: 150)
+                Text("Select a display to preview its panel shape.")
+                    .font(.footnote).foregroundStyle(.secondary)
             }
+            MediaFrameControls(session: model.mediaFrames, isSending: model.framingSession.isFrozen)
         }
         .tesseraeCard()
     }
@@ -977,28 +1259,29 @@ private struct ShareComposerView: View {
         ) {
             Text("Displays")
                 .font(.headline)
-            ForEach(model.displays) { display in
+            ForEach(model.sendTargets) { target in
                 Button {
-                    if model.selectedDeviceIDs.contains(display.id) {
-                        model.selectedDeviceIDs.remove(display.id)
-                        if model.previewDeviceID == display.id {
-                            model.previewDeviceID = model.displays.first {
-                                model.selectedDeviceIDs.contains($0.id)
-                            }?.id
-                        }
-                    } else {
-                        model.selectedDeviceIDs.insert(display.id)
-                        model.previewDeviceID = display.id
-                    }
+                    model.select(target)
                     hapticEvent.trigger(.selection)
                 } label: {
                     TesseraeDisplaySelectionRow(
-                        name: display.name,
-                        resolution: "\(display.panel.width)×\(display.panel.height)",
-                        isSelected: model.selectedDeviceIDs.contains(display.id)
+                        name: target.name,
+                        resolution: target.panel.map { "\($0.width)×\($0.height)" }
+                            ?? (target.nearby == nil ? String(localized: "Not nearby") : String(localized: "Nearby")),
+                        isSelected: target.isBluetooth ? model.bluetoothTargetID == target.id
+                            : model.selectedDeviceIDs.contains(target.id),
+                        transport: target.isBluetooth ? String(localized: "Bluetooth") : nil
                     )
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("share-display-\(target.id)")
+            }
+            if let session = model.bluetoothSession, model.sendTargets.isEmpty {
+                if let message = session.nearby.bluetoothUnavailableMessage {
+                    Text(message).font(.footnote).foregroundStyle(.secondary)
+                } else if session.devices.isEmpty && session.selectedDevice == nil {
+                    ProgressView("Looking for nearby displays…").font(.footnote)
+                }
             }
         }
         .tesseraeCard()
@@ -1037,7 +1320,7 @@ private struct ShareComposerView: View {
         HStack(spacing: 5) {
             if !dynamicTypeSize.isAccessibilitySize {
                 Image(
-                    systemName: model.selectedDisplays.isEmpty
+                    systemName: model.previewPanel == nil
                         ? "rectangle.slash"
                         : "rectangle.on.rectangle"
                 )
@@ -1068,11 +1351,11 @@ private struct ShareComposerView: View {
     }
 
     private var previewTargetSummary: String {
-        guard let display = model.previewDisplay else {
+        guard let panel = model.previewPanel, let name = model.previewName else {
             return String(localized: "None selected")
         }
-        let aspect = PanelAspectRatio(panel: display.panel).displayName
-        return "\(display.name) · \(display.panel.width) × \(display.panel.height) · \(aspect)"
+        let aspect = PanelAspectRatio(panel: panel).displayName
+        return "\(name) · \(panel.width) × \(panel.height) · \(aspect)"
     }
 
 
@@ -1084,7 +1367,7 @@ private struct ShareComposerView: View {
     }
 
     private var previewAspectRatio: PanelAspectRatio? {
-        model.previewDisplay.map { PanelAspectRatio(panel: $0.panel) }
+        model.previewPanel.map(PanelAspectRatio.init(panel:))
     }
 
     private var previewImageFraming: ImageFraming {

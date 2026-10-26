@@ -65,6 +65,26 @@ struct BluetoothDisplayStoreTests {
         #expect(failed.pendingModeReports(displayIDs: ["panel"], serverID: "home").isEmpty)
     }
 
+    @Test func unifiedShareListReusesBluetoothAssociationAndNeverMatchesByName() throws {
+        let store = BluetoothDisplayStore(fileURL: nil)
+        store.activeServerID = "home"
+        let id = UUID()
+        store.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: nil, peripheralID: id)
+        let device = NearbyTesseraeDevice(id: id, name: "Nearby Name", rssi: -45, mode: .photo,
+            hardware: .picPak42, hardwareSuffix: "A1B2C3", sessionID: Data([1,2,3,4]))
+        let targets = ShareDisplayTarget.catalog(displays: [display()], serverID: "home", records: store, nearby: [device])
+        #expect(targets.count == 1)
+        #expect(targets.first?.id == "panel")
+        #expect(targets.first?.name == "Desk")
+        #expect(targets.first?.isBluetooth == true)
+        #expect(targets.first?.nearby?.id == id)
+        let stranger = NearbyTesseraeDevice(id: UUID(), name: "Desk", rssi: -45, mode: .photo,
+            hardware: .picPak42, hardwareSuffix: "A1B2C3", sessionID: Data([1,2,3,4]))
+        let separate = ShareDisplayTarget.catalog(displays: [display()], serverID: "home", records: store, nearby: [stranger])
+        #expect(separate.count == 2)
+        #expect(separate.first?.nearby == nil)
+    }
+
     @Test func extensionReadsInventoryWithoutOverwritingIt() throws {
         let directory = URL.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

@@ -258,6 +258,7 @@ struct TesseraeDisplaySelectionRow: View {
     let name: String
     let resolution: String
     let isSelected: Bool
+    var transport: String? = nil
 
     var body: some View {
         HStack(alignment: dynamicTypeSize.isAccessibilitySize ? .top : .center, spacing: 12) {
@@ -268,9 +269,14 @@ struct TesseraeDisplaySelectionRow: View {
                 ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
                 : AnyLayout(HStackLayout())
             layout {
-                Text(name)
-                    .foregroundStyle(.primary)
-                    .fixedSize(horizontal: false, vertical: true)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(name)
+                        .foregroundStyle(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if transport != nil {
+                        PhosphorIcon(name: "bluetooth", size: 16, color: TesseraeTheme.info)
+                    }
+                }
                 if !dynamicTypeSize.isAccessibilitySize { Spacer() }
                 Text(resolution)
                     .font(.caption.monospaced())
@@ -284,7 +290,7 @@ struct TesseraeDisplaySelectionRow: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(name)
-        .accessibilityValue(resolution)
+        .accessibilityValue([transport, resolution].compactMap { $0 }.joined(separator: ", "))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

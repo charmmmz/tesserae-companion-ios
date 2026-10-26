@@ -13,6 +13,12 @@ capabilities.
 
 ### Added
 
+- Share Sheet discovers authorized nearby Bluetooth displays in the existing
+  device selector, marked with the Bluetooth logo. It reuses photo framing and
+  video/Live Photo frame selection, keeps first pairing in the app, and closes
+  only after the display confirms photo receipt. Shared metadata and immutable
+  receipts preserve app records without sharing keys or photos with the server.
+
 - Confirmed Bluetooth/Wi-Fi modes persist locally before upload to compatible
   servers. Foreground retries and server-scoped acknowledgements preserve offline
   observations; reports contain only mode, observation time, and `ios_ble` source.

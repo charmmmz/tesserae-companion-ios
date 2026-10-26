@@ -83,7 +83,8 @@ separate editor or frame-confirmation step.
 
 Live Photos initially use their supplied primary photo. Choose Frame expands
 the same timeline and loads the paired video only then; Key Photo restores the
-original still image. Only the selected
+original still image. Sharing a video or a Live Photo with motion available
+uses the same controls for server and Bluetooth destinations. Only the selected
 still image enters the existing delivery protocol. Decoding is bounded to the
 target size, respects video orientation, and normalizes HDR frames to SDR.
 Pending or superseded frame requests cannot be submitted; changing a frame
@@ -340,6 +341,22 @@ remain in the web editor.
 The extension never silently drops an image and never reports “Sent” for
 an item that is only queued locally.
 
+The existing display selector includes cached and nearby Bluetooth displays,
+marked with the Bluetooth logo, alongside server displays. Explanatory text is
+limited to connection, transfer, and error states; the row's accessibility value
+still names Bluetooth. Established device links and exact
+peripheral UUIDs fold a known display into one row; names and partial MAC suffixes
+do not establish identity. A saved Bluetooth display stays visible while absent
+and cannot accidentally use the server route. Selecting a Bluetooth display
+connects it and uses the same preview, Fit/Fill, framing, media-frame controls,
+and Send action. Bluetooth currently uses one display session at a time; server
+selection retains multiple targets. First-time authorization and configuration
+remain in the main app. The extension closes only after the matching
+`photo_received` receipt, never on the last packet acknowledgement, and errors
+leave the page open. Metadata is published read-only by the app, while immutable
+app-group receipts return confirmed previews without overwriting inventory.
+Bluetooth sending does not require server pairing or enter the server retry queue.
+
 ### 3.4 Run from Shortcuts
 
 The user can create automations such as:
@@ -536,6 +553,8 @@ The extension must be small and deterministic:
 - normalize orientation and downsample before upload;
 - obey the server-advertised encoded-byte and decoded-image limits;
 - use shared Keychain access for the scoped token;
+- request Bluetooth access for nearby discovery while the image composer is visible;
+- reconnect only to authorized photo services; pair and configure in the app;
 - complete within extension time and memory limits;
 - write a recoverable local queue item if a network submission fails;
 - never retain Photos library access beyond the shared item.

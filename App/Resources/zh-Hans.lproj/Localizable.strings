@@ -921,3 +921,8 @@
 "This item's video could not be loaded. Your current photo is unchanged." = "无法载入动态画面，当前照片已保留。";
 "This video does not contain a readable picture." = "无法读取这个视频的画面。";
 "This frame could not be prepared. Try another moment." = "无法处理这一帧，请选择其他画面。";
+
+// Unified share display selection
+"Nearby" = "附近";
+"Not nearby" = "不在附近";
+"Bluetooth devices could not be shared with the Share Sheet." = "无法向分享页面同步蓝牙设备信息。";

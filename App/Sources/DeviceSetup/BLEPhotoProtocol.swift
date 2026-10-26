@@ -233,16 +233,29 @@ struct BLEPhotoTransfer {
 /// Device authorization is local to this installation, never synced to a server.
 enum BLEPhotoKeyStore {
     private static func query(_ id: String) -> [String: Any] {
-        [kSecClass as String: kSecClassGenericPassword,
+        var query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
          kSecAttrService as String: "com.charmmmz.tesseraecompanion.ble-photo",
          kSecAttrAccount as String: id]
+#if !targetEnvironment(simulator)
+        if let group = Bundle.main.object(forInfoDictionaryKey: "TesseraeKeychainAccessGroup") as? String,
+           !group.contains("$(") {
+            query[kSecAttrAccessGroup as String] = group
+        }
+#endif
+        return query
     }
     static func read(_ id: String) -> Data? {
         var q = query(id)
         q[kSecReturnData as String] = true
         q[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?
-        guard SecItemCopyMatching(q as CFDictionary, &item) == errSecSuccess,
+        var status = SecItemCopyMatching(q as CFDictionary, &item)
+        // Existing app-only items, if any, migrate when the containing app next reads them.
+        if status == errSecItemNotFound, q.removeValue(forKey: kSecAttrAccessGroup as String) != nil {
+            status = SecItemCopyMatching(q as CFDictionary, &item)
+            if status == errSecSuccess, let data = item as? Data { try? save(data, for: id) }
+        }
+        guard status == errSecSuccess,
               let data = item as? Data, data.count == 32 else { return nil }
         return data
     }
@@ -260,5 +273,9 @@ enum BLEPhotoKeyStore {
             throw NSError(domain: NSOSStatusErrorDomain, code: Int(status))
         }
     }
-    static func remove(_ id: String) { SecItemDelete(query(id) as CFDictionary) }
+    static func remove(_ id: String) {
+        var q = query(id)
+        q.removeValue(forKey: kSecAttrAccessGroup as String)
+        SecItemDelete(q as CFDictionary)
+    }
 }
