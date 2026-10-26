@@ -980,7 +980,7 @@ private struct ShareComposerView: View {
         }
     }
 
-    private var bluetoothPage: some View {
+    private var styledPage: some View {
         page
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
             previewHeight = composerCanvasHeight(in: size)
@@ -988,6 +988,10 @@ private struct ShareComposerView: View {
         .tint(TesseraeTheme.accent)
         .interactiveDismissDisabled(model.isBusy)
         .tesseraeHapticFeedback(trigger: hapticEvent)
+    }
+
+    private var lifecyclePage: some View {
+        styledPage
         .onDisappear {
             model.mediaFrames.cancelWork()
             model.bluetoothSession?.stop()
@@ -996,6 +1000,10 @@ private struct ShareComposerView: View {
             model.bluetoothSession?.nearby.updateApplicationActivity(phase == .active)
         }
         .onChange(of: model.sendTargets) { _, _ in model.reconcileBluetoothSelection() }
+    }
+
+    private var bluetoothPage: some View {
+        lifecyclePage
         .onChange(of: model.bluetoothSession?.isBusy) { _, busy in model.setBluetoothBusy(busy == true) }
         .onChange(of: model.bluetoothSession?.failure) { _, _ in
             model.setBluetoothBusy(model.bluetoothSession?.isBusy == true)

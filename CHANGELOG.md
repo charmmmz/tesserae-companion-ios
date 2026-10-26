@@ -18,6 +18,8 @@ capabilities.
   avoiding strict-concurrency errors and Swift 6.1 default-argument compiler crashes.
 - Live Photo providers export motion within their Photos callback, returning only
   an immutable temporary-file lease across isolation boundaries on older SDKs.
+- Share composer lifecycle and Bluetooth handlers use separate view expressions
+  so older Swift compilers can type-check them without changing the UI.
 
 ### Added
 
