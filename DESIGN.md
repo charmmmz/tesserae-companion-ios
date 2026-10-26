@@ -209,6 +209,12 @@ the accessibility name when the visible label is icon-only. Connect, Review,
 Send/Retry, Select All and destructive confirmations retain descriptive text.
 Changing a label does not change permissions, disabled states or draft protection.
 
+Nearby Bluetooth photo sends close the send sheet as soon as the device confirms
+receipt. Only after dismissal, the presenting page shows a brief “Sent to <display>”
+message capsule. The editor, sending progress and success message never appear
+together. There is no separate success sheet or Done button; local-storage warnings
+remain visible in the capsule.
+
 ### Shared page actions
 
 Every page uses `TesseraeToolbarActions` from `App/Sources/DesignSystem` for its

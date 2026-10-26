@@ -101,6 +101,7 @@
 "This Tesserae server does not support the selected link action." = "这台 Tesserae 服务器不支持所选的链接操作。";
 "This Tesserae server does not support the queued link action." = "这台 Tesserae 服务器不再支持队列中的链接操作。";
 "Sent" = "已发送";
+"Sent to %@" = "已发送到 %@";
 "OK" = "好";
 "Tesserae accepted the image. Follow its progress in Activity." = "Tesserae 已接收图片。可在“活动”中查看进度。";
 "Choose one still image" = "选择一张静态图片";

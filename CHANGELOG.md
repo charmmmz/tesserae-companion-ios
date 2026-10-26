@@ -71,6 +71,8 @@ capabilities.
 
 ### Changed
 
+- Bluetooth photo sends close on confirmed receipt and show one brief confirmation
+  on the presenting page, without a separate success sheet or Done button.
 - Message capsules share the bottom safe area above tab bars. Brief confirmations
   float; persistent or actionable messages reserve content space without moving titles.
 

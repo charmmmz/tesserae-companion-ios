@@ -434,6 +434,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(nearby.waitForExistence(timeout: 5))
         for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
         nearby.tap()
+        let originalNearbyTitleFrame = app.navigationBars["Nearby Displays"].frame
         app.buttons.containing(.staticText, identifier: "Tesserae-A1B2C3").firstMatch.tap()
         let invitation = app.staticTexts["Ready to Receive"]
         XCTAssertTrue(invitation.waitForExistence(timeout: 4))
@@ -470,10 +471,21 @@ final class TesseraeCompanionUITests: XCTestCase {
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "PicPak Bluetooth Photo Sheet"; shot.lifetime = .keepAlways; add(shot)
         app.buttons["ble-send-photo"].tap()
-        XCTAssertTrue(app.staticTexts["Photo Sent"].waitForExistence(timeout: 12))
+        let confirmation = app.descendants(matching: .any)["ble-photo-sent"].firstMatch
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 12))
+        let confirmationFrame = confirmation.frame
+        let navigationFrame = app.navigationBars["Nearby Displays"].frame
+        XCTAssertEqual(navigationFrame.minY, originalNearbyTitleFrame.minY, accuracy: 1)
+        XCTAssertEqual(navigationFrame.height, originalNearbyTitleFrame.height, accuracy: 1)
+        XCTAssertGreaterThanOrEqual(confirmationFrame.minY, navigationFrame.maxY)
+        XCTAssertGreaterThan(confirmationFrame.midY, app.frame.midY)
+        let geometry = XCTAttachment(string: "capsule=\(confirmationFrame)\nnavigationBefore=\(originalNearbyTitleFrame)\nnavigationDuring=\(navigationFrame)")
+        geometry.name = "Bluetooth Receipt Capsule Geometry"; geometry.lifetime = .keepAlways; add(geometry)
+        XCTAssertFalse(app.buttons["ble-send-photo"].exists)
+        XCTAssertTrue(confirmation.label.contains("Tesserae-A1B2C3"))
         let completionShot = XCTAttachment(screenshot: app.screenshot())
-        completionShot.name = "PicPak Compact Completion"; completionShot.lifetime = .keepAlways; add(completionShot)
-        app.buttons["Done"].firstMatch.tap()
+        completionShot.name = "PicPak Sent Confirmation"; completionShot.lifetime = .keepAlways; add(completionShot)
+        XCTAssertFalse(app.staticTexts["Sending photo…"].exists)
         XCTAssertTrue(app.navigationBars["Nearby Displays"].waitForExistence(timeout: 4))
         app.navigationBars["Nearby Displays"].buttons.firstMatch.tap()
         let demo = app.buttons["Explore with Demo Data"]
@@ -502,23 +514,26 @@ final class TesseraeCompanionUITests: XCTestCase {
 
     func testPicPakFastPhotoResynchronizesAfterAMissingPacket() {
         let app = XCUIApplication()
+        app.launchArguments += ["-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_BLE"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_PHOTO"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_AUTO_DISCOVERY"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_FAST_PHOTO"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_DROP_PHOTO_PACKET"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_PHOTO_MAX_WRITE"] = "90"
         app.launch()
-        let nearby = app.buttons["onboarding-nearby-devices"]
-        XCTAssertTrue(nearby.waitForExistence(timeout: 5))
-        for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
-        nearby.tap()
-        app.buttons.containing(.staticText, identifier: "Tesserae-A1B2C3").firstMatch.tap()
         XCTAssertTrue(app.buttons["ble-photo-start"].waitForExistence(timeout: 4))
         app.buttons["ble-photo-start"].tap()
         XCTAssertTrue(app.buttons["ble-send-photo"].waitForExistence(timeout: 8))
         app.buttons["ble-send-photo"].tap()
-        XCTAssertTrue(app.staticTexts["Photo Sent"].waitForExistence(timeout: 30))
+        let confirmation = app.descendants(matching: .any)["ble-photo-sent"].firstMatch
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 30))
+        XCTAssertFalse(app.buttons["ble-send-photo"].exists)
+        XCTAssertTrue(confirmation.label.contains("已发送到"))
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "PicPak Sent Confirmation Chinese"; shot.lifetime = .keepAlways; add(shot)
+        XCTAssertFalse(app.staticTexts["Sending photo…"].exists)
     }
 
     func testUnifiedMaintenanceOffersModeWithoutPicPakRefreshControls() {
@@ -621,8 +636,14 @@ final class TesseraeCompanionUITests: XCTestCase {
         shot.name = e1003 ? "E1003 Negotiated Gray Bluetooth Photo Editor" : "E1004 Negotiated Bluetooth Photo Editor"
         shot.lifetime = .keepAlways; add(shot)
         app.buttons["ble-send-photo"].tap()
-        XCTAssertTrue(app.staticTexts["Photo Sent"].waitForExistence(timeout: 45))
-        XCTAssertTrue(app.staticTexts["The display received your photo and will now refresh its screen."].exists)
+        let confirmation = app.descendants(matching: .any)["ble-photo-sent"].firstMatch
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 45))
+        XCTAssertFalse(app.buttons["ble-send-photo"].exists)
+        XCTAssertTrue(confirmation.label.contains("Tesserae-A1B2C3"))
+        let completionShot = XCTAttachment(screenshot: app.screenshot())
+        completionShot.name = e1003 ? "E1003 Sent Confirmation" : "E1004 Sent Confirmation"
+        completionShot.lifetime = .keepAlways; add(completionShot)
+        XCTAssertFalse(app.staticTexts["Sending photo…"].exists)
     }
 
     func testPicPakPhotoDiscoveryWaitsForSendAndRespondsToShortDrag() {

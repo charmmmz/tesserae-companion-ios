@@ -978,7 +978,9 @@ struct NearbyDisplaysView: View {
     @Environment(NearbyDeviceManager.self) private var nearby
     @Environment(AppModel.self) private var model
     @Environment(SetupNetworkStore.self) private var setupNetworks
+    @Environment(TesseraeMessageCenter.self) private var messageCenter
     @State private var selectedDevice: NearbyTesseraeDevice?
+    @State private var photoConfirmation: TesseraeMessage?
 
     var body: some View {
         List {
@@ -1171,9 +1173,16 @@ struct NearbyDisplaysView: View {
                 }
                 selectedDevice = newDevice
             }
-        )) { device in
-            NearbyDeviceSheet(device: device)
+        ), onDismiss: showPhotoConfirmation) { device in
+            NearbyDeviceSheet(device: device) { photoConfirmation = $0 }
         }
+    }
+
+    private func showPhotoConfirmation() {
+        guard let message = photoConfirmation else { return }
+        photoConfirmation = nil
+        messageCenter.post(message)
+        AccessibilityNotification.Announcement(message.text).post()
     }
 
     private func hardwareSummary(_ presentation: DisplayHardwarePresentation) -> String {

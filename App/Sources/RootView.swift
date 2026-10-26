@@ -29,6 +29,7 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var serversPresented = false
     @State private var nearbyPresented = false
+    @State private var nearbyPhotoConfirmation: TesseraeMessage?
     @State private var presentation = CompanionPresentation()
 
     private var connectionContext: RootConnectionContext {
@@ -178,8 +179,8 @@ struct RootView: View {
                     nearbyDevices.suggestedDevice = newDevice
                 }
             }
-        )) { device in
-            NearbyDeviceSheet(device: device)
+        ), onDismiss: showNearbyPhotoConfirmation) { device in
+            NearbyDeviceSheet(device: device) { nearbyPhotoConfirmation = $0 }
         }
         .onChange(of: connectionContext) { previous, _ in
             presentation.sheet = nil
@@ -225,6 +226,13 @@ struct RootView: View {
         }
         return [model.connectionNotice ?? "", health, model.activeInstance?.id ?? ""]
             .joined(separator: "|")
+    }
+
+    private func showNearbyPhotoConfirmation() {
+        guard let message = nearbyPhotoConfirmation else { return }
+        nearbyPhotoConfirmation = nil
+        messageCenter.post(message)
+        AccessibilityNotification.Announcement(message.text).post()
     }
 
     private func synchronizeConnectionMessage() {

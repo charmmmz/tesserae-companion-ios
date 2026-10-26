@@ -187,6 +187,8 @@ import XCTest
         let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: send)
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 8), .completed)
         send.tap()
-        XCTAssertTrue(app.staticTexts["Photo Sent"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.descendants(matching: .any)["ble-photo-sent"].firstMatch.waitForExistence(timeout: 15))
+        XCTAssertFalse(app.buttons["ble-send-photo"].exists)
+        XCTAssertFalse(app.staticTexts["Sending photo…"].exists)
     }
 }

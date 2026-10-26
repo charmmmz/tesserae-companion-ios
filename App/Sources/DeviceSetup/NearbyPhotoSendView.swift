@@ -4,8 +4,11 @@ import TesseraeKit
 
 struct NearbyDeviceSheet: View {
     let device: NearbyTesseraeDevice
+    let onPhotoReceived: (TesseraeMessage) -> Void
     var body: some View {
-        if device.mode == .photo { NearbyPhotoSendView(device: device) }
+        if device.mode == .photo {
+            NearbyPhotoSendView(device: device, onPhotoReceived: onPhotoReceived)
+        }
         else { NearbyDeviceSetupView(device: device) }
     }
 }
@@ -19,9 +22,11 @@ struct NearbyPhotoSendView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(NearbyDeviceManager.self) private var nearby
     let device: NearbyTesseraeDevice
+    let onPhotoReceived: (TesseraeMessage) -> Void
     private var isUnifiedPhoto: Bool { device.photoProtocol == .tesseraeV2 }
     @State private var hasStarted = false
     @State private var didConnect = false
+    @State private var isFinishing = false
     @State private var loadedSelection: MediaPickerSelection?
     @State private var mediaFrames = MediaFrameSession()
     @State private var appliedMediaSourceID: UUID?
@@ -46,18 +51,18 @@ struct NearbyPhotoSendView: View {
     }
     private var aspect: PanelAspectRatio { PanelAspectRatio(panel: panel) }
     private var busy: Bool {
-        preparing || mediaFrames.isBusy || nearby.photoState == .sending
+        preparing || mediaFrames.isBusy || nearby.photoState == .sending || nearby.photoState == .received
             || (mediaFrames.source != nil && appliedMediaRevision != mediaFrames.outputRevision)
     }
     private var canEditFraming: Bool { image != nil && fit == .fill }
     private var phase: Phase {
         guard hasStarted else { return .invitation }
-        if nearby.photoState == .received { return .received }
+        if isFinishing || nearby.photoState == .received { return .received }
         if case .failed = nearby.connectionState { return .failed }
         return nearby.connectionState == .ready ? .editing : .connecting
     }
     private var preferredDetent: PresentationDetent {
-        phase == .editing || dynamicTypeSize.isAccessibilitySize ? .large : .height(360)
+        phase == .editing || phase == .received || dynamicTypeSize.isAccessibilitySize ? .large : .height(360)
     }
 
     var body: some View {
@@ -66,7 +71,8 @@ struct NearbyPhotoSendView: View {
                 switch phase {
                 case .invitation: introduction
                 case .editing: composer
-                case .connecting, .received, .failed: centeredStatus
+                case .received: Color.clear
+                case .connecting, .failed: centeredStatus
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -86,7 +92,7 @@ struct NearbyPhotoSendView: View {
         .frame(idealWidth: 960, idealHeight: 760)
         .presentationSizing(.fitted)
         .presentationDetents([preferredDetent])
-        .animation(.snappy, value: phase)
+        .animation(phase == .received ? nil : .snappy, value: phase)
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(32)
         .interactiveDismissDisabled(busy)
@@ -121,6 +127,9 @@ struct NearbyPhotoSendView: View {
 #endif
         }
         .task(id: selection) { await loadPhoto() }
+        .onChange(of: phase) { _, phase in
+            if phase == .received { finishReceivedPhoto() }
+        }
 
     }
 
@@ -181,26 +190,7 @@ struct NearbyPhotoSendView: View {
         GeometryReader { proxy in
             ScrollView {
                 VStack(spacing: 18) {
-                    if phase == .received {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 52)).foregroundStyle(TesseraeTheme.success)
-                        VStack(spacing: 8) {
-                            Text("Photo Sent").font(.title2.bold())
-                            Text(isUnifiedPhoto
-                                 ? String(localized: "The display received your photo and will now refresh its screen.")
-                                 : String(localized: "PicPak received your photo and will now refresh its screen."))
-                                .foregroundStyle(.secondary)
-                        }
-                        if let error = nearby.displayRecords.storageError {
-                            Text(error).font(.footnote).foregroundStyle(TesseraeTheme.warning)
-                        }
-                        Button("Done", systemImage: "checkmark") { close() }
-                            .labelStyle(.iconOnly)
-                            .buttonStyle(.borderedProminent)
-                            .tint(TesseraeTheme.accentFill).controlSize(.large)
-                            .foregroundStyle(.white)
-                            .padding(.top, 4)
-                    } else if case .failed(let message) = nearby.connectionState {
+                    if case .failed(let message) = nearby.connectionState {
                         Image(systemName: "exclamationmark.circle")
                             .font(.system(size: 44)).foregroundStyle(TesseraeTheme.danger)
                         Text(message).foregroundStyle(.secondary)
@@ -402,6 +392,26 @@ struct NearbyPhotoSendView: View {
             } catch { if !Task.isCancelled { localError = error.localizedDescription } }
         }
     }
+
+    private func finishReceivedPhoto() {
+        guard phase == .received, !isFinishing else { return }
+        isFinishing = true
+        let confirmation = String(localized: "Sent to \(device.name)")
+        let warning = nearby.displayRecords.storageError
+        let message = warning.map { "\(confirmation)\n\($0)" } ?? confirmation
+        // The presenting page shows this only after the sheet finishes closing.
+        onPhotoReceived(TesseraeMessage(
+            id: "nearby-photo.sent",
+            text: message,
+            kind: warning == nil ? .success : .warning,
+            lifetime: .automatic(seconds: warning == nil ? 3 : 8),
+            survivesPresentationChange: true,
+            accessibilityIdentifier: "ble-photo-sent",
+            haptic: .success
+        ))
+        close()
+    }
+
     private func close() {
         sendTask?.cancel()
         framing.discardAnalysis()
