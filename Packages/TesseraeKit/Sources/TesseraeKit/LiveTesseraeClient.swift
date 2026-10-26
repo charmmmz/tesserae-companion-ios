@@ -171,6 +171,15 @@ public actor LiveTesseraeClient: TesseraeServing {
         }
     }
 
+    public func reportDeviceMode(_ observation: DeviceModeObservation, deviceID: String,
+                                 instance: TesseraeInstance) async throws {
+        let request = try await authenticatedRequest(instance: instance,
+            path: ["devices", deviceID, "mode-observation"], method: "PUT",
+            body: TesseraeJSON.encoder().encode(observation))
+        let response = try await response(for: request)
+        guard response.statusCode == 204 else { throw try serverError(from: response) }
+    }
+
     public func fetchDeviceUpcoming(
         id: String,
         hours: Int?,

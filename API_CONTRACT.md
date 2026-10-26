@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Status | Implemented base contract plus reviewed and proposed gated extensions |
-| Contract version | 0.13.0 |
+| Contract version | 0.16.0 |
 | Namespace | `/api/app/v1` |
 | Authentication | Revocable per-client Companion bearer token |
 | Machine-readable source | [`Contracts/app-v1.openapi.yaml`](Contracts/app-v1.openapi.yaml) |
@@ -852,5 +852,18 @@ credentials. POST keeps the known MAC out of URL query logs.
 
 The app ignores legacy device-list MAC fields and only associates existing
 inventory IDs returned by this lookup. An older server's 404/405 means no
-automatic MAC match; canonical device IDs and explicit manual association
-remain available. Query cancellation or a server switch discards the result.
+automatic MAC match; canonical device IDs and previously saved explicit
+associations remain available. Query cancellation or a server switch discards the result.
+
+## Confirmed device modes
+
+Servers advertising `device_mode_observations` accept
+`PUT /api/app/v1/devices/{device_id}/mode-observation` with
+`device_setup:write`. The body contains only `mode` (`wifi` or `bluetooth`),
+`observed_at` (RFC 3339), and `source` (`ios_ble`). A successful idempotent
+write returns 204; older observations do not replace newer evidence.
+Device responses may expose the latest observation and `received_at`.
+These are advisory facts and do not change server transport or delivery rules.
+The app persists confirmed observations before upload and retries them while
+active, with acknowledgements scoped to the server and exact observation.
+Bluetooth keys and image data never enter this report.

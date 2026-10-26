@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Tesserae Companion API
-  version: 0.15.0
+  version: 0.16.0
   description: >-
     Companion API contract for community-built clients. Previews, History,
     resend, remote-image push, webpage push, and server-advertised image fit
@@ -234,6 +234,38 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+  /api/app/v1/devices/{device_id}/mode-observation:
+    parameters:
+      - $ref: "#/components/parameters/DeviceID"
+    put:
+      tags: [Displays]
+      operationId: reportCompanionDeviceMode
+      summary: Report a locally saved, confirmed Bluetooth mode observation
+      description: >-
+        Requires device_mode_observations and device_setup:write. The iOS app
+        saves confirmed mode locally before uploading. Delayed and identical
+        retries succeed without overwriting a newer observation. observed_at
+        must include a timezone and be between 1970 and five minutes in the
+        future; the server normalizes it to UTC seconds. This advisory record
+        never changes firmware settings, reachability, scheduling, or push gates.
+        No Bluetooth keys, photos, or device credentials are uploaded.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeviceModeObservation"
+      responses:
+        '204':
+          description: Observation processed, including an older or identical retry.
+        '400':
+          $ref: "#/components/responses/BadRequest"
+        '401':
+          $ref: "#/components/responses/Unauthorized"
+        '403':
+          $ref: "#/components/responses/Forbidden"
+        '404':
+          $ref: "#/components/responses/NotFound"
   /api/app/v1/devices/{device_id}/upcoming:
     parameters:
       - $ref: "#/components/parameters/DeviceID"
@@ -1506,6 +1538,7 @@ components:
               - lineup_authoring
               - session_read
               - device_setup
+              - device_mode_observations
               - device_timeline
         personal_data:
           $ref: "#/components/schemas/PersonalDataCapabilities"
@@ -2559,6 +2592,37 @@ components:
           type: string
           nullable: true
           description: Unique matching server device ID, or null when unknown or ambiguous.
+    DeviceModeObservation:
+      type: object
+      additionalProperties: false
+      required: [mode, observed_at, source]
+      properties:
+        mode:
+          type: string
+          enum: [wifi, bluetooth]
+        observed_at:
+          type: string
+          format: date-time
+        source:
+          type: string
+          enum: [ios_ble]
+    DeviceModeObservationStatus:
+      type: object
+      additionalProperties: false
+      required: [mode, observed_at, source, received_at]
+      properties:
+        mode:
+          type: string
+          enum: [wifi, bluetooth]
+        observed_at:
+          type: string
+          format: date-time
+        source:
+          type: string
+          enum: [ios_ble]
+        received_at:
+          type: string
+          format: date-time
     Device:
       type: object
       additionalProperties: false
@@ -2595,6 +2659,10 @@ components:
         firmware_version:
           type: string
           nullable: true
+        mode_observation:
+          allOf:
+            - $ref: "#/components/schemas/DeviceModeObservationStatus"
+          description: Last confirmed mode reported by a phone; advisory, with original observation time.
         capability_support:
           description: >-
             Server-computed support states keyed by protocol capability rather

@@ -137,9 +137,12 @@ firmware using code 11 must be updated.
 For automatic association with a differently named server device, Companion
 submits a full MAC already obtained from authenticated Bluetooth and receives
 only a matching device ID. It does not read MACs from the server's device list.
-Older servers keep manual association in Device Details. Saved observations
-stay local to this phone or tablet; another phone's operations do not sync into
-them. A received photo does not confirm a physical e-paper refresh.
+Device Details does not expose a manual Bluetooth linking control. Saved
+observations are saved on this phone or tablet first, then retried in the foreground
+when the server advertises `device_mode_observations`. The server retains the latest
+confirmed mode and observation time as advisory metadata; it does not alter push
+rules. Bluetooth keys and photos are not part of this report. A received photo does
+not confirm a physical e-paper refresh.
 
 PicPak Bluetooth photo sending uses its established protocol. The negotiated
 photo protocol for E1004, E1001, E1003 and Sticky remains experimental and

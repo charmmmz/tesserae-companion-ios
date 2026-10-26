@@ -9,6 +9,7 @@ struct BluetoothDisplayRecord: Codable, Equatable, Identifiable {
     var observedServerIDs: Set<String> = []
     var hardwareMAC: String?
     var hardwareKind: String?
+    var peripheralID: UUID?
     var mode: BLEScreenMode?
     var modeConfirmedAt: Date?
     var modeChangedAt: Date?
@@ -37,6 +38,12 @@ struct DisplayServerRecord: Codable, Equatable {
     var previewChangedAt: Date?
 }
 
+struct BluetoothModeReport: Codable, Hashable {
+    let displayID: String
+    let bluetoothID: String
+    let observation: DeviceModeObservation
+}
+
 /// Local evidence only. BLE advertisements, keys and server silence never establish a mode.
 /// Images retain the original colours and sent crop, saved only after photo_received.
 @MainActor @Observable
@@ -45,10 +52,14 @@ final class BluetoothDisplayStore {
         var records: [String: BluetoothDisplayRecord] = [:]
         var links: [String: [String: String]] = [:]
         var servers: [String: [String: DisplayServerRecord]] = [:]
+        var reportedModes: [String: [String: BluetoothModeReport]]?
     }
 
     private var snapshot = Snapshot()
     private let fileURL: URL?
+    private let receiptDirectoryURL: URL?
+    private let isReadOnly: Bool
+    private var hasPersistedSnapshot = false
     var activeServerID: String?
     private(set) var storageError: String?
 
@@ -56,15 +67,30 @@ final class BluetoothDisplayStore {
         URL.applicationSupportDirectory.appending(path: "BluetoothDisplays/records.plist")
     }
 
-    init(fileURL: URL? = BluetoothDisplayStore.defaultFileURL) {
+    static var sharedReceiptDirectoryURL: URL? {
+        guard let group = Bundle.main.object(forInfoDictionaryKey: "TesseraeAppGroupIdentifier") as? String else { return nil }
+        return FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group)?
+            .appending(path: "BluetoothShareReceipts", directoryHint: .isDirectory)
+    }
+
+    static var sharedInventoryURL: URL? {
+        sharedReceiptDirectoryURL?.deletingLastPathComponent().appending(path: "BluetoothDisplays.plist")
+    }
+
+    init(fileURL: URL? = BluetoothDisplayStore.defaultFileURL, receiptDirectoryURL: URL? = nil,
+         isReadOnly: Bool = false) {
         self.fileURL = fileURL
+        self.receiptDirectoryURL = receiptDirectoryURL
+        self.isReadOnly = isReadOnly
         guard let fileURL, FileManager.default.fileExists(atPath: fileURL.path) else { return }
         do {
             snapshot = try PropertyListDecoder().decode(Snapshot.self, from: Data(contentsOf: fileURL))
+            hasPersistedSnapshot = true
             let linksChanged = discardConflictingLinks()
             // Migrate records saved by versions that waited for a changed server image.
             let previewsChanged = discardSupersededPreviews()
             if linksChanged || previewsChanged { persist() }
+            publishSharedInventory()
         } catch {
             storageError = String(localized: "Bluetooth records could not be read.")
         }
@@ -72,12 +98,42 @@ final class BluetoothDisplayStore {
 
     var records: [BluetoothDisplayRecord] { snapshot.records.values.sorted { $0.id < $1.id } }
 
-    func manualLinkCandidates(for displayID: String, serverID: String?) -> [BluetoothDisplayRecord] {
-        guard let serverID, record(for: displayID, serverID: serverID) == nil else { return [] }
-        let mac = snapshot.servers[serverID]?[displayID]?.associationMAC
-        return records.filter { candidate in
-            let candidateMAC = hardwareMAC(for: candidate)
-            return mac == nil || candidateMAC == nil || mac == candidateMAC
+    /// The durable local records are the outbox. Only resolved identities can be reported.
+    func pendingModeReports(displayIDs: [String], serverID: String?) -> [BluetoothModeReport] {
+        guard !isReadOnly, hasPersistedSnapshot, let serverID else { return [] }
+        return displayIDs.sorted().compactMap { displayID in
+            guard let record = record(for: displayID, serverID: serverID),
+                  let mode = record.mode, let date = record.modeConfirmedAt,
+                  let reportedMode = DeviceModeObservation.Mode(rawValue: mode.rawValue) else { return nil }
+            let report = BluetoothModeReport(displayID: displayID, bluetoothID: record.id,
+                observation: DeviceModeObservation(mode: reportedMode, observedAt: date))
+            return snapshot.reportedModes?[serverID]?[displayID] == report ? nil : report
+        }
+    }
+
+    func markModeReported(_ report: BluetoothModeReport, serverID: String) {
+        var reports = snapshot.reportedModes ?? [:]
+        reports[serverID, default: [:]][report.displayID] = report
+        snapshot.reportedModes = reports
+        persist()
+    }
+
+    func record(for peripheralID: UUID) -> BluetoothDisplayRecord? {
+        let matches = records.filter { $0.peripheralID == peripheralID }
+        return matches.count == 1 ? matches.first : nil
+    }
+
+    /// The app publishes metadata only. The extension reads it without overwriting inventory or previews.
+    func publishSharedInventory(to url: URL? = BluetoothDisplayStore.sharedInventoryURL) {
+        guard !isReadOnly, fileURL == Self.defaultFileURL, let url else { return }
+        do {
+            var metadata = snapshot
+            for id in metadata.records.keys { metadata.records[id]?.previewPNG = nil }
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try PropertyListEncoder().encode(metadata).write(to: url,
+                options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        } catch {
+            storageError = String(localized: "Bluetooth devices could not be shared with the Share Sheet.")
         }
     }
 
@@ -144,10 +200,12 @@ final class BluetoothDisplayStore {
 
     func observe(deviceID: String, name: String, mode: BLEScreenMode?, batteryMillivolts: Int?,
                  batteryPercent: Int? = nil, hardwareMAC: String? = nil, hardwareKind: String? = nil,
+                 peripheralID: UUID? = nil,
                  at date: Date = Date()) {
         var record = snapshot.records[deviceID] ?? BluetoothDisplayRecord(id: deviceID, name: name)
         record.name = name
         if let hardwareKind { record.hardwareKind = hardwareKind }
+        if let peripheralID { record.peripheralID = peripheralID }
         if let mac = DeviceHardwareIdentity.normalizedMAC(hardwareMAC)
             ?? DeviceHardwareIdentity.picPakMAC(bluetoothID: deviceID) {
             record.hardwareMAC = mac
@@ -198,6 +256,51 @@ final class BluetoothDisplayStore {
         record.photoReceivedAt = date
         snapshot.records[deviceID] = record
         persist()
+        // Append an immutable receipt; an extension must never overwrite the app's inventory.
+        if let receiptDirectoryURL {
+            do {
+                try FileManager.default.createDirectory(at: receiptDirectoryURL, withIntermediateDirectories: true)
+                let data = try PropertyListEncoder().encode(record)
+                try data.write(to: receiptDirectoryURL.appending(path: UUID().uuidString + ".plist"),
+                               options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            } catch {
+                storageError = String(localized: "Photo sent, but its preview could not be saved for the app.")
+            }
+        }
+    }
+
+    /// Called by the containing app on foreground. Observation times protect newer local evidence.
+    func importSharedPhotoReceipts(from directory: URL? = BluetoothDisplayStore.sharedReceiptDirectoryURL) {
+        guard fileURL != nil, let directory,
+              let files = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+        else { return }
+        let receipts = files.compactMap { file -> (URL, BluetoothDisplayRecord)? in
+            guard file.pathExtension == "plist", let data = try? Data(contentsOf: file),
+                  let record = try? PropertyListDecoder().decode(BluetoothDisplayRecord.self, from: data),
+                  record.photoReceivedAt != nil, record.previewPNG?.isEmpty == false else { return nil }
+            return (file, record)
+        }.sorted { ($0.1.photoReceivedAt ?? .distantPast) < ($1.1.photoReceivedAt ?? .distantPast) }
+        for (file, incoming) in receipts {
+            let current = snapshot.records[incoming.id]
+            let incomingDate = incoming.photoReceivedAt ?? .distantPast
+            if (current?.modeConfirmedAt ?? .distantPast) <= incomingDate,
+               (current?.photoReceivedAt ?? .distantPast) <= incomingDate {
+                var merged = incoming
+                merged.observedServerIDs.formUnion(current?.observedServerIDs ?? [])
+                if (current?.batteryRecordedAt ?? .distantPast) > (incoming.batteryRecordedAt ?? .distantPast) {
+                    merged.batteryMillivolts = current?.batteryMillivolts
+                    merged.batteryRecordedAt = current?.batteryRecordedAt
+                }
+                if (current?.batteryPercentRecordedAt ?? .distantPast) > (incoming.batteryPercentRecordedAt ?? .distantPast) {
+                    merged.batteryPercent = current?.batteryPercent
+                    merged.batteryPercentRecordedAt = current?.batteryPercentRecordedAt
+                }
+                snapshot.records[incoming.id] = merged
+                persist()
+                guard storageError == nil else { continue }
+            }
+            try? FileManager.default.removeItem(at: file)
+        }
     }
 
     func remove(deviceID: String) {
@@ -307,14 +410,17 @@ final class BluetoothDisplayStore {
     }
 
     private func persist() {
-        guard let fileURL else { return }
+        guard !isReadOnly, let fileURL else { return }
         do {
             try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             let encoder = PropertyListEncoder()
             encoder.outputFormat = .binary
             try encoder.encode(snapshot).write(to: fileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            hasPersistedSnapshot = true
             storageError = nil
+            publishSharedInventory()
         } catch {
+            hasPersistedSnapshot = false
             storageError = String(localized: "Bluetooth records could not be saved. They may be lost when the app closes.")
         }
     }

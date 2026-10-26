@@ -16,7 +16,6 @@
 		065F51AE903AB65EE0538679 /* BluetoothPhotoV2Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8E3107649C81BDC8A30C213 /* BluetoothPhotoV2Tests.swift */; };
 		07FCF32DF59628F960A2736E /* PhotoSubjectAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09B9A585A1539B7342FE714 /* PhotoSubjectAnalyzer.swift */; };
 		0C0D109EF327D44C0755AC62 /* LineupsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30CBA6B44083893EBB93FB17 /* LineupsView.swift */; };
-		143245C898273ABCE60115A5 /* BluetoothRecordLinkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A943DAE9D38DCF3EF959A54 /* BluetoothRecordLinkView.swift */; };
 		17D2FCCE924BA07994FAEE09 /* TesseraeToolbarActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF4E6E91B23A87DC7A195340 /* TesseraeToolbarActions.swift */; };
 		1BB2212ACD6F5E42950AD62F /* AdaptiveComposerLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 982ACAB2004BA498F82E4AA0 /* AdaptiveComposerLayout.swift */; };
 		1DB64B0843105823C25C7E1D /* MediaFrameFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F9E787492913D7809CB9565 /* MediaFrameFixtures.swift */; };
@@ -67,6 +66,7 @@
 		7947C5ABEA598A1D59C57C68 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8FE0A6BC06BC1C26FD5AD93A /* Assets.xcassets */; };
 		7C7957F03F775B5E9B059BE2 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B2A5670FEC5BD4923C95159E /* PrivacyInfo.xcprivacy */; };
 		808C497AB18FB6FAC1ED23F9 /* MediaFrameControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEF048F26620C2F5266E0267 /* MediaFrameControls.swift */; };
+		80C4954A9622B176E64353D1 /* BluetoothModeSyncTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C43261595869AE53072EFD70 /* BluetoothModeSyncTests.swift */; };
 		80FF4272E3D31DF51A6245B8 /* DashboardSettingsAppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 348EE5DFDB46CEDFD1DBFFEE /* DashboardSettingsAppModelTests.swift */; };
 		86913487D95BFCE535E7C38C /* AlbumsAndActivityUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B1C7C0CE5B9420ECC69B548 /* AlbumsAndActivityUITests.swift */; };
 		8C920FF8FAAF6F167EB28756 /* MediaLibraryPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E080EF75EAC8A0C7863578B /* MediaLibraryPicker.swift */; };
@@ -88,6 +88,7 @@
 		BCC58FB96478BC3992F3946E /* ActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1A411679F997EDCC5BDFF5 /* ActivityView.swift */; };
 		BEF54278387345E5B5961B61 /* NearbyDeviceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 431BEA456C9FDD3620503327 /* NearbyDeviceManager.swift */; };
 		C43F0E113EF4A9E5D6AC77F0 /* OfflineAlbumView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A788C388472DC02CC74EDEB /* OfflineAlbumView.swift */; };
+		C4F93D6E2E1CD51D9B2FD84C /* BluetoothModeLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4330E9660E867A371A28E93F /* BluetoothModeLabel.swift */; };
 		CA3CCC0682447B674710FFE9 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 0580CE81ECB940408B4B84B9 /* InfoPlist.strings */; };
 		CB4BA3CC542CA597567043D8 /* FittedPreviewLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A04E5CC172EAC80A6C24F75 /* FittedPreviewLayout.swift */; };
 		D72F7AB7540DAF09C2FDB102 /* DashboardSettingsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7D732F7AB479072C4C94DA1 /* DashboardSettingsUITests.swift */; };
@@ -177,10 +178,10 @@
 		36574431BF8F9CAB78DF3088 /* DisplayHardwareBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayHardwareBadge.swift; sourceTree = "<group>"; };
 		392FCC1E3CDA7DF07E4B4444 /* DashboardComponentSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardComponentSettingsView.swift; sourceTree = "<group>"; };
 		3A4080F0A169BC5BCBF484AC /* PicPakPhotoEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PicPakPhotoEncoder.swift; sourceTree = "<group>"; };
-		3A943DAE9D38DCF3EF959A54 /* BluetoothRecordLinkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothRecordLinkView.swift; sourceTree = "<group>"; };
 		3F9E787492913D7809CB9565 /* MediaFrameFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaFrameFixtures.swift; sourceTree = "<group>"; };
 		426B2AE06E8492AEE89F8943 /* DeviceSetupQRScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceSetupQRScanner.swift; sourceTree = "<group>"; };
 		431BEA456C9FDD3620503327 /* NearbyDeviceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearbyDeviceManager.swift; sourceTree = "<group>"; };
+		4330E9660E867A371A28E93F /* BluetoothModeLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothModeLabel.swift; sourceTree = "<group>"; };
 		49B49CB5FE65FF3DC08A0081 /* ReminderSnapshotFactoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderSnapshotFactoryTests.swift; sourceTree = "<group>"; };
 		4E080EF75EAC8A0C7863578B /* MediaLibraryPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaLibraryPicker.swift; sourceTree = "<group>"; };
 		4EA5F074B206DD2FF54C9767 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -230,6 +231,7 @@
 		B5E57290EA4C5631004E3156 /* SendSubmissionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendSubmissionTests.swift; sourceTree = "<group>"; };
 		B85A93A46B59C02E13F75509 /* Tesserae Companion.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "Tesserae Companion.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BD5EEF99A30C18C07C717772 /* BLESetupProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BLESetupProtocolTests.swift; sourceTree = "<group>"; };
+		C43261595869AE53072EFD70 /* BluetoothModeSyncTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothModeSyncTests.swift; sourceTree = "<group>"; };
 		CB98E98A7C6727AE8FE4694E /* Phosphor.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Phosphor.ttf; sourceTree = "<group>"; };
 		CCAC4A35BBC2B83469A3411C /* LineupsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineupsUITests.swift; sourceTree = "<group>"; };
 		CF3B64DA50FECFA7A4514489 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
@@ -340,6 +342,7 @@
 				5B78EBE8F9EA638D2B8BE520 /* BLEPhotoTests.swift */,
 				BD5EEF99A30C18C07C717772 /* BLESetupProtocolTests.swift */,
 				DC4C4A40304AB2ED5571D5F3 /* BluetoothDisplayStoreTests.swift */,
+				C43261595869AE53072EFD70 /* BluetoothModeSyncTests.swift */,
 				A8E3107649C81BDC8A30C213 /* BluetoothPhotoV2Tests.swift */,
 				F6BCE92FAB7DF4093DAAE45D /* ConnectionRecoveryTests.swift */,
 				348EE5DFDB46CEDFD1DBFFEE /* DashboardSettingsAppModelTests.swift */,
@@ -477,7 +480,7 @@
 				13FE9A7CF2AD8318230B5311 /* BLEPhotoProtocol.swift */,
 				68AB5B0479A37A3F55286299 /* BLESetupProtocol.swift */,
 				1F84E715D6D8755E7AB565AE /* BluetoothDisplayStore.swift */,
-				3A943DAE9D38DCF3EF959A54 /* BluetoothRecordLinkView.swift */,
+				4330E9660E867A371A28E93F /* BluetoothModeLabel.swift */,
 				426B2AE06E8492AEE89F8943 /* DeviceSetupQRScanner.swift */,
 				F99101E3410A2CB4183DCF85 /* LocalBluetoothPhotoRenderer.swift */,
 				431BEA456C9FDD3620503327 /* NearbyDeviceManager.swift */,
@@ -719,7 +722,7 @@
 				A9C1333F5B8DEEBBCBECCF92 /* BLEPhotoProtocol.swift in Sources */,
 				E537E660E8D727EBC31DF725 /* BLESetupProtocol.swift in Sources */,
 				05A712A0FBD1D8AE269399D0 /* BluetoothDisplayStore.swift in Sources */,
-				143245C898273ABCE60115A5 /* BluetoothRecordLinkView.swift in Sources */,
+				C4F93D6E2E1CD51D9B2FD84C /* BluetoothModeLabel.swift in Sources */,
 				6C45BF99D82AB95DD6A2B979 /* DashboardComponentSettingsView.swift in Sources */,
 				B70394B493B56F40CF840CA5 /* DashboardSettingChoicesView.swift in Sources */,
 				5CC2CC564A1BE6925C43F4D5 /* DashboardSettingsView.swift in Sources */,
@@ -777,6 +780,7 @@
 				364139BE7274398A4FB6A50C /* BLEPhotoTests.swift in Sources */,
 				EF027BEE001DABA6D3E84627 /* BLESetupProtocolTests.swift in Sources */,
 				DD74E53D9A1746A291D53C1E /* BluetoothDisplayStoreTests.swift in Sources */,
+				80C4954A9622B176E64353D1 /* BluetoothModeSyncTests.swift in Sources */,
 				065F51AE903AB65EE0538679 /* BluetoothPhotoV2Tests.swift in Sources */,
 				E8F9020298F307760D7FA918 /* ConnectionRecoveryTests.swift in Sources */,
 				80FF4272E3D31DF51A6245B8 /* DashboardSettingsAppModelTests.swift in Sources */,

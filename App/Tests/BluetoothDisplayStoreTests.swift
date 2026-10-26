@@ -14,6 +14,92 @@ struct BluetoothDisplayStoreTests {
             freshness: .stale, lastSeenAt: seen, batteryPercent: percent)
     }
 
+    @Test func pendingModesSurviveRestartAndAcknowledgementsAreServerScoped() throws {
+        let directory = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appending(path: "records.plist")
+        let store = BluetoothDisplayStore(fileURL: file)
+        store.activeServerID = "home"
+        store.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: nil, at: start)
+        let restored = BluetoothDisplayStore(fileURL: file)
+        let pending = try #require(restored.pendingModeReports(displayIDs: ["panel"], serverID: "home").first)
+        #expect(pending.observation.mode == .bluetooth)
+        #expect(pending.observation.observedAt == start)
+        restored.markModeReported(pending, serverID: "home")
+        let reported = BluetoothDisplayStore(fileURL: file)
+        #expect(reported.pendingModeReports(displayIDs: ["panel"], serverID: "home").isEmpty)
+        #expect(reported.pendingModeReports(displayIDs: ["panel"], serverID: "other").isEmpty)
+        reported.activeServerID = "other"
+        reported.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: nil, at: start)
+        #expect(reported.pendingModeReports(displayIDs: ["panel"], serverID: "other").count == 1)
+    }
+
+    @Test func olderAcknowledgementCannotClearANewerLocalMode() throws {
+        let directory = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = BluetoothDisplayStore(fileURL: directory.appending(path: "records.plist"))
+        store.activeServerID = "home"
+        store.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: nil, at: start)
+        let old = try #require(store.pendingModeReports(displayIDs: ["panel"], serverID: "home").first)
+        store.observe(deviceID: "panel", name: "Desk", mode: .wifi, batteryMillivolts: nil, at: start.addingTimeInterval(1))
+        store.markModeReported(old, serverID: "home")
+        #expect(store.pendingModeReports(displayIDs: ["panel"], serverID: "home").first?.observation.mode == .wifi)
+    }
+
+    @Test func reportingRequiresDurableConfirmedEvidenceAndAnAssociatedDevice() throws {
+        let directory = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appending(path: "records.plist")
+        let store = BluetoothDisplayStore(fileURL: file)
+        store.activeServerID = "home"
+        store.observe(deviceID: "panel", name: "Desk", mode: nil, batteryMillivolts: nil, at: start)
+        #expect(store.pendingModeReports(displayIDs: ["panel"], serverID: "home").isEmpty)
+        store.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: nil, at: start)
+        #expect(store.pendingModeReports(displayIDs: ["same-name-other-id"], serverID: "home").isEmpty)
+        let extensionStore = BluetoothDisplayStore(fileURL: file, isReadOnly: true)
+        #expect(extensionStore.pendingModeReports(displayIDs: ["panel"], serverID: "home").isEmpty)
+        let failed = BluetoothDisplayStore(fileURL: file.appending(path: "cannot-write.plist"))
+        failed.activeServerID = "home"
+        failed.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: nil, at: start)
+        #expect(failed.storageError != nil)
+        #expect(failed.pendingModeReports(displayIDs: ["panel"], serverID: "home").isEmpty)
+    }
+
+    @Test func extensionReadsInventoryWithoutOverwritingIt() throws {
+        let directory = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appending(path: "inventory.plist")
+        let app = BluetoothDisplayStore(fileURL: file)
+        app.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: nil, peripheralID: UUID())
+        let original = try Data(contentsOf: file)
+        let share = BluetoothDisplayStore(fileURL: file, isReadOnly: true)
+        #expect(share.records.first?.peripheralID == app.records.first?.peripheralID)
+        share.observe(deviceID: "other", name: "Other", mode: .bluetooth, batteryMillivolts: nil)
+        #expect(try Data(contentsOf: file) == original)
+    }
+
+    @Test func sharedReceiptsImportOnlyConfirmedPhotosAndPreserveNewerMode() throws {
+        let directory = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let receipts = directory.appending(path: "receipts")
+        let share = BluetoothDisplayStore(fileURL: nil, receiptDirectoryURL: receipts)
+        share.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: 3900, at: start)
+        #expect(!FileManager.default.fileExists(atPath: receipts.path))
+        let png = try LocalBluetoothPhotoRenderer.previewPNG(rgba: Data([20, 100, 180, 255]), width: 1, height: 1)
+        share.receivedPhoto(deviceID: "panel", previewPNG: png, at: start.addingTimeInterval(1))
+        let app = BluetoothDisplayStore(fileURL: directory.appending(path: "records.plist"))
+        app.activeServerID = "home"
+        app.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: nil, at: start)
+        app.importSharedPhotoReceipts(from: receipts)
+        #expect(app.record(for: "panel", serverID: "home")?.previewPNG == png)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: receipts.path).isEmpty)
+        share.receivedPhoto(deviceID: "panel", previewPNG: png, at: start.addingTimeInterval(2))
+        app.observe(deviceID: "panel", name: "Desk", mode: .wifi, batteryMillivolts: nil, at: start.addingTimeInterval(3))
+        app.importSharedPhotoReceipts(from: receipts)
+        #expect(app.record(for: "panel", serverID: "home")?.mode == .wifi)
+        #expect(app.record(for: "panel", serverID: "home")?.previewPNG == nil)
+    }
+
     @Test func recordsSurviveRestartAndUnconfirmedWorkCannotReplaceTheImage() throws {
         let directory = URL.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -275,19 +361,17 @@ struct BluetoothDisplayStoreTests {
         #expect(store.record(for: "native-panel", serverID: "other") == nil)
     }
 
-    @Test func bindingControlsDisappearAfterAssociationAndRejectConflictingMACs() {
+    @Test func confirmedMACAssociationsOverrideConflictingLegacyLinks() {
         let store = BluetoothDisplayStore(fileURL: nil)
         store.observe(deviceID: "picpak-f85b1b4fe844", name: "Red", mode: .bluetooth, batteryMillivolts: nil)
         store.observe(deviceID: "picpak-f85b1b4f0700", name: "Blue", mode: .bluetooth, batteryMillivolts: nil)
-        #expect(store.manualLinkCandidates(for: "legacy", serverID: "home").count == 2)
         store.link("picpak-f85b1b4fe844", to: "legacy", serverID: "home")
-        #expect(store.manualLinkCandidates(for: "legacy", serverID: "home").isEmpty)
+        #expect(store.record(for: "legacy", serverID: "home")?.id == "picpak-f85b1b4fe844")
 
         // Complete hardware evidence repairs a historical manual mismatch without deleting the record.
         store.observeServer(displays: [display(id: "legacy")], previews: [:], serverID: "home")
         store.observeMACMatches(["f8:5b:1b:4f:07:00": "legacy"], serverID: "home")
         #expect(store.record(for: "legacy", serverID: "home")?.id == "picpak-f85b1b4f0700")
-        #expect(store.manualLinkCandidates(for: "legacy", serverID: "home").isEmpty)
         store.link("picpak-f85b1b4fe844", to: "legacy", serverID: "home")
         #expect(store.record(for: "legacy", serverID: "home")?.id == "picpak-f85b1b4f0700")
         #expect(store.records.count == 2)

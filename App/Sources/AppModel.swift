@@ -129,6 +129,24 @@ final class AppModel {
     }
 
     var activeInstance: TesseraeInstance?
+
+    func synchronizeBluetoothModes(_ reports: [BluetoothModeReport], store: BluetoothDisplayStore) async {
+        guard connectionMode == .live,
+              capabilities?.features.contains("device_mode_observations") == true,
+              let instance = activeInstance, let session = connectionSession else { return }
+        let client = activeClient
+        for report in reports {
+            do {
+                try checkConnectionSession(session)
+                try await client.reportDeviceMode(report.observation, deviceID: report.displayID, instance: instance)
+                try checkConnectionSession(session)
+                store.markModeReported(report, serverID: instance.id)
+            } catch {
+                // Keep the saved observation pending. Foreground synchronization retries it.
+                if Task.isCancelled || connectionSession != session { return }
+            }
+        }
+    }
     var connectionMode: ConnectionMode?
     var connectionHealth: ConnectionHealth = .restoring
     var connectionNotice: String?

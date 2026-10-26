@@ -1397,8 +1397,6 @@ private struct DisplayDetailView: View {
 }
 
 private struct DisplayDeviceDetails: View {
-    @Environment(AppModel.self) private var model
-    @Environment(NearbyDeviceManager.self) private var nearby
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let display: DisplaySummary
     @State private var isExpanded = false
@@ -1455,10 +1453,6 @@ private struct DisplayDeviceDetails: View {
                     Text(display.gamutLabel)
                 }
 
-                if !nearby.displayRecords.manualLinkCandidates(for: display.id, serverID: model.activeInstance?.id).isEmpty {
-                    Divider()
-                    BluetoothRecordLinkView(displayID: display.id)
-                }
             }
         }
         .tesseraeCard()

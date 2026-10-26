@@ -953,4 +953,12 @@ To associate with a renamed server device, Companion submits only those known
 MACs to the scoped device lookup and accepts unique IDs already in the current
 inventory. Device lists neither provide nor persist MACs. Matching stays scoped
 to the active connection, rejects ambiguity, and respects explicit manual
-association overrides. Older servers retain the manual association path.
+association overrides saved by earlier versions. Device Details no longer offers
+a manual linking picker. Confirmed mode observations persist locally before
+reporting through the `device_mode_observations` capability and
+`PUT /devices/{device_id}/mode-observation` (requires `device_setup:write`). The
+foreground task retries saved observations with backoff, using server-scoped
+acknowledgements so offline work and server changes cannot lose pending modes.
+Older servers keep local behavior. Reports contain mode, observation time and
+`ios_ble` source only; the server stores them as advisory facts without changing
+delivery rules. Shared photo receipts are imported before subsequent reporting.

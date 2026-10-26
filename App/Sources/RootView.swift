@@ -10,6 +10,13 @@ private struct BluetoothAssociationContext: Hashable {
     let connection: RootConnectionContext
     let displays: [DisplaySummary]
     let macs: [String]
+    let isActive: Bool
+}
+
+private struct BluetoothModeSyncContext: Hashable {
+    let connection: RootConnectionContext
+    let reports: [BluetoothModeReport]
+    let enabled: Bool
 }
 
 struct RootView: View {
@@ -32,8 +39,17 @@ struct RootView: View {
         BluetoothAssociationContext(
             connection: connectionContext,
             displays: model.displays,
-            macs: nearbyDevices.displayRecords.knownHardwareMACs
+            macs: nearbyDevices.displayRecords.knownHardwareMACs,
+            isActive: scenePhase == .active
         )
+    }
+
+    private var bluetoothModeSyncContext: BluetoothModeSyncContext {
+        BluetoothModeSyncContext(connection: connectionContext,
+            reports: nearbyDevices.displayRecords.pendingModeReports(
+                displayIDs: model.displays.map(\.id), serverID: model.activeInstance?.id),
+            enabled: scenePhase == .active && model.connectionMode == .live
+                && model.capabilities?.features.contains("device_mode_observations") == true)
     }
 
     var body: some View {
@@ -95,11 +111,33 @@ struct RootView: View {
         }
         .task(id: bluetoothAssociationContext) {
             let context = bluetoothAssociationContext
-            guard let serverID = context.connection.instanceID,
-                  let matches = await model.resolveBluetoothDisplayAssociations(macs: context.macs),
-                  !Task.isCancelled, context == bluetoothAssociationContext else { return }
-            rememberServerDisplays()
-            nearbyDevices.displayRecords.observeMACMatches(matches, serverID: serverID)
+            guard context.isActive, !context.macs.isEmpty,
+                  let serverID = context.connection.instanceID else { return }
+            var retrySeconds = 30
+            while !Task.isCancelled {
+                let matches = await model.resolveBluetoothDisplayAssociations(macs: context.macs)
+                guard !Task.isCancelled, context == bluetoothAssociationContext else { return }
+                if let matches {
+                    rememberServerDisplays()
+                    nearbyDevices.displayRecords.observeMACMatches(matches, serverID: serverID)
+                    return
+                }
+                do { try await Task.sleep(for: .seconds(retrySeconds)) }
+                catch { return }
+                retrySeconds = min(retrySeconds * 2, 300)
+            }
+        }
+        .task(id: bluetoothModeSyncContext) {
+            let context = bluetoothModeSyncContext
+            guard context.enabled, !context.reports.isEmpty else { return }
+            var retrySeconds = 30
+            while !Task.isCancelled {
+                await model.synchronizeBluetoothModes(context.reports, store: nearbyDevices.displayRecords)
+                guard !Task.isCancelled, context == bluetoothModeSyncContext else { return }
+                do { try await Task.sleep(for: .seconds(retrySeconds)) }
+                catch { return }
+                retrySeconds = min(retrySeconds * 2, 300)
+            }
         }
         .task(id: connectionContext) {
             await remindersBridgeModel.load(using: model)

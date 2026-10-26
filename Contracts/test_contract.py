@@ -15,6 +15,8 @@ SPEC = yaml.safe_load((ROOT / "app-v1.openapi.yaml").read_text())
 FIXTURES = ROOT / "Fixtures"
 
 CASES = {
+    "device-mode-observation.json": "DeviceModeObservation",
+    "device-mode-observation-status.json": "DeviceModeObservationStatus",
     "device-lookup-request.json": "DeviceLookupRequest",
     "device-lookup-response.json": "DeviceLookupResponse",
     "device-lookup-unmatched-response.json": "DeviceLookupResponse",
@@ -116,7 +118,7 @@ def _json_schema(value: Any) -> Any:
 
 def test_openapi_shape_and_operation_ids_are_stable() -> None:
     assert SPEC["openapi"] == "3.0.3"
-    assert SPEC["info"]["version"] == "0.15.0"
+    assert SPEC["info"]["version"] == "0.16.0"
     assert set(SPEC["paths"]) == {
         "/api/app/v1",
         "/api/app/v1/pair",
@@ -126,6 +128,7 @@ def test_openapi_shape_and_operation_ids_are_stable() -> None:
         "/api/app/v1/personal-data/{source_id}",
         "/api/app/v1/devices",
         "/api/app/v1/devices/lookup",
+        "/api/app/v1/devices/{device_id}/mode-observation",
         "/api/app/v1/devices/{device_id}/upcoming",
         "/api/app/v1/devices/{device_id}/preview",
         "/api/app/v1/dashboards",

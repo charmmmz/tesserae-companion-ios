@@ -13,6 +13,11 @@ capabilities.
 
 ### Added
 
+- Confirmed Bluetooth/Wi-Fi modes persist locally before upload to compatible
+  servers. Foreground retries and server-scoped acknowledgements preserve offline
+  observations; reports contain only mode, observation time, and `ios_ble` source.
+  Device Details no longer presents the manual Bluetooth linking picker.
+
 - Bluetooth battery status uses device-reported percentages in photo and
   maintenance views. Displays selects the newest dated percentage from Bluetooth
   or server status; polling cached server values does not refresh their age.
@@ -21,13 +26,12 @@ capabilities.
 - Displays automatically associates authenticated Bluetooth records with the
   current server's displays by submitting a complete Wi-Fi MAC already known
   from Bluetooth to an authenticated lookup. Device lists do not expose MACs;
-  older servers retain manual association. Confirmed
-  Bluetooth mode appears immediately. Device Details offers manual association
-  only while a compatible record remains unassociated.
+  older servers retain local observations. Confirmed
+  Bluetooth mode appears immediately. Historical explicit associations are retained.
 
 - Displays retains the last confirmed Bluetooth mode, battery readings, and
   verified Bluetooth photo preview locally across app restarts. Details show
-  timestamps and allow explicit association when BLE and server IDs differ.
+  timestamps; authenticated full-MAC lookup associates differing BLE and server IDs.
 
 - Dashboard cards and list rows open native settings on compatible servers:
   edit names, icons, display bindings, content/wake intervals, appearance, and
