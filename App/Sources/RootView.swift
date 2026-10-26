@@ -48,7 +48,8 @@ struct RootView: View {
     private var bluetoothModeSyncContext: BluetoothModeSyncContext {
         BluetoothModeSyncContext(connection: connectionContext,
             reports: nearbyDevices.displayRecords.pendingModeReports(
-                displayIDs: model.displays.map(\.id), serverID: model.activeInstance?.id),
+                displayIDs: model.displays.map(\.id), serverID: model.activeInstance?.id,
+                includeStatus: model.capabilities?.features.contains("device_status_observations") == true),
             enabled: scenePhase == .active && model.connectionMode == .live
                 && model.capabilities?.features.contains("device_mode_observations") == true)
     }

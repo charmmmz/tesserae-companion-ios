@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Status | Implemented base contract plus reviewed and proposed gated extensions |
-| Contract version | 0.16.0 |
+| Contract version | 0.17.0 |
 | Namespace | `/api/app/v1` |
 | Authentication | Revocable per-client Companion bearer token |
 | Machine-readable source | [`Contracts/app-v1.openapi.yaml`](Contracts/app-v1.openapi.yaml) |
@@ -859,10 +859,14 @@ associations remain available. Query cancellation or a server switch discards th
 
 Servers advertising `device_mode_observations` accept
 `PUT /api/app/v1/devices/{device_id}/mode-observation` with
-`device_setup:write`. The body contains only `mode` (`wifi` or `bluetooth`),
+`device_setup:write`. The body requires `mode` (`wifi` or `bluetooth`),
 `observed_at` (RFC 3339), and `source` (`ios_ble`). A successful idempotent
 write returns 204; older observations do not replace newer evidence.
-Device responses may expose the latest observation and `received_at`.
+Servers also advertising `device_status_observations` accept optional `battery`
+(`percent`, `observed_at`) and `firmware` (`version`, `observed_at`). Each reading
+keeps its own original collection time and merges independently of mode. Missing
+values never erase readings. The app sends these fields only with that capability.
+Device responses may expose the latest observation, readings and `received_at`.
 These are advisory facts and do not change server transport or delivery rules.
 The app persists confirmed observations before upload and retries them while
 active, with acknowledgements scoped to the server and exact observation.

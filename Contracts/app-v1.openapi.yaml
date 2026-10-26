@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Tesserae Companion API
-  version: 0.16.0
+  version: 0.17.0
   description: >-
     Companion API contract for community-built clients. Previews, History,
     resend, remote-image push, webpage push, and server-advertised image fit
@@ -248,6 +248,9 @@ paths:
         must include a timezone and be between 1970 and five minutes in the
         future; the server normalizes it to UTC seconds. This advisory record
         never changes firmware settings, reachability, scheduling, or push gates.
+        Servers also advertising device_status_observations accept optional battery
+        and firmware readings with their own original observed_at timestamps.
+        Each reading is merged independently; absent values do not clear saved data.
         No Bluetooth keys, photos, or device credentials are uploaded.
       requestBody:
         required: true
@@ -1539,6 +1542,7 @@ components:
               - session_read
               - device_setup
               - device_mode_observations
+              - device_status_observations
               - device_timeline
         personal_data:
           $ref: "#/components/schemas/PersonalDataCapabilities"
@@ -2592,6 +2596,30 @@ components:
           type: string
           nullable: true
           description: Unique matching server device ID, or null when unknown or ambiguous.
+    DeviceBatteryObservation:
+      type: object
+      additionalProperties: false
+      required: [percent, observed_at]
+      properties:
+        percent:
+          type: integer
+          minimum: 0
+          maximum: 100
+        observed_at:
+          type: string
+          format: date-time
+    DeviceFirmwareObservation:
+      type: object
+      additionalProperties: false
+      required: [version, observed_at]
+      properties:
+        version:
+          type: string
+          minLength: 1
+          maxLength: 128
+        observed_at:
+          type: string
+          format: date-time
     DeviceModeObservation:
       type: object
       additionalProperties: false
@@ -2606,6 +2634,10 @@ components:
         source:
           type: string
           enum: [ios_ble]
+        battery:
+          $ref: "#/components/schemas/DeviceBatteryObservation"
+        firmware:
+          $ref: "#/components/schemas/DeviceFirmwareObservation"
     DeviceModeObservationStatus:
       type: object
       additionalProperties: false
@@ -2623,6 +2655,10 @@ components:
         received_at:
           type: string
           format: date-time
+        battery:
+          $ref: "#/components/schemas/DeviceBatteryObservation"
+        firmware:
+          $ref: "#/components/schemas/DeviceFirmwareObservation"
     Device:
       type: object
       additionalProperties: false

@@ -988,5 +988,7 @@ reporting through the `device_mode_observations` capability and
 foreground task retries saved observations with backoff, using server-scoped
 acknowledgements so offline work and server changes cannot lose pending modes.
 Older servers keep local behavior. Reports contain mode, observation time and
-`ios_ble` source only; the server stores them as advisory facts without changing
-delivery rules. Shared photo receipts are imported before subsequent reporting.
+`ios_ble` source. With `device_status_observations`, they also carry locally saved
+battery percentages and firmware versions with their original read times; the
+server stores them as advisory facts without changing delivery rules. Shared
+photo receipts are imported before subsequent reporting.

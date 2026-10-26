@@ -8,6 +8,51 @@ import TesseraeKit
 struct BluetoothDisplayStoreTests {
     private let start = Date(timeIntervalSince1970: 1_700_000_000)
 
+    @Test func statusReadingsSurviveRestartAndUpgradeAnAcknowledgedMode() throws {
+        let directory = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appending(path: "records.plist")
+        let store = BluetoothDisplayStore(fileURL: file)
+        store.activeServerID = "home"
+        store.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: 3900,
+            batteryPercent: 65, firmwareVersion: "0.9.11", at: start)
+        let modeOnly = try #require(store.pendingModeReports(displayIDs: ["panel"], serverID: "home").first)
+        #expect(modeOnly.observation.battery == nil)
+        store.markModeReported(modeOnly, serverID: "home")
+        let restored = BluetoothDisplayStore(fileURL: file)
+        let status = try #require(restored.pendingModeReports(displayIDs: ["panel"], serverID: "home", includeStatus: true).first)
+        #expect(status.observation.battery == .init(percent: 65, observedAt: start))
+        #expect(status.observation.firmware == .init(version: "0.9.11", observedAt: start))
+        restored.markModeReported(status, serverID: "home")
+        let newer = start.addingTimeInterval(60)
+        restored.observe(deviceID: "panel", name: "Desk", mode: nil, batteryMillivolts: nil,
+            batteryPercent: 63, at: newer)
+        // A delayed acknowledgement cannot suppress a reading collected in the meantime.
+        restored.markModeReported(status, serverID: "home")
+        let updated = try #require(restored.pendingModeReports(displayIDs: ["panel"], serverID: "home", includeStatus: true).first)
+        #expect(updated.observation.observedAt == start)
+        #expect(updated.observation.battery == .init(percent: 63, observedAt: newer))
+        #expect(updated.observation.firmware?.observedAt == start)
+        let data = try TesseraeJSON.encoder().encode(updated.observation)
+        let decoded = try TesseraeJSON.decoder().decode(DeviceModeObservation.self, from: data)
+        #expect(decoded == updated.observation)
+        #expect(restored.pendingModeReports(displayIDs: ["other"], serverID: "home", includeStatus: true).isEmpty)
+    }
+
+    @Test func invalidOrOlderFirmwareCannotReplaceSavedVersion() {
+        let store = BluetoothDisplayStore(fileURL: nil)
+        store.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: nil,
+            firmwareVersion: "0.9.11", at: start)
+        for version in ["", "—", "-", "bad\nversion", String(repeating: "x", count: 129)] {
+            store.observe(deviceID: "panel", name: "Desk", mode: nil, batteryMillivolts: nil,
+                firmwareVersion: version, at: start.addingTimeInterval(1))
+        }
+        store.observe(deviceID: "panel", name: "Desk", mode: nil, batteryMillivolts: nil,
+            firmwareVersion: "older", at: start.addingTimeInterval(-1))
+        #expect(store.records.first?.firmwareVersion == "0.9.11")
+        #expect(store.records.first?.firmwareRecordedAt == start)
+    }
+
     private func display(id: String = "panel", percent: Int? = 73, seen: Date? = nil) -> DisplaySummary {
         DisplaySummary(id: id, name: "Desk", kind: "test_panel", iconName: "display",
             panel: PanelProfile(width: 4, height: 2, gamut: "bwry_4", orientation: "landscape"),
@@ -103,15 +148,18 @@ struct BluetoothDisplayStoreTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let receipts = directory.appending(path: "receipts")
         let share = BluetoothDisplayStore(fileURL: nil, receiptDirectoryURL: receipts)
-        share.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: 3900, at: start)
+        share.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: 3900,
+            firmwareVersion: "0.9.10", at: start)
         #expect(!FileManager.default.fileExists(atPath: receipts.path))
         let png = try LocalBluetoothPhotoRenderer.previewPNG(rgba: Data([20, 100, 180, 255]), width: 1, height: 1)
         share.receivedPhoto(deviceID: "panel", previewPNG: png, at: start.addingTimeInterval(1))
         let app = BluetoothDisplayStore(fileURL: directory.appending(path: "records.plist"))
         app.activeServerID = "home"
-        app.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: nil, at: start)
+        app.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: nil,
+            firmwareVersion: "0.9.11", firmwareRecordedAt: start.addingTimeInterval(0.5), at: start)
         app.importSharedPhotoReceipts(from: receipts)
         #expect(app.record(for: "panel", serverID: "home")?.previewPNG == png)
+        #expect(app.record(for: "panel", serverID: "home")?.firmwareVersion == "0.9.11")
         #expect(try FileManager.default.contentsOfDirectory(atPath: receipts.path).isEmpty)
         share.receivedPhoto(deviceID: "panel", previewPNG: png, at: start.addingTimeInterval(2))
         app.observe(deviceID: "panel", name: "Desk", mode: .wifi, batteryMillivolts: nil, at: start.addingTimeInterval(3))

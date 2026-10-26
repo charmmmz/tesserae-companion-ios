@@ -39,12 +39,17 @@ SDK, analytics SDK, tracking, or telemetry.
   only when it advertises the optional feature. The app keeps them in memory
   with their ETags and does not write them to the App Group or photo library.
 - After authenticated Bluetooth diagnostics or a confirmed mode change, the
-  app retains the mode and voltage locally. After verified photo reception, it
-  saves one preview per Bluetooth display with the sent crop and original colours,
+  app retains the mode, battery readings and firmware version locally. After
+  verified photo reception, it saves one preview per Bluetooth display with
+  the sent crop and original colours,
   with a maximum edge of 760 pixels, plus receipt time. These protected files
   live in the app's Application Support directory. Local display associations
-  and last server-reported battery readings are also retained. They are not
-  uploaded to the server or photo library. Confirmed Wi-Fi mode reclaims the
+  and last server-reported battery readings are also retained. A server that
+  supports mode observations receives confirmed mode and its observation time;
+  with status-observation support it also receives the Bluetooth battery
+  percentage and firmware version, each with its original reading time.
+  Bluetooth keys, local associations and photo previews are not uploaded by
+  these reports or saved to the photo library. Confirmed Wi-Fi mode reclaims the
   obsolete Bluetooth thumbnail without requiring the server image to change.
   Other cached state is replaced by authenticated observations; app
   deletion or a factory-reset acknowledgement clears the local record.

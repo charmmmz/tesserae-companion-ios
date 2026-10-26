@@ -17,6 +17,8 @@ struct BluetoothDisplayRecord: Codable, Equatable, Identifiable {
     var batteryRecordedAt: Date?
     var batteryPercent: Int?
     var batteryPercentRecordedAt: Date?
+    var firmwareVersion: String?
+    var firmwareRecordedAt: Date?
     var previewPNG: Data?
     var photoReceivedAt: Date?
 
@@ -99,14 +101,20 @@ final class BluetoothDisplayStore {
     var records: [BluetoothDisplayRecord] { snapshot.records.values.sorted { $0.id < $1.id } }
 
     /// The durable local records are the outbox. Only resolved identities can be reported.
-    func pendingModeReports(displayIDs: [String], serverID: String?) -> [BluetoothModeReport] {
+    func pendingModeReports(displayIDs: [String], serverID: String?, includeStatus: Bool = false) -> [BluetoothModeReport] {
         guard !isReadOnly, hasPersistedSnapshot, let serverID else { return [] }
         return displayIDs.sorted().compactMap { displayID in
             guard let record = record(for: displayID, serverID: serverID),
                   let mode = record.mode, let date = record.modeConfirmedAt,
                   let reportedMode = DeviceModeObservation.Mode(rawValue: mode.rawValue) else { return nil }
+            let battery = includeStatus ? record.batteryPercent.flatMap { percent in
+                record.batteryPercentRecordedAt.map { DeviceModeObservation.Battery(percent: percent, observedAt: $0) }
+            } : nil
+            let firmware = includeStatus ? record.firmwareVersion.flatMap { version in
+                record.firmwareRecordedAt.map { DeviceModeObservation.Firmware(version: version, observedAt: $0) }
+            } : nil
             let report = BluetoothModeReport(displayID: displayID, bluetoothID: record.id,
-                observation: DeviceModeObservation(mode: reportedMode, observedAt: date))
+                observation: DeviceModeObservation(mode: reportedMode, observedAt: date, battery: battery, firmware: firmware))
             return snapshot.reportedModes?[serverID]?[displayID] == report ? nil : report
         }
     }
@@ -200,7 +208,7 @@ final class BluetoothDisplayStore {
 
     func observe(deviceID: String, name: String, mode: BLEScreenMode?, batteryMillivolts: Int?,
                  batteryPercent: Int? = nil, hardwareMAC: String? = nil, hardwareKind: String? = nil,
-                 peripheralID: UUID? = nil,
+                 peripheralID: UUID? = nil, firmwareVersion: String? = nil, firmwareRecordedAt: Date? = nil,
                  at date: Date = Date()) {
         var record = snapshot.records[deviceID] ?? BluetoothDisplayRecord(id: deviceID, name: name)
         record.name = name
@@ -232,6 +240,15 @@ final class BluetoothDisplayStore {
            record.batteryPercentRecordedAt.map({ date >= $0 }) ?? true {
             record.batteryPercent = batteryPercent
             record.batteryPercentRecordedAt = date
+        }
+        if let version = firmwareVersion?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !version.isEmpty, version != "—", version != "-", version.count <= 128,
+           !version.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) {
+            let firmwareDate = firmwareRecordedAt ?? date
+            if record.firmwareRecordedAt.map({ firmwareDate >= $0 }) ?? true {
+                record.firmwareVersion = version
+                record.firmwareRecordedAt = firmwareDate
+            }
         }
         snapshot.records[deviceID] = record
         discardConflictingLinks()
@@ -294,6 +311,10 @@ final class BluetoothDisplayStore {
                 if (current?.batteryPercentRecordedAt ?? .distantPast) > (incoming.batteryPercentRecordedAt ?? .distantPast) {
                     merged.batteryPercent = current?.batteryPercent
                     merged.batteryPercentRecordedAt = current?.batteryPercentRecordedAt
+                }
+                if (current?.firmwareRecordedAt ?? .distantPast) > (incoming.firmwareRecordedAt ?? .distantPast) {
+                    merged.firmwareVersion = current?.firmwareVersion
+                    merged.firmwareRecordedAt = current?.firmwareRecordedAt
                 }
                 snapshot.records[incoming.id] = merged
                 persist()

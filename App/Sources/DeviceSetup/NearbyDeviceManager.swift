@@ -176,6 +176,7 @@ final class NearbyDeviceManager: NSObject {
     var suggestedDevice: NearbyTesseraeDevice?
     private(set) var activeDevice: NearbyTesseraeDevice?
     private(set) var deviceInfo: BLESetupDeviceInfo?
+    private var deviceInfoReadAt: Date?
     private(set) var networks: [NearbyWiFiNetwork] = []
     private(set) var diagnostics: NearbyDeviceDiagnostics?
     private(set) var refreshSpeedSetting = NearbyRefreshSpeedSetting()
@@ -447,6 +448,7 @@ final class NearbyDeviceManager: NSObject {
                 family: isUnifiedUIFixture ? "tesserae" : nil,
                 kind: isUnifiedUIFixture ? device.hardware.catalogKind : nil
             )
+            deviceInfoReadAt = Date()
             connectionState = .authenticating
             if device.mode == .photo {
                 let delay = Int(ProcessInfo.processInfo.environment[
@@ -612,6 +614,7 @@ final class NearbyDeviceManager: NSObject {
         outgoingMessageID = 0
         activeDevice = nil
         deviceInfo = nil
+        deviceInfoReadAt = nil
         networks = []
         diagnostics = nil
         connectionState = .idle
@@ -1137,7 +1140,8 @@ final class NearbyDeviceManager: NSObject {
         displayRecords.observe(deviceID: info.id, name: activeDevice?.name ?? info.model,
                                mode: mode, batteryMillivolts: batteryMillivolts, batteryPercent: batteryPercent,
                                hardwareMAC: info.hardwareMAC, hardwareKind: info.model,
-                               peripheralID: activeDevice?.id)
+                               peripheralID: activeDevice?.id, firmwareVersion: info.firmware,
+                               firmwareRecordedAt: deviceInfoReadAt)
     }
 
     func sendPhoto(_ data: Data, to device: NearbyTesseraeDevice, capabilityDigest: String?, previewPNG: Data? = nil) throws {
@@ -1538,6 +1542,7 @@ extension NearbyDeviceManager: @preconcurrency CBPeripheralDelegate {
                     )
                 }
                 deviceInfo = info
+                deviceInfoReadAt = Date()
                 controlCharacteristic = qrCode == nil
                     ? passkeyControlCharacteristic
                     : qrControlCharacteristic
