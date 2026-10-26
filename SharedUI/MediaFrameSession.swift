@@ -53,14 +53,21 @@ actor VideoFrameReader {
 
     private func range() async throws -> (start: Double, duration: Double) {
         if let videoRange { return videoRange }
+        let result = try await Self.loadVideoRange(url: file.url)
+        videoRange = result
+        return result
+    }
+
+    // Older AVFoundation SDKs return non-Sendable tracks. Keep them local to
+    // this nonisolated async operation and return only immutable timing values.
+    private nonisolated static func loadVideoRange(url: URL) async throws -> (start: Double, duration: Double) {
+        let asset = AVURLAsset(url: url)
         guard let track = try await asset.loadTracks(withMediaType: .video).first else { throw MediaFrameError.invalidVideo }
         let timeRange = try await track.load(.timeRange)
         let start = max(0, timeRange.start.seconds)
         let end = timeRange.end.seconds
         guard start.isFinite, end.isFinite, end > start else { throw MediaFrameError.invalidVideo }
-        let result = (start: start, duration: end - start)
-        videoRange = result
-        return result
+        return (start: start, duration: end - start)
     }
 
     func image(at seconds: Double, thumbnail: Bool = false) async throws -> PreparedUploadImage {

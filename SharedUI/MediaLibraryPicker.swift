@@ -111,31 +111,34 @@ extension View {
     }
 
     private func loadLivePhotoMovie() async throws -> MediaTemporaryFile {
-        let photo = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<PHLivePhoto, Error>) in
+        let file = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<MediaTemporaryFile, Error>) in
             provider.loadObject(ofClass: PHLivePhoto.self) { object, error in
-                if let photo = object as? PHLivePhoto { continuation.resume(returning: photo) }
+                if let photo = object as? PHLivePhoto {
+                    Self.exportMovie(from: photo) { continuation.resume(with: $0) }
+                }
                 else { continuation.resume(throwing: error ?? MediaFrameError.unavailable) }
             }
         }
         try Task.checkCancellation()
-        return try await Self.movie(from: photo)
+        return file
     }
 
-    static func movie(from photo: PHLivePhoto) async throws -> MediaTemporaryFile {
-        let resources = PHAssetResource.assetResources(for: photo)
-        guard let video = resources.first(where: { $0.type == .fullSizePairedVideo })
-            ?? resources.first(where: { $0.type == .pairedVideo }) else { throw MediaFrameError.unavailable }
-        let file = try MediaTemporaryFile(fileExtension: "mov")
-        let options = PHAssetResourceRequestOptions()
-        options.isNetworkAccessAllowed = true
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+    // Consume Photos objects in their callback context; only the immutable file
+    // lease crosses back to the main actor, including on older Photos SDKs.
+    nonisolated static func exportMovie(from photo: PHLivePhoto,
+        completion: @escaping @Sendable (Result<MediaTemporaryFile, Error>) -> Void) {
+        do {
+            let resources = PHAssetResource.assetResources(for: photo)
+            guard let video = resources.first(where: { $0.type == .fullSizePairedVideo })
+                ?? resources.first(where: { $0.type == .pairedVideo }) else { throw MediaFrameError.unavailable }
+            let file = try MediaTemporaryFile(fileExtension: "mov")
+            let options = PHAssetResourceRequestOptions()
+            options.isNetworkAccessAllowed = true
             PHAssetResourceManager.default().writeData(for: video, toFile: file.url, options: options) { error in
-                if let error { continuation.resume(throwing: error) }
-                else { continuation.resume() }
+                if let error { completion(.failure(error)) }
+                else { completion(.success(file)) }
             }
-        }
-        try Task.checkCancellation()
-        return file
+        } catch { completion(.failure(error)) }
     }
 }
 

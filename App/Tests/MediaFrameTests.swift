@@ -141,15 +141,16 @@ import UniformTypeIdentifiers
         let destination = try #require(CGImageDestinationCreateWithURL(still.url as CFURL, UTType.jpeg.identifier as CFString, 1, nil))
         CGImageDestinationAddImageFromSource(destination, imageSource, 0, [kCGImagePropertyMakerAppleDictionary: ["17": identifier]] as CFDictionary)
         try #require(CGImageDestinationFinalize(destination))
-        let photo = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<PHLivePhoto, Error>) in
+        let permission = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        let exported = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<MediaTemporaryFile, Error>) in
             PHLivePhoto.request(withResourceFileURLs: [still.url, movie.url], placeholderImage: nil, targetSize: .zero, contentMode: .aspectFit) { photo, info in
                 guard (info[PHLivePhotoInfoIsDegradedKey] as? Bool) != true else { return }
-                if let photo { continuation.resume(returning: photo) }
+                if let photo {
+                    MediaPickerSelection.exportMovie(from: photo) { continuation.resume(with: $0) }
+                }
                 else { continuation.resume(throwing: (info[PHLivePhotoInfoErrorKey] as? Error) ?? MediaFrameError.unavailable) }
             }
         }
-        let permission = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-        let exported = try await MediaPickerSelection.movie(from: photo)
         let actual = try await VideoFrameReader(file: exported, maximumPixelSize: 320).image(at: 2)
         #expect(actual.pixelWidth == 320)
         #expect(actual.data != frame.data)
