@@ -497,6 +497,8 @@ references and are not bundled in the app.
 
 - Use the iOS system font and Dynamic Type, with system monospaced styles
   for device identifiers, versions, dimensions, and diagnostic values.
+- Manufacturer logos scale with the adjacent caption text, preserving their
+  proportions and fitting within narrow columns; model names can move below them.
 - Use the bundled Phosphor regular icon font for server-selected Dashboard
   icons so identifiers match the web UI; keep SF Symbols for native
   navigation and controls.

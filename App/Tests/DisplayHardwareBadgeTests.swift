@@ -31,6 +31,7 @@ final class DisplayHardwareBadgeSnapshotTests: XCTestCase {
 
     func testHardwareBadgesWithAccessibilityText() throws {
         try attachBadges(scheme: .light, typeSize: .accessibility3, name: "Hardware badges — large text")
+        try attachBadges(scheme: .dark, typeSize: .accessibility5, name: "Hardware badges — largest text dark")
     }
 
     private func attachBadges(scheme: ColorScheme, typeSize: DynamicTypeSize, name: String) throws {
@@ -41,6 +42,14 @@ final class DisplayHardwareBadgeSnapshotTests: XCTestCase {
             "waveshare_1085g", "xteink_x4_pro_gray", "picpak_4_2", "trmnl_x",
             "custom_lab_panel",
         ]
+        // Keep captures readable at the largest Dynamic Type sizes.
+        for start in stride(from: 0, to: kinds.count, by: 5) {
+            let page = Array(kinds[start..<min(start + 5, kinds.count)])
+            try attachPage(page, scheme: scheme, typeSize: typeSize, name: "\(name) — page \(start / 5 + 1)")
+        }
+    }
+
+    private func attachPage(_ kinds: [String], scheme: ColorScheme, typeSize: DynamicTypeSize, name: String) throws {
         let content = VStack(alignment: .leading, spacing: 0) {
             ForEach(kinds, id: \.self) { kind in
                 VStack(alignment: .leading, spacing: 8) {

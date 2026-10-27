@@ -5,6 +5,9 @@ struct DisplayHardwareBadge: View {
     let presentation: DisplayHardwarePresentation
     var fallbackModelName = String(localized: "Custom display")
     @Environment(\.colorScheme) private var colorScheme
+    @ScaledMetric(relativeTo: .caption) private var logoHeight: CGFloat = 20
+
+    private var logoScale: CGFloat { logoHeight / 20 }
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
@@ -41,19 +44,22 @@ struct DisplayHardwareBadge: View {
     }
 
     private func brandLogo(_ brand: DisplayHardwareBrand) -> some View {
-        Image(brand.assetName)
+        let width = brand.logoWidth * logoScale
+        return Image(brand.assetName)
             .resizable()
             .renderingMode(brand.renderingMode(for: colorScheme))
             .foregroundStyle(brand.foregroundColor(for: colorScheme))
             .aspectRatio(contentMode: brand.contentMode)
             .frame(
-                width: brand.logoWidth,
-                height: 20,
+                idealWidth: width,
+                maxWidth: width,
+                minHeight: logoHeight,
+                maxHeight: logoHeight,
                 alignment: brand.logoAlignment
             )
             .clipped()
-            .offset(x: brand.opticalLeadingCorrection)
-            .frame(width: brand.logoWidth, alignment: .leading)
+            .offset(x: brand.opticalLeadingCorrection * logoScale)
+            .frame(idealWidth: width, maxWidth: width, alignment: .leading)
             .accessibilityLabel(brand.displayName)
             .accessibilityIdentifier("display-brand-\(brand.rawValue)")
     }
@@ -62,10 +68,10 @@ struct DisplayHardwareBadge: View {
         Image(systemName: "display")
             .font(.caption.weight(.semibold))
             .foregroundStyle(TesseraeTheme.accent)
-            .frame(width: 28, height: 26)
+            .frame(width: 28 * logoScale, height: 26 * logoScale)
             .background(
                 TesseraeTheme.accentSoft,
-                in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+                in: RoundedRectangle(cornerRadius: 6 * logoScale, style: .continuous)
             )
             .accessibilityHidden(true)
     }

@@ -13,6 +13,8 @@ capabilities.
 
 ### Fixed
 
+- Manufacturer logos scale with Dynamic Type alongside model names, including
+  accessibility text sizes and narrow display columns.
 - The floating Send button responds with a solid pressed state, spring feedback,
   and an optional light haptic when opening the composer, respecting Reduce Motion.
 - Bluetooth Send readiness refreshes after authentication without requiring an
