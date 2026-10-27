@@ -201,6 +201,9 @@ placement: compact pages place it above bottom tabs; wide windows place one
 shared button at the tab-container level, outside both split-view columns and
 above the bottom safe area. Both use the same size and margins. The Send sheet
 offers Close without a Settings shortcut.
+Pressing Send darkens its solid fill and lowers the shadow, with a brief scale
+and spring return unless Reduce Motion is enabled. Opening the composer gives
+one light impact when haptic feedback is enabled; the 56-point target stays fixed.
 Message hosts belong to page content inside navigation containers,
 including modal stacks. Capsules float 8 points below the window's top safe area,
 directly below the Dynamic Island/status bar. A non-key window presents them above

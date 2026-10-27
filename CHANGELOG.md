@@ -13,6 +13,8 @@ capabilities.
 
 ### Fixed
 
+- The floating Send button responds with a solid pressed state, spring feedback,
+  and an optional light haptic when opening the composer, respecting Reduce Motion.
 - Bluetooth Send readiness refreshes after authentication without requiring an
   Image Fit change.
 - In-app composers keep scrolling available during submission while protecting

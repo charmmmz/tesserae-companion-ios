@@ -25,11 +25,14 @@ struct TesseraeSettingsToolbarButton: View {
 
 struct TesseraeSendButton: View {
     @Environment(CompanionPresentation.self) private var presentation
+    @State private var hapticEvent = TesseraeHapticEvent()
 
     var body: some View {
         Button("Send", systemImage: "paperplane.fill") {
+            hapticEvent.trigger(.lightImpact)
             presentation.sheet = .send
         }
+        .tesseraeHapticFeedback(trigger: hapticEvent)
         .accessibilityHint("Opens the Send composer.")
         .accessibilityIdentifier("root-send-action")
     }

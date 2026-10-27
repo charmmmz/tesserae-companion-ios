@@ -79,16 +79,33 @@ struct TesseraeFloatingSendAction: View {
 }
 
 private struct TesseraeFloatingSendButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .labelStyle(.iconOnly)
             .font(.system(size: 22, weight: .semibold))
             .foregroundStyle(.white)
             .frame(width: TesseraeFloatingSendMetrics.size, height: TesseraeFloatingSendMetrics.size)
-            .background(TesseraeTheme.accentFill, in: Circle())
+            .background {
+                Circle()
+                    .fill(TesseraeTheme.accentFill)
+                    .overlay {
+                        Circle().fill(.black.opacity(configuration.isPressed ? 0.14 : 0))
+                    }
+            }
+            .shadow(
+                color: .black.opacity(0.18),
+                radius: configuration.isPressed ? 3 : 8,
+                y: configuration.isPressed ? 1 : 4
+            )
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.92 : 1)
+            .animation(
+                reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.72),
+                value: configuration.isPressed
+            )
+            .frame(width: TesseraeFloatingSendMetrics.size, height: TesseraeFloatingSendMetrics.size)
             .contentShape(Circle())
-            .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
-            .opacity(configuration.isPressed ? 0.65 : 1)
     }
 }
 
