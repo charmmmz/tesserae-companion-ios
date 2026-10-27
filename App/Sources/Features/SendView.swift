@@ -499,7 +499,7 @@ struct SendView: View {
                     image: previewImage,
                     panel: panel,
                     fit: fitMode,
-                    maximumCanvasHeight: previewHeight,
+                    maximumCanvasHeight: max(1, previewHeight - 2 * TesseraePanelImagePreview.canvasPadding),
                     emptyTitle: imageSelectionLabel,
                     accessibilityIdentifier: "send-panel-preview",
                     imageAccessibilityIdentifier: "selected-image-preview",

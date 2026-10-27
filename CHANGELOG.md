@@ -18,6 +18,7 @@ capabilities.
 
 - Send and Share keep remembered Bluetooth displays disabled until nearby discovery,
   route Bluetooth photos to one display exclusively, and hide connection chatter.
+  Share previews retain a fixed canvas slot when switching panel aspect ratios.
 
 - Xcode 16.4 builds keep AVFoundation track objects inside a nonisolated metadata
   operation and create Bluetooth/Share state inside its main-actor initializer,

@@ -12,12 +12,13 @@ final class BluetoothShareUITests: XCTestCase {
 
     private func launch(unified: Bool = false, noReceipt: Bool = false, unauthorized: Bool = false,
                         systemShare: Bool = false, accessibilityText: Bool = false, unifiedTargets: Bool = false,
-                        absent: Bool = false, delayed: Bool = false) -> XCUIApplication {
+                        absent: Bool = false, delayed: Bool = false, aspectSwitch: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
         if accessibilityText {
             app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
         }
         if delayed { app.launchEnvironment["TESSERAE_UI_TEST_BLUETOOTH_DISCOVERY_DELAY_MS"] = "6000" }
+        if aspectSwitch { app.launchEnvironment["TESSERAE_UI_TEST_SHARE_ASPECT_SWITCH"] = "1" }
         if unifiedTargets { app.launchEnvironment["TESSERAE_UI_TEST_UNIFIED_SHARE_TARGETS"] = "1" }
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_BLUETOOTH_SHARE"] = "1"
@@ -183,6 +184,26 @@ final class BluetoothShareUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'PicPak/'")).firstMatch.exists)
         send(app)
         XCTAssertTrue(app.staticTexts["share-test-complete"].waitForExistence(timeout: 15))
+    }
+
+    func testSwitchingPanelAspectKeepsPreviewAndDeviceListStable() {
+        let app = launch(unifiedTargets: true, aspectSwitch: true)
+        let portrait = app.buttons["share-display-portrait"]
+        let landscape = app.buttons["share-display-landscape"]
+        XCTAssertTrue(portrait.waitForExistence(timeout: 8))
+        reveal(portrait, app: app)
+        portrait.tap()
+        let preview = app.descendants(matching: .any)["share-preview-card"].firstMatch
+        let devices = app.descendants(matching: .any)["share-displays-card"].firstMatch
+        let originalPreview = preview.frame
+        let originalDevices = devices.frame
+        for target in [landscape, portrait, portrait, landscape] {
+            target.tap()
+            XCTAssertEqual(preview.frame.height, originalPreview.height, accuracy: 1)
+            XCTAssertEqual(devices.frame.minY, originalDevices.minY, accuracy: 1)
+        }
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Share Stable Preview Across Panel Aspects"; shot.lifetime = .keepAlways; add(shot)
     }
 
     func testInAppBluetoothDiscoveryAndExclusiveSelectionSend() {

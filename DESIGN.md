@@ -371,7 +371,9 @@ entry. Remembered Bluetooth targets remain dimmed and disabled until their exact
 peripheral is discovered; a connected, authenticated target remains available
 when it stops advertising. Bluetooth selection is exclusive of every other target;
 server targets retain multi-selection. Scanning and connection handshakes add no
-status-log text to the composer.
+status-log text to the composer. The share preview reserves one canvas and footer
+slot across negotiated panel sizes, so changing aspect ratio does not move the
+device list or discard per-aspect framing.
 
 
 ### 3.4 Run from Shortcuts

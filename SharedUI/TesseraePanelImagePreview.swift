@@ -6,6 +6,7 @@ import UIKit
 /// modes. The image is laid out explicitly and clipped by the canvas, avoiding
 /// SwiftUI's implicit `aspectRatio` sizing from escaping its parent.
 struct TesseraePanelImagePreview: View {
+    static let canvasPadding: CGFloat = 7
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let image: UIImage?
@@ -118,7 +119,7 @@ struct TesseraePanelImagePreview: View {
                 }
             }
         }
-        .padding(7)
+        .padding(Self.canvasPadding)
         .background(
             Color.black.opacity(0.82),
             in: RoundedRectangle(cornerRadius: 13, style: .continuous)

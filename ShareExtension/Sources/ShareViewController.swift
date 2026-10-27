@@ -900,6 +900,15 @@ extension ShareComposerModel {
                     panel: panel, freshness: .stale)
             ], dashboards: [], jobs: [])
         }
+        if ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_SHARE_ASPECT_SWITCH"] == "1",
+           let snapshot = model.snapshot {
+            let portrait = DisplaySummary(id: "portrait", name: "Portrait", kind: "test_panel", iconName: "display",
+                panel: PanelProfile(width: 1200, height: 1600, gamut: "spectra_6", orientation: "portrait"), freshness: .stale)
+            let landscape = DisplaySummary(id: "landscape", name: "Landscape", kind: "test_panel", iconName: "display",
+                panel: PanelProfile(width: 1872, height: 1404, gamut: "gray_16", orientation: "landscape"), freshness: .stale)
+            model.snapshot = CompanionSnapshot(activeInstance: snapshot.activeInstance, capabilities: nil,
+                displays: snapshot.displays + [portrait, landscape], dashboards: [], jobs: [])
+        }
         model.bluetoothSession = BluetoothShareSession(nearby: nearby)
         model.bluetoothSession?.start()
         model.applyMediaFrame()
@@ -1149,47 +1158,55 @@ private struct ShareComposerView: View {
             Text("Preview")
                 .font(.headline)
 
-            if let panel = model.previewPanel {
-                TesseraePanelImagePreview(
-                    image: model.previewImage,
-                    panel: panel,
-                    fit: model.fit,
-                    maximumCanvasHeight: previewHeight,
-                    emptyTitle: String(localized: "Loading shared image…"),
-                    accessibilityIdentifier: "share-panel-preview",
-                    imageAccessibilityIdentifier: "shared-image-preview",
-                    framing: previewImageFramingBinding,
-                    maximumFramingZoom: model.maximumFramingZoom,
-                    prioritizesFramingGesture: true,
-                    framingEditingEnabled: !model.framingSession.isFrozen && !model.mediaFrames.isBusy,
-                    onAutoFrame: model.framingEditorIsActive ? { autoFrame() } : nil,
-                    isAutoFraming: model.framingSession.isAnalyzing,
-                    autoFramingFeedback: model.framingSession.feedback,
-                    onFramingInteraction: { framingInteractionStarted() }
-                )
-                .accessibilityLabel("Display image preview")
-                .accessibilityValue(
-                    previewAccessibilityValue(panel: panel)
-                )
-                .accessibilityHint(
-                    model.framingEditorIsActive && !model.framingSession.isFrozen
-                        ? "Drag to reposition the photo and pinch to zoom."
-                        : ""
-                )
+            ZStack {
+                Color.clear
+                if let panel = model.previewPanel {
+                    TesseraePanelImagePreview(
+                        image: model.previewImage,
+                        panel: panel,
+                        fit: model.fit,
+                        maximumCanvasHeight: max(1, previewHeight - 2 * TesseraePanelImagePreview.canvasPadding),
+                        emptyTitle: String(localized: "Loading shared image…"),
+                        accessibilityIdentifier: "share-panel-preview",
+                        imageAccessibilityIdentifier: "shared-image-preview",
+                        framing: previewImageFramingBinding,
+                        maximumFramingZoom: model.maximumFramingZoom,
+                        prioritizesFramingGesture: true,
+                        framingEditingEnabled: !model.framingSession.isFrozen && !model.mediaFrames.isBusy,
+                        onAutoFrame: model.framingEditorIsActive ? { autoFrame() } : nil,
+                        isAutoFraming: model.framingSession.isAnalyzing,
+                        autoFramingFeedback: model.framingSession.feedback,
+                        onFramingInteraction: { framingInteractionStarted() }
+                    )
+                    .accessibilityLabel("Display image preview")
+                    .accessibilityValue(
+                        previewAccessibilityValue(panel: panel)
+                    )
+                    .accessibilityHint(
+                        model.framingEditorIsActive && !model.framingSession.isFrozen
+                            ? "Drag to reposition the photo and pinch to zoom."
+                            : ""
+                    )
 
-                previewTargetPicker
-            } else {
-                if let image = model.previewImage {
-                    Image(uiImage: image).resizable().scaledToFit()
-                        .frame(maxWidth: .infinity, maxHeight: previewHeight)
-                        .accessibilityLabel("Shared photo")
+                } else {
+                    if let image = model.previewImage {
+                        Image(uiImage: image).resizable().scaledToFit()
+                            .frame(maxWidth: .infinity, maxHeight: previewHeight)
+                            .accessibilityLabel("Shared photo")
+                    }
                 }
-                Text("Select a display to preview its panel shape.")
-                    .font(.footnote).foregroundStyle(.secondary)
             }
+            .frame(minHeight: previewHeight, maxHeight: dynamicTypeSize.isAccessibilitySize ? nil : previewHeight)
+            .animation(nil, value: model.previewPanel)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("share-preview-slot")
+            previewTargetPicker
+                .frame(height: dynamicTypeSize.isAccessibilitySize ? nil : 44)
             MediaFrameControls(session: model.mediaFrames, isSending: model.framingSession.isFrozen)
         }
         .tesseraeCard()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("share-preview-card")
     }
 
     private var linkCard: some View {
@@ -1297,6 +1314,8 @@ private struct ShareComposerView: View {
             }
         }
         .tesseraeCard()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("share-displays-card")
     }
 
     @ViewBuilder
