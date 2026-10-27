@@ -93,6 +93,10 @@ target size, respects video orientation, and normalizes HDR frames to SDR.
 Pending or superseded frame requests cannot be submitted; changing a frame
 preserves manual framing and invalidates old subject analysis.
 
+Photos, video frames and Live Photo key/alternate frames use the same vertically
+centered display canvas within the reserved preview area. The selected display's
+aspect ratio determines its size; media kind does not change its placement.
+
 The Share Extension also recognizes Live Photo type declarations when the host
 cannot vend a `PHLivePhoto` object. If the shared motion cannot be read, a compact
 Choose Live Photo action opens the system picker filtered to Live Photos. This

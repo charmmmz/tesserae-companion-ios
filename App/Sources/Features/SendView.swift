@@ -535,7 +535,7 @@ struct SendView: View {
                     choosePhotoFromPreview()
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: dynamicTypeSize.isAccessibilitySize ? nil : previewHeight, alignment: .top)
+                .frame(height: dynamicTypeSize.isAccessibilitySize ? nil : previewHeight, alignment: .center)
             } else if let previewImage = mediaFrames.scrubbingPreview ?? previewImage {
                 Image(uiImage: previewImage)
                     .resizable().scaledToFit()
@@ -549,7 +549,7 @@ struct SendView: View {
                     Text("Connect a display to preview its panel shape.")
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: previewHeight, alignment: .top)
+                .frame(height: previewHeight, alignment: .center)
             }
 
             MediaFrameControls(session: mediaFrames, isSending: submission.isSubmitting || isPreparingImage)

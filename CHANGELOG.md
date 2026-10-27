@@ -13,6 +13,9 @@ capabilities.
 
 ### Fixed
 
+- In-app Send centers display previews vertically in their reserved canvas area
+  for photos, videos and Live Photos, balancing the space above and below
+  landscape panels while keeping frame controls and target selection stable.
 - Live Photo frame controls show the key photo and timeline immediately in all
   composers, keep the timeline visible after restoring the key photo, and remove
   the extra expand/collapse labels. Loading optional motion leaves the key photo
