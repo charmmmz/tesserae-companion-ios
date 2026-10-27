@@ -836,7 +836,7 @@ private struct DisplayDetailView: View {
                     }
                 }
 
-                DisplayDeviceDetails(display: currentDisplay)
+                DisplayDeviceDetails(display: currentDisplay, firmwareVersion: local.firmwareVersion)
             }
             .padding(16)
         }
@@ -1401,6 +1401,7 @@ private struct DisplayDetailView: View {
 private struct DisplayDeviceDetails: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let display: DisplaySummary
+    let firmwareVersion: String?
     @State private var isExpanded = false
 
     var body: some View {
@@ -1425,7 +1426,8 @@ private struct DisplayDeviceDetails: View {
                 }
 
                 detailRow("Firmware") {
-                    Text(display.firmwareVersion ?? String(localized: "Not reported"))
+                    Text(firmwareVersion ?? String(localized: "Not reported"))
+                        .accessibilityIdentifier("display-firmware-\(display.id)")
                 }
 
                 detailRow("Device Type") {

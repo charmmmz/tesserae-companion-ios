@@ -372,8 +372,12 @@ final class TesseraeCompanionUITests: XCTestCase {
         for _ in 0..<3 where !details.isHittable { app.swipeUp() }
         details.tap()
         XCTAssertEqual(details.value as? String, "Expanded")
+        let firmware = app.staticTexts["display-firmware-picpak-kitchen"]
+        XCTAssertTrue(firmware.waitForExistence(timeout: 3))
+        XCTAssertEqual(firmware.label, "0.9.3")
         XCTAssertFalse(app.buttons["bluetooth-record-link-picpak-kitchen"].exists)
         XCTAssertFalse(app.buttons["Forget Bluetooth Record"].exists)
+        app.swipeUp()
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "Automatic MAC Association and Compact Details"
         shot.lifetime = .keepAlways
@@ -1789,6 +1793,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Manufacturer"].exists)
         XCTAssertTrue(app.staticTexts["Model"].exists)
         XCTAssertTrue(app.staticTexts["Firmware"].exists)
+        XCTAssertEqual(app.staticTexts["display-firmware-picpak-kitchen"].label, "1.8.0")
         XCTAssertTrue(app.staticTexts["Device Type"].exists)
         XCTAssertTrue(app.staticTexts["800 × 480"].exists)
         XCTAssertTrue(app.staticTexts["Spectra 6 · 6-color"].exists)

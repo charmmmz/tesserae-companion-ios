@@ -20,6 +20,7 @@ struct BluetoothDisplayStoreTests {
         #expect(modeOnly.observation.battery == nil)
         store.markModeReported(modeOnly, serverID: "home")
         let restored = BluetoothDisplayStore(fileURL: file)
+        #expect(restored.presentation(for: display(percent: nil), serverID: "home").firmwareVersion == "0.9.11")
         let status = try #require(restored.pendingModeReports(displayIDs: ["panel"], serverID: "home", includeStatus: true).first)
         #expect(status.observation.battery == .init(percent: 65, observedAt: start))
         #expect(status.observation.firmware == .init(version: "0.9.11", observedAt: start))
@@ -53,10 +54,46 @@ struct BluetoothDisplayStoreTests {
         #expect(store.records.first?.firmwareRecordedAt == start)
     }
 
-    private func display(id: String = "panel", percent: Int? = 73, seen: Date? = nil) -> DisplaySummary {
+    @Test func firmwarePresentationUsesItsOwnReadTimeAcrossTransports() {
+        let store = BluetoothDisplayStore(fileURL: nil)
+        store.activeServerID = "home"
+        store.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: nil,
+            firmwareVersion: "0.9.11", at: start)
+        let cases: [(String?, TimeInterval?, String)] = [
+            (nil, nil, "0.9.11"),
+            (nil, 20, "0.9.11"),
+            ("0.9.10", nil, "0.9.11"),
+            ("0.9.10", -10, "0.9.11"),
+            ("0.9.10", 0, "0.9.11"),
+            ("0.9.12", 10, "0.9.12"),
+        ]
+        // Newer battery samples must not make the saved firmware outrank newer Wi-Fi evidence.
+        store.observe(deviceID: "panel", name: "Desk", mode: nil, batteryMillivolts: 3900,
+            batteryPercent: 65, at: start.addingTimeInterval(60))
+        for (version, offset, expected) in cases {
+            let summary = display(seen: offset.map { start.addingTimeInterval($0) }, firmware: version)
+            #expect(store.presentation(for: summary, serverID: "home").firmwareVersion == expected)
+        }
+    }
+
+    @Test func firmwarePresentationFallsBackWithoutAnAssociatedBluetoothVersion() {
+        let store = BluetoothDisplayStore(fileURL: nil)
+        store.activeServerID = "home"
+        let summary = display(firmware: "1.8.0")
+        #expect(store.presentation(for: summary, serverID: "home").firmwareVersion == "1.8.0")
+        #expect(store.presentation(for: display(), serverID: "home").firmwareVersion == nil)
+        store.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: nil,
+            firmwareVersion: "0.9.11", at: start)
+        #expect(store.presentation(for: summary, serverID: "other").firmwareVersion == "1.8.0")
+        store.link(nil, to: "panel", serverID: "home")
+        #expect(store.presentation(for: summary, serverID: "home").firmwareVersion == "1.8.0")
+    }
+
+    private func display(id: String = "panel", percent: Int? = 73, seen: Date? = nil,
+                         firmware: String? = nil) -> DisplaySummary {
         DisplaySummary(id: id, name: "Desk", kind: "test_panel", iconName: "display",
             panel: PanelProfile(width: 4, height: 2, gamut: "bwry_4", orientation: "landscape"),
-            freshness: .stale, lastSeenAt: seen, batteryPercent: percent)
+            freshness: .stale, lastSeenAt: seen, batteryPercent: percent, firmwareVersion: firmware)
     }
 
     @Test func pendingModesSurviveRestartAndAcknowledgementsAreServerScoped() throws {

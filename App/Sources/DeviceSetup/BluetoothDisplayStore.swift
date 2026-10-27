@@ -426,7 +426,8 @@ final class BluetoothDisplayStore {
         let record = record(for: display.id, serverID: serverID)
         let server = serverRecord(displayID: display.id, serverID: serverID)
         return DisplayBluetoothPresentation(record: record, server: server,
-            fallbackPercent: display.batteryPercent, fallbackBatteryDate: display.lastSeenAt,
+            fallbackPercent: display.batteryPercent, fallbackFirmwareVersion: display.firmwareVersion,
+            fallbackLastSeenAt: display.lastSeenAt,
             usesLocalPreview: showsBluetoothPreview(record, displayID: display.id, serverID: serverID))
     }
 
@@ -451,10 +452,19 @@ struct DisplayBluetoothPresentation {
     let record: BluetoothDisplayRecord?
     let server: DisplayServerRecord?
     let fallbackPercent: Int?
-    let fallbackBatteryDate: Date?
+    let fallbackFirmwareVersion: String?
+    let fallbackLastSeenAt: Date?
     let usesLocalPreview: Bool
 
     var isBluetooth: Bool { record?.mode == .bluetooth }
+    var firmwareVersion: String? {
+        guard let version = record?.firmwareVersion else { return fallbackFirmwareVersion }
+        // Keep the firmware's own read time; a later battery sample does not refresh it.
+        guard fallbackFirmwareVersion != nil,
+              (fallbackLastSeenAt ?? .distantPast) > (record?.firmwareRecordedAt ?? .distantPast)
+        else { return version }
+        return fallbackFirmwareVersion
+    }
     func lastSeenAt(fallback: Date?) -> Date? {
         guard isBluetooth, let record else { return server?.lastSeenAt ?? fallback }
         return [record.modeConfirmedAt, record.batteryRecordedAt, record.batteryPercentRecordedAt, record.photoReceivedAt]
@@ -468,7 +478,7 @@ struct DisplayBluetoothPresentation {
         // Prefer the authenticated local sample on a timestamp tie.
         for (percent, date) in [(record?.batteryPercent, record?.batteryPercentRecordedAt),
                                 (server?.batteryPercent, server?.batteryRecordedAt),
-                                (fallbackPercent, fallbackBatteryDate)] {
+                                (fallbackPercent, fallbackLastSeenAt)] {
             guard let percent, (0...100).contains(percent) else { continue }
             if let current = latest, (date ?? .distantPast) <= (current.date ?? .distantPast) { continue }
             latest = (percent, date)

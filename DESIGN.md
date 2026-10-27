@@ -1027,3 +1027,6 @@ Older servers keep local behavior. Reports contain mode, observation time and
 battery percentages and firmware versions with their original read times; the
 server stores them as advisory facts without changing delivery rules. Shared
 photo receipts are imported before subsequent reporting.
+Device Details also resolves firmware locally from the associated Bluetooth
+record and server heartbeat, preferring the newer observation and Bluetooth
+on a timestamp tie. Battery updates do not refresh the firmware read time.

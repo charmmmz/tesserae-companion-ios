@@ -13,6 +13,8 @@ capabilities.
 
 ### Fixed
 
+- Display details show the latest known firmware from associated Bluetooth
+  readings or Wi-Fi heartbeats, including when the server has no firmware value.
 - Hardware labels now recognize Elecrow CrowPanel, Good Display ESP32-133C02,
   ZecTrix NOTE4C, Bloomin8 Canvas, epdiy v7 and CrossPoint, plus Inkplate 13SPECTRA,
   Inkplate 6COLOR and Waveshare 7.3-inch e-Paper (F), with official marks for the
