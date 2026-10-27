@@ -7,8 +7,9 @@ import XCTest
     }
 
     override func tearDown() async throws {
-        if testRun?.hasSucceeded == false {
+        if let testRun, testRun.failureCount > 0 {
             let app = XCUIApplication()
+            guard app.state != .notRunning else { return }
             capture("Media Frame Failure", app: app)
             let hierarchy = XCTAttachment(string: app.debugDescription)
             hierarchy.name = "Media Frame Failure Hierarchy"
@@ -83,10 +84,15 @@ import XCTest
     #if TESSERAE_SYSTEM_PHOTOS_TESTS
     // Run Scripts/test_system_photos_share.sh to seed the synthetic paired asset.
     func testSystemPhotosLivePhotoAutomaticallyShowsTimeline() {
-        XCUIApplication().launch()
+        // Exercise the first share with neither app nor Photos kept warm.
+        XCUIApplication().terminate()
         let photos = XCUIApplication(bundleIdentifier: "com.apple.mobileslideshow")
+        photos.terminate()
         photos.launch()
-        defer { photos.terminate() }
+        defer {
+            if let testRun, testRun.failureCount > 0 { capture("Photos Share Failure", app: photos) }
+            photos.terminate()
+        }
         let share = photos.buttons["PUOneUpBarButtonItemIdentifierShare"]
         if !share.exists {
             let live = photos.images.matching(NSPredicate(format: "label BEGINSWITH 'Live Photo,'")).firstMatch

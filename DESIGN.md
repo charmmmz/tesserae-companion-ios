@@ -105,7 +105,9 @@ object providers. System Photos' legacy item provider requires an Objective-C
 completion block explicitly typed as `PHLivePhoto` for Foundation's class
 coercion; a small shared bridge preserves that signature and automatically
 exports the paired movie without requesting library access. If a source's
-shared motion is genuinely unavailable, a compact
+advertised movie file cannot be loaded, the import continues with its complete
+Live Photo object before reporting unavailable motion. If the shared motion is
+genuinely unavailable, a compact
 Choose Live Photo action opens the system picker filtered to Live Photos. This
 does not request library authorization or discard the shared key photo on cancel.
 The selected asset feeds the same timeline and preserves the chosen destinations.

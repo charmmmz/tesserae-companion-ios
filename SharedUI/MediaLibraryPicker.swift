@@ -115,7 +115,12 @@ extension View {
 
     private func loadLivePhotoMovie() async throws -> MediaTemporaryFile {
         if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
-            return try await loadMovie()
+            do { return try await loadMovie() }
+            catch {
+                // Photos can advertise a movie that its share provider cannot
+                // vend as a file. Continue with the complete Live Photo object.
+                try Task.checkCancellation()
+            }
         }
         if provider.canLoadObject(ofClass: PHLivePhoto.self) {
             do {

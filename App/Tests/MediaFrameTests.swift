@@ -81,6 +81,33 @@ import UniformTypeIdentifiers
         session.cancelWork()
     }
 
+    @Test func sharedLivePhotoFallsBackWhenAdvertisedMovieCannotBeLoaded() async throws {
+        let resources = try await livePhotoResources()
+        let provider = NSItemProvider()
+        provider.registerDataRepresentation(forTypeIdentifier: UTType.jpeg.identifier, visibility: .all) { completion in
+            completion(resources.keyData, nil)
+            return nil
+        }
+        provider.registerFileRepresentation(forTypeIdentifier: UTType.quickTimeMovie.identifier,
+            fileOptions: [], visibility: .all) { completion in
+            completion(nil, false, MediaFrameError.unavailable)
+            return nil
+        }
+        provider.registerItem(forTypeIdentifier: UTType.livePhoto.identifier) { completion, _, _ in
+            PHLivePhoto.request(withResourceFileURLs: [resources.still.url, resources.movie.url],
+                placeholderImage: nil, targetSize: .zero, contentMode: .aspectFit) { photo, info in
+                guard (info[PHLivePhotoInfoIsDegradedKey] as? Bool) != true else { return }
+                completion?(photo, info[PHLivePhotoInfoErrorKey] as? Error)
+            }
+        }
+        let source = try await MediaPickerSelection(provider: provider).load(maximumPixelSize: 320)
+        #expect(source.kind == .livePhoto)
+        let recovered = try await source.loadMovie()
+        let reader = VideoFrameReader(file: recovered, maximumPixelSize: 320)
+        #expect(try await reader.duration() > 0)
+        #expect(try await reader.image(at: 2).data != source.primaryImage.data)
+    }
+
     @Test func livePhotoLoadsTimelineAutomaticallyAndRestoresPrimaryWithoutHidingIt() async throws {
         let fixture = try await MediaFrameFixtures.source(kind: .livePhoto)
         var movieLoads = 0
@@ -275,17 +302,10 @@ import UniformTypeIdentifiers
     }
 
     @Test func realLivePhotoResourcesCanExportMotionWithoutLibraryAccess() async throws {
-        let identifier = UUID().uuidString
-        let movie = try await MediaFrameFixtureWriter().makeMovie(contentIdentifier: identifier)
-        let frame = try await VideoFrameReader(file: movie, maximumPixelSize: 320).image(at: 1.5)
-        let still = try MediaTemporaryFile(fileExtension: "jpg")
-        let imageSource = try #require(CGImageSourceCreateWithData(frame.data as CFData, nil))
-        let destination = try #require(CGImageDestinationCreateWithURL(still.url as CFURL, UTType.jpeg.identifier as CFString, 1, nil))
-        CGImageDestinationAddImageFromSource(destination, imageSource, 0, [kCGImagePropertyMakerAppleDictionary: ["17": identifier]] as CFDictionary)
-        try #require(CGImageDestinationFinalize(destination))
+        let resources = try await livePhotoResources()
         let permission = PHPhotoLibrary.authorizationStatus(for: .readWrite)
         let exported = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<MediaTemporaryFile, Error>) in
-            PHLivePhoto.request(withResourceFileURLs: [still.url, movie.url], placeholderImage: nil, targetSize: .zero, contentMode: .aspectFit) { photo, info in
+            PHLivePhoto.request(withResourceFileURLs: [resources.still.url, resources.movie.url], placeholderImage: nil, targetSize: .zero, contentMode: .aspectFit) { photo, info in
                 guard (info[PHLivePhotoInfoIsDegradedKey] as? Bool) != true else { return }
                 if let photo {
                     MediaPickerSelection.exportMovie(from: photo) { continuation.resume(with: $0) }
@@ -295,8 +315,20 @@ import UniformTypeIdentifiers
         }
         let actual = try await VideoFrameReader(file: exported, maximumPixelSize: 320).image(at: 2)
         #expect(actual.pixelWidth == 320)
-        #expect(actual.data != frame.data)
+        #expect(actual.data != resources.keyData)
         #expect(PHPhotoLibrary.authorizationStatus(for: .readWrite) == permission)
+    }
+
+    private func livePhotoResources() async throws -> (still: MediaTemporaryFile, movie: MediaTemporaryFile, keyData: Data) {
+        let identifier = UUID().uuidString
+        let movie = try await MediaFrameFixtureWriter().makeMovie(contentIdentifier: identifier)
+        let frame = try await VideoFrameReader(file: movie, maximumPixelSize: 320).image(at: 1.5)
+        let still = try MediaTemporaryFile(fileExtension: "jpg")
+        let imageSource = try #require(CGImageSourceCreateWithData(frame.data as CFData, nil))
+        let destination = try #require(CGImageDestinationCreateWithURL(still.url as CFURL, UTType.jpeg.identifier as CFString, 1, nil))
+        CGImageDestinationAddImageFromSource(destination, imageSource, 0, [kCGImagePropertyMakerAppleDictionary: ["17": identifier]] as CFDictionary)
+        try #require(CGImageDestinationFinalize(destination))
+        return (still, movie, frame.data)
     }
 
     private func eventually(_ condition: @MainActor () -> Bool) async throws {

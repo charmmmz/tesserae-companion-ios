@@ -13,6 +13,9 @@ capabilities.
 
 ### Fixed
 
+- Live Photo sharing continues with the complete Live Photo when an advertised
+  movie file cannot be read, preserving the key photo and loading the timeline
+  without requiring Change Photo to reselect the asset.
 - Sharing a Live Photo directly from system Photos automatically loads its
   motion and frame timeline. The legacy item-provider callback now preserves
   the concrete Live Photo class required for Foundation's class coercion.
