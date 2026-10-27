@@ -23,7 +23,40 @@ import UniformTypeIdentifiers
         #expect(!session.isBusy)
     }
 
-    @Test func livePhotoKeepsPrimaryUntilExplicitlyExpandedAndRestoresIt() async throws {
+    @Test func sharedLivePhotoTypePreservesKeyPhotoAndLoadsOfferedMovie() async throws {
+        let fixture = try await MediaFrameFixtures.source(kind: .livePhoto)
+        let movie = try await fixture.loadMovie()
+        let primaryData = fixture.primaryImage.data
+        let provider = NSItemProvider()
+        provider.registerDataRepresentation(forTypeIdentifier: UTType.jpeg.identifier, visibility: .all) { completion in
+            completion(primaryData, nil)
+            return nil
+        }
+        provider.registerDataRepresentation(forTypeIdentifier: UTType.livePhoto.identifier, visibility: .all) { completion in
+            completion(nil, MediaFrameError.unavailable)
+            return nil
+        }
+        provider.registerFileRepresentation(forTypeIdentifier: UTType.quickTimeMovie.identifier,
+            fileOptions: [], visibility: .all) { completion in
+            completion(movie.url, false, nil)
+            return nil
+        }
+        let selection = MediaPickerSelection(provider: provider)
+        #expect(selection.kind == .livePhoto)
+        let source = try await selection.load(maximumPixelSize: 320)
+        let session = MediaFrameSession()
+        session.adopt(source)
+        #expect(session.output == source.primaryImage)
+        #expect(!session.isBusy)
+        try await eventually { session.duration > 0 }
+        session.select(position: 0.8, immediately: true)
+        try await eventually { !session.isBusy }
+        #expect(!session.usesPrimaryImage)
+        #expect(session.output?.data != source.primaryImage.data)
+        session.cancelWork()
+    }
+
+    @Test func livePhotoLoadsTimelineAutomaticallyAndRestoresPrimaryWithoutHidingIt() async throws {
         let fixture = try await MediaFrameFixtures.source(kind: .livePhoto)
         var movieLoads = 0
         let source = MediaFrameSource(kind: .livePhoto, primaryImage: fixture.primaryImage, maximumPixelSize: 320) {
@@ -32,10 +65,8 @@ import UniformTypeIdentifiers
         }
         let session = MediaFrameSession()
         session.adopt(source)
-        #expect(movieLoads == 0)
         #expect(session.output == source.primaryImage)
-        #expect(!session.isExpanded)
-        session.expand()
+        session.loadTimeline()
         try await eventually { session.duration > 0 && !session.isBusy }
         #expect(movieLoads == 1)
         session.select(position: 0.8, immediately: true)
@@ -47,7 +78,8 @@ import UniformTypeIdentifiers
         try await Task.sleep(for: .milliseconds(120))
         #expect(session.output == source.primaryImage)
         #expect(session.usesPrimaryImage)
-        #expect(!session.isExpanded)
+        #expect(session.duration > 0)
+        #expect(movieLoads == 1)
         #expect(!session.isBusy)
         session.cancelWork()
     }
@@ -62,10 +94,9 @@ import UniformTypeIdentifiers
         session.adopt(second)
         try await Task.sleep(for: .milliseconds(120))
         #expect(session.output == second.primaryImage)
-        #expect(session.duration == 0)
         #expect(session.scrubbingPreview == nil)
         #expect(!session.isScrubbing)
-        session.expand()
+        session.loadTimeline()
         try await eventually { session.duration > 0 && !session.isBusy }
         #expect(session.output == second.primaryImage)
         session.cancelWork()
@@ -76,7 +107,7 @@ import UniformTypeIdentifiers
         let source = try await MediaFrameFixtures.source(kind: kind)
         let session = MediaFrameSession()
         session.adopt(source)
-        session.expand()
+        session.loadTimeline()
         try await eventually { session.duration > 0 && !session.isBusy }
         let originalRevision = session.outputRevision
 
@@ -140,21 +171,28 @@ import UniformTypeIdentifiers
 
     @Test func unavailableLiveMotionPreservesPrimaryAndAllowsRetry() async throws {
         let fixture = try await MediaFrameFixtures.source(kind: .livePhoto)
+        var attempts = 0
         let source = MediaFrameSource(kind: .livePhoto, primaryImage: fixture.primaryImage, maximumPixelSize: 320) {
-            throw MediaFrameError.unavailable
+            attempts += 1
+            if attempts == 1 { throw MediaFrameError.unavailable }
+            return try await fixture.loadMovie()
         }
         let session = MediaFrameSession()
         session.adopt(source)
-        session.expand()
+        session.loadTimeline()
         try await eventually { session.errorMessage != nil }
         #expect(!session.isBusy)
         #expect(session.output == fixture.primaryImage)
         session.restorePrimaryImage()
+        #expect(session.errorMessage != nil)
+        session.retry()
+        try await eventually { session.duration > 0 }
         #expect(session.errorMessage == nil)
-        #expect(!session.isExpanded)
+        #expect(session.output == fixture.primaryImage)
+        session.cancelWork()
     }
 
-    @Test func hidingAStillLoadingLivePhotoKeepsPrimaryImmediatelySendable() async throws {
+    @Test func restoringAStillLoadingLivePhotoKeepsPrimaryImmediatelySendable() async throws {
         let fixture = try await MediaFrameFixtures.source(kind: .livePhoto)
         var pending: CheckedContinuation<MediaTemporaryFile, Error>?
         let source = MediaFrameSource(kind: .livePhoto, primaryImage: fixture.primaryImage, maximumPixelSize: 320) {
@@ -162,15 +200,14 @@ import UniformTypeIdentifiers
         }
         let session = MediaFrameSession()
         session.adopt(source)
-        session.expand()
+        session.loadTimeline()
         try await eventually { pending != nil }
-        session.toggleExpanded()
+        session.restorePrimaryImage()
         #expect(!session.isBusy)
-        #expect(!session.isExpanded)
         #expect(session.output == fixture.primaryImage)
         pending?.resume(throwing: MediaFrameError.unavailable)
         await Task.yield()
-        #expect(session.errorMessage == nil)
+        try await eventually { session.errorMessage != nil }
     }
 
     @Test func movieFramesBakeOrientationRespectSizeAndDifferByTime() async throws {

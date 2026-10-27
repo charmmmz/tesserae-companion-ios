@@ -6,11 +6,12 @@ import UniformTypeIdentifiers
 
 /// Uses the system picker's item providers, without requesting access to the photo library.
 struct MediaLibraryPicker: UIViewControllerRepresentable {
+    var livePhotosOnly = false
     let onSelection: (MediaPickerSelection?) -> Void
 
     func makeUIViewController(context: Context) -> PHPickerViewController {
         var configuration = PHPickerConfiguration()
-        configuration.filter = .any(of: [.images, .videos])
+        configuration.filter = livePhotosOnly ? .livePhotos : .any(of: [.images, .videos])
         configuration.selectionLimit = 1
         configuration.preferredAssetRepresentationMode = .current
         let picker = PHPickerViewController(configuration: configuration)
@@ -31,9 +32,10 @@ struct MediaLibraryPicker: UIViewControllerRepresentable {
 }
 
 extension View {
-    func mediaLibraryPicker(isPresented: Binding<Bool>, selection: Binding<MediaPickerSelection?>) -> some View {
+    func mediaLibraryPicker(isPresented: Binding<Bool>, selection: Binding<MediaPickerSelection?>,
+                            livePhotosOnly: Bool = false) -> some View {
         sheet(isPresented: isPresented) {
-            MediaLibraryPicker { item in
+            MediaLibraryPicker(livePhotosOnly: livePhotosOnly) { item in
                 if let item { selection.wrappedValue = item }
                 isPresented.wrappedValue = false
             }
@@ -49,7 +51,8 @@ extension View {
 
     init(provider: NSItemProvider) {
         self.provider = provider
-        if provider.canLoadObject(ofClass: PHLivePhoto.self) { kind = .livePhoto }
+        if provider.hasItemConformingToTypeIdentifier(UTType.livePhoto.identifier)
+            || provider.canLoadObject(ofClass: PHLivePhoto.self) { kind = .livePhoto }
         else if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) { kind = .video }
         else { kind = .photo }
     }
@@ -111,8 +114,24 @@ extension View {
     }
 
     private func loadLivePhotoMovie() async throws -> MediaTemporaryFile {
+        if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
+            return try await loadMovie()
+        }
+        if provider.canLoadObject(ofClass: PHLivePhoto.self) {
+            do {
+                return try await withCheckedThrowingContinuation { continuation in
+                    provider.loadObject(ofClass: PHLivePhoto.self) { object, error in
+                        if let photo = object as? PHLivePhoto {
+                            Self.exportMovie(from: photo) { continuation.resume(with: $0) }
+                        } else { continuation.resume(throwing: error ?? MediaFrameError.unavailable) }
+                    }
+                }
+            } catch { try Task.checkCancellation() }
+        }
         let file = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<MediaTemporaryFile, Error>) in
-            provider.loadObject(ofClass: PHLivePhoto.self) { object, error in
+            // Share extensions may vend a Live Photo through the original item
+            // API even when the provider cannot load a PHLivePhoto object class.
+            provider.loadItem(forTypeIdentifier: UTType.livePhoto.identifier, options: nil) { object, error in
                 if let photo = object as? PHLivePhoto {
                     Self.exportMovie(from: photo) { continuation.resume(with: $0) }
                 }

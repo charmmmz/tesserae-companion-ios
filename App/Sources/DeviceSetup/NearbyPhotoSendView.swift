@@ -99,7 +99,7 @@ struct NearbyPhotoSendView: View {
         .mediaLibraryPicker(isPresented: $photoPickerPresented, selection: $selection)
         .onChange(of: mediaFrames.outputRevision) { _, _ in applyMediaFrame() }
         .onDisappear { mediaFrames.cancelWork() }
-        .onAppear { if mediaFrames.isExpanded { mediaFrames.expand() } }
+        .onAppear { mediaFrames.loadTimeline() }
         .task(id: hasStarted) {
             // Discovery only offers the invitation. Connect once the user chooses Send.
             guard hasStarted, !didConnect else { return }

@@ -13,6 +13,14 @@ capabilities.
 
 ### Fixed
 
+- Live Photo frame controls show the key photo and timeline immediately in all
+  composers, keep the timeline visible after restoring the key photo, and remove
+  the extra expand/collapse labels. Loading optional motion leaves the key photo
+  ready to send.
+- Share Sheet recognizes Live Photo type declarations as well as object providers.
+  If Photos cannot supply motion through sharing, an inline system-picker action
+  lets users select the complete Live Photo without leaving the composer or
+  granting photo-library access. Cancelling keeps the shared key photo.
 - Display details show the latest known firmware from associated Bluetooth
   readings or Wi-Fi heartbeats, including when the server has no firmware value.
 - Hardware labels now recognize Elecrow CrowPanel, Good Display ESP32-133C02,

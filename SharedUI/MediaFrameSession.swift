@@ -132,7 +132,6 @@ actor VideoFrameReader {
     private(set) var duration: Double = 0
     private(set) var position: Double = 0
     private(set) var usesPrimaryImage = true
-    private(set) var isExpanded = false
     private(set) var isLoadingMovie = false
     private(set) var isRenderingFrame = false
     private(set) var errorMessage: String?
@@ -146,7 +145,8 @@ actor VideoFrameReader {
     @ObservationIgnored private var failedPosition: Double?
     @ObservationIgnored private var pendingPreviewPosition: Double?
 
-    var isBusy: Bool { isLoadingMovie || isRenderingFrame }
+    // Loading optional motion must not block sending the already prepared key photo.
+    var isBusy: Bool { isRenderingFrame }
     var hasTimeline: Bool { source?.kind == .video || source?.kind == .livePhoto }
 
     func adopt(_ source: MediaFrameSource) {
@@ -155,7 +155,7 @@ actor VideoFrameReader {
         output = source.primaryImage
         outputRevision = UUID()
         usesPrimaryImage = true
-        if source.kind == .video { expand() }
+        loadTimeline()
     }
 
     func clear() {
@@ -169,7 +169,6 @@ actor VideoFrameReader {
         committedPosition = 0
         failedPosition = nil
         usesPrimaryImage = true
-        isExpanded = false
         errorMessage = nil
     }
 
@@ -191,18 +190,8 @@ actor VideoFrameReader {
         isRenderingFrame = false
     }
 
-    func toggleExpanded() {
-        if isExpanded {
-            isExpanded = false
-            if isLoadingMovie || isScrubbing { cancelWork() }
-            errorMessage = nil
-        }
-        else { expand() }
-    }
-
-    func expand() {
+    func loadTimeline() {
         guard let source, hasTimeline else { return }
-        isExpanded = true
         guard reader == nil, !isLoadingMovie else { return }
         errorMessage = nil
         isLoadingMovie = true
@@ -305,14 +294,15 @@ actor VideoFrameReader {
         output = source.primaryImage
         outputRevision = UUID()
         usesPrimaryImage = true
-        errorMessage = nil
+        // A missing movie still needs its retry/reselection action when the
+        // user taps the key photo. Only frame-extraction errors can be cleared.
+        if reader != nil { errorMessage = nil }
         failedPosition = nil
-        isExpanded = false
     }
 
     func retry() {
         if reader != nil { select(position: failedPosition ?? position, immediately: true) }
-        else { expand() }
+        else { loadTimeline() }
     }
 
     private func makeThumbnails(reader: VideoFrameReader, token: UUID) {

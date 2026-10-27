@@ -83,14 +83,21 @@ full-size still used for sending; Send stays disabled until this frame is ready.
 The existing framing and Send actions remain the completion path. There is no
 separate editor or frame-confirmation step.
 
-Live Photos initially use their supplied primary photo. Choose Frame expands
-the same timeline and loads the paired video only then; Key Photo restores the
-original still image. Sharing a video or a Live Photo with motion available
+Live Photos initially use their supplied primary photo, with the Key Photo
+thumbnail and timeline visible immediately. Motion loads in the background
+without blocking the primary photo; Key Photo restores the original still
+without hiding the timeline. Sharing a video or a Live Photo with motion available
 uses the same controls for server and Bluetooth destinations. Only the selected
 still image enters the existing delivery protocol. Decoding is bounded to the
 target size, respects video orientation, and normalizes HDR frames to SDR.
 Pending or superseded frame requests cannot be submitted; changing a frame
 preserves manual framing and invalidates old subject analysis.
+
+The Share Extension also recognizes Live Photo type declarations when the host
+cannot vend a `PHLivePhoto` object. If the shared motion cannot be read, a compact
+Choose Live Photo action opens the system picker filtered to Live Photos. This
+does not request library authorization or discard the shared key photo on cancel.
+The selected asset feeds the same timeline and preserves the chosen destinations.
 
 ### Post-1.0 photo framing roadmap
 
@@ -595,7 +602,7 @@ exercise every feature without a running server.
 
 The extension must be small and deterministic:
 
-- accept one still image in release 1.0;
+- accept one image, video, or Live Photo, sending only a prepared still image;
 - load cached targets instead of performing a full synchronization;
 - normalize orientation and downsample before upload;
 - obey the server-advertised encoded-byte and decoded-image limits;
@@ -606,8 +613,8 @@ The extension must be small and deterministic:
 - write a recoverable local queue item if a network submission fails;
 - never retain Photos library access beyond the shared item.
 
-Video, Live Photo motion, multi-image albums, RAW editing, and automatic
-background retry are out of scope.
+Video and Live Photo motion are used only for selecting a still frame. Multi-image
+albums, RAW editing, and automatic background retry are out of scope.
 
 ### 6.5 Personal Data retention
 

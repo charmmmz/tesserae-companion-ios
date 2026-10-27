@@ -41,9 +41,13 @@ struct BluetoothShareTestHost: View {
         .task {
             if let value = ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_MEDIA"] {
                 do {
-                    let source = try await MediaFrameFixtures.source(kind: value == "live" ? .livePhoto : .video)
+                    let fixture = try await MediaFrameFixtures.source(kind: value.hasPrefix("live") ? .livePhoto : .video)
+                    let source = value == "live-unavailable"
+                        ? MediaFrameSource(kind: .livePhoto, primaryImage: fixture.primaryImage, maximumPixelSize: 640) {
+                            throw MediaFrameError.unavailable
+                        } : fixture
                     mediaFrames.adopt(source)
-                    movie = try await source.loadMovie()
+                    movie = try await fixture.loadMovie()
                 } catch { fixtureError = String(reflecting: error) }
             }
         }

@@ -60,6 +60,7 @@ private final class ShareComposerModel: ObservableObject {
     @Published private(set) var bluetoothSession: BluetoothShareSession?
     @Published private(set) var bluetoothTargetID: String?
     @Published private(set) var bluetoothIsBusy = false
+    @Published private(set) var isPreparingMedia = false
     let framingSession = PhotoFramingSession()
     let mediaFrames: MediaFrameSession
 #if DEBUG
@@ -147,6 +148,7 @@ private final class ShareComposerModel: ObservableObject {
 
     var canSend: Bool {
         (phase == .ready || (phase == .failed && bluetoothTargetID == nil))
+            && !isPreparingMedia
             && !mediaFrames.isBusy
             && (mediaFrames.source == nil || appliedMediaRevision == mediaFrames.outputRevision)
             && (
@@ -227,7 +229,7 @@ private final class ShareComposerModel: ObservableObject {
     }
 
     var sharedImageData: Data? { imageData }
-    var isBusy: Bool { bluetoothIsBusy || phase == .submitting }
+    var isBusy: Bool { bluetoothIsBusy || isPreparingMedia || phase == .submitting }
 
     func setBluetoothBusy(_ busy: Bool) {
         bluetoothIsBusy = busy
@@ -254,6 +256,23 @@ private final class ShareComposerModel: ObservableObject {
         contentType = image.contentType
         fileName = "shared-photo.\(image.fileExtension)"
         framingSession.discardAnalysis()
+    }
+
+    func replaceSharedMedia(_ selection: MediaPickerSelection) async {
+        guard !isBusy else { return }
+        isPreparingMedia = true
+        defer { isPreparingMedia = false }
+        do {
+            let displayMaxEdge = displays.map { max($0.panel.width, $0.panel.height) }.max() ?? 2_048
+            let source = try await selection.load(maximumPixelSize: max(2_048, displayMaxEdge))
+            try Task.checkCancellation()
+            mediaFrames.adopt(source)
+            framingSession.replaceImage()
+            applyMediaFrame()
+            errorMessage = nil
+        } catch {
+            if !Task.isCancelled { errorMessage = error.localizedDescription }
+        }
     }
 
     func autoFrame(aspect: PanelAspectRatio) {
@@ -936,6 +955,8 @@ private struct ImageSubmissionOutcome {
 private struct ShareComposerView: View {
     @ObservedObject var model: ShareComposerModel
     @State private var previewHeight: CGFloat = 220
+    @State private var showsLivePhotoPicker = false
+    @State private var livePhotoSelection: MediaPickerSelection?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var hapticEvent = TesseraeHapticEvent()
     @Environment(\.scenePhase) private var scenePhase
@@ -1013,6 +1034,7 @@ private struct ShareComposerView: View {
     private var lifecyclePage: some View {
         styledPage
         .onDisappear {
+            guard !showsLivePhotoPicker else { return }
             model.mediaFrames.cancelWork()
             model.bluetoothSession?.stop()
         }
@@ -1037,8 +1059,15 @@ private struct ShareComposerView: View {
 
     var body: some View {
         bluetoothPage
+        .mediaLibraryPicker(isPresented: $showsLivePhotoPicker, selection: $livePhotoSelection, livePhotosOnly: true)
+        .task(id: livePhotoSelection) {
+            if let livePhotoSelection { await model.replaceSharedMedia(livePhotoSelection) }
+        }
         .onChange(of: model.mediaFrames.outputRevision) { _, _ in model.applyMediaFrame() }
-        .onAppear { if model.mediaFrames.isExpanded { model.mediaFrames.expand() } }
+        .onAppear {
+            model.mediaFrames.loadTimeline()
+            model.bluetoothSession?.start()
+        }
         .onChange(of: model.automaticFramingContext, initial: true) { _, context in
             model.updateAutomaticFraming(context)
         }
@@ -1205,7 +1234,8 @@ private struct ShareComposerView: View {
             .accessibilityIdentifier("share-preview-slot")
             previewTargetPicker
                 .frame(height: dynamicTypeSize.isAccessibilitySize ? nil : 44)
-            MediaFrameControls(session: model.mediaFrames, isSending: model.framingSession.isFrozen)
+            MediaFrameControls(session: model.mediaFrames, isSending: model.framingSession.isFrozen || model.isPreparingMedia,
+                onChooseLivePhoto: { showsLivePhotoPicker = true })
         }
         .tesseraeCard()
         .accessibilityElement(children: .contain)

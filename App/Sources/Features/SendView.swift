@@ -111,7 +111,7 @@ struct SendView: View {
         }
         .onChange(of: mediaFrames.outputRevision) { _, _ in applyMediaFrame() }
         .onDisappear { mediaFrames.cancelWork() }
-        .onAppear { if mediaFrames.isExpanded { mediaFrames.expand() } }
+        .onAppear { mediaFrames.loadTimeline() }
         #if DEBUG
         .task {
             if let value = ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_MEDIA"] {

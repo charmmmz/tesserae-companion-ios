@@ -4,52 +4,31 @@ import SwiftUI
 struct MediaFrameControls: View {
     let session: MediaFrameSession
     var isSending = false
+    var onChooseLivePhoto: (() -> Void)?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @GestureState private var isDragging = false
 
     var body: some View {
         if session.hasTimeline {
             VStack(alignment: .leading, spacing: 8) {
-                if session.source?.kind == .livePhoto {
-                    HStack {
-                        Text(session.usesPrimaryImage && !session.isRenderingFrame ? String(localized: "Live Photo · Key Photo") : String(localized: "Live Photo"))
-                            .font(.caption).foregroundStyle(.secondary)
-                        Spacer(minLength: 8)
-                        Button(session.isExpanded ? String(localized: "Hide Frames") : String(localized: "Choose Frame")) { session.toggleExpanded() }
-                            .font(.footnote).frame(minHeight: 44)
-                            .accessibilityIdentifier("media-choose-frame")
+                HStack(spacing: 10) {
+                    if session.source?.kind == .livePhoto {
+                        keyPhoto
                     }
-                }
-                if session.isExpanded {
                     if session.isLoadingMovie {
-                        ProgressView("Loading frames…")
-                            .font(.footnote).frame(minHeight: 44)
+                        ProgressView()
+                            .frame(maxWidth: .infinity, minHeight: 52)
+                            .accessibilityLabel("Loading frames…")
                     } else if session.duration > 0 {
-                        HStack(spacing: 10) {
-                            if session.source?.kind == .livePhoto {
-                                Button { session.restorePrimaryImage() } label: {
-                                    if let data = session.source?.primaryImage.data, let image = UIImage(data: data) {
-                                        Image(uiImage: image).resizable().scaledToFill()
-                                            .frame(width: 44, height: 44).clipped()
-                                            .overlay(alignment: .bottom) {
-                                                Text("Key").font(.caption2)
-                                                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge).lineLimit(1)
-                                                    .foregroundStyle(.white).padding(.vertical, 2)
-                                                    .frame(maxWidth: .infinity).background(.black.opacity(0.65))
-                                            }
-                                            .clipShape(.rect(cornerRadius: 6))
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityLabel("Restore Key Photo")
-                                .accessibilityAddTraits(session.usesPrimaryImage ? .isSelected : [])
-                                .accessibilityIdentifier("media-restore-key-photo")
-                            }
-                            timeline
-                        }
+                        timeline
+                    } else if offersReselection, session.errorMessage != nil, let onChooseLivePhoto {
+                        Button("Choose Live Photo", systemImage: "photo") { onChooseLivePhoto() }
+                            .font(.footnote)
+                            .frame(maxWidth: .infinity, minHeight: 52)
+                            .accessibilityIdentifier("media-reselect-live-photo")
                     }
                 }
-                if let error = session.errorMessage {
+                if let error = session.errorMessage, !offersReselection {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(error).font(.footnote).foregroundStyle(TesseraeTheme.danger)
                         Button("Retry") { session.retry() }.font(.footnote).frame(minHeight: 44)
@@ -60,6 +39,46 @@ struct MediaFrameControls: View {
             .disabled(isSending)
             .tint(TesseraeTheme.accent)
         }
+    }
+
+    private var offersReselection: Bool {
+        session.source?.kind == .livePhoto && session.duration == 0 && onChooseLivePhoto != nil
+    }
+
+    private var keyPhoto: some View {
+        Button { session.restorePrimaryImage() } label: {
+            if let data = session.source?.primaryImage.data, let image = UIImage(data: data) {
+                Image(uiImage: image).resizable().scaledToFill()
+                    .frame(width: 52, height: 52).clipped()
+                    .overlay(alignment: .bottom) {
+                        Text("Key").font(.caption2)
+                            .dynamicTypeSize(...DynamicTypeSize.xxxLarge).lineLimit(1)
+                            .foregroundStyle(.white).padding(.vertical, 2)
+                            .frame(maxWidth: .infinity).background(.black.opacity(0.65))
+                    }
+                    .clipShape(.rect(cornerRadius: 8))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8)
+                            .strokeBorder(keyPhotoIsSelected ? TesseraeTheme.accent : .clear, lineWidth: 2)
+                    }
+                    .overlay(alignment: .topTrailing) {
+                        if keyPhotoIsSelected {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.white, TesseraeTheme.accent)
+                                .padding(3)
+                        }
+                    }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Restore Key Photo")
+        .accessibilityAddTraits(keyPhotoIsSelected ? .isSelected : [])
+        .accessibilityIdentifier("media-restore-key-photo")
+    }
+
+    private var keyPhotoIsSelected: Bool {
+        session.usesPrimaryImage && !session.isRenderingFrame
     }
 
     private var timeline: some View {
@@ -77,21 +96,21 @@ struct MediaFrameControls: View {
                         }
                     }
                 }
-                .frame(width: proxy.size.width, height: 44).clipped()
+                .frame(width: proxy.size.width, height: 52).clipped()
                 .clipShape(.rect(cornerRadius: 6))
                 .accessibilityHidden(true)
 
                 if !session.usesPrimaryImage || session.isRenderingFrame || session.source?.kind == .video {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(TesseraeTheme.accent)
-                        .frame(width: 3, height: 50)
+                        .frame(width: 3, height: 58)
                         .overlay { RoundedRectangle(cornerRadius: 1).strokeBorder(.white.opacity(0.9), lineWidth: 0.5) }
                         .offset(x: max(0, min(proxy.size.width - 3, proxy.size.width * session.position - 1.5)))
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 }
             }
-            .frame(height: 50)
+            .frame(height: 58)
             .contentShape(.rect)
             .gesture(DragGesture(minimumDistance: 0)
                 .updating($isDragging) { _, dragging, _ in dragging = true }
@@ -118,6 +137,6 @@ struct MediaFrameControls: View {
             }
             .accessibilityIdentifier("media-frame-timeline")
         }
-        .frame(height: dynamicTypeSize.isAccessibilitySize ? 60 : 50)
+        .frame(height: dynamicTypeSize.isAccessibilitySize ? 60 : 58)
     }
 }

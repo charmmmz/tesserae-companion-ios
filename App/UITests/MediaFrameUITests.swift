@@ -92,31 +92,24 @@ import XCTest
 
     func testLivePhotoStartsWithPrimaryAndCanRestoreIt() {
         let app = launch("live")
-        let change = app.buttons["media-choose-frame"]
-        XCTAssertTrue(change.waitForExistence(timeout: 10))
-        XCTAssertFalse(timeline(app).exists)
-        capture("Live Photo Default Key Photo", app: app)
-        reveal(change, in: app)
-        change.tap()
         let frames = timeline(app)
         XCTAssertTrue(frames.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["media-choose-frame"].exists)
+        XCTAssertTrue(app.buttons["media-restore-key-photo"].isSelected)
         reveal(frames, in: app)
+        capture("Live Photo Default Expanded Timeline", app: app)
         scrub(frames)
         capture("Inline Live Photo Frame Selection", app: app)
         let key = app.buttons["media-restore-key-photo"]
         XCTAssertTrue(key.isHittable)
         key.tap()
-        XCTAssertFalse(frames.exists)
-        XCTAssertEqual(change.label, "Choose Frame")
+        XCTAssertTrue(frames.exists)
+        XCTAssertTrue(key.isSelected)
+        capture("Live Photo Restored Key Photo", app: app)
     }
 
     func testLivePhotoLargeChineseTextKeepsInlineControlsReachable() {
         let app = launch("live", largeText: true)
-        let change = app.buttons["media-choose-frame"]
-        XCTAssertTrue(change.waitForExistence(timeout: 10))
-        reveal(change, in: app)
-        XCTAssertEqual(change.label, "换一帧")
-        change.tap()
         let frames = timeline(app)
         XCTAssertTrue(frames.waitForExistence(timeout: 10))
         reveal(frames, in: app)
@@ -126,6 +119,29 @@ import XCTest
         XCTAssertGreaterThanOrEqual(key.frame.width, 44)
         key.tap()
         reveal(app.buttons["send-submit"], in: app)
+    }
+
+    func testUnavailableSharedLiveMotionOffersPickerAndPreservesKeyPhotoOnCancel() {
+        let app = launch("live-unavailable", bluetooth: true)
+        let key = app.buttons["media-restore-key-photo"]
+        XCTAssertTrue(key.waitForExistence(timeout: 12))
+        XCTAssertTrue(key.isSelected)
+        let recovery = app.buttons["media-reselect-live-photo"]
+        XCTAssertTrue(recovery.waitForExistence(timeout: 12))
+        reveal(recovery, in: app)
+        capture("Share Live Photo Motion Recovery", app: app)
+        recovery.tap()
+        let cancel = app.buttons["Cancel"].firstMatch
+        XCTAssertTrue(cancel.waitForExistence(timeout: 12))
+        cancel.tap()
+        XCTAssertTrue(key.waitForExistence(timeout: 8))
+        XCTAssertTrue(key.isSelected)
+        let device = app.buttons["share-display-nearby:00000000-0000-0000-0000-000000000011"]
+        reveal(device, in: app)
+        device.tap()
+        let send = app.buttons["share-send"]
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: send)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 8), .completed)
     }
 
     func testBluetoothSendsSelectedVideoFrame() {
