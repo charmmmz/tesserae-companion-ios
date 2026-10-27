@@ -26,6 +26,7 @@ capabilities.
 
 ### Fixed
 
+- Displays uses the server's Lineups icon for its Manage Lineups action.
 - Bluetooth icons beside display names are vertically centered in Send and Share.
 - When Photos sharing cannot provide readable Live Photo motion, Share can
   request Photos access and retry the current shared item after approval.

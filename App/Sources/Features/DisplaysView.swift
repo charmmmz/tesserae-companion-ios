@@ -186,9 +186,16 @@ struct DisplaysView: View {
     }
 
     private var manageLineupsButton: some View {
-        Button("Manage Lineups", systemImage: "rectangle.3.group") {
+        Button {
             lineupsPresented = true
+        } label: {
+            Label {
+                Text("Manage Lineups")
+            } icon: {
+                PhosphorIcon(name: "monitor-play", size: TesseraeActionMetrics.iconSize)
+            }
         }
+        .accessibilityLabel("Manage Lineups")
         .accessibilityIdentifier("manage-lineups")
         .accessibilityHint("Opens Lineups and controls.")
     }
