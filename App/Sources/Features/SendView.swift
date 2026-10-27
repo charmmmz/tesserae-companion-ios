@@ -18,6 +18,11 @@ final class SendSubmissionSession {
 struct SendView: View {
     @Environment(AppModel.self) private var model
     @Environment(TesseraeMessageCenter.self) private var messageCenter
+    @Environment(NearbyDeviceManager.self) private var nearbyDevices
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var bluetoothSession: BluetoothShareSession?
+    @State private var bluetoothTargetID: String?
+    @State private var bluetoothConfirmation: String?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var previewHeight: CGFloat = 276
@@ -63,7 +68,7 @@ struct SendView: View {
         previewHeight + 9 + 44
     }
 
-    var body: some View {
+    private var composerPage: some View {
         AdaptiveComposerLayout {
             if supportsLinks { sourceCard }
             if source == .photo { imagePickerCard } else { linkCard }
@@ -84,7 +89,7 @@ struct SendView: View {
             normalizeLinkSelection()
         }
         .onChange(of: sendPreferenceSelection) { _, selection in
-            guard didLoadSendPreferences else { return }
+            guard didLoadSendPreferences, bluetoothTargetID == nil else { return }
             Task {
                 await model.saveSendPreferences(
                     deviceIDs: selection.deviceIDs,
@@ -127,9 +132,136 @@ struct SendView: View {
         .tesseraeHapticFeedback(trigger: hapticEvent)
     }
 
+    var body: some View {
+        composerPage
+            .task { startBluetoothDiscovery() }
+            .onDisappear {
+                bluetoothSession?.stop()
+                if let confirmation = bluetoothConfirmation {
+                    bluetoothConfirmation = nil
+                    showSentConfirmation(confirmation)
+                }
+            }
+            .onChange(of: scenePhase) { _, phase in
+                bluetoothSession?.nearby.updateApplicationActivity(phase == .active)
+            }
+            .onChange(of: sendTargets) { _, _ in reconcileBluetoothSelection() }
+            .onChange(of: bluetoothSession?.failure) { _, failure in
+                guard let failure else { return }
+                submission.isSubmitting = false
+                framingSession.resumeEditing()
+                messageCenter.dismiss(id: "send.submission")
+                model.lastError = failure
+            }
+            .onChange(of: bluetoothSession?.nearby.photoState) { _, state in
+                guard state == .received, let target = bluetoothTarget else { return }
+                bluetoothConfirmation = String(localized: "Sent to \(target.name)")
+                submission.isSubmitting = false
+                if let device = bluetoothSession?.selectedDevice { nearbyDevices.dismissSuggestion(for: device) }
+                dismiss()
+            }
+            .onChange(of: source) { _, source in
+                if source != .photo, bluetoothTargetID != nil {
+                    bluetoothSession?.changeDisplay()
+                    bluetoothTargetID = nil
+                }
+            }
+    }
+
+    private var sendTargets: [ShareDisplayTarget] {
+        ShareDisplayTarget.catalog(displays: model.sortedDisplays, serverID: model.activeInstance?.id,
+            records: nearbyDevices.displayRecords, nearby: bluetoothSession?.devices ?? [])
+    }
+
+    private var bluetoothTarget: ShareDisplayTarget? { sendTargets.first { $0.id == bluetoothTargetID } }
+    private var hasSelectedDestination: Bool { bluetoothTargetID != nil || !selectedDeviceIDs.isEmpty }
+    private var destinationIsReady: Bool {
+        if bluetoothTargetID != nil {
+            return bluetoothTarget?.isAvailable == true && bluetoothSession?.canSend == true
+        }
+        return !selectedDeviceIDs.isEmpty
+            && selectedDeviceIDs.isSubset(of: Set(sendTargets.filter { !$0.isBluetooth }.map(\.id)))
+    }
+
+    private func canSelect(_ target: ShareDisplayTarget) -> Bool {
+        target.isAvailable && (!target.isBluetooth ||
+            (source == .photo && bluetoothSession?.nearby.bluetoothUnavailableMessage == nil))
+    }
+
+    private func startBluetoothDiscovery() {
+        guard bluetoothSession == nil else { return }
+        let nearby = NearbyDeviceManager(displayRecords: nearbyDevices.displayRecords, photoSharingOnly: true)
+#if DEBUG
+        if ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_SEND_BLUETOOTH"] == "1",
+           let device = nearby.nearbyDevices.first, let serverID = model.activeInstance?.id {
+            let records = nearbyDevices.displayRecords
+            records.activeServerID = serverID
+            records.observe(deviceID: "picpak-f85b1ba1b2c3", name: "Kitchen", mode: .bluetooth,
+                batteryMillivolts: nil, peripheralID: device.id)
+            records.link("picpak-f85b1ba1b2c3", to: "picpak-kitchen", serverID: serverID)
+        }
+#endif
+        let session = BluetoothShareSession(nearby: nearby)
+        bluetoothSession = session
+        session.start()
+        reconcileBluetoothSelection()
+    }
+
+    private func select(_ target: ShareDisplayTarget) {
+        guard canSelect(target), !submission.isSubmitting else { return }
+        model.lastError = nil
+        if target.isBluetooth {
+            selectedDeviceIDs = []
+            if bluetoothTargetID == target.id, bluetoothSession?.failure == nil {
+                bluetoothTargetID = nil
+                bluetoothSession?.changeDisplay()
+            } else if let device = target.nearby {
+                bluetoothTargetID = target.id
+                bluetoothSession?.select(device)
+            }
+        } else {
+            if bluetoothTargetID != nil { bluetoothSession?.changeDisplay() }
+            bluetoothTargetID = nil
+            if selectedDeviceIDs.contains(target.id) { selectedDeviceIDs.remove(target.id) }
+            else { selectedDeviceIDs.insert(target.id); previewDeviceID = target.id }
+        }
+        if !availableFitModes.contains(fitMode) { fitMode = .fill }
+    }
+
+    private func reconcileBluetoothSelection() {
+        selectedDeviceIDs.subtract(sendTargets.filter(\.isBluetooth).map(\.id))
+        for device in bluetoothSession?.devices ?? [] { nearbyDevices.dismissSuggestion(for: device) }
+        if let session = bluetoothSession, bluetoothTargetID != nil, bluetoothTarget == nil,
+           let id = session.selectedDevice?.id,
+           let resolved = sendTargets.first(where: { $0.nearby?.id == id }) {
+            bluetoothTargetID = resolved.id
+        }
+    }
+
+    private func sendBluetooth() {
+        guard sourceIsReady, destinationIsReady, let session = bluetoothSession,
+              let image = previewImage, let panel = previewPanel else { return }
+        framingSession.freeze()
+        submission.isSubmitting = true
+        showSendingMessage()
+        session.send(image: image, fit: fitMode,
+            framing: framingSession.framing(for: PanelAspectRatio(panel: panel))) { busy in
+                if !busy, let failure = session.failure {
+                    submission.isSubmitting = false
+                    framingSession.resumeEditing()
+                    messageCenter.dismiss(id: "send.submission")
+                    model.lastError = failure
+                }
+            }
+    }
+
     private var submitButton: some View {
         Button {
-            guard !submission.isSubmitting, sourceIsReady, !selectedDeviceIDs.isEmpty, !isSending else { return }
+            guard !submission.isSubmitting, sourceIsReady, destinationIsReady, !isSending else { return }
+            if bluetoothTargetID != nil {
+                sendBluetooth()
+                return
+            }
             framingSession.freeze()
             submission.isSubmitting = true
             let submittedSource = source
@@ -192,7 +324,7 @@ struct SendView: View {
         .controlSize(.large)
         .disabled(
             !sourceIsReady
-                || selectedDeviceIDs.isEmpty
+                || !destinationIsReady
                 || isSending
         )
         .accessibilityIdentifier("send-submit")
@@ -362,9 +494,7 @@ struct SendView: View {
     @ViewBuilder
     private var simulatedPanel: some View {
         VStack(spacing: 9) {
-            if let previewDisplay {
-                let panel = previewDisplay.panel
-
+            if let panel = previewPanel {
                 TesseraePanelImagePreview(
                     image: previewImage,
                     panel: panel,
@@ -401,6 +531,12 @@ struct SendView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: dynamicTypeSize.isAccessibilitySize ? nil : previewHeight, alignment: .top)
+            } else if let previewImage {
+                Image(uiImage: previewImage)
+                    .resizable().scaledToFit()
+                    .frame(maxWidth: .infinity)
+                    .frame(height: previewHeight)
+                    .accessibilityLabel("Shared photo")
             } else {
                 ContentUnavailableView {
                     Label("No display selected", systemImage: "rectangle.slash")
@@ -464,7 +600,7 @@ struct SendView: View {
         HStack(spacing: 5) {
             if !dynamicTypeSize.isAccessibilitySize {
                 Image(
-                    systemName: selectedDisplays.isEmpty
+                    systemName: !hasSelectedDestination
                         ? "rectangle.slash"
                         : "rectangle.on.rectangle"
                 )
@@ -492,6 +628,7 @@ struct SendView: View {
     }
 
     private var previewTargetName: String {
+        if let bluetoothTarget { return bluetoothTarget.name }
         if selectedDisplays.isEmpty {
             return String(localized: "None selected")
         }
@@ -499,7 +636,7 @@ struct SendView: View {
     }
 
     private var previewTargetSummary: String {
-        guard !selectedDisplays.isEmpty, let panel = previewDisplay?.panel else {
+        guard hasSelectedDestination, let panel = previewPanel else {
             return previewTargetName
         }
         let aspect = PanelAspectRatio(panel: panel).displayName
@@ -536,7 +673,7 @@ struct SendView: View {
             Text("Displays")
                 .font(.headline)
 
-            if model.sortedDisplays.isEmpty {
+            if sendTargets.isEmpty {
                 ContentUnavailableView {
                     Label("No Displays", systemImage: "rectangle.slash")
                 } description: {
@@ -550,37 +687,31 @@ struct SendView: View {
                 .frame(maxWidth: .infinity)
             } else {
                 VStack(spacing: 0) {
-                    ForEach(model.sortedDisplays) { display in
+                    ForEach(sendTargets) { target in
+                        let panel = bluetoothSession?.panel(for: target) ?? target.panel
                         Button {
-                            if selectedDeviceIDs.contains(display.id) {
-                                selectedDeviceIDs.remove(display.id)
-                                if previewDeviceID == display.id,
-                                   let remainingPreview = model.sortedDisplays.first(
-                                       where: {
-                                           selectedDeviceIDs.contains($0.id)
-                                       }
-                                   ) {
-                                    previewDeviceID = remainingPreview.id
-                                }
-                            } else {
-                                selectedDeviceIDs.insert(display.id)
-                                previewDeviceID = display.id
-                            }
+                            select(target)
                             hapticEvent.trigger(.selection)
                         } label: {
                             TesseraeDisplaySelectionRow(
-                                name: display.name,
-                                resolution: "\(display.panel.width)×\(display.panel.height)",
-                                isSelected: selectedDeviceIDs.contains(display.id)
+                                name: target.name,
+                                resolution: panel.map { "\($0.width)×\($0.height)" } ?? "—",
+                                isSelected: target.isBluetooth ? bluetoothTargetID == target.id
+                                    : selectedDeviceIDs.contains(target.id),
+                                transport: target.isBluetooth ? String(localized: "Bluetooth") : nil,
+                                isAvailable: canSelect(target)
                             )
                         }
                         .buttonStyle(.plain)
-                        .accessibilityIdentifier("send-display-\(display.id)")
+                        .disabled(!canSelect(target))
+                        .accessibilityIdentifier("send-display-\(target.id)")
                     }
                 }
             }
         }
         .tesseraeCard()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("send-displays-card")
     }
 
     private var imageSelectionLabel: String {
@@ -591,7 +722,7 @@ struct SendView: View {
     }
 
     private var isSending: Bool {
-        model.activeOperationIDs.contains(
+        bluetoothSession?.isBusy == true || model.activeOperationIDs.contains(
             source == .photo ? "image" : "link"
         )
     }
@@ -678,16 +809,23 @@ struct SendView: View {
         } ?? model.sortedDisplays.first
     }
 
+    private var previewPanel: PanelProfile? {
+        if let bluetoothTarget {
+            return bluetoothSession?.panel(for: bluetoothTarget) ?? bluetoothTarget.panel
+        }
+        return previewDisplay?.panel
+    }
+
     private var selectedDisplays: [DisplaySummary] {
         model.sortedDisplays.filter { selectedDeviceIDs.contains($0.id) }
     }
 
     private var supportsImageFraming: Bool {
-        model.capabilities?.supportsImageFraming == true
+        bluetoothTargetID != nil || model.capabilities?.supportsImageFraming == true
     }
 
     private var maximumFramingZoom: Double {
-        max(model.capabilities?.limits.imageFramingMaxZoom ?? 1, 1)
+        bluetoothTargetID != nil ? 4 : max(model.capabilities?.limits.imageFramingMaxZoom ?? 1, 1)
     }
 
     private var framingEditorIsActive: Bool {
@@ -698,13 +836,13 @@ struct SendView: View {
     }
 
     private var canAutoFrame: Bool {
-        framingEditorIsActive && !selectedDeviceIDs.isEmpty && !isPreparingImage && !mediaFrames.isBusy
+        framingEditorIsActive && hasSelectedDestination && !isPreparingImage && !mediaFrames.isBusy
     }
 
     private var automaticFramingContext: PhotoFramingSession.AutomaticContext {
         .init(
             imageID: framingSession.imageID, instanceID: model.activeInstance?.id,
-            aspect: previewAspectRatio, targetIDs: selectedDeviceIDs, maximumZoom: maximumFramingZoom,
+            aspect: previewAspectRatio, targetIDs: bluetoothTargetID.map { [$0] } ?? selectedDeviceIDs, maximumZoom: maximumFramingZoom,
             isReady: canAutoFrame && didLoadSendPreferences && !submission.isSubmitting
         )
     }
@@ -720,7 +858,7 @@ struct SendView: View {
     }
 
     private var previewAspectRatio: PanelAspectRatio? {
-        previewDisplay.map { PanelAspectRatio(panel: $0.panel) }
+        previewPanel.map(PanelAspectRatio.init(panel:))
     }
 
     private var previewImageFraming: ImageFraming {
@@ -762,6 +900,7 @@ struct SendView: View {
     }
 
     private var availableFitModes: [ImageFitMode] {
+        if bluetoothTargetID != nil { return [.fill, .fit] }
         let advertised = model.capabilities?.limits.imageFitModes
             ?? ImageFitMode.legacyModes
         let modes = ImageFitMode.allCases.filter(advertised.contains)
@@ -772,7 +911,8 @@ struct SendView: View {
         [
             model.activeInstance?.id ?? "none",
             model.displays.map(\.id).sorted().joined(separator: ","),
-            availableFitModes.map(\.rawValue).joined(separator: ","),
+            (model.capabilities?.limits.imageFitModes ?? ImageFitMode.legacyModes)
+                .map(\.rawValue).joined(separator: ","),
         ].joined(separator: "|")
     }
 
@@ -784,16 +924,19 @@ struct SendView: View {
     }
 
     private func loadSendPreferences() async {
+        guard bluetoothTargetID == nil else { return }
         didLoadSendPreferences = false
-        let availableIDs = Set(model.displays.map(\.id))
+        defer { if !Task.isCancelled { didLoadSendPreferences = true } }
         let preferences = await model.savedSendPreferences()
+        let availableIDs = Set(sendTargets.filter { !$0.isBluetooth }.map(\.id))
         let preferredIDs = Set(preferences?.deviceIDs ?? [])
             .intersection(availableIDs)
 
+        guard !Task.isCancelled, bluetoothTargetID == nil else { return }
         if !preferredIDs.isEmpty {
             selectedDeviceIDs = preferredIDs
         } else {
-            selectedDeviceIDs = Set(model.sortedDisplays.prefix(1).map(\.id))
+            selectedDeviceIDs = Set(sendTargets.filter { !$0.isBluetooth }.prefix(1).map(\.id))
         }
 
         if let preferredFit = preferences?.imageFitMode,

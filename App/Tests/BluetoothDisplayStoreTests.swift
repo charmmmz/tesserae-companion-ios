@@ -123,11 +123,17 @@ struct BluetoothDisplayStoreTests {
         #expect(targets.first?.name == "Desk")
         #expect(targets.first?.isBluetooth == true)
         #expect(targets.first?.nearby?.id == id)
+        #expect(targets.first?.isAvailable == true)
+        let absent = ShareDisplayTarget.catalog(displays: [display()], serverID: "home", records: store, nearby: [])
+        #expect(absent.first?.isBluetooth == true)
+        #expect(absent.first?.isAvailable == false)
         let stranger = NearbyTesseraeDevice(id: UUID(), name: "Desk", rssi: -45, mode: .photo,
             hardware: .picPak42, hardwareSuffix: "A1B2C3", sessionID: Data([1,2,3,4]))
         let separate = ShareDisplayTarget.catalog(displays: [display()], serverID: "home", records: store, nearby: [stranger])
         #expect(separate.count == 2)
         #expect(separate.first?.nearby == nil)
+        #expect(separate.first?.isAvailable == false)
+        #expect(separate.last?.isAvailable == true)
     }
 
     @Test func extensionReadsInventoryWithoutOverwritingIt() throws {

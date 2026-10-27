@@ -352,7 +352,7 @@ an item that is only queued locally.
 
 The existing display selector includes cached and nearby Bluetooth displays,
 marked with the Bluetooth logo, alongside server displays. Explanatory text is
-limited to connection, transfer, and error states; the row's accessibility value
+limited to transfer and actionable error states; the row's accessibility value
 still names Bluetooth. Established device links and exact
 peripheral UUIDs fold a known display into one row; names and partial MAC suffixes
 do not establish identity. A saved Bluetooth display stays visible while absent
@@ -365,6 +365,14 @@ remain in the main app. The extension closes only after the matching
 leave the page open. Metadata is published read-only by the app, while immutable
 app-group receipts return confirmed previews without overwriting inventory.
 Bluetooth sending does not require server pairing or enter the server retry queue.
+
+Both the in-app photo Send and Share Sheet composers start nearby discovery on
+entry. Remembered Bluetooth targets remain dimmed and disabled until their exact
+peripheral is discovered; a connected, authenticated target remains available
+when it stops advertising. Bluetooth selection is exclusive of every other target;
+server targets retain multi-selection. Scanning and connection handshakes add no
+status-log text to the composer.
+
 
 ### 3.4 Run from Shortcuts
 

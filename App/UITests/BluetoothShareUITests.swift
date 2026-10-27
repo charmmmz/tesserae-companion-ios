@@ -12,11 +12,12 @@ final class BluetoothShareUITests: XCTestCase {
 
     private func launch(unified: Bool = false, noReceipt: Bool = false, unauthorized: Bool = false,
                         systemShare: Bool = false, accessibilityText: Bool = false, unifiedTargets: Bool = false,
-                        absent: Bool = false) -> XCUIApplication {
+                        absent: Bool = false, delayed: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
         if accessibilityText {
             app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
         }
+        if delayed { app.launchEnvironment["TESSERAE_UI_TEST_BLUETOOTH_DISCOVERY_DELAY_MS"] = "6000" }
         if unifiedTargets { app.launchEnvironment["TESSERAE_UI_TEST_UNIFIED_SHARE_TARGETS"] = "1" }
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_BLUETOOTH_SHARE"] = "1"
@@ -98,11 +99,12 @@ final class BluetoothShareUITests: XCTestCase {
         let app = launch(unifiedTargets: true, absent: true)
         let target = app.buttons["share-display-picpak-f85b1ba1b2c3"]
         XCTAssertTrue(target.waitForExistence(timeout: 8))
-        target.tap()
+        XCTAssertFalse(target.isEnabled)
+        XCTAssertFalse(target.isSelected)
         XCTAssertTrue((target.value as? String)?.contains("Bluetooth") == true)
         XCTAssertFalse(app.buttons["share-send"].isEnabled)
         XCTAssertFalse(app.buttons["share-display-living-room"].isSelected)
-        XCTAssertTrue(app.staticTexts["Not nearby"].exists)
+        XCTAssertFalse(app.staticTexts["Not nearby"].exists)
     }
 
     func testAllBytesAcknowledgedKeepsPageOpenWithoutReceipt() {
@@ -155,4 +157,76 @@ final class BluetoothShareUITests: XCTestCase {
         send(app)
         XCTAssertTrue(app.staticTexts["share-test-complete"].waitForExistence(timeout: 15))
     }
+    private func reveal(_ element: XCUIElement, app: XCUIApplication) {
+        for _ in 0..<6 where !element.isHittable {
+            let scroll = app.scrollViews.containing(.button, identifier: element.identifier).firstMatch
+            let container = scroll.exists ? scroll : app
+            let start = container.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.8))
+            let end = container.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.2))
+            start.press(forDuration: 0.05, thenDragTo: end)
+        }
+        XCTAssertTrue(element.isHittable)
+    }
+
+    func testSavedBluetoothIsDisabledUntilDiscoveredWithoutConnectionLogs() {
+        let app = launch(unifiedTargets: true, delayed: true)
+        let target = app.buttons["share-display-picpak-f85b1ba1b2c3"]
+        XCTAssertTrue(target.waitForExistence(timeout: 4))
+        XCTAssertFalse(target.isEnabled)
+        XCTAssertFalse(target.isSelected)
+        let disabledShot = XCTAttachment(screenshot: app.screenshot())
+        disabledShot.name = "Bluetooth Target Before Discovery"; disabledShot.lifetime = .keepAlways; add(disabledShot)
+        let discovered = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: target)
+        XCTAssertEqual(XCTWaiter.wait(for: [discovered], timeout: 12), .completed)
+        target.tap()
+        XCTAssertFalse(app.staticTexts["Connecting securely…"].exists)
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'PicPak/'")).firstMatch.exists)
+        send(app)
+        XCTAssertTrue(app.staticTexts["share-test-complete"].waitForExistence(timeout: 15))
+    }
+
+    func testInAppBluetoothDiscoveryAndExclusiveSelectionSend() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_BLE"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_PHOTO"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_SEND_BLUETOOTH"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_BLUETOOTH_DISCOVERY_DELAY_MS"] = "6000"
+        app.launchEnvironment["TESSERAE_UI_TEST_MEDIA"] = "video"
+        app.launch()
+        app.buttons["Explore with Demo Data"].tap()
+        app.buttons["root-send-action"].tap()
+        let target = app.buttons["send-display-picpak-kitchen"]
+        XCTAssertTrue(target.waitForExistence(timeout: 6))
+        XCTAssertFalse(target.isEnabled)
+        XCTAssertFalse(target.isSelected)
+        let disabledShot = XCTAttachment(screenshot: app.screenshot())
+        disabledShot.name = "Bluetooth Target Before Discovery"; disabledShot.lifetime = .keepAlways; add(disabledShot)
+        let discovered = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: target)
+        XCTAssertEqual(XCTWaiter.wait(for: [discovered], timeout: 12), .completed)
+        let server = app.buttons["send-display-e1004-desk"]
+        reveal(server, app: app)
+        server.tap()
+        target.tap()
+        XCTAssertTrue(target.isSelected)
+        XCTAssertFalse(server.isSelected)
+        server.tap()
+        XCTAssertFalse(target.isSelected)
+        XCTAssertTrue(server.isSelected)
+        target.tap()
+        let selectionShot = XCTAttachment(screenshot: app.screenshot())
+        selectionShot.name = "In App Exclusive Bluetooth Selection"; selectionShot.lifetime = .keepAlways; add(selectionShot)
+        let panelReady = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value CONTAINS '400×300'"), object: target)
+        XCTAssertEqual(XCTWaiter.wait(for: [panelReady], timeout: 8), .completed)
+        let button = app.buttons["send-submit"]
+        reveal(button, app: app)
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: button)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 8), .completed)
+        button.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["send-success-banner"].firstMatch.waitForExistence(timeout: 20))
+        XCTAssertFalse(app.buttons["send-submit"].exists)
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "In App Bluetooth Exclusive Send Confirmation"; shot.lifetime = .keepAlways; add(shot)
+    }
+
 }

@@ -270,6 +270,8 @@ final class NearbyDeviceManager: NSObject {
     private var appIsActive = false
     private var refreshSpeedTimeoutTask: Task<Void, Never>?
 #if DEBUG
+    private var fixtureDiscoveryTask: Task<Void, Never>?
+    private var fixtureDiscoveryStarted = false
     private var fixturePhotoReceivedOffset = 0
     private var fixturePhotoPacketOffsets: Set<UInt32> = []
     private var fixtureWriteTail: Task<Void, Never>?
@@ -341,6 +343,18 @@ final class NearbyDeviceManager: NSObject {
     func startScanning() {
 #if DEBUG
         if isSetupUIFixture {
+            if photoSharingOnly, !fixtureDiscoveryStarted,
+               let delay = ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_BLUETOOTH_DISCOVERY_DELAY_MS"].flatMap(Int.init), delay > 0 {
+                fixtureDiscoveryStarted = true
+                let devices = nearbyDevices
+                nearbyDevices = []
+                fixtureDiscoveryTask = Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .milliseconds(delay))
+                    guard !Task.isCancelled, let self, self.appIsActive else { return }
+                    self.nearbyDevices = devices
+                }
+            }
+
             if ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_PICPAK_AUTO_DISCOVERY"] == "1",
                suggestedDevice == nil, activeDevice == nil,
                let device = nearbyDevices.first,
@@ -364,6 +378,9 @@ final class NearbyDeviceManager: NSObject {
     }
 
     func stopScanning() {
+#if DEBUG
+        fixtureDiscoveryTask?.cancel()
+#endif
         guard isScanning else { return }
         presenceExpiryTask?.cancel()
         presenceExpiryTask = nil

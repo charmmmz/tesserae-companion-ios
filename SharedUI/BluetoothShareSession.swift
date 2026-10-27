@@ -19,7 +19,15 @@ final class BluetoothShareSession {
         )
     }
 
-    var devices: [NearbyTesseraeDevice] { nearby.nearbyDevices.filter { $0.mode == .photo } }
+    var devices: [NearbyTesseraeDevice] {
+        var devices = nearby.nearbyDevices.filter { $0.mode == .photo }
+        // An authenticated display may stop advertising while connected.
+        if nearby.connectionState == .ready, let active = nearby.activeDevice,
+           active.mode == .photo, !devices.contains(where: { $0.id == active.id }) {
+            devices.append(active)
+        }
+        return devices
+    }
     var isBusy: Bool {
         if case .failed = nearby.connectionState { return isPreparing }
         return isPreparing || nearby.photoState == .sending
@@ -33,6 +41,16 @@ final class BluetoothShareSession {
     var panel: PanelProfile {
         nearby.photoCapabilities?.panel
             ?? PanelProfile(width: 400, height: 300, gamut: "bwry_4", orientation: "landscape")
+    }
+    var connectedPanel: PanelProfile? {
+        guard nearby.connectionState == .ready, let selectedDevice,
+              selectedDevice.id == nearby.activeDevice?.id else { return nil }
+        return panel
+    }
+    func panel(for target: ShareDisplayTarget) -> PanelProfile? {
+        if target.isBluetooth, target.nearby?.id == selectedDevice?.id,
+           let connectedPanel { return connectedPanel }
+        return target.panel
     }
     var failure: String? {
         if let errorMessage { return errorMessage }

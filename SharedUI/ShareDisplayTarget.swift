@@ -9,6 +9,7 @@ struct ShareDisplayTarget: Identifiable, Equatable {
     let record: BluetoothDisplayRecord?
     let nearby: NearbyTesseraeDevice?
     var isBluetooth: Bool { record?.mode == .bluetooth || nearby != nil }
+    var isAvailable: Bool { !isBluetooth || nearby != nil }
     var panel: PanelProfile? { display?.panel }
 
     @MainActor

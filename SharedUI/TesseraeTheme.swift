@@ -259,6 +259,7 @@ struct TesseraeDisplaySelectionRow: View {
     let resolution: String
     let isSelected: Bool
     var transport: String? = nil
+    var isAvailable = true
 
     var body: some View {
         HStack(alignment: dynamicTypeSize.isAccessibilitySize ? .top : .center, spacing: 12) {
@@ -288,6 +289,7 @@ struct TesseraeDisplaySelectionRow: View {
         .padding(.vertical, 6)
         .frame(minHeight: 44)
         .contentShape(Rectangle())
+        .opacity(isAvailable ? 1 : 0.45)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(name)
         .accessibilityValue([transport, resolution].compactMap { $0 }.joined(separator: ", "))

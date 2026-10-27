@@ -172,7 +172,7 @@ struct RootView: View {
             nearbyDevices.updateApplicationActivity(scenePhase == .active)
         }
         .sheet(item: Binding(
-            get: { nearbyDevices.suggestedDevice },
+            get: { presentation.isSendComposerPresented ? nil : nearbyDevices.suggestedDevice },
             set: { newDevice in
                 if newDevice == nil, let suggestedDevice = nearbyDevices.suggestedDevice {
                     nearbyDevices.endSession(for: suggestedDevice)

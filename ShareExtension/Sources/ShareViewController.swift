@@ -82,6 +82,8 @@ private final class ShareComposerModel: ObservableObject {
     private let activityThumbnails: any ActivityThumbnailStoring
     private let credentials: any CredentialStoring
     private let client: any TesseraeServing
+    private let bluetoothRecords = BluetoothDisplayStore(fileURL: BluetoothDisplayStore.sharedInventoryURL,
+        receiptDirectoryURL: BluetoothDisplayStore.sharedReceiptDirectoryURL, isReadOnly: true)
     private let protectDismissal: (Bool) -> Void
 
     init(extensionContext: NSExtensionContext?, mediaFrames: MediaFrameSession? = nil,
@@ -152,30 +154,32 @@ private final class ShareComposerModel: ObservableObject {
                     || contentKind == .link && sharedURL != nil
             )
             && (bluetoothTargetID != nil
-                ? bluetoothSession?.canSend == true
+                ? bluetoothTarget?.isAvailable == true && bluetoothSession?.canSend == true
                 : !selectedDeviceIDs.isEmpty && snapshot != nil)
     }
 
     var sendTargets: [ShareDisplayTarget] {
-        guard let bluetoothSession else {
-            return displays.map { .init(id: $0.id, name: $0.name, display: $0, record: nil, nearby: nil) }
-        }
-        return ShareDisplayTarget.catalog(displays: displays, serverID: snapshot?.activeInstance.id,
-            records: bluetoothSession.nearby.displayRecords, nearby: bluetoothSession.devices)
+        ShareDisplayTarget.catalog(displays: displays, serverID: snapshot?.activeInstance.id,
+            records: bluetoothSession?.nearby.displayRecords ?? bluetoothRecords,
+            nearby: bluetoothSession?.devices ?? [])
     }
 
     var bluetoothTarget: ShareDisplayTarget? { sendTargets.first { $0.id == bluetoothTargetID } }
     var previewPanel: PanelProfile? {
         if let bluetoothTarget {
-            if bluetoothSession?.nearby.connectionState == .ready { return bluetoothSession?.panel }
-            return bluetoothTarget.panel
+            return bluetoothSession?.panel(for: bluetoothTarget) ?? bluetoothTarget.panel
         }
         return previewDisplay?.panel
     }
     var previewName: String? { bluetoothTarget?.name ?? previewDisplay?.name }
 
+    func canSelect(_ target: ShareDisplayTarget) -> Bool {
+        target.isAvailable && (!target.isBluetooth ||
+            (contentKind == .image && bluetoothSession?.nearby.bluetoothUnavailableMessage == nil))
+    }
+
     func select(_ target: ShareDisplayTarget) {
-        guard !isBusy, !mediaFrames.isBusy, !framingSession.isFrozen else { return }
+        guard canSelect(target), !isBusy, !mediaFrames.isBusy, !framingSession.isFrozen else { return }
         errorMessage = nil
         if target.isBluetooth {
             selectedDeviceIDs = []
@@ -197,6 +201,7 @@ private final class ShareComposerModel: ObservableObject {
     }
 
     func reconcileBluetoothSelection() {
+        selectedDeviceIDs.subtract(sendTargets.filter(\.isBluetooth).map(\.id))
         guard let session = bluetoothSession, bluetoothTargetID != nil, !isBusy else { return }
         // Once authenticated info supplies a full identity, fold a discovery row into its saved row.
         if bluetoothTarget == nil, let id = session.selectedDevice?.id,
@@ -376,10 +381,13 @@ private final class ShareComposerModel: ObservableObject {
                 selectedDeviceIDs.contains($0.id)
             }?.id
             if let preferredBluetooth = sendTargets.first(where: { selectedDeviceIDs.contains($0.id) && $0.isBluetooth }) {
-                selectedDeviceIDs = []
-                bluetoothTargetID = preferredBluetooth.id
-                if let device = preferredBluetooth.nearby { bluetoothSession?.select(device) }
+                if canSelect(preferredBluetooth), let device = preferredBluetooth.nearby {
+                    selectedDeviceIDs = []
+                    bluetoothTargetID = preferredBluetooth.id
+                    bluetoothSession?.select(device)
+                }
             }
+            selectedDeviceIDs.subtract(sendTargets.filter(\.isBluetooth).map(\.id))
             if let preferredFit = savedPreferences?.imageFitMode,
                fitModes.contains(preferredFit)
             {
@@ -1117,12 +1125,6 @@ private struct ShareComposerView: View {
                     }
                 }
                 .tesseraeCard()
-            } else if model.bluetoothTarget?.nearby == nil {
-                Text("Not nearby")
-                    .font(.footnote).foregroundStyle(.secondary).tesseraeCard()
-            } else if session.nearby.connectionState != .ready {
-                ProgressView(session.nearby.statusMessage ?? String(localized: "Connecting securely…"))
-                    .tesseraeCard()
             }
         }
     }
@@ -1268,27 +1270,29 @@ private struct ShareComposerView: View {
             Text("Displays")
                 .font(.headline)
             ForEach(model.sendTargets) { target in
+                let panel = model.bluetoothSession?.panel(for: target) ?? target.panel
                 Button {
                     model.select(target)
                     hapticEvent.trigger(.selection)
                 } label: {
                     TesseraeDisplaySelectionRow(
                         name: target.name,
-                        resolution: target.panel.map { "\($0.width)×\($0.height)" }
-                            ?? (target.nearby == nil ? String(localized: "Not nearby") : String(localized: "Nearby")),
+                        resolution: panel.map { "\($0.width)×\($0.height)" } ?? "—",
                         isSelected: target.isBluetooth ? model.bluetoothTargetID == target.id
                             : model.selectedDeviceIDs.contains(target.id),
-                        transport: target.isBluetooth ? String(localized: "Bluetooth") : nil
+                        transport: target.isBluetooth ? String(localized: "Bluetooth") : nil,
+                        isAvailable: model.canSelect(target)
                     )
                 }
                 .buttonStyle(.plain)
+                .disabled(!model.canSelect(target))
                 .accessibilityIdentifier("share-display-\(target.id)")
             }
             if let session = model.bluetoothSession, model.sendTargets.isEmpty {
                 if let message = session.nearby.bluetoothUnavailableMessage {
                     Text(message).font(.footnote).foregroundStyle(.secondary)
                 } else if session.devices.isEmpty && session.selectedDevice == nil {
-                    ProgressView("Looking for nearby displays…").font(.footnote)
+                    ProgressView().accessibilityLabel("Looking for nearby displays…")
                 }
             }
         }
@@ -1360,7 +1364,7 @@ private struct ShareComposerView: View {
 
     private var previewTargetSummary: String {
         guard let panel = model.previewPanel, let name = model.previewName else {
-            return String(localized: "None selected")
+            return model.previewName ?? String(localized: "None selected")
         }
         let aspect = PanelAspectRatio(panel: panel).displayName
         return "\(name) · \(panel.width) × \(panel.height) · \(aspect)"
