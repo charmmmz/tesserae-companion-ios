@@ -38,6 +38,8 @@ targets:
         NSLocalNetworkUsageDescription: Discover and connect to your Tesserae server on the local network.
         NSBluetoothAlwaysUsageDescription: Find, securely configure, and send photos to nearby Tesserae displays.
         NSCameraUsageDescription: Scan the temporary setup code shown on a Tesserae display.
+        NSPhotoLibraryUsageDescription: Select the Live Photo you are sharing so Tesserae can recover its motion when system sharing cannot provide it.
+        PHPhotoLibraryPreventAutomaticLimitedAccessAlert: true
         NSRemindersFullAccessUsageDescription: Choose Reminders lists to send a minimal, expiring snapshot to your Tesserae server.
         NSHealthShareUsageDescription: Read only the Activity, Sleep, and Workout summaries you select and send a minimal seven-day snapshot directly to your paired Tesserae server.
         NSHealthUpdateUsageDescription: Tesserae does not write data to Health. HealthKit access is read-only and is used only to build the seven-day summaries you choose for your paired Tesserae server.
@@ -104,6 +106,8 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSLocalNetworkUsageDescription: Connect to your paired Tesserae server to send this shared item.
         NSBluetoothAlwaysUsageDescription: Find and send photos to nearby Tesserae displays already authorized in the app.
+        NSPhotoLibraryUsageDescription: Select the Live Photo you are sharing so Tesserae can recover its motion when system sharing cannot provide it.
+        PHPhotoLibraryPreventAutomaticLimitedAccessAlert: true
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         TesseraeAppGroupIdentifier: group.com.charmmmz.tesseraecompanion

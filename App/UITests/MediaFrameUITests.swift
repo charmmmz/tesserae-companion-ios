@@ -84,11 +84,16 @@ import XCTest
     #if TESSERAE_SYSTEM_PHOTOS_TESTS
     // Run Scripts/test_system_photos_share.sh to seed the synthetic paired asset.
     func testSystemPhotosLivePhotoAutomaticallyShowsTimeline() {
-        // Exercise the first share with neither app nor Photos kept warm.
-        XCUIApplication().terminate()
+        // Install/register the extension on a fresh simulator, then exercise a
+        // share with neither the containing app nor Photos kept warm.
+        let companion = XCUIApplication()
+        companion.launch()
+        companion.terminate()
         let photos = XCUIApplication(bundleIdentifier: "com.apple.mobileslideshow")
         photos.terminate()
         photos.launch()
+        let welcome = photos.buttons["Continue"]
+        if welcome.waitForExistence(timeout: 3) { welcome.tap() }
         defer {
             if let testRun, testRun.failureCount > 0 { capture("Photos Share Failure", app: photos) }
             photos.terminate()
@@ -97,7 +102,8 @@ import XCTest
         if !share.exists {
             let live = photos.images.matching(NSPredicate(format: "label BEGINSWITH 'Live Photo,'")).firstMatch
             XCTAssertTrue(live.waitForExistence(timeout: 8))
-            live.tap()
+            // Photos' grid image is visible but can report no AX hit point.
+            live.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         }
         XCTAssertTrue(share.waitForExistence(timeout: 5))
         share.tap()
@@ -225,11 +231,20 @@ import XCTest
         XCTAssertTrue(key.isSelected)
         let recovery = app.buttons["media-reselect-live-photo"]
         XCTAssertTrue(recovery.waitForExistence(timeout: 12))
+        let guidance = app.staticTexts["media-frame-error"]
+        XCTAssertTrue(guidance.waitForExistence(timeout: 5))
+        XCTAssertTrue(guidance.label.contains("Limited Access"))
+        XCTAssertTrue(guidance.label.contains("Full Access"))
         reveal(recovery, in: app)
         capture("Share Live Photo Motion Recovery", app: app)
         recovery.tap()
-        let cancel = app.buttons["Cancel"].firstMatch
+        // The underlying composer also has a Cancel button. Wait for the
+        // picker's own action rather than matching the covered share-cancel.
+        let cancel = app.buttons.matching(NSPredicate(
+            format: "label == %@ AND identifier != %@", "Cancel", "share-cancel"
+        )).firstMatch
         XCTAssertTrue(cancel.waitForExistence(timeout: 12))
+        XCTAssertTrue(cancel.isHittable)
         cancel.tap()
         XCTAssertTrue(key.waitForExistence(timeout: 8))
         XCTAssertTrue(key.isSelected)

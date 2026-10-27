@@ -794,7 +794,7 @@ private final class ShareComposerModel: ObservableObject {
             throw ShareComposerError.noSharedItem
         }
 
-        let selection = MediaPickerSelection(provider: provider)
+        let selection = MediaPickerSelection(provider: provider, allowsLibraryRecovery: true)
         if selection.kind != .photo {
             let source = try await selection.load(maximumPixelSize: maximumPixelSize)
             mediaFrames.adopt(source)

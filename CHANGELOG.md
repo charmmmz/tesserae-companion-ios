@@ -13,6 +13,12 @@ capabilities.
 
 ### Fixed
 
+- When Photos sharing cannot provide readable Live Photo motion, Share can
+  request Photos access and retry the current shared item after approval.
+  Limited Access must include that photo; Full Access also works. If access is
+  declined or the photo is not included, the key photo and system-picker
+  alternative remain available, with guidance for adjusting access in Settings.
+  Recovery does not browse or match library photos.
 - Live Photo sharing continues with the complete Live Photo when an advertised
   movie file cannot be read, preserving the key photo and loading the timeline
   without requiring Change Photo to reselect the asset.

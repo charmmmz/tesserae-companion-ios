@@ -44,7 +44,7 @@ struct BluetoothShareTestHost: View {
                     let fixture = try await MediaFrameFixtures.source(kind: value.hasPrefix("live") ? .livePhoto : .video)
                     let source = value == "live-unavailable"
                         ? MediaFrameSource(kind: .livePhoto, primaryImage: fixture.primaryImage, maximumPixelSize: 640) {
-                            throw MediaFrameError.unavailable
+                            throw MediaFrameError.limitedPhotoAccess
                         } : fixture
                     mediaFrames.adopt(source)
                     movie = try await fixture.loadMovie()

@@ -39,8 +39,12 @@
 	<string>Tesserae does not write data to Health. HealthKit access is read-only and is used only to build the seven-day summaries you choose for your paired Tesserae server.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Discover and connect to your Tesserae server on the local network.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Select the Live Photo you are sharing so Tesserae can recover its motion when system sharing cannot provide it.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
 	<string>Choose Reminders lists to send a minimal, expiring snapshot to your Tesserae server.</string>
+	<key>PHPhotoLibraryPreventAutomaticLimitedAccessAlert</key>
+	<true/>
 	<key>TesseraeAppGroupIdentifier</key>
 	<string>group.com.charmmmz.tesseraecompanion</string>
 	<key>TesseraeKeychainAccessGroup</key>

@@ -21,6 +21,7 @@
 		1BB2212ACD6F5E42950AD62F /* AdaptiveComposerLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 982ACAB2004BA498F82E4AA0 /* AdaptiveComposerLayout.swift */; };
 		1DB64B0843105823C25C7E1D /* MediaFrameFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F9E787492913D7809CB9565 /* MediaFrameFixtures.swift */; };
 		1E5FF7A01F07A246FF6E813F /* LineupsAppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80F13F36D4E7990EF0B890C3 /* LineupsAppModelTests.swift */; };
+		1F86ACB60F975D9D182C0CD5 /* SelectedLivePhotoRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68FACFFEB5BA1B6CF6162995 /* SelectedLivePhotoRecovery.swift */; };
 		28315FF4BF85AAE536A42F85 /* TesseraePanelImagePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 135374B71848FF0E87F4A6D3 /* TesseraePanelImagePreview.swift */; };
 		2CAD41B5926767175B4C39E5 /* MediaFrameTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 895ED3887D8E6C731D22A34C /* MediaFrameTests.swift */; };
 		2DB239AB23E1BEDF30BF73EA /* PhosphorRegularGlyphs.json in Resources */ = {isa = PBXBuildFile; fileRef = 5CCA51F737B4F27E6617E7E4 /* PhosphorRegularGlyphs.json */; };
@@ -87,6 +88,7 @@
 		989E27DFBE6C6AC369525233 /* MessageCenterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 878F2E4D47D31218D70ED033 /* MessageCenterTests.swift */; };
 		9AC2C9AD316705D104BC71AC /* ActivityPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A5B1ACBB0D226BC89B9674D /* ActivityPresentationTests.swift */; };
 		9B2AA5AAF6D5A7E6F48CB945 /* PicPakPhotoEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A4080F0A169BC5BCBF484AC /* PicPakPhotoEncoder.swift */; };
+		9F40D6F02E97821C46712330 /* SelectedLivePhotoRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68FACFFEB5BA1B6CF6162995 /* SelectedLivePhotoRecovery.swift */; };
 		A33C850BFA53E3B5066F3D30 /* PhotoFramingGesture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EA333FF9332F6E7F0A3AAEA /* PhotoFramingGesture.swift */; };
 		A372DBF29C5725B419393279 /* MediaLibraryPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E080EF75EAC8A0C7863578B /* MediaLibraryPicker.swift */; };
 		A39325FC03A45BD076B23270 /* TesseraeCompanionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F7B082A4F4C920F49545310 /* TesseraeCompanionUITests.swift */; };
@@ -220,6 +222,7 @@
 		63B3CC1F9EFE4C397C9BFB34 /* TesseraeShared-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "TesseraeShared-Bridging-Header.h"; sourceTree = "<group>"; };
 		68AB5B0479A37A3F55286299 /* BLESetupProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BLESetupProtocol.swift; sourceTree = "<group>"; };
 		68D757E72A99A23D9A75B361 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		68FACFFEB5BA1B6CF6162995 /* SelectedLivePhotoRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectedLivePhotoRecovery.swift; sourceTree = "<group>"; };
 		6BA6516AC76BFF5C21FAAE27 /* DraftEditingSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftEditingSession.swift; sourceTree = "<group>"; };
 		6BD9BF482144BDCB753B7EF6 /* PreviewImageState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewImageState.swift; sourceTree = "<group>"; };
 		6D69D61C92AB080C32014EEB /* TesseraeLivePhotoItemProvider.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = TesseraeLivePhotoItemProvider.m; sourceTree = "<group>"; };
@@ -487,6 +490,7 @@
 				2EA333FF9332F6E7F0A3AAEA /* PhotoFramingGesture.swift */,
 				90C9F22206234BD938D1E5B1 /* PhotoFramingSession.swift */,
 				D09B9A585A1539B7342FE714 /* PhotoSubjectAnalyzer.swift */,
+				68FACFFEB5BA1B6CF6162995 /* SelectedLivePhotoRecovery.swift */,
 				8B1A88193CB426789297DE51 /* ShareDisplayTarget.swift */,
 				F1ED17F9D08A95A5CA24D82F /* TesseraeComposerMediaPreview.swift */,
 				82947940CD945EF439E22E9F /* TesseraeLivePhotoItemProvider.h */,
@@ -751,6 +755,7 @@
 				07FCF32DF59628F960A2736E /* PhotoSubjectAnalyzer.swift in Sources */,
 				9B2AA5AAF6D5A7E6F48CB945 /* PicPakPhotoEncoder.swift in Sources */,
 				EBA1410E74DCE50280302A5A /* PreviewImageState.swift in Sources */,
+				1F86ACB60F975D9D182C0CD5 /* SelectedLivePhotoRecovery.swift in Sources */,
 				3D0C7A0C72B529B74488017B /* ShareDisplayTarget.swift in Sources */,
 				50F233622A7FB17CD2295534 /* ShareViewController.swift in Sources */,
 				7A9EA24785824EA88D43AAA4 /* TesseraeComposerMediaPreview.swift in Sources */,
@@ -826,6 +831,7 @@
 				64D3E04F40AB9CBE6306FBC0 /* RemindersBridge.swift in Sources */,
 				FE4195F9C97F6AD1B91871CE /* RemindersBridgeView.swift in Sources */,
 				4F63438E4356B972B7A4600D /* RootView.swift in Sources */,
+				9F40D6F02E97821C46712330 /* SelectedLivePhotoRecovery.swift in Sources */,
 				34687E78EE655E20CD4768D8 /* SendView.swift in Sources */,
 				5A369EE1C0A1B4C46F414077 /* SettingsView.swift in Sources */,
 				A822986A4CCE386F6A7ED1D5 /* SetupNetworkStore.swift in Sources */,

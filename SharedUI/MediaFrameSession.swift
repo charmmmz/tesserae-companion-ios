@@ -1,17 +1,30 @@
 import AVFoundation
 import ImageIO
 import Observation
+import OSLog
 import TesseraeKit
 import UIKit
 import UniformTypeIdentifiers
 
+/// Records loading stages without photo contents, asset names or file paths.
+enum MediaFrameDiagnostics {
+    static let logger = Logger(subsystem: "com.charmmmz.tesseraecompanion", category: "MediaFrames")
+
+    nonisolated static func failure(_ error: Error, stage: String) {
+        let error = error as NSError
+        logger.info("\(stage, privacy: .public) failed domain=\(error.domain, privacy: .public) code=\(error.code)")
+    }
+}
+
 enum MediaFrameError: Error, LocalizedError {
-    case unavailable, invalidVideo, encoding
+    case unavailable, invalidVideo, encoding, limitedPhotoAccess, photoAccessDenied
     var errorDescription: String? {
         switch self {
         case .unavailable: String(localized: "This item's video could not be loaded. Your current photo is unchanged.")
         case .invalidVideo: String(localized: "This video does not contain a readable picture.")
         case .encoding: String(localized: "This frame could not be prepared. Try another moment.")
+        case .limitedPhotoAccess: String(localized: "For automatic motion loading, include this photo in Limited Access or choose Full Access in Settings → Apps → Tesserae → Photos. You can also use Choose Live Photo.")
+        case .photoAccessDenied: String(localized: "Allow Photos access in Settings → Apps → Tesserae → Photos to load shared Live Photo motion automatically. You can also use Choose Live Photo.")
         }
     }
 }
@@ -195,6 +208,7 @@ actor VideoFrameReader {
         guard reader == nil, !isLoadingMovie else { return }
         errorMessage = nil
         isLoadingMovie = true
+        MediaFrameDiagnostics.logger.info("timeline.begin kind=\(String(describing: source.kind), privacy: .public)")
         let token = generation
         movieTask = Task {
             do {
@@ -206,11 +220,13 @@ actor VideoFrameReader {
                 self.reader = reader
                 self.duration = duration
                 isLoadingMovie = false
+                MediaFrameDiagnostics.logger.info("timeline.ready duration=\(duration)")
                 makeThumbnails(reader: reader, token: token)
             } catch {
                 guard generation == token, !Task.isCancelled else { return }
                 isLoadingMovie = false
                 errorMessage = error.localizedDescription
+                MediaFrameDiagnostics.failure(error, stage: "timeline")
             }
         }
     }
@@ -253,6 +269,7 @@ actor VideoFrameReader {
                 outputRevision = UUID()
                 scrubbingPreview = nil
                 isRenderingFrame = false
+                MediaFrameDiagnostics.logger.info("frame.ready seconds=\(seconds)")
             } catch {
                 guard frameGeneration == token, !Task.isCancelled else { return }
                 isRenderingFrame = false
@@ -320,6 +337,7 @@ actor VideoFrameReader {
             }
             guard generation == token else { return }
             thumbnails = frames
+            MediaFrameDiagnostics.logger.info("timeline.thumbnails count=\(frames.count)")
         }
     }
 }

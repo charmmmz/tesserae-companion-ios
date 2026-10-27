@@ -314,6 +314,7 @@ import UniformTypeIdentifiers
             }
         }
         let actual = try await VideoFrameReader(file: exported, maximumPixelSize: 320).image(at: 2)
+        #expect(try Data(contentsOf: exported.url) == Data(contentsOf: resources.movie.url))
         #expect(actual.pixelWidth == 320)
         #expect(actual.data != resources.keyData)
         #expect(PHPhotoLibrary.authorizationStatus(for: .readWrite) == permission)

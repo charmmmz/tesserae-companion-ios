@@ -28,10 +28,19 @@ struct MediaFrameControls: View {
                             .accessibilityIdentifier("media-reselect-live-photo")
                     }
                 }
-                if let error = session.errorMessage, !offersReselection {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(error).font(.footnote).foregroundStyle(TesseraeTheme.danger)
-                        Button("Retry") { session.retry() }.font(.footnote).frame(minHeight: 44)
+                if let error = session.errorMessage {
+                    Group {
+                        if offersReselection {
+                            Text(error)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else {
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text(error).font(.footnote).foregroundStyle(TesseraeTheme.danger)
+                                Button("Retry") { session.retry() }.font(.footnote).frame(minHeight: 44)
+                            }
+                        }
                     }
                     .accessibilityIdentifier("media-frame-error")
                 }

@@ -48,6 +48,10 @@
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Connect to your paired Tesserae server to send this shared item.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Select the Live Photo you are sharing so Tesserae can recover its motion when system sharing cannot provide it.</string>
+	<key>PHPhotoLibraryPreventAutomaticLimitedAccessAlert</key>
+	<true/>
 	<key>TesseraeAppGroupIdentifier</key>
 	<string>group.com.charmmmz.tesseraecompanion</string>
 	<key>TesseraeKeychainAccessGroup</key>

@@ -22,6 +22,13 @@ SDK, analytics SDK, tracking, or telemetry.
   the user's selected Tesserae instance, or directly to the chosen display for
   Bluetooth photo sends. They do not pass through a service operated by the
   iOS app maintainer.
+- If Photos sharing cannot deliver a readable Live Photo movie, Share can request
+  optional Photos access and retry the current item's provider. **Limited Access**
+  must include the shared photo; Full Access also permits this loading path.
+  Recovery never enumerates or matches library photos. The temporary movie is
+  removed after use. Denying access or excluding the photo preserves the key
+  photo and the system-picker alternative, which can provide that item without
+  a persistent library grant. Normal in-app photo picking needs no library grant.
 - Auto Frame analyzes a thumbnail locally using Apple Vision when a selected
   photo's Fill preview first becomes ready, or when the user taps Auto again.
   Detected face and subject regions remain in memory for
@@ -133,6 +140,8 @@ already selected for Companion.
 - Deleting the app removes its private container. iOS and the server control
   deletion of their respective Keychain and server-side records.
 - Local Network permission can be changed at any time in iOS Settings.
+- Selected Photos access can be changed or revoked in iOS Settings → Apps →
+  Tesserae → Photos. Select only the Live Photos you want Share to recover.
 - Bluetooth permission can be changed at any time in iOS Settings. Camera
   permission is requested only when the user chooses to scan a display's setup
   code; the app does not capture or retain photos during setup.

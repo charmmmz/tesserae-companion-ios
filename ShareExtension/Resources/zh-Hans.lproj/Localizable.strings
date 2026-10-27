@@ -109,3 +109,7 @@
 "Choose Live Photo" = "选择实况照片";
 "Change Photo" = "更换照片";
 "Loading photo or video…" = "正在载入照片或视频…";
+
+/* Live Photo share access guidance */
+"For automatic motion loading, include this photo in Limited Access or choose Full Access in Settings → Apps → Tesserae → Photos. You can also use Choose Live Photo." = "若要自动载入动态画面，请在“设置 → App → Tesserae → 照片”中将这张照片加入“有限访问”，或选择“完全访问”。也可以使用“选择实况照片”。";
+"Allow Photos access in Settings → Apps → Tesserae → Photos to load shared Live Photo motion automatically. You can also use Choose Live Photo." = "若要自动载入分享的实况照片动态画面，请在“设置 → App → Tesserae → 照片”中允许照片访问。也可以使用“选择实况照片”。";
