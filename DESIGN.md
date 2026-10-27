@@ -525,6 +525,9 @@ references and are not bundled in the app.
 
 ### 5.4 Component language
 
+- Displays home cards show battery and connection type, using a Wi-Fi or
+  Bluetooth icon with its label. Signal values belong to device details;
+  VoiceOver connection content reports the same type as the visible card.
 - Warm paper background with warm light or charcoal cards, without the
   previous ambient glow or decorative grid.
 - Restrained 10–16 pt radii; pills only for compact states.

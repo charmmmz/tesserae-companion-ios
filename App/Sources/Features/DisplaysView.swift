@@ -294,7 +294,7 @@ struct DisplaysView: View {
             )
             .accessibilityCustomContent("Battery", Text(localState(display).batteryText))
             .accessibilityCustomContent("Connection", Text(localState(display).isBluetooth
-                ? String(localized: "Bluetooth Mode") : (display.rssiDBM.map { "\($0) dBm" } ?? "—")))
+                ? String(localized: "Bluetooth") : "Wi-Fi"))
             .accessibilityCustomContent(
                 "Status",
                 Text(localState(display).isBluetooth ? String(localized: "Bluetooth Mode") : display.hasPendingRender == true
@@ -627,7 +627,7 @@ private struct DisplayCard: View {
                     if local.isBluetooth {
                         BluetoothModeLabel(compact: true)
                     } else {
-                        metric("wifi", display.rssiDBM.map { "\($0) dBm" } ?? "—")
+                        metric("wifi", "Wi-Fi")
                     }
                 }
                 .font(.caption)
@@ -832,6 +832,7 @@ private struct DisplayDetailView: View {
                     if !local.isBluetooth {
                         detailRow("Signal") {
                             Text(currentDisplay.rssiDBM.map { "\($0) dBm" } ?? String(localized: "Not reported"))
+                                .accessibilityIdentifier("display-signal-\(currentDisplay.id)")
                         }
                     }
                 }

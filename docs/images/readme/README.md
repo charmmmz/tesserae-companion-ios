@@ -32,14 +32,14 @@ in `/tmp/tesserae-floating-send/phone-unified.xcresult`, on the
 `Tesserae Adaptive iPhone` simulator. The navigation title, bottom tabs and Send
 placement were checked before replacing the superseded captures.
 
-`displays-visible-logo-spacing.png` was refreshed on 27 October 2026 from the
-working tree based on `66ada5d`, including the visible-artwork logo spacing fix.
-It is the original `Displays Root Toolbar` attachment from
+`displays-connection-types.png` was refreshed on 27 October 2026 from the
+working tree based on `66ada5d`, with icon-plus-connection labels on home cards
+and Wi-Fi signal values in device details. It includes the visible-artwork logo
+spacing fix. It is the original `Displays Root Toolbar` attachment from
 `TesseraeCompanionUITests.testRootToolbarsKeepSettingsAndContextActionsConsistent`
-in `/tmp/tesserae-brand-gap-readme.xcresult`, on the `Tesserae Logo Gap` simulator
-(iPhone 18 Pro, iOS 27.0). Light/dark manufacturer pages and all-brand snapshots
-at standard and accessibility text sizes were inspected before replacing the
-superseded capture.
+in `/tmp/tesserae-display-connection-20261027/phone.xcresult`, on the
+`Tesserae Branding iPhone` simulator (iOS 27.0). The Bluetooth/Wi-Fi mixed-device
+capture and the Wi-Fi detail signal value were checked separately.
 
 - iPhone 18 Pro Simulator, iOS 27.0, English, light appearance except the dark
   duration picker.
@@ -51,7 +51,7 @@ superseded capture.
 
 | File | Screen / capture point |
 | --- | --- |
-| `displays-visible-logo-spacing.png` | Demo Mode → Displays |
+| `displays-connection-types.png` | Demo Mode → Displays |
 | `dashboards-floating-send.png` | Demo Mode → Dashboards, expanded display groups |
 | `dashboard-settings-actions.png` | Pantry → native settings, shared actions and bounded Push icon, before editing |
 | `lineup-editor-actions.png` | New Manual Lineup, native icon actions, selected display and two Dashboards |

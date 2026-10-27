@@ -364,6 +364,13 @@ final class TesseraeCompanionUITests: XCTestCase {
         let display = app.buttons["display-card-picpak-kitchen"]
         XCTAssertTrue(display.waitForExistence(timeout: 8))
         XCTAssertTrue(display.label.contains("Bluetooth Mode"))
+        XCTAssertTrue(app.staticTexts["Bluetooth"].exists)
+        XCTAssertTrue(app.staticTexts["Wi-Fi"].exists)
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'dBm'")).firstMatch.exists)
+        let connectionLabels = XCTAttachment(screenshot: app.screenshot())
+        connectionLabels.name = "Bluetooth and Wi-Fi Connection Labels"
+        connectionLabels.lifetime = .keepAlways
+        add(connectionLabels)
         display.tap()
         XCTAssertFalse(app.staticTexts["Mode Confirmed"].exists)
         XCTAssertFalse(app.staticTexts["Last Bluetooth Battery"].exists)
@@ -1761,6 +1768,8 @@ final class TesseraeCompanionUITests: XCTestCase {
 
         let kitchenCard = app.buttons["display-card-picpak-kitchen"]
         XCTAssertTrue(kitchenCard.waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Wi-Fi"].exists)
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'dBm'")).firstMatch.exists)
         kitchenCard.tap()
 
         let detailNavigation = app.navigationBars["Kitchen"]
@@ -1775,6 +1784,9 @@ final class TesseraeCompanionUITests: XCTestCase {
         )
         XCTAssertTrue(app.staticTexts["Connection & Power"].exists)
         XCTAssertTrue(app.staticTexts["Battery"].exists)
+        let signal = app.staticTexts["display-signal-picpak-kitchen"]
+        XCTAssertTrue(signal.exists)
+        XCTAssertEqual(signal.label, "-54 dBm")
         XCTAssertFalse(app.staticTexts["Device ID"].exists)
         XCTAssertFalse(app.staticTexts["Device Type"].exists)
         XCTAssertFalse(app.staticTexts["Colour Gamut"].exists)

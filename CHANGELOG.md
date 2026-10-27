@@ -13,6 +13,9 @@ capabilities.
 
 ### Fixed
 
+- Displays home cards use a connection icon with Wi-Fi or Bluetooth consistently,
+  including VoiceOver connection content. Wi-Fi signal values remain in device
+  details instead of sharing the home-card slot with the Bluetooth mode label.
 - In-app Send centers display previews vertically in their reserved canvas area
   for photos, videos and Live Photos, balancing the space above and below
   landscape panels while keeping frame controls and target selection stable.
