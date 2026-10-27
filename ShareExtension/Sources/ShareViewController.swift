@@ -941,7 +941,10 @@ private struct ShareComposerView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     private var page: some View {
-        NavigationStack {
+        // Toolbar builders may otherwise keep the pre-authentication value
+        // until an unrelated Published field, such as Fit, changes.
+        let canSubmit = !model.isBusy && !model.mediaFrames.isBusy && model.canSend
+        return NavigationStack {
             Group {
                 switch model.phase {
                 case .loading:
@@ -989,7 +992,7 @@ private struct ShareComposerView: View {
                     }
                     if model.contentKind != nil {
                         ToolbarItem(placement: .confirmationAction) {
-                            sendToolbarButton
+                            sendToolbarButton(isEnabled: canSubmit)
                         }
                     }
                 }
@@ -1081,7 +1084,7 @@ private struct ShareComposerView: View {
         }
     }
 
-    private var sendToolbarButton: some View {
+    private func sendToolbarButton(isEnabled: Bool) -> some View {
         Button {
             guard !model.mediaFrames.isBusy, model.canSend || model.phase == .failed else { return }
             if model.bluetoothTargetID != nil {
@@ -1107,7 +1110,7 @@ private struct ShareComposerView: View {
         .tint(TesseraeTheme.accentFill)
         .foregroundStyle(.white)
         .accessibilityIdentifier("share-send")
-        .disabled(model.isBusy || model.mediaFrames.isBusy || !model.canSend)
+        .disabled(!isEnabled)
         .accessibilityLabel(
             model.phase == .submitting
                 ? "Sending"

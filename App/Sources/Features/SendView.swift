@@ -69,13 +69,17 @@ struct SendView: View {
     }
 
     private var composerPage: some View {
-        AdaptiveComposerLayout {
+        // Read readiness in this view's observation scope, before the layout's
+        // deferred builders capture it. BLE authentication can finish on its own.
+        let destinationReady = destinationIsReady
+        let canSubmit = sourceIsReady && destinationReady && !isSending && !submission.isSubmitting
+        return AdaptiveComposerLayout {
             if supportsLinks { sourceCard }
             if source == .photo { imagePickerCard } else { linkCard }
         } controls: {
             targetCard
             fitCard
-            submitButton
+            submitButton(isEnabled: canSubmit)
         }
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
             previewHeight = composerCanvasHeight(in: size)
@@ -255,7 +259,7 @@ struct SendView: View {
             }
     }
 
-    private var submitButton: some View {
+    private func submitButton(isEnabled: Bool) -> some View {
         Button {
             guard !submission.isSubmitting, sourceIsReady, destinationIsReady, !isSending else { return }
             if bluetoothTargetID != nil {
@@ -322,11 +326,7 @@ struct SendView: View {
         .tint(TesseraeTheme.accentFill)
         .foregroundStyle(.white)
         .controlSize(.large)
-        .disabled(
-            !sourceIsReady
-                || !destinationIsReady
-                || isSending
-        )
+        .disabled(!isEnabled)
         .accessibilityIdentifier("send-submit")
     }
 

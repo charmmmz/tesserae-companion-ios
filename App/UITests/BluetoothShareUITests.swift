@@ -12,12 +12,14 @@ final class BluetoothShareUITests: XCTestCase {
 
     private func launch(unified: Bool = false, noReceipt: Bool = false, unauthorized: Bool = false,
                         systemShare: Bool = false, accessibilityText: Bool = false, unifiedTargets: Bool = false,
-                        absent: Bool = false, delayed: Bool = false, aspectSwitch: Bool = false) -> XCUIApplication {
+                        absent: Bool = false, delayed: Bool = false, aspectSwitch: Bool = false,
+                        connectionDelay: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
         if accessibilityText {
             app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
         }
         if delayed { app.launchEnvironment["TESSERAE_UI_TEST_BLUETOOTH_DISCOVERY_DELAY_MS"] = "6000" }
+        if connectionDelay { app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_CONNECTION_DELAY_MS"] = "6000" }
         if aspectSwitch { app.launchEnvironment["TESSERAE_UI_TEST_SHARE_ASPECT_SWITCH"] = "1" }
         if unifiedTargets { app.launchEnvironment["TESSERAE_UI_TEST_UNIFIED_SHARE_TARGETS"] = "1" }
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
@@ -204,6 +206,17 @@ final class BluetoothShareUITests: XCTestCase {
         }
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "Share Stable Preview Across Panel Aspects"; shot.lifetime = .keepAlways; add(shot)
+    }
+
+    func testBluetoothSendEnablesAfterConnectionWithoutChangingFit() {
+        let app = launch(connectionDelay: true)
+        chooseDisplay(app)
+        let send = app.buttons["share-send"]
+        XCTAssertFalse(send.isEnabled)
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: send)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 12), .completed)
+        send.tap()
+        XCTAssertTrue(app.staticTexts["share-test-complete"].waitForExistence(timeout: 15))
     }
 
     func testInAppBluetoothDiscoveryAndExclusiveSelectionSend() {

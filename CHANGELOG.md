@@ -13,6 +13,8 @@ capabilities.
 
 ### Fixed
 
+- Bluetooth Send readiness refreshes after authentication without requiring an
+  Image Fit change.
 - Bluetooth status reports include saved battery percentages and firmware versions
   when the server advertises support, preserving each reading’s collection time.
 
