@@ -35,6 +35,8 @@ enum MediaFrameError: Error, LocalizedError {
 
 /// AVFoundation decoding and JPEG encoding stay on this actor, away from the UI actor.
 actor VideoFrameReader {
+    enum Quality { case thumbnail, preview, fullSize }
+
     private let file: MediaTemporaryFile
     private let asset: AVURLAsset
     private let maximumPixelSize: Int
@@ -70,7 +72,7 @@ actor VideoFrameReader {
         return (start: start, duration: end - start)
     }
 
-    func image(at seconds: Double, thumbnail: Bool = false) async throws -> PreparedUploadImage {
+    func image(at seconds: Double, quality: Quality = .fullSize) async throws -> PreparedUploadImage {
         try Task.checkCancellation()
         let range = try await range()
         // Stay inside the actual video track, including its final frame at 60/120 fps.
@@ -78,10 +80,16 @@ actor VideoFrameReader {
         let time = CMTime(seconds: range.start + offset, preferredTimescale: 60_000)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
-        let edge = thumbnail ? 160 : maximumPixelSize
+        let edge = switch quality {
+        case .thumbnail: 160
+        case .preview: min(640, maximumPixelSize)
+        case .fullSize: maximumPixelSize
+        }
         generator.maximumSize = CGSize(width: edge, height: edge)
-        generator.requestedTimeToleranceBefore = .zero
-        generator.requestedTimeToleranceAfter = .zero
+        // Dragging allows a nearby frame; the final selection remains exact.
+        let tolerance = quality == .preview ? CMTime(seconds: 0.1, preferredTimescale: 600) : .zero
+        generator.requestedTimeToleranceBefore = tolerance
+        generator.requestedTimeToleranceAfter = tolerance
         if #available(iOS 18, *) { generator.dynamicRangePolicy = .forceSDR }
         let id = UUID()
         generators[id] = generator
@@ -118,6 +126,8 @@ actor VideoFrameReader {
     private(set) var source: MediaFrameSource?
     private(set) var output: PreparedUploadImage?
     private(set) var outputRevision = UUID()
+    private(set) var scrubbingPreview: UIImage?
+    private(set) var isScrubbing = false
     private(set) var thumbnails: [Thumbnail] = []
     private(set) var duration: Double = 0
     private(set) var position: Double = 0
@@ -134,6 +144,7 @@ actor VideoFrameReader {
     @ObservationIgnored private var frameGeneration = UUID()
     @ObservationIgnored private var committedPosition: Double = 0
     @ObservationIgnored private var failedPosition: Double?
+    @ObservationIgnored private var pendingPreviewPosition: Double?
 
     var isBusy: Bool { isLoadingMovie || isRenderingFrame }
     var hasTimeline: Bool { source?.kind == .video || source?.kind == .livePhoto }
@@ -164,19 +175,26 @@ actor VideoFrameReader {
 
     func cancelWork() {
         generation = UUID()
-        frameGeneration = UUID()
         movieTask?.cancel(); movieTask = nil
         thumbnailTask?.cancel(); thumbnailTask = nil
-        frameTask?.cancel(); frameTask = nil
+        cancelFrameWork()
         isLoadingMovie = false
-        isRenderingFrame = false
         position = committedPosition
+    }
+
+    private func cancelFrameWork() {
+        frameGeneration = UUID()
+        frameTask?.cancel(); frameTask = nil
+        pendingPreviewPosition = nil
+        scrubbingPreview = nil
+        isScrubbing = false
+        isRenderingFrame = false
     }
 
     func toggleExpanded() {
         if isExpanded {
             isExpanded = false
-            if isLoadingMovie { cancelWork() }
+            if isLoadingMovie || isScrubbing { cancelWork() }
             errorMessage = nil
         }
         else { expand() }
@@ -211,16 +229,31 @@ actor VideoFrameReader {
     func select(position: Double, immediately: Bool = false) {
         guard let reader, position.isFinite else { return }
         self.position = min(1, max(0, position))
-        frameTask?.cancel()
-        let token = UUID()
-        frameGeneration = token
         errorMessage = nil
         isRenderingFrame = true
+        if !immediately {
+            if !isScrubbing {
+                frameTask?.cancel(); frameTask = nil
+                frameGeneration = UUID()
+                isScrubbing = true
+            }
+            // Keep one decode running and replace only the queued position.
+            // Cancelling on every touch would starve decoding during a drag.
+            pendingPreviewPosition = self.position
+            if frameTask == nil { renderPreviews(reader: reader) }
+            return
+        }
+
+        frameTask?.cancel()
+        pendingPreviewPosition = nil
+        isScrubbing = false
+        let token = UUID()
+        frameGeneration = token
         let requestedPosition = self.position
         let seconds = requestedPosition * duration
         frameTask = Task {
+            defer { if frameGeneration == token { frameTask = nil } }
             do {
-                if !immediately { try await Task.sleep(for: .milliseconds(65)) }
                 let image = try await reader.image(at: seconds)
                 try Task.checkCancellation()
                 guard frameGeneration == token else { return }
@@ -229,10 +262,12 @@ actor VideoFrameReader {
                 committedPosition = requestedPosition
                 failedPosition = nil
                 outputRevision = UUID()
+                scrubbingPreview = nil
                 isRenderingFrame = false
             } catch {
                 guard frameGeneration == token, !Task.isCancelled else { return }
                 isRenderingFrame = false
+                scrubbingPreview = nil
                 failedPosition = requestedPosition
                 self.position = committedPosition
                 errorMessage = error.localizedDescription
@@ -240,14 +275,36 @@ actor VideoFrameReader {
         }
     }
 
+    private func renderPreviews(reader: VideoFrameReader) {
+        let token = frameGeneration
+        frameTask = Task {
+            defer { if frameGeneration == token { frameTask = nil } }
+            let clock = ContinuousClock()
+            while frameGeneration == token, !Task.isCancelled, let requestedPosition = pendingPreviewPosition {
+                pendingPreviewPosition = nil
+                let nextUpdate = clock.now + .milliseconds(33)
+                do {
+                    let image = try await reader.image(at: requestedPosition * duration, quality: .preview)
+                    try Task.checkCancellation()
+                    guard frameGeneration == token else { return }
+                    scrubbingPreview = UIImage(data: image.data)
+                } catch {
+                    guard frameGeneration == token, !Task.isCancelled else { return }
+                    // Keep the previous preview on transient seek errors. The
+                    // exact frame requested on release owns error reporting.
+                }
+                do { try await clock.sleep(until: nextUpdate) }
+                catch { return }
+            }
+        }
+    }
+
     func restorePrimaryImage() {
         guard let source, source.kind == .livePhoto else { return }
-        frameTask?.cancel()
-        frameGeneration = UUID()
+        cancelFrameWork()
         output = source.primaryImage
         outputRevision = UUID()
         usesPrimaryImage = true
-        isRenderingFrame = false
         errorMessage = nil
         failedPosition = nil
         isExpanded = false
@@ -263,7 +320,7 @@ actor VideoFrameReader {
             var frames: [Thumbnail] = []
             for index in 0..<10 {
                 do {
-                    let frame = try await reader.image(at: duration * (Double(index) + 0.5) / 10, thumbnail: true)
+                    let frame = try await reader.image(at: duration * (Double(index) + 0.5) / 10, quality: .thumbnail)
                     try Task.checkCancellation()
                     guard generation == token else { return }
                     if let image = UIImage(data: frame.data) {

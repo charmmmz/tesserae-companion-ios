@@ -5,13 +5,14 @@ struct MediaFrameControls: View {
     let session: MediaFrameSession
     var isSending = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @GestureState private var isDragging = false
 
     var body: some View {
         if session.hasTimeline {
             VStack(alignment: .leading, spacing: 8) {
                 if session.source?.kind == .livePhoto {
                     HStack {
-                        Text(session.usesPrimaryImage ? String(localized: "Live Photo · Key Photo") : String(localized: "Live Photo"))
+                        Text(session.usesPrimaryImage && !session.isRenderingFrame ? String(localized: "Live Photo · Key Photo") : String(localized: "Live Photo"))
                             .font(.caption).foregroundStyle(.secondary)
                         Spacer(minLength: 8)
                         Button(session.isExpanded ? String(localized: "Hide Frames") : String(localized: "Choose Frame")) { session.toggleExpanded() }
@@ -80,7 +81,7 @@ struct MediaFrameControls: View {
                 .clipShape(.rect(cornerRadius: 6))
                 .accessibilityHidden(true)
 
-                if !session.usesPrimaryImage || session.source?.kind == .video {
+                if !session.usesPrimaryImage || session.isRenderingFrame || session.source?.kind == .video {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(TesseraeTheme.accent)
                         .frame(width: 3, height: 50)
@@ -93,15 +94,22 @@ struct MediaFrameControls: View {
             .frame(height: 50)
             .contentShape(.rect)
             .gesture(DragGesture(minimumDistance: 0)
+                .updating($isDragging) { _, dragging, _ in dragging = true }
                 .onChanged { value in
                     session.select(position: value.location.x / max(1, proxy.size.width))
                 }
                 .onEnded { value in
                     session.select(position: value.location.x / max(1, proxy.size.width), immediately: true)
                 })
+            .onChange(of: isDragging) { _, dragging in
+                // GestureState also resets when a drag is interrupted.
+                if !dragging, session.isScrubbing {
+                    session.select(position: session.position, immediately: true)
+                }
+            }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Choose Frame")
-            .accessibilityValue(session.usesPrimaryImage && session.source?.kind == .livePhoto
+            .accessibilityValue(session.usesPrimaryImage && !session.isRenderingFrame && session.source?.kind == .livePhoto
                 ? String(localized: "Key Photo")
                 : String(localized: "\((session.position * session.duration).formatted(.number.precision(.fractionLength(2)))) seconds"))
             .accessibilityAdjustableAction { direction in

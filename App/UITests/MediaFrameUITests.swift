@@ -59,10 +59,11 @@ import XCTest
         XCTAssertTrue(element.isHittable)
     }
 
-    private func scrub(_ timeline: XCUIElement) {
+    private func scrub(_ timeline: XCUIElement, velocity: XCUIGestureVelocity = .default) {
         let previous = timeline.value as? String
         timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.5))
-            .press(forDuration: 0.05, thenDragTo: timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)))
+            .press(forDuration: 0.05, thenDragTo: timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)),
+                   withVelocity: velocity, thenHoldForDuration: 0)
         XCTAssertNotEqual(timeline.value as? String, previous)
     }
 
@@ -78,7 +79,7 @@ import XCTest
         let frames = timeline(app)
         XCTAssertTrue(frames.waitForExistence(timeout: 12))
         reveal(frames, in: app)
-        scrub(frames)
+        scrub(frames, velocity: XCUIGestureVelocity(rawValue: 60))
         XCTAssertFalse(app.buttons["Use This Frame"].exists)
         capture("Inline Video Frame Selection", app: app)
         let send = app.buttons["send-submit"]

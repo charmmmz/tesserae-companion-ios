@@ -496,7 +496,7 @@ struct SendView: View {
         VStack(spacing: 9) {
             if let panel = previewPanel {
                 TesseraePanelImagePreview(
-                    image: previewImage,
+                    image: mediaFrames.scrubbingPreview ?? previewImage,
                     panel: panel,
                     fit: fitMode,
                     maximumCanvasHeight: max(1, previewHeight - 2 * TesseraePanelImagePreview.canvasPadding),
@@ -531,7 +531,7 @@ struct SendView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: dynamicTypeSize.isAccessibilitySize ? nil : previewHeight, alignment: .top)
-            } else if let previewImage {
+            } else if let previewImage = mediaFrames.scrubbingPreview ?? previewImage {
                 Image(uiImage: previewImage)
                     .resizable().scaledToFit()
                     .frame(maxWidth: .infinity)

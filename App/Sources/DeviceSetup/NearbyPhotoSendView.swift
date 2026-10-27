@@ -223,7 +223,7 @@ struct NearbyPhotoSendView: View {
             }
 
             TesseraePanelImagePreview(
-                image: image, panel: panel, fit: fit, maximumCanvasHeight: previewHeight,
+                image: mediaFrames.scrubbingPreview ?? image, panel: panel, fit: fit, maximumCanvasHeight: previewHeight,
                 emptyTitle: preparing ? "Loading photo or video…" : "Choose a photo or video",
                 accessibilityIdentifier: "ble-photo-preview",
                 imageAccessibilityIdentifier: "ble-photo-image",

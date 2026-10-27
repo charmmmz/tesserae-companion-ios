@@ -77,8 +77,10 @@ Companion release.
 
 The in-app Send and nearby Bluetooth composers accept photos, videos, and Live
 Photos through the system Photos picker. A video adds a thumbnail timeline
-directly below the existing display preview. Dragging selects a still image;
-the existing framing and Send actions remain the completion path. There is no
+directly below the existing display preview. Small, coalesced frame requests
+update the preview throughout a drag. Releasing the timeline commits the precise,
+full-size still used for sending; Send stays disabled until this frame is ready.
+The existing framing and Send actions remain the completion path. There is no
 separate editor or frame-confirmation step.
 
 Live Photos initially use their supplied primary photo. Choose Frame expands

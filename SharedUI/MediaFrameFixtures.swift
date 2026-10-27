@@ -28,7 +28,8 @@ import UIKit
 }
 
 actor MediaFrameFixtureWriter {
-    func makeMovie(rotated: Bool = false, contentIdentifier: String? = nil, frameRate: Int32 = 4) async throws -> MediaTemporaryFile {
+    func makeMovie(rotated: Bool = false, contentIdentifier: String? = nil, frameRate: Int32 = 4,
+                   width: Int = 320, height: Int = 200) async throws -> MediaTemporaryFile {
         let file = try MediaTemporaryFile(fileExtension: "mov")
         let writer = try AVAssetWriter(outputURL: file.url, fileType: .mov)
         var metadataInput: AVAssetWriterInput?
@@ -51,12 +52,12 @@ actor MediaFrameFixtureWriter {
             writer.add(input)
         }
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
-            AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: 320, AVVideoHeightKey: 200,
+            AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: width, AVVideoHeightKey: height,
         ])
         if rotated { input.transform = CGAffineTransform(rotationAngle: .pi / 2) }
         let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32ARGB,
-            kCVPixelBufferWidthKey as String: 320, kCVPixelBufferHeightKey as String: 200,
+            kCVPixelBufferWidthKey as String: width, kCVPixelBufferHeightKey as String: height,
             kCVPixelBufferCGImageCompatibilityKey as String: true,
             kCVPixelBufferCGBitmapContextCompatibilityKey as String: true,
         ])
@@ -85,18 +86,18 @@ actor MediaFrameFixtureWriter {
                 try await Task.sleep(for: .milliseconds(5))
             }
             var buffer: CVPixelBuffer?
-            guard CVPixelBufferCreate(kCFAllocatorDefault, 320, 200, kCVPixelFormatType_32ARGB, [
+            guard CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32ARGB, [
                 kCVPixelBufferCGImageCompatibilityKey: true, kCVPixelBufferCGBitmapContextCompatibilityKey: true,
             ] as CFDictionary, &buffer) == kCVReturnSuccess, let buffer else { throw MediaFrameError.encoding }
             CVPixelBufferLockBaseAddress(buffer, [])
-            guard let context = CGContext(data: CVPixelBufferGetBaseAddress(buffer), width: 320, height: 200,
+            guard let context = CGContext(data: CVPixelBufferGetBaseAddress(buffer), width: width, height: height,
                                           bitsPerComponent: 8, bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
                                           space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue)
             else { CVPixelBufferUnlockBaseAddress(buffer, []); throw MediaFrameError.encoding }
             context.setFillColor(CGColor(red: 0.34, green: 0.52, blue: 0.48, alpha: 1))
-            context.fill(CGRect(x: 0, y: 0, width: 320, height: 200))
+            context.fill(CGRect(x: 0, y: 0, width: width, height: height))
             context.setFillColor(CGColor(red: 0.92, green: 0.86, blue: 0.66, alpha: 1))
-            context.fill(CGRect(x: 0, y: 0, width: 320, height: 60))
+            context.fill(CGRect(x: 0, y: 0, width: width, height: 60))
             context.setFillColor(CGColor(red: 0.74, green: 0.18, blue: 0.12, alpha: 1))
             context.fillEllipse(in: CGRect(x: 15 + index * 18, y: 80, width: 70, height: 70))
             CVPixelBufferUnlockBaseAddress(buffer, [])

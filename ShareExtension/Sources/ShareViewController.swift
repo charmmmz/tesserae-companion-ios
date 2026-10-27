@@ -1162,7 +1162,7 @@ private struct ShareComposerView: View {
                 Color.clear
                 if let panel = model.previewPanel {
                     TesseraePanelImagePreview(
-                        image: model.previewImage,
+                        image: model.mediaFrames.scrubbingPreview ?? model.previewImage,
                         panel: panel,
                         fit: model.fit,
                         maximumCanvasHeight: max(1, previewHeight - 2 * TesseraePanelImagePreview.canvasPadding),
@@ -1189,7 +1189,7 @@ private struct ShareComposerView: View {
                     )
 
                 } else {
-                    if let image = model.previewImage {
+                    if let image = model.mediaFrames.scrubbingPreview ?? model.previewImage {
                         Image(uiImage: image).resizable().scaledToFit()
                             .frame(maxWidth: .infinity, maxHeight: previewHeight)
                             .accessibilityLabel("Shared photo")

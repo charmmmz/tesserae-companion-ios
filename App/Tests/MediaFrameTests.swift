@@ -63,10 +63,79 @@ import UniformTypeIdentifiers
         try await Task.sleep(for: .milliseconds(120))
         #expect(session.output == second.primaryImage)
         #expect(session.duration == 0)
+        #expect(session.scrubbingPreview == nil)
+        #expect(!session.isScrubbing)
         session.expand()
         try await eventually { session.duration > 0 && !session.isBusy }
         #expect(session.output == second.primaryImage)
         session.cancelWork()
+    }
+
+    @Test(arguments: [MediaFrameSource.Kind.video, .livePhoto])
+    func continuousDraggingUpdatesPreviewBeforeReleaseAndOnlyCommitsTheExactFinalFrame(kind: MediaFrameSource.Kind) async throws {
+        let source = try await MediaFrameFixtures.source(kind: kind)
+        let session = MediaFrameSession()
+        session.adopt(source)
+        session.expand()
+        try await eventually { session.duration > 0 && !session.isBusy }
+        let originalRevision = session.outputRevision
+
+        var isMoving = true
+        let drag = Task {
+            defer { isMoving = false }
+            for index in 0..<150 {
+                try Task.checkCancellation()
+                session.select(position: Double(index % 100) / 100)
+                try await Task.sleep(for: .milliseconds(8))
+            }
+        }
+        defer { drag.cancel(); session.cancelWork() }
+        try await eventually { session.scrubbingPreview != nil }
+        let firstPreview = try #require(session.scrubbingPreview?.pngData())
+        try await eventually {
+            guard let data = session.scrubbingPreview?.pngData() else { return false }
+            return data != firstPreview
+        }
+        #expect(isMoving, "Preview must change while touch events continue, before release.")
+        #expect(session.isBusy)
+        #expect(session.isScrubbing)
+        #expect(session.output == source.primaryImage)
+        #expect(session.outputRevision == originalRevision)
+
+        drag.cancel()
+        _ = await drag.result
+        session.select(position: 0.85, immediately: true)
+        try await eventually { !session.isBusy }
+        let movie = try await source.loadMovie()
+        let expected = try await VideoFrameReader(file: movie, maximumPixelSize: source.maximumPixelSize)
+            .image(at: session.duration * 0.85)
+        #expect(session.output == expected)
+        #expect(session.scrubbingPreview == nil)
+        #expect(!session.isScrubbing)
+    }
+
+    @Test func cancellingADragDiscardsPreviewAndKeepsTheLastCommittedFrame() async throws {
+        let source = try await MediaFrameFixtures.source(kind: .video)
+        let session = MediaFrameSession()
+        session.adopt(source)
+        defer { session.cancelWork() }
+        try await eventually { session.duration > 0 && !session.isBusy }
+        session.select(position: 0.5, immediately: true)
+        try await eventually { !session.isBusy }
+        let committed = session.output
+        let revision = session.outputRevision
+        session.select(position: 0.9)
+        try await eventually { session.scrubbingPreview != nil }
+        session.select(position: 0.1)
+        session.cancelWork()
+        #expect(session.scrubbingPreview == nil)
+        #expect(!session.isScrubbing)
+        #expect(!session.isBusy)
+        #expect(session.position == 0.5)
+        try await Task.sleep(for: .milliseconds(120))
+        #expect(session.output == committed)
+        #expect(session.outputRevision == revision)
+        #expect(session.scrubbingPreview == nil)
     }
 
     @Test func unavailableLiveMotionPreservesPrimaryAndAllowsRetry() async throws {
@@ -114,6 +183,17 @@ import UniformTypeIdentifiers
         #expect(first.data != later.data)
         #expect(first.contentType == "image/jpeg")
         #expect(UIImage(data: first.data)?.imageOrientation == .up)
+    }
+
+    @Test func scrubbingPreviewDoesNotReduceFinalFrameResolution() async throws {
+        let file = try await MediaFrameFixtureWriter().makeMovie(width: 1280, height: 800)
+        let reader = VideoFrameReader(file: file, maximumPixelSize: 1280)
+        let preview = try await reader.image(at: 1, quality: .preview)
+        let final = try await reader.image(at: 1)
+        #expect(preview.pixelWidth == 640)
+        #expect(preview.pixelHeight == 400)
+        #expect(final.pixelWidth == 1280)
+        #expect(final.pixelHeight == 800)
     }
 
     @Test func timelineEndpointSelectsTheFinalFrameOfSixtyFPSVideo() async throws {
