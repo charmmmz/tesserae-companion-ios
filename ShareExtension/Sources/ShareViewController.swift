@@ -954,9 +954,10 @@ private struct ImageSubmissionOutcome {
 
 private struct ShareComposerView: View {
     @ObservedObject var model: ShareComposerModel
-    @State private var previewHeight: CGFloat = 220
-    @State private var showsLivePhotoPicker = false
-    @State private var livePhotoSelection: MediaPickerSelection?
+    @State private var previewHeight: CGFloat = 276
+    @State private var showsMediaPicker = false
+    @State private var livePhotosOnly = false
+    @State private var mediaSelection: MediaPickerSelection?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var hapticEvent = TesseraeHapticEvent()
     @Environment(\.scenePhase) private var scenePhase
@@ -1034,7 +1035,7 @@ private struct ShareComposerView: View {
     private var lifecyclePage: some View {
         styledPage
         .onDisappear {
-            guard !showsLivePhotoPicker else { return }
+            guard !showsMediaPicker else { return }
             model.mediaFrames.cancelWork()
             model.bluetoothSession?.stop()
         }
@@ -1059,9 +1060,9 @@ private struct ShareComposerView: View {
 
     var body: some View {
         bluetoothPage
-        .mediaLibraryPicker(isPresented: $showsLivePhotoPicker, selection: $livePhotoSelection, livePhotosOnly: true)
-        .task(id: livePhotoSelection) {
-            if let livePhotoSelection { await model.replaceSharedMedia(livePhotoSelection) }
+        .mediaLibraryPicker(isPresented: $showsMediaPicker, selection: $mediaSelection, livePhotosOnly: livePhotosOnly)
+        .task(id: mediaSelection) {
+            if let mediaSelection { await model.replaceSharedMedia(mediaSelection) }
         }
         .onChange(of: model.mediaFrames.outputRevision) { _, _ in model.applyMediaFrame() }
         .onAppear {
@@ -1183,15 +1184,21 @@ private struct ShareComposerView: View {
     }
 
     private var imageCard: some View {
-        VStack(
-            alignment: .leading,
-            spacing: TesseraeComposerLayout.contentCardSpacing
-        ) {
-            Text("Preview")
-                .font(.headline)
+        VStack(alignment: .leading, spacing: TesseraeComposerLayout.contentCardSpacing) {
+            TesseraeComposerPreviewHeader(
+                titleAccessibilityIdentifier: "share-preview-title",
+                changePhotoAccessibilityIdentifier: "share-change-photo",
+                isLoading: model.isPreparingMedia,
+                onChoosePhoto: { livePhotosOnly = false; showsMediaPicker = true }
+            )
+            .disabled(model.isBusy)
 
-            ZStack {
-                Color.clear
+            TesseraeComposerMediaPreview(
+                session: model.mediaFrames,
+                canvasHeight: previewHeight,
+                isSending: model.framingSession.isFrozen || model.isPreparingMedia,
+                onChooseLivePhoto: { livePhotosOnly = true; showsMediaPicker = true }
+            ) {
                 if let panel = model.previewPanel {
                     TesseraePanelImagePreview(
                         image: model.mediaFrames.scrubbingPreview ?? model.previewImage,
@@ -1204,7 +1211,7 @@ private struct ShareComposerView: View {
                         framing: previewImageFramingBinding,
                         maximumFramingZoom: model.maximumFramingZoom,
                         prioritizesFramingGesture: true,
-                        framingEditingEnabled: !model.framingSession.isFrozen && !model.mediaFrames.isBusy,
+                        framingEditingEnabled: !model.framingSession.isFrozen && !model.mediaFrames.isBusy && !model.isPreparingMedia,
                         onAutoFrame: model.framingEditorIsActive ? { autoFrame() } : nil,
                         isAutoFraming: model.framingSession.isAnalyzing,
                         autoFramingFeedback: model.framingSession.feedback,
@@ -1219,23 +1226,17 @@ private struct ShareComposerView: View {
                             ? "Drag to reposition the photo and pinch to zoom."
                             : ""
                     )
-
                 } else {
                     if let image = model.mediaFrames.scrubbingPreview ?? model.previewImage {
                         Image(uiImage: image).resizable().scaledToFit()
                             .frame(maxWidth: .infinity, maxHeight: previewHeight)
                             .accessibilityLabel("Shared photo")
+                            .accessibilityIdentifier("shared-image-preview")
                     }
                 }
+            } targets: {
+                previewTargetPicker
             }
-            .frame(minHeight: previewHeight, maxHeight: dynamicTypeSize.isAccessibilitySize ? nil : previewHeight)
-            .animation(nil, value: model.previewPanel)
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("share-preview-slot")
-            previewTargetPicker
-                .frame(height: dynamicTypeSize.isAccessibilitySize ? nil : 44)
-            MediaFrameControls(session: model.mediaFrames, isSending: model.framingSession.isFrozen || model.isPreparingMedia,
-                onChooseLivePhoto: { showsLivePhotoPicker = true })
         }
         .tesseraeCard()
         .accessibilityElement(children: .contain)

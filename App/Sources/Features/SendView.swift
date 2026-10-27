@@ -64,10 +64,6 @@ struct SendView: View {
         self.initialImage = initialImage
     }
 
-    private var previewSlotHeight: CGFloat {
-        previewHeight + 9 + 44
-    }
-
     private var composerPage: some View {
         // Read readiness in this view's observation scope, before the layout's
         // deferred builders capture it. BLE authentication can finish on its own.
@@ -448,57 +444,21 @@ struct SendView: View {
         .tesseraeCard()
     }
 
-    @ViewBuilder
     private var previewHeader: some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            VStack(alignment: .leading, spacing: 8) {
-                previewTitle
-                changePhotoButton
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                previewTitle
-                Spacer(minLength: 8)
-                changePhotoButton
-            }
-        }
+        TesseraeComposerPreviewHeader(
+            titleAccessibilityIdentifier: "send-preview-title",
+            changePhotoAccessibilityIdentifier: "send-change-photo",
+            isLoading: isPreparingImage,
+            onChoosePhoto: imageData != nil ? { isPhotoPickerPresented = true } : nil
+        )
     }
 
-    private var previewTitle: some View {
-        HStack(spacing: 8) {
-            Text("Preview")
-                .font(.headline)
-                .accessibilityIdentifier("send-preview-title")
-            if isPreparingImage {
-                ProgressView().controlSize(.small)
-                    .accessibilityLabel("Loading photo or video…")
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var changePhotoButton: some View {
-        if imageData != nil {
-            Button {
-                isPhotoPickerPresented = true
-            } label: {
-                Text("Change Photo")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(TesseraeTheme.accent)
-                    .padding(.horizontal, 2)
-                    .padding(.vertical, 7)
-                    .frame(minHeight: 44)
-            }
-            .buttonStyle(.plain)
-            .fixedSize(horizontal: true, vertical: false)
-            .accessibilityIdentifier("send-change-photo")
-        }
-    }
-
-    @ViewBuilder
     private var simulatedPanel: some View {
-        VStack(spacing: 9) {
+        TesseraeComposerMediaPreview(
+            session: mediaFrames,
+            canvasHeight: previewHeight,
+            isSending: submission.isSubmitting || isPreparingImage
+        ) {
             if let panel = previewPanel {
                 TesseraePanelImagePreview(
                     image: mediaFrames.scrubbingPreview ?? previewImage,
@@ -535,12 +495,11 @@ struct SendView: View {
                     choosePhotoFromPreview()
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: dynamicTypeSize.isAccessibilitySize ? nil : previewHeight, alignment: .center)
             } else if let previewImage = mediaFrames.scrubbingPreview ?? previewImage {
                 Image(uiImage: previewImage)
                     .resizable().scaledToFit()
                     .frame(maxWidth: .infinity)
-                    .frame(height: previewHeight)
+                    .frame(maxHeight: previewHeight)
                     .accessibilityLabel("Shared photo")
             } else {
                 ContentUnavailableView {
@@ -549,13 +508,10 @@ struct SendView: View {
                     Text("Connect a display to preview its panel shape.")
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: previewHeight, alignment: .center)
             }
-
-            MediaFrameControls(session: mediaFrames, isSending: submission.isSubmitting || isPreparingImage)
+        } targets: {
             previewFooter
         }
-        .frame(height: dynamicTypeSize.isAccessibilitySize || mediaFrames.hasTimeline ? nil : previewSlotHeight)
     }
 
     private var previewFooter: some View {

@@ -18,13 +18,18 @@ import XCTest
     }
 
     private func launch(_ kind: String, largeText: Bool = false, bluetooth: Bool = false,
-                        systemShare: Bool = false) -> XCUIApplication {
+                        systemShare: Bool = false, nearby: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         if !kind.isEmpty { app.launchEnvironment["TESSERAE_UI_TEST_MEDIA"] = kind }
         if largeText {
             app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
                                     "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
+        }
+        if nearby {
+            app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_BLE"] = "1"
+            app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_PHOTO"] = "1"
+            app.launchEnvironment["TESSERAE_UI_TEST_SEND_BLUETOOTH"] = "1"
         }
         if bluetooth {
             app.launchEnvironment["TESSERAE_UI_TEST_BLUETOOTH_SHARE"] = "1"
@@ -53,8 +58,9 @@ import XCTest
         for _ in 0..<6 where !element.isHittable {
             let region = app.scrollViews.containing(.any, identifier: element.identifier).allElementsBoundByIndex.last
             let surface: XCUIElement = region ?? app
-            let start = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: 0.8))
-            start.press(forDuration: 0.05, thenDragTo: surface.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: 0.25)))
+            let above = element.frame.midY < surface.frame.midY
+            let start = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: above ? 0.25 : 0.8))
+            start.press(forDuration: 0.05, thenDragTo: surface.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: above ? 0.8 : 0.25)))
         }
         XCTAssertTrue(element.isHittable)
     }
@@ -73,6 +79,35 @@ import XCTest
         attachment.lifetime = .keepAlways
         add(attachment)
     }
+
+    #if TESSERAE_SYSTEM_PHOTOS_TESTS
+    // Run Scripts/test_system_photos_share.sh to seed the synthetic paired asset.
+    func testSystemPhotosLivePhotoAutomaticallyShowsTimeline() {
+        XCUIApplication().launch()
+        let photos = XCUIApplication(bundleIdentifier: "com.apple.mobileslideshow")
+        photos.launch()
+        defer { photos.terminate() }
+        let share = photos.buttons["PUOneUpBarButtonItemIdentifierShare"]
+        if !share.exists {
+            let live = photos.images.matching(NSPredicate(format: "label BEGINSWITH 'Live Photo,'")).firstMatch
+            XCTAssertTrue(live.waitForExistence(timeout: 8))
+            live.tap()
+        }
+        XCTAssertTrue(share.waitForExistence(timeout: 5))
+        share.tap()
+        let activity = photos.cells["Tesserae"]
+        XCTAssertTrue(activity.waitForExistence(timeout: 8))
+        activity.tap()
+        let frames = photos.descendants(matching: .any)["media-frame-timeline"].firstMatch
+        let ready = frames.waitForExistence(timeout: 15)
+        if !ready { print("LIVE_SHARE_FAILURE", photos.debugDescription) }
+        XCTAssertTrue(ready)
+        XCTAssertFalse(photos.buttons["media-reselect-live-photo"].exists)
+        if ready { scrub(frames) }
+        capture("Photos Live Photo Direct Frame Selection", app: photos)
+        assertInlinePreviewOrder(photos, prefix: "share")
+    }
+    #endif
 
     func testVideoTimelineSelectsFrameAndSendsFromExistingPreview() {
         let app = launch("video")
@@ -119,6 +154,62 @@ import XCTest
         XCTAssertGreaterThanOrEqual(key.frame.width, 44)
         key.tap()
         reveal(app.buttons["send-submit"], in: app)
+    }
+
+    private func assertInlinePreviewOrder(_ app: XCUIApplication, prefix: String) {
+        let imageID = prefix == "share" ? "shared-image-preview" : "selected-image-preview"
+        let canvas = app.descendants(matching: .any)[imageID].firstMatch
+        let frames = timeline(app)
+        let target = app.descendants(matching: .any)["\(prefix)-preview-display-picker"].firstMatch
+        XCTAssertTrue(canvas.exists)
+        XCTAssertTrue(target.exists)
+        XCTAssertLessThanOrEqual(canvas.frame.maxY, frames.frame.minY + 1)
+        XCTAssertLessThanOrEqual(frames.frame.maxY, target.frame.minY + 1)
+    }
+
+    func testLivePhotoPreviewLayoutMatchesAppAndShare() {
+        let app = launch("live", nearby: true)
+        let target = app.buttons["send-display-picpak-kitchen"]
+        XCTAssertTrue(target.waitForExistence(timeout: 8))
+        reveal(target, in: app)
+        if !target.isSelected { target.tap() }
+        let connected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value CONTAINS '400×300'"), object: target)
+        XCTAssertEqual(XCTWaiter.wait(for: [connected], timeout: 12), .completed)
+        let frames = timeline(app)
+        XCTAssertTrue(frames.waitForExistence(timeout: 10))
+        reveal(frames, in: app)
+        assertInlinePreviewOrder(app, prefix: "send")
+        let appPanel = app.descendants(matching: .any)["send-panel-preview"].firstMatch.frame
+        let appImage = app.descendants(matching: .any)["selected-image-preview"].firstMatch.frame
+        XCTAssertEqual(appPanel.midY, appImage.midY, accuracy: 1)
+        capture("App Live Photo Shared Preview Layout", app: app)
+        let compact = app.frame.width < 600
+        app.terminate()
+
+        let share = launch("live", bluetooth: true)
+        let nearby = share.buttons["share-display-nearby:00000000-0000-0000-0000-000000000011"]
+        XCTAssertTrue(nearby.waitForExistence(timeout: 8))
+        reveal(nearby, in: share)
+        nearby.tap()
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: share.buttons["share-send"])
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 12), .completed)
+        let sharedFrames = timeline(share)
+        XCTAssertTrue(sharedFrames.waitForExistence(timeout: 10))
+        reveal(sharedFrames, in: share)
+        assertInlinePreviewOrder(share, prefix: "share")
+        let sharePanel = share.descendants(matching: .any)["share-panel-preview"].firstMatch.frame
+        let shareImage = share.descendants(matching: .any)["shared-image-preview"].firstMatch.frame
+        XCTAssertEqual(sharePanel.midY, shareImage.midY, accuracy: 1)
+        if compact {
+            XCTAssertEqual(appPanel.height, sharePanel.height, accuracy: 1)
+            XCTAssertEqual(appPanel.width, sharePanel.width, accuracy: 1)
+        }
+        XCTAssertTrue(share.buttons["share-change-photo"].exists)
+        capture("Share Live Photo Shared Preview Layout", app: share)
+        scrub(sharedFrames)
+        share.buttons["media-restore-key-photo"].tap()
+        XCTAssertTrue(sharedFrames.exists)
+        XCTAssertTrue(share.buttons["media-restore-key-photo"].isSelected)
     }
 
     func testUnavailableSharedLiveMotionOffersPickerAndPreservesKeyPhotoOnCancel() {

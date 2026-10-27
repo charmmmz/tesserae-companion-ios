@@ -96,6 +96,9 @@ preserves manual framing and invalidates old subject analysis.
 Photos, video frames and Live Photo key/alternate frames use the same vertically
 centered display canvas within the reserved preview area. The selected display's
 aspect ratio determines its size; media kind does not change its placement.
+The app and Share Extension use one shared preview layout and header: Change
+Photo, centered canvas, key photo/timeline, then the target-display selector.
+Accessibility text sizes allow the canvas and controls to grow vertically.
 
 The Share Extension recognizes Live Photo type declarations as well as modern
 object providers. System Photos' legacy item provider requires an Objective-C

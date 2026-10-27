@@ -36,6 +36,19 @@ xcodebuild \
 The checked-in Xcode project is generated from `project.yml`. When target or
 build settings change, regenerate it with XcodeGen and commit both files.
 
+To test automatic Live Photo import through the real system Photos Share Sheet,
+use a dedicated booted iPhone simulator with Photos' first-run setup completed:
+
+```sh
+Scripts/test_system_photos_share.sh SIMULATOR_UDID
+```
+
+This seeds a small synthetic Live Photo, opens Photos and shares it to Tesserae.
+It checks that the timeline appears without reselecting the asset, can scrub,
+and follows the same preview order as the app. The test is excluded from normal
+runs because it requires a seeded Photos library. In-app media tests also cover
+shared preview geometry, key-photo restoration, and larger text on iPhone/iPad.
+
 ## Contract changes
 
 Changes to `/api/app/v1` must update all relevant artifacts together:

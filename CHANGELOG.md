@@ -16,6 +16,9 @@ capabilities.
 - Sharing a Live Photo directly from system Photos automatically loads its
   motion and frame timeline. The legacy item-provider callback now preserves
   the concrete Live Photo class required for Foundation's class coercion.
+- Send and Share use a shared preview header and layout: Change Photo, a
+  centered canvas, frame controls, then the target display. Both adapt to
+  accessibility text sizes; Share can replace media without leaving its draft.
 - Displays home cards use a connection icon with Wi-Fi or Bluetooth consistently,
   including VoiceOver connection content. Wi-Fi signal values remain in device
   details instead of sharing the home-card slot with the Bluetooth mode label.
