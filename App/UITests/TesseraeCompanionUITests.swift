@@ -1955,6 +1955,7 @@ final class TesseraeCompanionUITests: XCTestCase {
             "send-progress-capsule"
         ]
         XCTAssertTrue(progressCapsule.waitForExistence(timeout: 2))
+        XCTAssertTrue(app.buttons["root-send-close"].waitForNonExistence(timeout: 2))
         XCTAssertFalse(
             sendButton.descendants(matching: .activityIndicator).firstMatch.exists
         )
@@ -2743,7 +2744,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(sendPhoto.isHittable)
     }
 
-    func testFailedPhotoSendPreservesDraftAndClosesAfterRetry() {
+    func testFailedPhotoSendRetriesFromCapsuleAfterComposerCloses() {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
@@ -2773,25 +2774,18 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(reset.waitForExistence(timeout: 3))
         XCTAssertTrue(reset.isEnabled)
         let preview = app.descendants(matching: .any)["send-panel-preview"]
-        let framing = preview.value as? String
-        let zoom = app.staticTexts["send-framing-zoom"].label
+        XCTAssertNotNil(preview.value as? String)
 
         let send = app.buttons["send-submit"]
         scrollToButton(send, app: app)
         send.tap()
-        XCTAssertTrue(app.alerts.firstMatch.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.alerts.staticTexts["Test send failed. Try again."].exists)
-        app.alerts.buttons["OK"].tap()
-        XCTAssertTrue(app.buttons["root-send-close"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["root-send-close"].waitForNonExistence(timeout: 3))
+        let failure = app.descendants(matching: .any)["send-error-capsule"].firstMatch
+        XCTAssertTrue(failure.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Test send failed. Try again."].exists)
+        XCTAssertFalse(app.alerts.firstMatch.exists)
         XCTAssertFalse(app.descendants(matching: .any)["send-success-banner"].exists)
-        XCTAssertTrue(app.buttons["send-change-photo"].exists)
-        XCTAssertEqual(preview.value as? String, framing)
-        XCTAssertEqual(app.staticTexts["send-framing-zoom"].label, zoom)
-        XCTAssertTrue(desk.isSelected)
-        XCTAssertFalse(kitchen.isSelected)
-        XCTAssertTrue(send.isEnabled)
-
-        send.tap()
+        app.buttons["Retry"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["send-success-banner"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["root-send-close"].waitForNonExistence(timeout: 3))
         XCTAssertTrue(app.buttons["root-send-action"].isHittable)

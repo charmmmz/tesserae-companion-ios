@@ -220,7 +220,7 @@ final class BluetoothShareUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["share-test-complete"].waitForExistence(timeout: 15))
     }
 
-    func testInAppBluetoothBecomesReadyWithoutFitChangeAndKeepsScrollingWhileSending() {
+    func testInAppBluetoothBecomesReadyAndClosesComposerWhileSending() {
         let app = XCUIApplication()
         app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
@@ -246,16 +246,15 @@ final class BluetoothShareUITests: XCTestCase {
         let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: send)
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 15), .completed)
         send.tap()
-        XCTAssertFalse(app.buttons["root-send-close"].isEnabled)
-        let preview = app.staticTexts["send-preview-title"]
-        let before = preview.frame.minY
-        let scroll = app.scrollViews.containing(.button, identifier: "send-submit").firstMatch
-        scroll.swipeDown()
-        XCTAssertGreaterThan(preview.frame.minY, before + 40)
-        XCTAssertTrue(app.buttons["root-send-close"].exists)
-        XCTAssertFalse(send.isEnabled)
+        XCTAssertTrue(app.buttons["root-send-close"].waitForNonExistence(timeout: 3))
+        let progress = app.descendants(matching: .any)["send-progress-capsule"].firstMatch
+        XCTAssertTrue(progress.waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["root-send-action"].isEnabled)
+        XCTAssertFalse(app.descendants(matching: .any)["send-success-banner"].exists)
+        app.buttons["Activity"].firstMatch.tap()
+        XCTAssertTrue(progress.exists)
         let shot = XCTAttachment(screenshot: app.screenshot())
-        shot.name = "Bluetooth send remains scrollable"; shot.lifetime = .keepAlways; add(shot)
+        shot.name = "Bluetooth send continues after composer closes"; shot.lifetime = .keepAlways; add(shot)
     }
 
     func testInAppBluetoothDiscoveryAndExclusiveSelectionSend() {

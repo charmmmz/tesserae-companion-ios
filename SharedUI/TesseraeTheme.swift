@@ -660,10 +660,10 @@ struct TesseraePresentedMessage: View {
                 if let fraction {
                     ProgressView(value: fraction)
                         .progressViewStyle(.circular)
-                        .tint(TesseraeTheme.info)
+                        .tint(TesseraeTheme.accent)
                 } else {
                     ProgressView()
-                        .tint(TesseraeTheme.info)
+                        .tint(TesseraeTheme.accent)
                 }
             case .warning:
                 Image(systemName: "exclamationmark.triangle.fill")
@@ -677,8 +677,10 @@ struct TesseraePresentedMessage: View {
 
     private func color(for kind: TesseraeMessageKind) -> Color {
         switch kind {
-        case .info, .progress:
+        case .info:
             TesseraeTheme.info
+        case .progress:
+            TesseraeTheme.accent
         case .success:
             TesseraeTheme.success
         case .warning:

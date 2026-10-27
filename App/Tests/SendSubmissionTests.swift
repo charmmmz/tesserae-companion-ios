@@ -46,7 +46,7 @@ struct SendSubmissionTests {
         if outcome == .offline { #expect(model.connectionHealth == .offline) }
     }
 
-    @Test("A partially accepted photo batch stays open and retries without duplicating accepted jobs")
+    @Test("A partially accepted photo batch retries without duplicating accepted jobs")
     func partialBatchRetry() async throws {
         let client = MockTesseraeClient(latency: .zero, imageSendErrors: [
             .server(code: "temporary_error", message: "Try again", requestID: nil)
@@ -59,6 +59,58 @@ struct SendSubmissionTests {
         #expect(model.jobs.count == 2)
         #expect(model.jobs.allSatisfy { $0.status == .succeeded })
         #expect(model.lastError == nil)
+    }
+
+    @Test("Submission and progress survive closing the composer and reject duplicate starts")
+    func submissionSurvivesClosingComposer() async throws {
+        let submission = SendSubmissionSession()
+        let center = TesseraeMessageCenter()
+        let root = UUID()
+        let composer = UUID()
+        center.activateHost(id: root)
+        center.activateHost(id: composer)
+        let gate = AsyncStream<Void>.makeStream()
+        let task = try #require(submission.start(messageCenter: center, confirmation: "Sent") {
+            var iterator = gate.stream.makeAsyncIterator()
+            _ = await iterator.next()
+            return nil
+        })
+        #expect(submission.isSubmitting)
+        #expect(center.currentMessage?.kind == .progress(fraction: nil))
+        center.deactivateHost(id: composer)
+        #expect(center.currentMessage?.accessibilityIdentifier == "send-progress-capsule")
+        #expect(submission.start(messageCenter: center, confirmation: "Duplicate", operation: { nil }) == nil)
+        gate.continuation.yield(())
+        gate.continuation.finish()
+        await task.value
+        #expect(!submission.isSubmitting)
+        #expect(center.currentMessage?.kind == .success)
+        #expect(center.currentMessage?.text == "Sent")
+    }
+
+    @Test("A failed submission retains its operation for an explicit capsule retry")
+    func failureRetriesFromCapsule() async throws {
+        let submission = SendSubmissionSession()
+        let center = TesseraeMessageCenter()
+        let retried = AsyncStream<Void>.makeStream()
+        var attempts = 0
+        let task = try #require(submission.start(messageCenter: center, confirmation: "Sent") {
+            attempts += 1
+            if attempts == 1 { return "Try again" }
+            retried.continuation.yield(())
+            retried.continuation.finish()
+            return nil
+        })
+        await task.value
+        #expect(!submission.isSubmitting)
+        #expect(center.currentMessage?.kind == .error)
+        let retry = try #require(center.currentMessage?.action)
+        retry.perform()
+        #expect(submission.isSubmitting)
+        for await _ in retried.stream { break }
+        #expect(attempts == 2)
+        #expect(!submission.isSubmitting)
+        #expect(center.currentMessage?.kind == .success)
     }
 
     private func sendPhoto(_ model: AppModel) async -> Bool {

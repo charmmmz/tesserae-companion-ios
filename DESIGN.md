@@ -245,6 +245,10 @@ the accessibility name when the visible label is icon-only. Connect, Review,
 Send/Retry, Select All and destructive confirmations retain descriptive text.
 Changing a label does not change permissions, disabled states or draft protection.
 
+In-app Send closes immediately after submission. Its presentation-owned session
+keeps the foreground send alive, and the message capsule shows progress,
+confirmation or a failure with Retry. Progress indicators use the theme accent.
+
 Nearby Bluetooth photo sends close the send sheet as soon as the device confirms
 receipt. Only after dismissal, the presenting page shows a brief “Sent to <display>”
 message capsule. The editor, sending progress and success message never appear

@@ -10,6 +10,7 @@ final class CompanionPresentation {
 
     var sheet: Sheet?
     var isSendComposerPresented = false
+    let sendSubmission = SendSubmissionSession()
 }
 
 struct TesseraeSettingsToolbarButton: View {
@@ -35,6 +36,7 @@ struct TesseraeSendButton: View {
         .tesseraeHapticFeedback(trigger: hapticEvent)
         .accessibilityHint("Opens the Send composer.")
         .accessibilityIdentifier("root-send-action")
+        .disabled(presentation.sendSubmission.isSubmitting)
     }
 }
 
@@ -214,7 +216,7 @@ struct MainTabView: View {
 struct SendComposerSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(CompanionPresentation.self) private var presentation
-    @State private var submission = SendSubmissionSession()
+    private var submission: SendSubmissionSession { presentation.sendSubmission }
     var initialImage: SendImageDraft? = nil
 
     let close: () -> Void
@@ -243,8 +245,8 @@ struct SendComposerSheet: View {
         .onAppear { presentation.isSendComposerPresented = true }
         .onDisappear { presentation.isSendComposerPresented = false }
         .alert("Something Went Wrong", isPresented: Binding(
-            get: { model.lastError != nil },
-            set: { if !$0 { model.lastError = nil } }
+            get: { model.lastError != nil && !submission.isSubmitting },
+            set: { if !$0 && !submission.isSubmitting { model.lastError = nil } }
         )) {
             Button("OK", role: .cancel) { model.lastError = nil }
         } message: {

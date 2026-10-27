@@ -12,7 +12,91 @@ struct SendImageDraft: Identifiable {
 
 @MainActor @Observable
 final class SendSubmissionSession {
-    var isSubmitting = false
+    private(set) var isSubmitting = false
+    private var task: Task<Void, Never>?
+    private var bluetoothSession: BluetoothShareSession?
+
+    // The presentation owns this session; closing the composer does not cancel
+    // its foreground send or release an active Bluetooth connection.
+    @discardableResult
+    func start(
+        messageCenter: TesseraeMessageCenter,
+        confirmation: String,
+        operation: @escaping @MainActor () async -> String?
+    ) -> Task<Void, Never>? {
+        guard !isSubmitting else { return nil }
+        isSubmitting = true
+        messageCenter.post(TesseraeMessage(
+            id: "send.submission", text: String(localized: "Sending…"),
+            kind: .progress(fraction: nil), lifetime: .persistent,
+            survivesPresentationChange: true,
+            accessibilityIdentifier: "send-progress-capsule"
+        ))
+        let task = Task { @MainActor [self, messageCenter] in
+            let failure = await operation()
+            self.isSubmitting = false
+            self.task = nil
+            if let failure {
+                messageCenter.post(TesseraeMessage(
+                    id: "send.submission", text: failure,
+                    kind: .error, lifetime: .persistent,
+                    survivesPresentationChange: true,
+                    accessibilityIdentifier: "send-error-capsule", haptic: .error,
+                    action: TesseraeMessageAction(title: String(localized: "Retry")) {
+                        [weak self, weak messageCenter] in
+                        guard let self, let messageCenter else { return }
+                        self.start(messageCenter: messageCenter, confirmation: confirmation,
+                                   operation: operation)
+                    }
+                ))
+            } else {
+                messageCenter.post(TesseraeMessage(
+                    id: "send.submission", text: confirmation,
+                    kind: .success, lifetime: .automatic(seconds: 3),
+                    survivesPresentationChange: true,
+                    accessibilityIdentifier: "send-success-banner", haptic: .success
+                ))
+            }
+        }
+        self.task = task
+        return task
+    }
+
+    func startBluetooth(
+        session: BluetoothShareSession, image: UIImage, fit: ImageFitMode,
+        framing: ImageFraming, messageCenter: TesseraeMessageCenter, confirmation: String
+    ) {
+        guard !isSubmitting, let device = session.selectedDevice else { return }
+        bluetoothSession = session
+        start(messageCenter: messageCenter, confirmation: confirmation) {
+            self.bluetoothSession = session
+            defer { session.stop(); self.bluetoothSession = nil }
+            session.start()
+            if !session.canSend { session.select(device) }
+            do {
+                while !session.canSend {
+                    if let failure = session.failure ?? session.nearby.bluetoothUnavailableMessage { return failure }
+                    try await Task.sleep(for: .milliseconds(250))
+                }
+                session.send(image: image, fit: fit, framing: framing) { _ in }
+                while session.nearby.photoState != .received {
+                    if let failure = session.failure { return failure }
+                    try await Task.sleep(for: .milliseconds(250))
+                }
+                return nil
+            } catch {
+                return error.localizedDescription
+            }
+        }
+    }
+
+    func updateApplicationActivity(_ isActive: Bool) {
+        bluetoothSession?.nearby.updateApplicationActivity(isActive)
+    }
+
+    func ownsBluetoothSession(_ session: BluetoothShareSession?) -> Bool {
+        bluetoothSession != nil && bluetoothSession === session
+    }
 }
 
 struct SendView: View {
@@ -22,7 +106,6 @@ struct SendView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var bluetoothSession: BluetoothShareSession?
     @State private var bluetoothTargetID: String?
-    @State private var bluetoothConfirmation: String?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var previewHeight: CGFloat = 276
@@ -43,7 +126,7 @@ struct SendView: View {
     @State private var framingSession = PhotoFramingSession()
     @State private var imageLoadRevision = UUID()
     @State private var isPreparingImage = false
-    @State private var submission: SendSubmissionSession
+    private let submission: SendSubmissionSession
     @State private var imageRevision = UUID()
     @State private var imageSendAttempt: ImageSendAttempt?
     @State private var selectedDeviceIDs: Set<String> = []
@@ -59,7 +142,7 @@ struct SendView: View {
         prioritizesFramingGesture: Bool = false,
         submission: SendSubmissionSession = SendSubmissionSession()
     ) {
-        _submission = State(initialValue: submission)
+        self.submission = submission
         self.prioritizesFramingGesture = prioritizesFramingGesture
         self.initialImage = initialImage
     }
@@ -141,29 +224,17 @@ struct SendView: View {
         composerPage
             .task { startBluetoothDiscovery() }
             .onDisappear {
-                bluetoothSession?.stop()
-                if let confirmation = bluetoothConfirmation {
-                    bluetoothConfirmation = nil
-                    showSentConfirmation(confirmation)
-                }
+                if !submission.ownsBluetoothSession(bluetoothSession) { bluetoothSession?.stop() }
             }
             .onChange(of: scenePhase) { _, phase in
-                bluetoothSession?.nearby.updateApplicationActivity(phase == .active)
+                if !submission.ownsBluetoothSession(bluetoothSession) {
+                    bluetoothSession?.nearby.updateApplicationActivity(phase == .active)
+                }
             }
             .onChange(of: sendTargets) { _, _ in reconcileBluetoothSelection() }
             .onChange(of: bluetoothSession?.failure) { _, failure in
-                guard let failure else { return }
-                submission.isSubmitting = false
-                framingSession.resumeEditing()
-                messageCenter.dismiss(id: "send.submission")
+                guard let failure, !submission.isSubmitting, !framingSession.isFrozen else { return }
                 model.lastError = failure
-            }
-            .onChange(of: bluetoothSession?.nearby.photoState) { _, state in
-                guard state == .received, let target = bluetoothTarget else { return }
-                bluetoothConfirmation = String(localized: "Sent to \(target.name)")
-                submission.isSubmitting = false
-                if let device = bluetoothSession?.selectedDevice { nearbyDevices.dismissSuggestion(for: device) }
-                dismiss()
             }
             .onChange(of: source) { _, source in
                 if source != .photo, bluetoothTargetID != nil {
@@ -245,19 +316,13 @@ struct SendView: View {
 
     private func sendBluetooth() {
         guard sourceIsReady, destinationIsReady, let session = bluetoothSession,
-              let image = previewImage, let panel = previewPanel else { return }
+              let target = bluetoothTarget, let image = previewImage, let panel = previewPanel else { return }
         framingSession.freeze()
-        submission.isSubmitting = true
-        showSendingMessage()
-        session.send(image: image, fit: fitMode,
-            framing: framingSession.framing(for: PanelAspectRatio(panel: panel))) { busy in
-                if !busy, let failure = session.failure {
-                    submission.isSubmitting = false
-                    framingSession.resumeEditing()
-                    messageCenter.dismiss(id: "send.submission")
-                    model.lastError = failure
-                }
-            }
+        submission.startBluetooth(session: session, image: image, fit: fitMode,
+            framing: framingSession.framing(for: PanelAspectRatio(panel: panel)),
+            messageCenter: messageCenter, confirmation: String(localized: "Sent to \(target.name)"))
+        if let device = session.selectedDevice { nearbyDevices.dismissSuggestion(for: device) }
+        dismiss()
     }
 
     private func submitButton(isEnabled: Bool) -> some View {
@@ -268,7 +333,6 @@ struct SendView: View {
                 return
             }
             framingSession.freeze()
-            submission.isSubmitting = true
             let submittedSource = source
             let submittedData = imageData
             let submittedFit = fitMode
@@ -278,18 +342,16 @@ struct SendView: View {
             let submittedURL = linkURL
             let submittedLinkKind = linkKind
             let submittedIDs = Array(selectedDeviceIDs)
-            Task {
-                defer {
-                    submission.isSubmitting = false
-                    framingSession.resumeEditing()
+            let submittedConnection = model.connectionSession
+            submission.start(messageCenter: messageCenter, confirmation: confirmationMessage) { [model] in
+                guard model.connectionSession == submittedConnection else {
+                    return String(localized: "Could not confirm the send. Check Activity before retrying.")
                 }
-                showSendingMessage()
                 let sent: Bool
                 switch submittedSource {
                 case .photo:
                     guard let submittedData else {
-                        messageCenter.dismiss(id: "send.submission")
-                        return
+                        return String(localized: "Could not confirm the send. Check Activity before retrying.")
                     }
                     sent = await model.sendImage(
                         data: submittedData,
@@ -300,8 +362,7 @@ struct SendView: View {
                     )
                 case .link:
                     guard let submittedURL else {
-                        messageCenter.dismiss(id: "send.submission")
-                        return
+                        return String(localized: "Could not confirm the send. Check Activity before retrying.")
                     }
                     sent = await model.sendLink(
                         url: submittedURL,
@@ -310,15 +371,16 @@ struct SendView: View {
                         deviceIDs: submittedIDs
                     )
                 }
-                if sent {
-                    linkFieldIsFocused = false
-                    showSentConfirmation(confirmationMessage)
-                    dismiss()
-                } else {
-                    messageCenter.dismiss(id: "send.submission")
-                    hapticEvent.trigger(.error)
+                guard model.connectionSession == submittedConnection else {
+                    return String(localized: "Could not confirm the send. Check Activity before retrying.")
                 }
+                let failure = model.lastError ?? model.connectionNotice
+                    ?? String(localized: "Could not confirm the send. Check Activity before retrying.")
+                model.lastError = nil
+                return sent ? nil : failure
             }
+            linkFieldIsFocused = false
+            dismiss()
         } label: {
             Label("Send to Displays", systemImage: "paperplane.fill")
                 .frame(maxWidth: .infinity)
@@ -727,34 +789,6 @@ struct SendView: View {
 
     private var confirmationMessage: String {
         String(localized: "Sent to Displays")
-    }
-
-    private func showSentConfirmation(_ message: String) {
-        messageCenter.post(
-            TesseraeMessage(
-                id: "send.submission",
-                text: message,
-                kind: .success,
-                lifetime: .automatic(seconds: 3),
-                survivesPresentationChange: true,
-                priority: .normal,
-                accessibilityIdentifier: "send-success-banner",
-                haptic: .success
-            )
-        )
-    }
-
-    private func showSendingMessage() {
-        messageCenter.post(
-            TesseraeMessage(
-                id: "send.submission",
-                text: String(localized: "Sending…"),
-                kind: .progress(fraction: nil),
-                lifetime: .persistent,
-                priority: .normal,
-                accessibilityIdentifier: "send-progress-capsule"
-            )
-        )
     }
 
     private var previewDisplay: DisplaySummary? {

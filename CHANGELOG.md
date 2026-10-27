@@ -11,6 +11,12 @@ capabilities.
 
 ## [Unreleased]
 
+### Changed
+
+- In-app Send closes as soon as a send starts, with progress, confirmation and
+  failures shown in the message capsule. Failed sends can retry the submitted
+  content and framing. Message progress indicators now use the theme accent.
+
 ### Fixed
 
 - When Photos sharing cannot provide readable Live Photo motion, Share can
@@ -56,8 +62,6 @@ capabilities.
   and an optional light haptic when opening the composer, respecting Reduce Motion.
 - Bluetooth Send readiness refreshes after authentication without requiring an
   Image Fit change.
-- In-app composers keep scrolling available during submission while protecting
-  the draft and preventing duplicate sends or dismissal.
 - Message capsules sit directly below the Dynamic Island/status bar, independently
   of navigation titles and sheet positions, with pass-through background touches.
 - Bluetooth status reports include saved battery percentages and firmware versions

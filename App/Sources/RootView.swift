@@ -156,6 +156,7 @@ struct RootView: View {
         }
         .onChange(of: scenePhase) { _, newPhase in
             nearbyDevices.updateApplicationActivity(newPhase == .active)
+            presentation.sendSubmission.updateApplicationActivity(newPhase == .active)
             remindersBridgeModel.updateApplicationActivity(
                 newPhase == .active,
                 using: model
@@ -172,7 +173,8 @@ struct RootView: View {
             nearbyDevices.updateApplicationActivity(scenePhase == .active)
         }
         .sheet(item: Binding(
-            get: { presentation.isSendComposerPresented ? nil : nearbyDevices.suggestedDevice },
+            get: { presentation.isSendComposerPresented || presentation.sendSubmission.isSubmitting
+                ? nil : nearbyDevices.suggestedDevice },
             set: { newDevice in
                 if newDevice == nil, let suggestedDevice = nearbyDevices.suggestedDevice {
                     nearbyDevices.endSession(for: suggestedDevice)
@@ -196,9 +198,11 @@ struct RootView: View {
         .alert(
             "Something Went Wrong",
             isPresented: Binding(
-                get: { model.lastError != nil && !presentation.isSendComposerPresented },
+                get: { model.lastError != nil && !presentation.isSendComposerPresented
+                    && !presentation.sendSubmission.isSubmitting },
                 set: { isPresented in
-                    if !isPresented && !presentation.isSendComposerPresented {
+                    if !isPresented && !presentation.isSendComposerPresented
+                        && !presentation.sendSubmission.isSubmitting {
                         model.lastError = nil
                     }
                 }
