@@ -15,6 +15,8 @@ capabilities.
 
 - Bluetooth Send readiness refreshes after authentication without requiring an
   Image Fit change.
+- In-app composers keep scrolling available during submission while protecting
+  the draft and preventing duplicate sends or dismissal.
 - Bluetooth status reports include saved battery percentages and firmware versions
   when the server advertises support, preserving each reading’s collection time.
 

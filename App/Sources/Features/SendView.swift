@@ -74,17 +74,22 @@ struct SendView: View {
         let destinationReady = destinationIsReady
         let canSubmit = sourceIsReady && destinationReady && !isSending && !submission.isSubmitting
         return AdaptiveComposerLayout {
-            if supportsLinks { sourceCard }
-            if source == .photo { imagePickerCard } else { linkCard }
+            Group {
+                if supportsLinks { sourceCard }
+                if source == .photo { imagePickerCard } else { linkCard }
+            }
+            .disabled(submission.isSubmitting)
         } controls: {
-            targetCard
-            fitCard
+            Group {
+                targetCard
+                fitCard
+            }
+            .disabled(submission.isSubmitting)
             submitButton(isEnabled: canSubmit)
         }
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
             previewHeight = composerCanvasHeight(in: size)
         }
-        .disabled(submission.isSubmitting)
         .interactiveDismissDisabled(submission.isSubmitting)
         .task(id: sendPreferenceContextID) {
             await loadSendPreferences()

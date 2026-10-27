@@ -161,8 +161,9 @@ final class BluetoothShareUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["share-test-complete"].waitForExistence(timeout: 15))
     }
     private func reveal(_ element: XCUIElement, app: XCUIApplication) {
+        let identifier = element.identifier.isEmpty ? element.label : element.identifier
         for _ in 0..<6 where !element.isHittable {
-            let scroll = app.scrollViews.containing(.button, identifier: element.identifier).firstMatch
+            let scroll = app.scrollViews.containing(.button, identifier: identifier).firstMatch
             let container = scroll.exists ? scroll : app
             let start = container.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.8))
             let end = container.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.2))
@@ -217,6 +218,44 @@ final class BluetoothShareUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 12), .completed)
         send.tap()
         XCTAssertTrue(app.staticTexts["share-test-complete"].waitForExistence(timeout: 15))
+    }
+
+    func testInAppBluetoothBecomesReadyWithoutFitChangeAndKeepsScrollingWhileSending() {
+        let app = XCUIApplication()
+        app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
+        app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_BLE"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_PHOTO"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_SEND_BLUETOOTH"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_CONNECTION_DELAY_MS"] = "10000"
+        app.launchEnvironment["TESSERAE_UI_TEST_SKIP_PHOTO_RECEIPT"] = "1"
+        app.launch()
+        app.buttons["Explore with Demo Data"].tap()
+        app.buttons["root-send-action"].tap()
+        let sample = app.buttons["Use Sample"]
+        XCTAssertTrue(sample.waitForExistence(timeout: 5))
+        reveal(sample, app: app)
+        sample.tap()
+        let target = app.buttons["send-display-picpak-kitchen"]
+        reveal(target, app: app)
+        target.tap()
+        let send = app.buttons["send-submit"]
+        XCTAssertFalse(send.isEnabled)
+        reveal(send, app: app)
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: send)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 15), .completed)
+        send.tap()
+        XCTAssertFalse(app.buttons["root-send-close"].isEnabled)
+        let preview = app.staticTexts["send-preview-title"]
+        let before = preview.frame.minY
+        let scroll = app.scrollViews.containing(.button, identifier: "send-submit").firstMatch
+        scroll.swipeDown()
+        XCTAssertGreaterThan(preview.frame.minY, before + 40)
+        XCTAssertTrue(app.buttons["root-send-close"].exists)
+        XCTAssertFalse(send.isEnabled)
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Bluetooth send remains scrollable"; shot.lifetime = .keepAlways; add(shot)
     }
 
     func testInAppBluetoothDiscoveryAndExclusiveSelectionSend() {
