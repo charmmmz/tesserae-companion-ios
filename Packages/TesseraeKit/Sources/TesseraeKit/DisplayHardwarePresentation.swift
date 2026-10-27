@@ -13,6 +13,10 @@ public enum DisplayHardwareBrand: String, CaseIterable, Hashable, Sendable {
     case amazon
     case kobo
     case remarkable
+    case elecrow
+    case goodDisplay
+    case zectrix
+    case bloomin8
 
     public var displayName: String {
         switch self {
@@ -40,6 +44,14 @@ public enum DisplayHardwareBrand: String, CaseIterable, Hashable, Sendable {
             "Kobo"
         case .remarkable:
             "reMarkable"
+        case .elecrow:
+            "Elecrow"
+        case .goodDisplay:
+            "Good Display"
+        case .zectrix:
+            "ZecTrix"
+        case .bloomin8:
+            "Bloomin8"
         }
     }
 }
@@ -109,6 +121,8 @@ public struct DisplayHardwarePresentation: Equatable, Hashable, Sendable {
             self.init(brand: .waveshare, modelName: "10.85″ e-Paper HAT+ (G)")
         case "waveshare_esp32_driver_75":
             self.init(brand: .waveshare, modelName: "ESP32 Driver · 7.5″ B/W")
+        case "waveshare_epaper_73f":
+            self.init(brand: .waveshare, modelName: "7.3″ e-Paper (F)")
         case "picpak", "picpak_client", "picpak_4_2":
             self.init(brand: .picPak, modelName: "PicPak 4.2″")
         case "xteink_x3":
@@ -131,6 +145,10 @@ public struct DisplayHardwarePresentation: Equatable, Hashable, Sendable {
             self.init(brand: .m5stack, modelName: "PaperS3")
         case "soldered_inkplate_10":
             self.init(brand: .soldered, modelName: "Inkplate 10")
+        case "soldered_inkplate_13spectra":
+            self.init(brand: .soldered, modelName: "Inkplate 13SPECTRA")
+        case "soldered_inkplate_6color":
+            self.init(brand: .soldered, modelName: "Inkplate 6COLOR")
         case "paperlesspaper_openpaper_7":
             self.init(brand: .paperlesspaper, modelName: "OpenPaper 7")
         case "paperlesspaper_openpaper_l":
@@ -165,6 +183,18 @@ public struct DisplayHardwarePresentation: Equatable, Hashable, Sendable {
             self.init(brand: .remarkable, modelName: "reMarkable 2")
         case "remarkable_paper_pro":
             self.init(brand: .remarkable, modelName: "Paper Pro")
+        case "elecrow_crowpanel_579":
+            self.init(brand: .elecrow, modelName: "CrowPanel 5.79″")
+        case "gooddisplay_esp32_133c02":
+            self.init(brand: .goodDisplay, modelName: "ESP32-133C02 · 13.3″")
+        case "note4c_client":
+            self.init(brand: .zectrix, modelName: "NOTE4C Devkit")
+        case "bloomin8_canvas":
+            self.init(brand: .bloomin8, modelName: "Canvas")
+        case "epdiy_v7_ed133ut2":
+            self.init(brand: nil, modelName: "epdiy v7 · ED133UT2 13.3″")
+        case "crosspoint_gray":
+            self.init(brand: nil, modelName: "CrossPoint e-reader")
         case "circuitpython_generic":
             self.init(brand: nil, modelName: "CircuitPython")
         case "esp32_client", "esp32_bw_client":
@@ -225,6 +255,18 @@ public struct DisplayHardwarePresentation: Equatable, Hashable, Sendable {
         }
         if kind.hasPrefix("remarkable_") {
             return .remarkable
+        }
+        if kind.hasPrefix("elecrow_") {
+            return .elecrow
+        }
+        if kind.hasPrefix("gooddisplay_") {
+            return .goodDisplay
+        }
+        if kind.hasPrefix("zectrix_") {
+            return .zectrix
+        }
+        if kind.hasPrefix("bloomin8_") {
+            return .bloomin8
         }
         return nil
     }

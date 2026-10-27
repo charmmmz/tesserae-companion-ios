@@ -499,6 +499,9 @@ references and are not bundled in the app.
   for device identifiers, versions, dimensions, and diagnostic values.
 - Manufacturer logos scale with the adjacent caption text, preserving their
   proportions and fitting within narrow columns; model names can move below them.
+- Hardware labels cover the upstream hardware catalog and named device adapters.
+  epdiy and CrossPoint retain platform/firmware names without claiming a manufacturer;
+  NOTE4C identifies ZecTrix independently of its shared PicPak transport protocol.
 - Use the bundled Phosphor regular icon font for server-selected Dashboard
   icons so identifiers match the web UI; keep SF Symbols for native
   navigation and controls.

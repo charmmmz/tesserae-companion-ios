@@ -113,16 +113,26 @@ extension DisplayHardwareBrand {
             "BrandKobo"
         case .remarkable:
             "BrandRemarkable"
+        case .elecrow:
+            "BrandElecrow"
+        case .goodDisplay:
+            "BrandGoodDisplay"
+        case .zectrix:
+            "BrandZectrix"
+        case .bloomin8:
+            "BrandBloomin8"
         }
     }
 
     func renderingMode(for colorScheme: ColorScheme) -> Image.TemplateRenderingMode {
         switch (self, colorScheme) {
         case (.seeedStudio, .dark), (.pimoroni, _), (.trmnl, _),
-            (.xteink, .dark), (.paperlesspaper, _), (.remarkable, _):
+            (.xteink, .dark), (.paperlesspaper, _), (.remarkable, _),
+            (.zectrix, _), (.bloomin8, _), (.goodDisplay, .dark):
             .template
         case (.seeedStudio, _), (.waveshare, _), (.picPak, _), (.xteink, _),
-            (.m5stack, _), (.soldered, _), (.kobo, _), (.amazon, _):
+            (.m5stack, _), (.soldered, _), (.kobo, _), (.amazon, _),
+            (.elecrow, _), (.goodDisplay, _):
             .original
         }
     }
@@ -160,6 +170,12 @@ extension DisplayHardwareBrand {
             72
         case .remarkable:
             78
+        case .elecrow:
+            80
+        case .goodDisplay:
+            94
+        case .zectrix, .bloomin8:
+            20
         }
     }
 

@@ -76,7 +76,8 @@ text is in `ThirdPartyNotices/Phosphor.txt`.
 
 ## Compatible-hardware marks
 
-The app bundles manufacturer marks sourced from official artwork solely to
+The app bundles manufacturer marks sourced from official artwork or the
+documented icon collection below solely to
 identify compatible hardware in the user's own Tesserae device list. Each name
 and mark remains the property of its respective owner and is not covered by
 this repository's Apache-2.0 licence. Their presence does not imply sponsorship
@@ -140,6 +141,33 @@ date:
   The `131 × 17` view box and paths are preserved. The site's `currentColor`
   fill is resolved to black in the SVG, and the asset renders as an adaptive
   monochrome template.
+- Elecrow orange-and-blue wordmark, retrieved 2026-10-27 from the
+  [official branding kit](https://www.elecrow.com/download/partner/elecrow_logo_branding_kit.zip),
+  linked by the [official brochure page](https://www.elecrow.com/brochure.html).
+  The source is `elecrow_logo_branding kit/RGB/elecrow_logo_01.svg`. Paths and
+  colours are preserved; the square canvas is cropped to a `48 328 704 144`
+  view box around the horizontal mark, with exporter metadata removed.
+- Good Display blue wordmark, retrieved 2026-10-27 from the
+  [official site](https://www.good-display.com/):
+  [header artwork](https://img202.yun300.cn/repository/image/08db4c90-c2b2-49f8-9474-e9070bdf7387.png?tenantId=160096&viewType=1&k=1791776976000).
+  Only the wordmark to the right of the emblem is used. The blue silhouette in
+  the `411 × 68` source is separated from its white background and converted
+  to smooth SVG paths with Potrace 1.16, using the source's sampled navy colour.
+  The view box is `97 13 304 51`. This is a contour conversion of official
+  raster artwork, not an official vector original. It has no background, and
+  the same silhouette renders as an adaptive white template in dark appearance.
+- ZecTrix glyph, retrieved 2026-10-27 via the
+  [Dashboard Icons entry](https://dashboardicons.com/icons/external/simpleicons/zectrix)
+  from [Simple Icons 16.36.0](https://cdn.jsdelivr.net/npm/simple-icons@16.36.0/icons/zectrix.svg).
+  The supplied SVG paths and `0 0 24 24` view box are unchanged and render as
+  an adaptive monochrome template. Simple Icons documents the
+  [official cloud logo](https://cloud.zectrix.com/logo.svg) as its source and
+  distributes its collection under [CC0 1.0](https://cdn.jsdelivr.net/npm/simple-icons@16.36.0/LICENSE.md);
+  brand rights remain with the owner.
+- Bloomin8 black floral glyph, retrieved 2026-10-27 from the header of the
+  [official site](https://bloomin8.com/):
+  [original transparent PNG](https://bloomin8.com/cdn/shop/files/black_4c61cfe3-b387-405e-a453-567277be6612.png?v=1765963165).
+  The bundled PNG is unchanged and renders as an adaptive monochrome template.
 
 These source links document provenance and rendering adaptations. Availability
 on an official site does not itself grant a general trademark licence or imply

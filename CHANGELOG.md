@@ -13,6 +13,10 @@ capabilities.
 
 ### Fixed
 
+- Hardware labels now recognize Elecrow CrowPanel, Good Display ESP32-133C02,
+  ZecTrix NOTE4C, Bloomin8 Canvas, epdiy v7 and CrossPoint, plus Inkplate 13SPECTRA,
+  Inkplate 6COLOR and Waveshare 7.3-inch e-Paper (F), with official marks for the
+  four newly recognized manufacturers.
 - Manufacturer logos scale with Dynamic Type alongside model names, including
   accessibility text sizes and narrow display columns.
 - The floating Send button responds with a solid pressed state, spring feedback,

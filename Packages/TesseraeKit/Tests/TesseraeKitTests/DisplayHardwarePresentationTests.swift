@@ -2,7 +2,8 @@ import Testing
 @testable import TesseraeKit
 
 struct DisplayHardwarePresentationTests {
-    // All 54 hardware IDs from Tesserae v0.442.3 (22f2aeb9).
+    // Branded hardware and device IDs from Tesserae main c944fc370a2b (2026-10-27).
+    // The epdiy hardware ID is covered by the platform/protocol cases below.
     @Test("Catalog hardware has a recognizable brand and model", arguments: [
         ("kindle_basic_4", DisplayHardwareBrand.amazon, "Kindle · 11th gen / Basic 4"),
         ("kindle_oasis_3", .amazon, "Kindle Oasis · 3rd gen"),
@@ -46,18 +47,25 @@ struct DisplayHardwarePresentationTests {
         ("xiao_epaper_75_bwr", .seeedStudio, "XIAO 7.5″ ePaper · B/W/R"),
         ("xiao_epaper_panel_75_c3", .seeedStudio, "XIAO 7.5″ ePaper · C3"),
         ("soldered_inkplate_10", .soldered, "Inkplate 10"),
+        ("soldered_inkplate_13spectra", .soldered, "Inkplate 13SPECTRA"),
+        ("soldered_inkplate_6color", .soldered, "Inkplate 6COLOR"),
         ("trmnl_x", .trmnl, "TRMNL X"),
         ("waveshare_photopainter_73", .waveshare, "PhotoPainter 7.3″"),
         ("waveshare_4_2_bw", .waveshare, "4.2″ B/W e-Paper"),
         ("waveshare_1085g", .waveshare, "10.85″ e-Paper HAT+ (G)"),
         ("waveshare_133e6", .waveshare, "13.3″ Spectra E6"),
         ("waveshare_esp32_driver_75", .waveshare, "ESP32 Driver · 7.5″ B/W"),
+        ("waveshare_epaper_73f", .waveshare, "7.3″ e-Paper (F)"),
         ("xteink_x3", .xteink, "X3"),
         ("xteink_x3_gray", .xteink, "X3 · 4-level grayscale"),
         ("xteink_x4", .xteink, "X4"),
         ("xteink_x4_gray", .xteink, "X4 · 4-level grayscale"),
         ("xteink_x4_pro", .xteink, "X4 Pro"),
         ("xteink_x4_pro_gray", .xteink, "X4 Pro · 4-level grayscale"),
+        ("elecrow_crowpanel_579", .elecrow, "CrowPanel 5.79″"),
+        ("gooddisplay_esp32_133c02", .goodDisplay, "ESP32-133C02 · 13.3″"),
+        ("note4c_client", .zectrix, "NOTE4C Devkit"),
+        ("bloomin8_canvas", .bloomin8, "Canvas"),
     ])
     func hardwareCatalogKindsResolveToTheirBrandsAndModels(
         kind: String,
@@ -90,7 +98,9 @@ struct DisplayHardwarePresentationTests {
         #expect(DisplayHardwarePresentation(kind: kind) == .init(brand: brand, modelName: modelName))
     }
 
-    @Test("Generic protocols do not claim a device manufacturer", arguments: [
+    @Test("Platforms and generic protocols do not claim a device manufacturer", arguments: [
+        ("epdiy_v7_ed133ut2", "epdiy v7 · ED133UT2 13.3″"),
+        ("crosspoint_gray", "CrossPoint e-reader"),
         ("circuitpython_generic", "CircuitPython"),
         ("esp32_client", "ESP32"),
         ("esp32_bw_client", "ESP32"),
@@ -125,6 +135,10 @@ struct DisplayHardwarePresentationTests {
         ("kindle_future_reader", .amazon),
         ("kobo_future_reader", .kobo),
         ("remarkable_future_reader", .remarkable),
+        ("elecrow_future_panel", .elecrow),
+        ("gooddisplay_future_panel", .goodDisplay),
+        ("zectrix_future_panel", .zectrix),
+        ("bloomin8_future_panel", .bloomin8),
     ])
     func futureVendorSKUShowsOnlyTheVendor(kind: String, brand: DisplayHardwareBrand) {
         let presentation = DisplayHardwarePresentation(kind: kind)
@@ -135,6 +149,8 @@ struct DisplayHardwarePresentationTests {
 
     @Test("Unrecognized kinds never invent hardware information", arguments: [
         "custom_lab_panel", "", "  \n", "koreader", "kindleness_reader", "kobold_reader",
+        "note4_client", "elecrowd_panel", "gooddisplayish_panel", "epdiy_future_panel",
+        "crosspoint_future_reader",
     ])
     func unknownKindFallsBackWithoutInventingABrand(kind: String) {
         let presentation = DisplayHardwarePresentation(kind: kind)
@@ -147,6 +163,7 @@ struct DisplayHardwarePresentationTests {
         ("  M5STACK_PAPERS3\n", DisplayHardwareBrand.m5stack, "PaperS3"),
         ("\tKindle_Scribe ", .amazon, "Kindle Scribe"),
         (" REMARKABLE_2 ", .remarkable, "reMarkable 2"),
+        (" NOTE4C_CLIENT ", .zectrix, "NOTE4C Devkit"),
     ])
     func hardwareKindsAreNormalized(kind: String, brand: DisplayHardwareBrand, modelName: String) {
         #expect(DisplayHardwarePresentation(kind: kind) == .init(brand: brand, modelName: modelName))
@@ -159,6 +176,10 @@ struct DisplayHardwarePresentationTests {
         (.amazon, "Amazon"),
         (.kobo, "Kobo"),
         (.remarkable, "reMarkable"),
+        (.elecrow, "Elecrow"),
+        (.goodDisplay, "Good Display"),
+        (.zectrix, "ZecTrix"),
+        (.bloomin8, "Bloomin8"),
     ])
     func newBrandDisplayNames(brand: DisplayHardwareBrand, name: String) {
         #expect(brand.displayName == name)

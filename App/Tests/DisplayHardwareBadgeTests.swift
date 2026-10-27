@@ -18,6 +18,23 @@ struct DisplayHardwareLogoTests {
         #expect(image.size.width > 0)
         #expect(image.size.height > 0)
     }
+
+    @Test("Good Display wordmark has transparent surroundings")
+    func goodDisplayWordmarkHasTransparentSurroundings() throws {
+        let image = try #require(UIImage(named: DisplayHardwareBrand.goodDisplay.assetName)?.cgImage)
+        let context = try #require(CGContext(
+            data: nil, width: image.width, height: image.height, bitsPerComponent: 8,
+            bytesPerRow: image.width * 4, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
+        ))
+        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        let pixels = try #require(context.data).assumingMemoryBound(to: UInt8.self)
+        let alphaOffsets = stride(from: 3, to: image.width * image.height * 4, by: 4)
+        let transparent = alphaOffsets.count { pixels[$0] == 0 }
+        let opaque = alphaOffsets.count { pixels[$0] == 255 }
+        #expect(transparent > image.width * image.height / 10)
+        #expect(opaque > image.width * image.height / 10)
+    }
 }
 
 // These attachments exercise the actual asset catalog and SwiftUI layout for visual
@@ -40,6 +57,9 @@ final class DisplayHardwareBadgeSnapshotTests: XCTestCase {
             "kindle_paperwhite_3", "kobo_clara_colour", "remarkable_paper_pro",
             "seeed_reterminal_e1001_gray_legacy", "pimoroni_inky_frame_73",
             "waveshare_1085g", "xteink_x4_pro_gray", "picpak_4_2", "trmnl_x",
+            "elecrow_crowpanel_579", "gooddisplay_esp32_133c02", "note4c_client",
+            "bloomin8_canvas", "epdiy_v7_ed133ut2", "soldered_inkplate_13spectra",
+            "soldered_inkplate_6color", "waveshare_epaper_73f", "crosspoint_gray",
             "custom_lab_panel",
         ]
         // Keep captures readable at the largest Dynamic Type sizes.
