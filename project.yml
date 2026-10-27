@@ -67,6 +67,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: App/Resources/TesseraeCompanion.entitlements
         SWIFT_VERSION: 6.0
         SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_OBJC_BRIDGING_HEADER: SharedUI/TesseraeShared-Bridging-Header.h
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
@@ -130,6 +131,7 @@ targets:
         SKIP_INSTALL: YES
         SWIFT_VERSION: 6.0
         SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_OBJC_BRIDGING_HEADER: SharedUI/TesseraeShared-Bridging-Header.h
         TARGETED_DEVICE_FAMILY: "1,2"
 
   TesseraeCompanionUITests:

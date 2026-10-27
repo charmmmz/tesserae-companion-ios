@@ -129,10 +129,10 @@ extension View {
             } catch { try Task.checkCancellation() }
         }
         let file = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<MediaTemporaryFile, Error>) in
-            // Share extensions may vend a Live Photo through the original item
-            // API even when the provider cannot load a PHLivePhoto object class.
-            provider.loadItem(forTypeIdentifier: UTType.livePhoto.identifier, options: nil) { object, error in
-                if let photo = object as? PHLivePhoto {
+            // Preserve the concrete PHLivePhoto block signature required by
+            // Photos' legacy item provider; a generic Swift block cannot coerce it.
+            TesseraeLoadLivePhotoItem(provider) { photo, error in
+                if let photo {
                     Self.exportMovie(from: photo) { continuation.resume(with: $0) }
                 }
                 else { continuation.resume(throwing: error ?? MediaFrameError.unavailable) }

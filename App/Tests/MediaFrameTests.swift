@@ -1,6 +1,7 @@
 import Foundation
 import ImageIO
 import Photos
+import Synchronization
 import Testing
 import UIKit
 import UniformTypeIdentifiers
@@ -21,6 +22,30 @@ import UniformTypeIdentifiers
         session.adopt(source)
         #expect(!session.hasTimeline)
         #expect(!session.isBusy)
+    }
+
+    @Test func legacySharedLivePhotoRequestsConcretePhotoClass() async throws {
+        let fixture = try await MediaFrameFixtures.source(kind: .livePhoto)
+        let primaryData = fixture.primaryImage.data
+        let requestedClass = Mutex<String?>(nil)
+        let provider = NSItemProvider()
+        provider.registerDataRepresentation(forTypeIdentifier: UTType.png.identifier, visibility: .all) { completion in
+            completion(primaryData, nil)
+            return nil
+        }
+        provider.registerItem(forTypeIdentifier: UTType.livePhoto.identifier) { completion, expectedClass, _ in
+            // Photos' legacy provider fails unless the completion block names
+            // PHLivePhoto. Record that coercion hint without needing library access.
+            requestedClass.withLock { $0 = expectedClass.map(NSStringFromClass) ?? "UntypedCompletion" }
+            completion?(nil, MediaFrameError.unavailable)
+        }
+        let source = try await MediaPickerSelection(provider: provider).load(maximumPixelSize: 320)
+        do {
+            _ = try await source.loadMovie()
+            Issue.record("The probe provider should fail after recording the requested class.")
+        } catch {
+            #expect(requestedClass.withLock { $0 } == NSStringFromClass(PHLivePhoto.self))
+        }
     }
 
     @Test func sharedLivePhotoTypePreservesKeyPhotoAndLoadsOfferedMovie() async throws {

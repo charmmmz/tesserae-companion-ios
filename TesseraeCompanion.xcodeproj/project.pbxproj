@@ -88,6 +88,7 @@
 		A33C850BFA53E3B5066F3D30 /* PhotoFramingGesture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EA333FF9332F6E7F0A3AAEA /* PhotoFramingGesture.swift */; };
 		A372DBF29C5725B419393279 /* MediaLibraryPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E080EF75EAC8A0C7863578B /* MediaLibraryPicker.swift */; };
 		A39325FC03A45BD076B23270 /* TesseraeCompanionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F7B082A4F4C920F49545310 /* TesseraeCompanionUITests.swift */; };
+		A68A6A2C359A5C63108740CC /* TesseraeLivePhotoItemProvider.m in Sources */ = {isa = PBXBuildFile; fileRef = 6D69D61C92AB080C32014EEB /* TesseraeLivePhotoItemProvider.m */; };
 		A74F07DCB5C3C7E92DE86F8A /* BLEPhotoProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13FE9A7CF2AD8318230B5311 /* BLEPhotoProtocol.swift */; };
 		A822986A4CCE386F6A7ED1D5 /* SetupNetworkStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20D62C46FB3E95326C7B906 /* SetupNetworkStore.swift */; };
 		A9C1333F5B8DEEBBCBECCF92 /* BLEPhotoProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13FE9A7CF2AD8318230B5311 /* BLEPhotoProtocol.swift */; };
@@ -124,6 +125,7 @@
 		EDA7DAFA44340F1BDCBE5FCB /* TesseraeTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD8060E9227692A0914DB946 /* TesseraeTheme.swift */; };
 		EEC2E5BFD4520294884FAA73 /* MediaFrameSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7900B085EB33F558356A1E91 /* MediaFrameSession.swift */; };
 		EF027BEE001DABA6D3E84627 /* BLESetupProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD5EEF99A30C18C07C717772 /* BLESetupProtocolTests.swift */; };
+		EF87A1BE93C2FE5479DA5267 /* TesseraeLivePhotoItemProvider.m in Sources */ = {isa = PBXBuildFile; fileRef = 6D69D61C92AB080C32014EEB /* TesseraeLivePhotoItemProvider.m */; };
 		F0209EEDC79E28C76F13B892 /* AppConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DABD7AC708239FDC0621487 /* AppConfiguration.swift */; };
 		F2B69015E438D0D45B00B241 /* DashboardsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA9D7AD75F28CF202A22080E /* DashboardsView.swift */; };
 		F49FCB7C12E28E8AB7DF788B /* PreviewImageState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BD9BF482144BDCB753B7EF6 /* PreviewImageState.swift */; };
@@ -213,10 +215,12 @@
 		5BEB87772E7D7FCDD812DDC7 /* NearbyDeviceSetupError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearbyDeviceSetupError.swift; sourceTree = "<group>"; };
 		5CCA51F737B4F27E6617E7E4 /* PhosphorRegularGlyphs.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = PhosphorRegularGlyphs.json; sourceTree = "<group>"; };
 		61AF530D779237A174E117C6 /* PreviewArtwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewArtwork.swift; sourceTree = "<group>"; };
+		63B3CC1F9EFE4C397C9BFB34 /* TesseraeShared-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "TesseraeShared-Bridging-Header.h"; sourceTree = "<group>"; };
 		68AB5B0479A37A3F55286299 /* BLESetupProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BLESetupProtocol.swift; sourceTree = "<group>"; };
 		68D757E72A99A23D9A75B361 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		6BA6516AC76BFF5C21FAAE27 /* DraftEditingSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftEditingSession.swift; sourceTree = "<group>"; };
 		6BD9BF482144BDCB753B7EF6 /* PreviewImageState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewImageState.swift; sourceTree = "<group>"; };
+		6D69D61C92AB080C32014EEB /* TesseraeLivePhotoItemProvider.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = TesseraeLivePhotoItemProvider.m; sourceTree = "<group>"; };
 		6DABD7AC708239FDC0621487 /* AppConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfiguration.swift; sourceTree = "<group>"; };
 		6F532D2BC8A0893B35702D88 /* TesseraeShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = TesseraeShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		6F5E8EDAA49826101FE30209 /* BluetoothShareSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothShareSession.swift; sourceTree = "<group>"; };
@@ -224,6 +228,7 @@
 		7F7B082A4F4C920F49545310 /* TesseraeCompanionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TesseraeCompanionUITests.swift; sourceTree = "<group>"; };
 		80F13F36D4E7990EF0B890C3 /* LineupsAppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineupsAppModelTests.swift; sourceTree = "<group>"; };
 		82133CF83B163B7E5D046A3B /* BluetoothShareTestHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothShareTestHost.swift; sourceTree = "<group>"; };
+		82947940CD945EF439E22E9F /* TesseraeLivePhotoItemProvider.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = TesseraeLivePhotoItemProvider.h; sourceTree = "<group>"; };
 		834AF00906D63D9F2A468C94 /* DisplayHardwareBadgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayHardwareBadgeTests.swift; sourceTree = "<group>"; };
 		878F2E4D47D31218D70ED033 /* MessageCenterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCenterTests.swift; sourceTree = "<group>"; };
 		895ED3887D8E6C731D22A34C /* MediaFrameTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaFrameTests.swift; sourceTree = "<group>"; };
@@ -480,8 +485,11 @@
 				90C9F22206234BD938D1E5B1 /* PhotoFramingSession.swift */,
 				D09B9A585A1539B7342FE714 /* PhotoSubjectAnalyzer.swift */,
 				8B1A88193CB426789297DE51 /* ShareDisplayTarget.swift */,
+				82947940CD945EF439E22E9F /* TesseraeLivePhotoItemProvider.h */,
+				6D69D61C92AB080C32014EEB /* TesseraeLivePhotoItemProvider.m */,
 				4C7978DD383BE1BBCCCDC4BC /* TesseraeMessageOverlay.swift */,
 				135374B71848FF0E87F4A6D3 /* TesseraePanelImagePreview.swift */,
+				63B3CC1F9EFE4C397C9BFB34 /* TesseraeShared-Bridging-Header.h */,
 				FD8060E9227692A0914DB946 /* TesseraeTheme.swift */,
 			);
 			path = SharedUI;
@@ -741,6 +749,7 @@
 				EBA1410E74DCE50280302A5A /* PreviewImageState.swift in Sources */,
 				3D0C7A0C72B529B74488017B /* ShareDisplayTarget.swift in Sources */,
 				50F233622A7FB17CD2295534 /* ShareViewController.swift in Sources */,
+				EF87A1BE93C2FE5479DA5267 /* TesseraeLivePhotoItemProvider.m in Sources */,
 				FDE42BD366582AA2FB79CFDD /* TesseraeMessageOverlay.swift in Sources */,
 				4F402A0069B78FDE2256EE9F /* TesseraePanelImagePreview.swift in Sources */,
 				04BA9B524B9B033C0098349C /* TesseraeTheme.swift in Sources */,
@@ -819,6 +828,7 @@
 				56E8E95D324E6354ACAC62B8 /* ShareViewController.swift in Sources */,
 				38FFA83B75C8B09B8F32AE6E /* TesseraeCompanionApp.swift in Sources */,
 				4B98C3F8FFCE806E85BF0034 /* TesseraeIntents.swift in Sources */,
+				A68A6A2C359A5C63108740CC /* TesseraeLivePhotoItemProvider.m in Sources */,
 				64934B7F5B6214C6F3A23438 /* TesseraeMessageOverlay.swift in Sources */,
 				28315FF4BF85AAE536A42F85 /* TesseraePanelImagePreview.swift in Sources */,
 				EDA7DAFA44340F1BDCBE5FCB /* TesseraeTheme.swift in Sources */,
@@ -896,6 +906,7 @@
 				PRODUCT_NAME = TesseraeShare;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "SharedUI/TesseraeShared-Bridging-Header.h";
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -1004,6 +1015,7 @@
 				PRODUCT_NAME = TesseraeShare;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "SharedUI/TesseraeShared-Bridging-Header.h";
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -1030,6 +1042,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.charmmmz.tesseraecompanion;
 				PRODUCT_NAME = "Tesserae Companion";
 				SDKROOT = iphoneos;
+				SWIFT_OBJC_BRIDGING_HEADER = "SharedUI/TesseraeShared-Bridging-Header.h";
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -1172,6 +1185,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.charmmmz.tesseraecompanion;
 				PRODUCT_NAME = "Tesserae Companion";
 				SDKROOT = iphoneos;
+				SWIFT_OBJC_BRIDGING_HEADER = "SharedUI/TesseraeShared-Bridging-Header.h";
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";

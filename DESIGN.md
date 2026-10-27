@@ -97,8 +97,12 @@ Photos, video frames and Live Photo key/alternate frames use the same vertically
 centered display canvas within the reserved preview area. The selected display's
 aspect ratio determines its size; media kind does not change its placement.
 
-The Share Extension also recognizes Live Photo type declarations when the host
-cannot vend a `PHLivePhoto` object. If the shared motion cannot be read, a compact
+The Share Extension recognizes Live Photo type declarations as well as modern
+object providers. System Photos' legacy item provider requires an Objective-C
+completion block explicitly typed as `PHLivePhoto` for Foundation's class
+coercion; a small shared bridge preserves that signature and automatically
+exports the paired movie without requesting library access. If a source's
+shared motion is genuinely unavailable, a compact
 Choose Live Photo action opens the system picker filtered to Live Photos. This
 does not request library authorization or discard the shared key photo on cancel.
 The selected asset feeds the same timeline and preserves the chosen destinations.

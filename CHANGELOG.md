@@ -13,6 +13,9 @@ capabilities.
 
 ### Fixed
 
+- Sharing a Live Photo directly from system Photos automatically loads its
+  motion and frame timeline. The legacy item-provider callback now preserves
+  the concrete Live Photo class required for Foundation's class coercion.
 - Displays home cards use a connection icon with Wi-Fi or Bluetooth consistently,
   including VoiceOver connection content. Wi-Fi signal values remain in device
   details instead of sharing the home-card slot with the Bluetooth mode label.
@@ -24,7 +27,7 @@ capabilities.
   the extra expand/collapse labels. Loading optional motion leaves the key photo
   ready to send.
 - Share Sheet recognizes Live Photo type declarations as well as object providers.
-  If Photos cannot supply motion through sharing, an inline system-picker action
+  If a source cannot supply motion through sharing, an inline system-picker action
   lets users select the complete Live Photo without leaving the composer or
   granting photo-library access. Cancelling keeps the shared key photo.
 - Display details show the latest known firmware from associated Bluetooth
