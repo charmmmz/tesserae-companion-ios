@@ -500,6 +500,9 @@ references and are not bundled in the app.
 - Manufacturer logos scale with the adjacent caption text, preserving their
   proportions and fitting within narrow columns; model names can move below them.
   Prefer transparent vector artwork so enlarged marks retain smooth edges.
+  Measure horizontal spacing from the visible artwork: discard transparent
+  canvas padding before applying the shared 4-point logo-to-model gap. Preserve
+  the original asset rendering and scale the mark down when its column narrows.
 - Hardware labels cover the upstream hardware catalog and named device adapters.
   epdiy and CrossPoint retain platform/firmware names without claiming a manufacturer;
   NOTE4C identifies ZecTrix independently of its shared PicPak transport protocol.

@@ -20,15 +20,23 @@ fix. It is the original `Photo composer compact targets` attachment from
 `AdaptiveLayoutUITests.testPhotoFramingSurvivesDeviceTurn`, captured after resetting
 the demo framing to 1.0×.
 
-`displays-floating-send.png`, `dashboards-floating-send.png` and
-`activity-floating-send.png` were refreshed on 26 October 2026 from the working
+`dashboards-floating-send.png` and `activity-floating-send.png` were refreshed on 26 October 2026 from the working
 tree based on `830c083`, with the independent Send button and top-message layout.
-They are the original `Displays Root Toolbar`, `Dashboards Root Toolbar` and
-`Activity Root Toolbar` attachments from
+They are the original `Dashboards Root Toolbar` and `Activity Root Toolbar`
+attachments from
 `TesseraeCompanionUITests.testRootToolbarsKeepSettingsAndContextActionsConsistent`
 in `/tmp/tesserae-floating-send/phone-unified.xcresult`, on the
 `Tesserae Adaptive iPhone` simulator. The navigation title, bottom tabs and Send
 placement were checked before replacing the superseded captures.
+
+`displays-visible-logo-spacing.png` was refreshed on 27 October 2026 from the
+working tree based on `66ada5d`, including the visible-artwork logo spacing fix.
+It is the original `Displays Root Toolbar` attachment from
+`TesseraeCompanionUITests.testRootToolbarsKeepSettingsAndContextActionsConsistent`
+in `/tmp/tesserae-brand-gap-readme.xcresult`, on the `Tesserae Logo Gap` simulator
+(iPhone 18 Pro, iOS 27.0). Light/dark manufacturer pages and all-brand snapshots
+at standard and accessibility text sizes were inspected before replacing the
+superseded capture.
 
 - iPhone 18 Pro Simulator, iOS 27.0, English, light appearance except the dark
   duration picker.
@@ -40,7 +48,7 @@ placement were checked before replacing the superseded captures.
 
 | File | Screen / capture point |
 | --- | --- |
-| `displays-floating-send.png` | Demo Mode → Displays |
+| `displays-visible-logo-spacing.png` | Demo Mode → Displays |
 | `dashboards-floating-send.png` | Demo Mode → Dashboards, expanded display groups |
 | `dashboard-settings-actions.png` | Pantry → native settings, shared actions and bounded Push icon, before editing |
 | `lineup-editor-actions.png` | New Manual Lineup, native icon actions, selected display and two Dashboards |
