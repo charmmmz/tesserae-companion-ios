@@ -499,6 +499,7 @@ references and are not bundled in the app.
   for device identifiers, versions, dimensions, and diagnostic values.
 - Manufacturer logos scale with the adjacent caption text, preserving their
   proportions and fitting within narrow columns; model names can move below them.
+  Prefer transparent vector artwork so enlarged marks retain smooth edges.
 - Hardware labels cover the upstream hardware catalog and named device adapters.
   epdiy and CrossPoint retain platform/firmware names without claiming a manufacturer;
   NOTE4C identifies ZecTrix independently of its shared PicPak transport protocol.

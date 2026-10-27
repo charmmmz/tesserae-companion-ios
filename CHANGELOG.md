@@ -19,6 +19,8 @@ capabilities.
   four newly recognized manufacturers.
 - Manufacturer logos scale with Dynamic Type alongside model names, including
   accessibility text sizes and narrow display columns.
+- Elecrow, Good Display, ZecTrix and Xteink marks use transparent vector assets
+  for smoother edges when enlarged.
 - The floating Send button responds with a solid pressed state, spring feedback,
   and an optional light haptic when opening the composer, respecting Reduce Motion.
 - Bluetooth Send readiness refreshes after authentication without requiring an

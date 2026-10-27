@@ -102,6 +102,10 @@ date:
   [official shop header asset](https://cdn.shopify.com/s/files/1/0674/8569/6246/files/Vector.svg?v=1774110422)
 - Xteink black-and-orange wordmark, retrieved 2026-08-01:
   [official shop header asset](https://www.xteink.com/cdn/shop/files/logo_pc.png?v=1784536352&width=760)
+  Rechecked 2026-10-27: the server supplies a `200 × 37` PNG despite the width
+  parameter. Its black and orange silhouettes are converted to smooth SVG paths
+  with Potrace 1.16, retaining the sampled colours and original canvas. This is
+  a contour conversion of official raster artwork, not an official vector original.
 - M5Stack horizontal colour and white wordmarks, retrieved 2026-10-04 from
   `Horizontal Version/SVG/Color logo.svg` and `White logo.svg` in the
   [official logo archive](https://static-cdn.m5stack.com/resource/public/assets/M5Stack%20Logo.zip),
