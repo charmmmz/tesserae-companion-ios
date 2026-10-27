@@ -23,7 +23,7 @@ struct TesseraeSettingsToolbarButton: View {
     }
 }
 
-struct TesseraeSendToolbarButton: View {
+struct TesseraeSendButton: View {
     @Environment(CompanionPresentation.self) private var presentation
 
     var body: some View {
@@ -43,7 +43,6 @@ struct TesseraeRootToolbar<ContextAction: View>: ToolbarContent {
         TesseraeToolbarActions(identifier: "root-toolbar-actions") {
             contextAction
             if showsGlobalActions {
-                TesseraeSendToolbarButton()
                 TesseraeSettingsToolbarButton()
             }
         }
@@ -58,6 +57,7 @@ private enum AppTab: Hashable {
 }
 
 struct MainTabView: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(AppModel.self) private var model
     @Environment(GalleryUploadCoordinator.self) private var galleryUploads
     @Environment(TesseraeMessageCenter.self) private var messageCenter
@@ -67,6 +67,12 @@ struct MainTabView: View {
     var body: some View {
         @Bindable var presentation = presentation
         tabs
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if horizontalSizeClass != .compact {
+                    TesseraeFloatingSendAction()
+                }
+            }
+            .environment(\.tesseraePageSendEnabled, horizontalSizeClass == .compact)
             .sheet(item: $presentation.sheet) { sheet in
                 switch sheet {
                 case .settings:
@@ -197,7 +203,7 @@ struct MainTabView: View {
         NavigationStack {
             content()
                 .navigationTitle(title)
-                .tesseraeMessageCenter()
+                .tesseraeRootPageChrome()
         }
     }
 }

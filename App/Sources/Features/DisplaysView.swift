@@ -54,7 +54,7 @@ struct DisplaysView: View {
     var body: some View {
         NavigationSplitView(preferredCompactColumn: $preferredColumn) {
             displayList
-                .tesseraeMessageCenter()
+                .tesseraeRootPageChrome()
                 .navigationTitle("Displays")
                 .navigationSplitViewColumnWidth(min: 300, ideal: 360, max: 440)
         } detail: {
@@ -841,7 +841,7 @@ private struct DisplayDetailView: View {
             .padding(16)
         }
         .navigationTitle(currentDisplay.name)
-        .tesseraeMessageCenter()
+        .tesseraeRootPageChrome()
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             TesseraeRootToolbar {

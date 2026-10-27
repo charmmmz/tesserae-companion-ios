@@ -478,7 +478,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertEqual(navigationFrame.minY, originalNearbyTitleFrame.minY, accuracy: 1)
         XCTAssertEqual(navigationFrame.height, originalNearbyTitleFrame.height, accuracy: 1)
         XCTAssertGreaterThanOrEqual(confirmationFrame.minY, navigationFrame.maxY)
-        XCTAssertGreaterThan(confirmationFrame.midY, app.frame.midY)
+        XCTAssertLessThan(confirmationFrame.midY, app.frame.midY)
         let geometry = XCTAttachment(string: "capsule=\(confirmationFrame)\nnavigationBefore=\(originalNearbyTitleFrame)\nnavigationDuring=\(navigationFrame)")
         geometry.name = "Bluetooth Receipt Capsule Geometry"; geometry.lifetime = .keepAlways; add(geometry)
         XCTAssertFalse(app.buttons["ble-send-photo"].exists)
@@ -916,6 +916,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.buttons["Explore with Demo Data"].tap()
         XCTAssertTrue(app.navigationBars["Displays"].waitForExistence(timeout: 5))
         let originalNavigationFrame = app.navigationBars["Displays"].frame
+        let originalSendFrame = app.buttons["root-send-action"].frame
         let originalLayout = XCTAttachment(screenshot: app.screenshot())
         originalLayout.name = "Gallery Layout Without Message"; originalLayout.lifetime = .keepAlways; add(originalLayout)
         app.terminate()
@@ -936,14 +937,18 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertGreaterThan(sendAction.frame.midX, app.frame.midX)
         XCTAssertTrue(sendAction.isHittable)
         XCTAssertFalse(capsule.frame.intersects(sendAction.frame))
+        XCTAssertLessThanOrEqual(capsule.frame.maxY, sendAction.frame.minY)
+        XCTAssertEqual(sendAction.frame.minY, originalSendFrame.minY, accuracy: 1)
+        XCTAssertEqual(sendAction.frame.minX, originalSendFrame.minX, accuracy: 1)
         let navigationFrame = app.navigationBars["Displays"].frame
         XCTAssertEqual(navigationFrame.minY, originalNavigationFrame.minY, accuracy: 1)
         XCTAssertEqual(navigationFrame.height, originalNavigationFrame.height, accuracy: 1)
         XCTAssertGreaterThanOrEqual(capsule.frame.minY, navigationFrame.maxY)
         let tabBar = app.tabBars.firstMatch
         XCTAssertTrue(tabBar.exists)
-        XCTAssertGreaterThan(capsule.frame.midY, app.frame.midY)
+        XCTAssertLessThan(capsule.frame.midY, app.frame.midY)
         XCTAssertLessThanOrEqual(capsule.frame.maxY, tabBar.frame.minY)
+        XCTAssertGreaterThanOrEqual(app.buttons["display-card-e1004-desk"].frame.minY, capsule.frame.maxY)
         let geometry = XCTAttachment(string: "capsule=\(capsule.frame)\nnavigationBefore=\(originalNavigationFrame)\nnavigationDuring=\(navigationFrame)")
         geometry.name = "Gallery Upload Capsule Geometry"; geometry.lifetime = .keepAlways; add(geometry)
 
@@ -1106,7 +1111,6 @@ final class TesseraeCompanionUITests: XCTestCase {
         func checkToolbar(contextID: String, name: String) -> CGRect {
             let actions = [
                 app.buttons[contextID],
-                app.buttons["root-send-action"],
                 settings,
             ]
             var bounds = CGRect.null
@@ -1119,8 +1123,16 @@ final class TesseraeCompanionUITests: XCTestCase {
                 bounds = bounds.union(action.frame)
             }
             XCTAssertLessThanOrEqual(actions[0].frame.maxX, actions[1].frame.minX + 0.5)
-            XCTAssertLessThanOrEqual(actions[1].frame.maxX, actions[2].frame.minX + 0.5)
-            XCTAssertLessThanOrEqual(bounds.width, 150)
+            XCTAssertLessThanOrEqual(bounds.width, 100)
+            let send = app.buttons["root-send-action"]
+            XCTAssertTrue(send.waitForExistence(timeout: 3))
+            XCTAssertTrue(send.isHittable)
+            XCTAssertEqual(app.buttons.matching(identifier: "root-send-action").count, 1)
+            XCTAssertEqual(send.frame.width, 56, accuracy: 0.5)
+            XCTAssertEqual(send.frame.height, 56, accuracy: 0.5)
+            XCTAssertEqual(app.frame.maxX - send.frame.maxX, 16, accuracy: 1)
+            XCTAssertGreaterThan(send.frame.minY, app.frame.midY)
+            XCTAssertLessThanOrEqual(send.frame.maxY + 8, app.tabBars.firstMatch.frame.minY)
             let screenshot = XCTAttachment(screenshot: app.screenshot())
             screenshot.name = name
             screenshot.lifetime = .keepAlways
@@ -1134,6 +1146,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertFalse(app.buttons["dashboard-layout-toggle"].exists)
         XCTAssertFalse(app.buttons["clear-local-activity"].exists)
         let displaysToolbar = checkToolbar(contextID: "manage-lineups", name: "Displays Root Toolbar")
+        let floatingSendFrame = app.buttons["root-send-action"].frame
 
         app.buttons["display-card-picpak-kitchen"].tap()
         XCTAssertTrue(app.buttons["root-send-action"].waitForExistence(timeout: 3))
@@ -1142,6 +1155,7 @@ final class TesseraeCompanionUITests: XCTestCase {
             XCTAssertGreaterThanOrEqual(action.frame.width, 44 - 0.01)
             XCTAssertGreaterThanOrEqual(action.frame.height, 44 - 0.01)
         }
+        XCTAssertEqual(app.buttons["root-send-action"].frame.minY, floatingSendFrame.minY, accuracy: 1)
         let displayDetailShot = XCTAttachment(screenshot: app.screenshot())
         displayDetailShot.name = "Display detail shared toolbar"
         displayDetailShot.lifetime = .keepAlways
@@ -1156,6 +1170,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.buttons["gallery-folder-folder_family"].tap()
         let folderActions = [app.buttons["gallery-grid-options"], app.buttons["gallery-add-photos"]]
         XCTAssertTrue(folderActions[0].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["root-send-action"].isHittable)
         for action in folderActions {
             XCTAssertGreaterThanOrEqual(action.frame.width, 44 - 0.01)
             XCTAssertGreaterThanOrEqual(action.frame.height, 44 - 0.01)
@@ -1206,6 +1221,7 @@ final class TesseraeCompanionUITests: XCTestCase {
             identifier: "root-settings"
         )
         XCTAssertTrue(app.buttons["root-send-close"].waitForExistence(timeout: 2))
+        XCTAssertFalse(app.buttons.matching(identifier: "root-send-action").allElementsBoundByIndex.contains { $0.isHittable })
         XCTAssertFalse(sendSettingsQuery.allElementsBoundByIndex.contains { $0.isHittable })
         XCTAssertFalse(app.buttons["dashboard-layout-toggle"].isHittable)
         XCTAssertFalse(app.buttons["clear-local-activity"].isHittable)

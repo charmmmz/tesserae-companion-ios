@@ -109,7 +109,16 @@ final class AdaptiveLayoutUITests: XCTestCase {
 
     func testAccessibilityComposerKeepsSendReachable() {
         let app = demo(accessibilityText: true)
-        app.buttons["root-send-action"].firstMatch.tap()
+        let rootSend = app.buttons["root-send-action"].firstMatch
+        XCTAssertTrue(rootSend.isHittable)
+        XCTAssertEqual(app.buttons.matching(identifier: "root-send-action").count, 1)
+        XCTAssertGreaterThanOrEqual(rootSend.frame.width, 44)
+        XCTAssertGreaterThanOrEqual(rootSend.frame.height, 44)
+        XCTAssertGreaterThan(rootSend.frame.minY, app.frame.midY)
+        XCTAssertGreaterThan(rootSend.frame.minX, app.frame.midX)
+        XCTAssertEqual(app.frame.maxX - rootSend.frame.maxX, 16, accuracy: 1)
+        capture("Accessibility root Send", app: app)
+        rootSend.tap()
         let sample = app.buttons["Use Sample"]
         XCTAssertTrue(sample.waitForExistence(timeout: 5))
         reveal(sample, app: app)
@@ -221,10 +230,19 @@ final class AdaptiveLayoutUITests: XCTestCase {
         XCTAssertTrue(kitchen.waitForExistence(timeout: 5))
         kitchen.tap()
         XCTAssertTrue(app.navigationBars["Kitchen"].waitForExistence(timeout: 5))
+        let send = app.buttons["root-send-action"]
+        XCTAssertEqual(app.buttons.matching(identifier: "root-send-action").count, 1)
+        XCTAssertTrue(send.isHittable)
+        XCTAssertGreaterThan(send.frame.minX, app.frame.midX)
+        XCTAssertGreaterThan(send.frame.minY, app.frame.midY)
         capture("Display detail portrait", app: app)
         XCUIDevice.shared.orientation = .landscapeLeft
         XCTAssertTrue(app.navigationBars["Kitchen"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Current Screen"].exists)
+        XCTAssertEqual(app.buttons.matching(identifier: "root-send-action").count, 1)
+        XCTAssertTrue(send.isHittable)
+        XCTAssertGreaterThan(send.frame.minX, app.frame.midX)
+        XCTAssertGreaterThan(send.frame.minY, app.frame.midY)
         capture("Display detail after device turn", app: app)
         XCUIDevice.shared.orientation = .portrait
         XCTAssertTrue(app.navigationBars["Kitchen"].waitForExistence(timeout: 5))

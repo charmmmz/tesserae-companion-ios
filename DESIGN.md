@@ -192,11 +192,20 @@ framing, target selection and submission state above adaptive regions. On iOS
 27.1, wide composers use ArrangementView to respect active divisions; older
 systems use a two-column layout. Compact and accessibility layouts remain scrollable.
 
-Root actions use system toolbars; the Send sheet offers Close without a Settings
-shortcut. Message hosts belong to page content inside navigation containers,
-including modal stacks. Capsules float at the bottom safe area, above tab bars
-when present. Transient confirmations do not move content. Persistent/actionable
-messages reserve their measured height at the bottom of page content. Navigation
+Root pages and display details have an independent 56-point circular
+Send button, 16 points from the trailing safe-area edge and 12 points above the
+bottom navigation safe area. The tab container selects compact versus wide
+placement: compact pages place it above bottom tabs; wide windows place one
+shared button at the tab-container level, outside both split-view columns and
+above the bottom safe area. Both use the same size and margins. The Send sheet
+offers Close without a Settings shortcut.
+Message hosts belong to page content inside navigation containers,
+including modal stacks. Capsules float at the top of page content, 12 points
+below navigation, clear of titles and toolbar actions. The independent Send button
+keeps a fixed position when messages appear; scrolling content reserves its
+height so the final item remains reachable. Transient confirmations do not move
+content. Persistent/actionable messages reserve their measured height at the top
+of page content. Navigation
 titles and toolbars stay fixed. Gallery density follows the available width without
 overwriting the saved preference. Resizing cancels an unfinished display
 reorder without committing it. BLE connection ownership remains in NearbyDeviceManager;
@@ -218,7 +227,9 @@ remain visible in the capsule.
 ### Shared page actions
 
 Every page uses `TesseraeToolbarActions` from `App/Sources/DesignSystem` for its
-trailing actions. `TesseraeRootToolbar` composes it with global Send and Settings.
+trailing actions. `TesseraeRootToolbar` composes it with Settings.
+Compact root pages use `.tesseraeRootPageChrome()` for top messages
+and the independent Send button in the bottom safe area.
 The component owns the single native capsule, icon-only labels, 44 × 44-point
 targets, 4-point spacing, symbol sizing, accent tint, and muted disabled state.
 Feature views supply action semantics and availability; they do not override

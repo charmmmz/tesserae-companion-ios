@@ -540,7 +540,7 @@ final class TesseraeMessageCenter {
 }
 
 private struct TesseraeMessageCenterHost: View {
-    let bottomPadding: CGFloat
+    let verticalPadding: CGFloat
     @Environment(TesseraeMessageCenter.self) private var center
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hostID = UUID()
@@ -552,7 +552,7 @@ private struct TesseraeMessageCenterHost: View {
                let message = center.currentMessage
             {
                 presentedMessage(message)
-                    .padding(.bottom, bottomPadding)
+                    .padding(.vertical, verticalPadding)
                     .id(message.id)
                     .transition(messageTransition)
             }
@@ -584,7 +584,7 @@ private struct TesseraeMessageCenterHost: View {
 
     private var messageTransition: AnyTransition {
         guard !reduceMotion else { return .opacity }
-        return .opacity.combined(with: .scale(scale: 0.97, anchor: .bottom))
+        return .opacity.combined(with: .scale(scale: 0.97, anchor: .top))
     }
 
     @ViewBuilder
@@ -677,8 +677,10 @@ private struct TesseraeMessageCenterHost: View {
     }
 }
 
-private struct TesseraeMessageCenterModifier: ViewModifier {
-    let bottomPadding: CGFloat
+private struct TesseraeMessageCenterModifier<BottomAccessory: View>: ViewModifier {
+    let verticalPadding: CGFloat
+    let bottomAccessoryHeight: CGFloat
+    @ViewBuilder let bottomAccessory: BottomAccessory
     @Environment(TesseraeMessageCenter.self) private var center
     @State private var messageHeight: CGFloat = 0
 
@@ -690,22 +692,39 @@ private struct TesseraeMessageCenterModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .safeAreaInset(edge: .bottom, spacing: 0) {
+            .safeAreaInset(edge: .top, spacing: 0) {
                 Color.clear.frame(height: reservesContentSpace ? messageHeight : 0)
             }
-            .overlay(alignment: .bottom) {
-                TesseraeMessageCenterHost(bottomPadding: bottomPadding)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                Color.clear.frame(height: bottomAccessoryHeight)
+            }
+            .overlay(alignment: .top) {
+                TesseraeMessageCenterHost(verticalPadding: verticalPadding)
                     .padding(.horizontal, 16)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
                         messageHeight = height
                     }
             }
+            .overlay(alignment: .bottom) {
+                bottomAccessory
+            }
     }
 }
 
 extension View {
-    func tesseraeMessageCenter(bottomPadding: CGFloat = 12) -> some View {
-        modifier(TesseraeMessageCenterModifier(bottomPadding: bottomPadding))
+    func tesseraeMessageCenter(verticalPadding: CGFloat = 12) -> some View {
+        tesseraeMessageCenter(verticalPadding: verticalPadding) { EmptyView() }
+    }
+
+    func tesseraeMessageCenter<BottomAccessory: View>(
+        verticalPadding: CGFloat = 12,
+        bottomAccessoryHeight: CGFloat = 0,
+        @ViewBuilder bottomAccessory: () -> BottomAccessory
+    ) -> some View {
+        modifier(TesseraeMessageCenterModifier(
+            verticalPadding: verticalPadding, bottomAccessoryHeight: bottomAccessoryHeight,
+            bottomAccessory: bottomAccessory
+        ))
     }
 }
 

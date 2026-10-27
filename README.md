@@ -32,8 +32,8 @@ Tesserae Companion connects directly to your own Tesserae server, with a built-i
 
 <table>
   <tr>
-    <td align="center"><a href="docs/images/readme/displays.png"><img src="docs/images/readme/displays.png" width="220" alt="Displays overview with hardware, battery, Wi-Fi status, and quick actions"></a></td>
-    <td align="center"><a href="docs/images/readme/dashboards.png"><img src="docs/images/readme/dashboards.png" width="220" alt="Saved Dashboards grouped by display with preview and push actions"></a></td>
+    <td align="center"><a href="docs/images/readme/displays-floating-send.png"><img src="docs/images/readme/displays-floating-send.png" width="220" alt="Displays overview with hardware, battery, Wi-Fi status, and quick actions"></a></td>
+    <td align="center"><a href="docs/images/readme/dashboards-floating-send.png"><img src="docs/images/readme/dashboards-floating-send.png" width="220" alt="Saved Dashboards grouped by display with preview and push actions"></a></td>
     <td align="center"><a href="docs/images/readme/dashboard-settings-actions.png"><img src="docs/images/readme/dashboard-settings-actions.png" width="220" alt="Native Dashboard settings with paper background, shared actions, preview, and configuration controls"></a></td>
     <td align="center"><a href="docs/images/readme/lineup-editor-actions.png"><img src="docs/images/readme/lineup-editor-actions.png" width="220" alt="Native Lineup editor with consistent icon actions, a target display, and selected Dashboards"></a></td>
   </tr>
@@ -46,7 +46,7 @@ Tesserae Companion connects directly to your own Tesserae server, with a built-i
   <tr>
     <td align="center"><a href="docs/images/readme/gallery-folder-actions.png"><img src="docs/images/readme/gallery-folder-actions.png" width="220" alt="Photo Library showing a square grid of sample images and shared folder action capsule"></a></td>
     <td align="center"><a href="docs/images/readme/send-photo-compact-displays.png"><img src="docs/images/readme/send-photo-compact-displays.png" width="220" alt="Photo composer with a display-aware preview and Auto Frame controls"></a></td>
-    <td align="center"><a href="docs/images/readme/activity.png"><img src="docs/images/readme/activity.png" width="220" alt="Activity showing recent content and send outcomes"></a></td>
+    <td align="center"><a href="docs/images/readme/activity-floating-send.png"><img src="docs/images/readme/activity-floating-send.png" width="220" alt="Activity showing recent content and send outcomes"></a></td>
     <td align="center"><a href="docs/images/readme/bluetooth-maintenance.png"><img src="docs/images/readme/bluetooth-maintenance.png" width="220" alt="Authenticated Bluetooth maintenance for a supported PicPak display"></a></td>
   </tr>
   <tr>

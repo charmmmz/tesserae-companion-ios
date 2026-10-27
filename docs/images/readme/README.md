@@ -20,6 +20,16 @@ fix. It is the original `Photo composer compact targets` attachment from
 `AdaptiveLayoutUITests.testPhotoFramingSurvivesDeviceTurn`, captured after resetting
 the demo framing to 1.0×.
 
+`displays-floating-send.png`, `dashboards-floating-send.png` and
+`activity-floating-send.png` were refreshed on 26 October 2026 from the working
+tree based on `830c083`, with the independent Send button and top-message layout.
+They are the original `Displays Root Toolbar`, `Dashboards Root Toolbar` and
+`Activity Root Toolbar` attachments from
+`TesseraeCompanionUITests.testRootToolbarsKeepSettingsAndContextActionsConsistent`
+in `/tmp/tesserae-floating-send/phone-unified.xcresult`, on the
+`Tesserae Adaptive iPhone` simulator. The navigation title, bottom tabs and Send
+placement were checked before replacing the superseded captures.
+
 - iPhone 18 Pro Simulator, iOS 27.0, English, light appearance except the dark
   duration picker.
 - Original 1206 × 2622 PNG captures; no resizing, compositing or image retouching.
@@ -30,13 +40,13 @@ the demo framing to 1.0×.
 
 | File | Screen / capture point |
 | --- | --- |
-| `displays.png` | Demo Mode → Displays |
-| `dashboards.png` | Demo Mode → Dashboards, expanded display groups |
+| `displays-floating-send.png` | Demo Mode → Displays |
+| `dashboards-floating-send.png` | Demo Mode → Dashboards, expanded display groups |
 | `dashboard-settings-actions.png` | Pantry → native settings, shared actions and bounded Push icon, before editing |
 | `lineup-editor-actions.png` | New Manual Lineup, native icon actions, selected display and two Dashboards |
 | `gallery-folder-actions.png` | Library → family folder, square image grid and shared More/Add capsule |
 | `send-photo-compact-displays.png` | Send → Use Sample → reset framing, centered Fill at 1.0× with compact display selection |
-| `activity.png` | Demo Mode → Activity |
+| `activity-floating-send.png` | Demo Mode → Activity |
 | `bluetooth-maintenance.png` | Simulated PicPak → authenticated Maintenance, current battery status |
 | `dashboard-components.png` | Pantry → Demo Reminders settings, before searching or editing a field |
 | `lineup-selection-actions.png` | New Manual Lineup → two selected Dashboards and shared Done capsule |

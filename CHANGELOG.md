@@ -88,10 +88,14 @@ capabilities.
 
 ### Changed
 
+- iPhone and iPad restore an independent Send button at the bottom trailing safe
+  area, above bottom navigation when present. Scrolling content reserves its
+  space; wide split layouts share one button outside the columns.
 - Bluetooth photo sends close on confirmed receipt and show one brief confirmation
   on the presenting page, without a separate success sheet or Done button.
-- Message capsules share the bottom safe area above tab bars. Brief confirmations
-  float; persistent or actionable messages reserve content space without moving titles.
+- Message capsules appear below navigation at the top of page content. Brief
+  confirmations float; persistent or actionable messages reserve content space
+  without moving titles or the independent Send button.
 
 - Page action capsules share one DesignSystem component across root and detail
   pages, including Dashboard settings, display details, Library folders and
@@ -139,9 +143,9 @@ capabilities.
   update, and appearance preferences. Field help and reset actions are available
   on demand; choice lists show selections once and keep Done within reach.
 
-- Displays, Dashboards, Library, and Activity share a compact toolbar with
-  consistent widths, Tesserae theme colours, and full-size touch targets for
-  all three actions.
+- Displays, Dashboards, Library, and Activity share a toolbar with consistent
+  widths, Tesserae theme colours, and full-size touch targets for page actions
+  and Settings. Send remains independent at the bottom trailing edge.
 
 - Offline Album setup and review use shorter explanations focused on playback,
   display support, and storage. Photo ordering stays in the Album draft when
