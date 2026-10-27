@@ -461,7 +461,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Send to PicPak"].waitForExistence(timeout: 8))
         XCTAssertFalse(app.navigationBars["Maintenance"].exists)
         XCTAssertTrue(app.buttons["ble-change-photo"].waitForExistence(timeout: 4))
-        XCTAssertTrue(app.staticTexts["Image Fit"].exists)
+        XCTAssertFalse(app.staticTexts["Image Fit"].exists)
         let deviceInfo = app.buttons["ble-photo-device-info"]
         XCTAssertTrue(deviceInfo.exists)
         XCTAssertTrue(app.staticTexts["Battery: 65%"].exists)
@@ -692,12 +692,14 @@ final class TesseraeCompanionUITests: XCTestCase {
         waitForExpectations(timeout: 4)
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "PicPak Short Crop Drag"; shot.lifetime = .keepAlways; add(shot)
+        let fitToggle = app.buttons["photo-fit-toggle"]
+        fitToggle.tap()
+        XCTAssertFalse(reset.exists)
+        XCTAssertTrue(fitToggle.exists)
+        fitToggle.tap()
+        XCTAssertTrue(reset.isEnabled, "Returning to Fill must retain the manual crop.")
         reset.tap()
         XCTAssertFalse(reset.isEnabled)
-        app.segmentedControls.buttons["Fit"].tap()
-        XCTAssertFalse(app.buttons["send-framing-reset"].exists)
-        app.segmentedControls.buttons["Fill"].tap()
-        XCTAssertTrue(app.buttons["send-framing-reset"].exists)
     }
 
     func testDemoGalleryBrowsesFoldersAndHandsPhotoToSend() {
@@ -2439,8 +2441,9 @@ final class TesseraeCompanionUITests: XCTestCase {
         let kitchenTarget = app.buttons["send-display-picpak-kitchen"]
         XCTAssertTrue(deskTarget.waitForExistence(timeout: 2))
         XCTAssertTrue(kitchenTarget.exists)
-        XCTAssertTrue(app.buttons["Stretch"].exists)
-        XCTAssertTrue(app.buttons["Center"].exists)
+        XCTAssertFalse(app.staticTexts["Image Fit"].exists)
+        XCTAssertFalse(app.buttons["Stretch"].exists)
+        XCTAssertFalse(app.buttons["Center"].exists)
         XCTAssertFalse(app.buttons["More"].exists)
         let previewPicker = app.descendants(matching: .any)[
             "send-preview-display-picker"
@@ -2689,9 +2692,28 @@ final class TesseraeCompanionUITests: XCTestCase {
         let controls = app.descendants(matching: .any)["send-framing-controls"]
         let controlsHeight = controls.frame.height
         XCTAssertEqual(controlsHeight, 44, accuracy: 0.5)
-        XCTAssertLessThan(controls.frame.width, 180)
+        XCTAssertLessThanOrEqual(controls.frame.width, app.descendants(matching: .any)["send-panel-preview"].frame.width)
         XCTAssertLessThanOrEqual(hint.frame.maxX, auto.frame.minX + 1)
         XCTAssertLessThanOrEqual(auto.frame.maxX, zoom.frame.minX)
+        XCTAssertFalse(app.staticTexts["Image Fit"].exists)
+        let fitToggle = app.buttons["photo-fit-toggle"]
+        XCTAssertGreaterThanOrEqual(fitToggle.frame.width, 44 - 0.01)
+        let canvas = app.descendants(matching: .any)["selected-image-preview"]
+        XCTAssertLessThanOrEqual(controls.frame.maxX, canvas.frame.maxX)
+        XCTAssertGreaterThanOrEqual(controls.frame.minX, canvas.frame.minX)
+        XCTAssertLessThanOrEqual(fitToggle.frame.maxX, canvas.frame.maxX)
+        XCTAssertGreaterThanOrEqual(fitToggle.frame.minX, canvas.frame.minX)
+        fitToggle.tap()
+        let menuShot = XCTAttachment(screenshot: app.screenshot())
+        menuShot.name = "Whole photo after one tap"
+        menuShot.lifetime = .keepAlways
+        add(menuShot)
+        XCTAssertFalse(app.buttons["Blur"].exists)
+        XCTAssertFalse(reset.exists)
+        XCTAssertEqual(fitToggle.value as? String, "Show Entire Photo")
+        fitToggle.tap()
+        XCTAssertEqual(zoom.label, "2.0×")
+        XCTAssertTrue(reset.isEnabled)
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "Auto Frame applied"
         shot.lifetime = .keepAlways
@@ -2843,21 +2865,25 @@ final class TesseraeCompanionUITests: XCTestCase {
         add(shot)
         XCTAssertFalse(app.buttons["send-framing-hint"].exists)
         XCTAssertTrue(auto.isHittable)
-        let fit = app.buttons["send-image-fit-picker"]
+        let fit = app.buttons["photo-fit-toggle"]
         for _ in 0..<8 where !fit.isHittable {
             // Scroll outside the photo, where a drag intentionally edits its crop.
+            let isAbove = fit.frame.midY < app.frame.midY
             app.coordinate(withNormalizedOffset: CGVector(dx: 0.96, dy: 0.75))
                 .press(forDuration: 0.05, thenDragTo: app.coordinate(
-                    withNormalizedOffset: CGVector(dx: 0.96, dy: 0.25)
+                    withNormalizedOffset: CGVector(dx: 0.96, dy: isAbove ? 0.95 : 0.25)
                 ))
         }
         XCTAssertTrue(fit.isHittable)
         readabilityAttachment(app, "Chinese AX5 preview target full text")
         fit.tap()
-        XCTAssertTrue(app.buttons["适应"].waitForExistence(timeout: 3))
-        readabilityAttachment(app, "Chinese AX5 dark image fit menu")
-        app.buttons["适应"].tap()
+        XCTAssertEqual(fit.value as? String, "显示完整照片")
+        readabilityAttachment(app, "Chinese AX5 whole photo after one tap")
         XCTAssertFalse(app.buttons["send-auto-framing"].exists)
+        XCTAssertTrue(fit.exists)
+        fit.tap()
+        XCTAssertTrue(auto.exists)
+        XCTAssertEqual(zoom.label, "2.0×")
     }
 
     func testManualConnectionAgainstFixtureServer() throws {

@@ -160,7 +160,6 @@ struct NearbyPhotoSendView: View {
         AdaptiveComposerLayout {
             previewCard
         } controls: {
-            fitCard
             if nearby.photoState == .sending {
                 VStack(spacing: 8) {
                     Text("Sending photo…").font(.subheadline)
@@ -231,6 +230,7 @@ struct NearbyPhotoSendView: View {
                     get: { framing.framing(for: aspect) },
                     set: { framing.setFraming($0, for: aspect) }
                 ) : nil,
+                fitSelection: $fit,
                 maximumFramingZoom: 4,
                 onCanvasTap: { if !canEditFraming && !busy { photoPickerPresented = true } },
                 prioritizesFramingGesture: true,
@@ -317,19 +317,6 @@ struct NearbyPhotoSendView: View {
             .fixedSize(horizontal: true, vertical: false)
             .accessibilityIdentifier("ble-change-photo")
         }
-    }
-
-    private var fitCard: some View {
-        VStack(alignment: .leading, spacing: TesseraeComposerLayout.controlCardSpacing) {
-            Text("Image Fit").font(.headline)
-            Picker("Image Fit", selection: $fit) {
-                Text("Fill").tag(ImageFitMode.fill)
-                Text("Fit").tag(ImageFitMode.fit)
-            }
-            .tesseraeAdaptivePickerStyle().disabled(busy)
-            Text(LocalizedStringKey(fit.helpText)).font(.footnote).foregroundStyle(.secondary)
-        }
-        .tesseraeCard()
     }
 
     private func loadPhoto() async {

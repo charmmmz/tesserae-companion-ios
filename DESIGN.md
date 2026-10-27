@@ -112,6 +112,18 @@ Choose Live Photo action opens the system picker filtered to Live Photos. This
 does not request library authorization or discard the shared key photo on cancel.
 The selected asset feeds the same timeline and preserves the chosen destinations.
 
+### Photo framing choices
+
+Send, Share and nearby Bluetooth photo composers default to Fill and expose a
+compact one-tap fit button on the preview, replacing the separate Image Fit
+card. Show Entire Photo uses Fit with white space where needed; Fill Display
+restores the existing per-aspect crop. The button remains available in Fit and
+without server-side manual-framing support, subject to advertised Fit/Fill
+capabilities. Existing Fit/Fill preferences are retained; older Blur, Stretch
+and Center preferences fall back to the default supported mode on a new draft.
+Those modes remain compatible with stored records and the API, but leave these
+composer choices. This supersedes D-018's composer UI choice.
+
 ### Post-1.0 photo framing roadmap
 
 Manual photo composition is split into independently reviewable layers:
@@ -240,14 +252,16 @@ window changes do not initiate a new connection. No server API changes are requi
 
 Simple toolbar, modal and completion actions use SF Symbols with native button
 chrome: checkmark for Save/Done/confirming a new Lineup, xmark for Cancel/Close,
-and a chevron for Back. New Folder uses plus. The localized action title remains
+and a chevron for Back. New Folder uses plus. Send and Share composers use a
+paper-plane action in the upper-right toolbar, with progress replacing the icon
+during submission. In-app Send closes immediately after submission; its
+presentation-owned session keeps the foreground send alive and the message
+capsule shows progress, confirmation or a failure with Retry. The progress ring
+uses the theme accent. Display choices use compact rows, smaller trailing selection
+marks and a subtle selected background. The localized action title remains
 the accessibility name when the visible label is icon-only. Connect, Review,
-Send/Retry, Select All and destructive confirmations retain descriptive text.
+Select All and destructive confirmations retain descriptive text.
 Changing a label does not change permissions, disabled states or draft protection.
-
-In-app Send closes immediately after submission. Its presentation-owned session
-keeps the foreground send alive, and the message capsule shows progress,
-confirmation or a failure with Retry. Progress indicators use the theme accent.
 
 Nearby Bluetooth photo sends close the send sheet as soon as the device confirms
 receipt. Only after dismissal, the presenting page shows a brief “Sent to <display>”
@@ -1001,7 +1015,7 @@ display model/transport, and observed outcome.
 | D-015 | 2026-07-28 | Use 24 hours as the initial server-advertised Job and idempotency retention default. | Accepted by upstream maintainer |
 | D-016 | 2026-07-28 | Use the Tesserae name and mark under the community-built, advertising, analytics, data-use, and free-web-feature terms in `ATTRIBUTION.md`. | Accepted; identity clause superseded by D-026 |
 | D-017 | 2026-07-28 | Treat authenticated read-only previews as an optional additive capability with ETag revalidation and placeholder fallback. | Implemented upstream and in the client |
-| D-018 | 2026-07-29 | Advertise image fit modes from server limits; prioritise Fit/Fill/Blur and keep Stretch/Center in advanced UI. | Accepted by upstream maintainer |
+| D-018 | 2026-07-29 | Advertise image fit modes from server limits; prioritise Fit/Fill/Blur and keep Stretch/Center in advanced UI. | Historical; composer UI superseded by Photo framing choices on 2026-10-28 |
 | D-019 | 2026-07-29 | Keep History thumbnails as source compositions, but make Displays use the device-specific post-fit preview. | Accepted by upstream maintainer |
 | D-020 | 2026-07-29 | Add canonical server History and idempotent resend to Activity as an optional capability without adding another tab or exposing History administration. | Accepted by upstream maintainer |
 | D-021 | 2026-07-30 | Add separate capability-gated image-URL and webpage Job routes; render or fetch once, then use existing per-target push fan-out. | Accepted by upstream maintainer |

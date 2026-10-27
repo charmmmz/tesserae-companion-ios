@@ -51,7 +51,7 @@ private final class ShareComposerModel: ObservableObject {
     @Published var snapshot: CompanionSnapshot?
     @Published var selectedDeviceIDs: Set<String> = []
     @Published var previewDeviceID: String?
-    @Published var fit: ImageFitMode = .fit
+    @Published var fit: ImageFitMode = .fill
     @Published var previewImage: UIImage?
     @Published var contentKind: ContentKind?
     @Published var sharedURL: URL?
@@ -199,7 +199,9 @@ private final class ShareComposerModel: ObservableObject {
             if selectedDeviceIDs.contains(target.id) { selectedDeviceIDs.remove(target.id) }
             else { selectedDeviceIDs.insert(target.id); previewDeviceID = target.id }
         }
-        if !fitModes.contains(fit) { fit = .fill }
+        if !fitModes.contains(fit) {
+            fit = fitModes.contains(.fill) ? .fill : fitModes.first ?? .fill
+        }
     }
 
     func reconcileBluetoothSelection() {
@@ -408,11 +410,12 @@ private final class ShareComposerModel: ObservableObject {
             }
             selectedDeviceIDs.subtract(sendTargets.filter(\.isBluetooth).map(\.id))
             if let preferredFit = savedPreferences?.imageFitMode,
+               [.fill, .fit].contains(preferredFit),
                fitModes.contains(preferredFit)
             {
                 fit = preferredFit
             } else if !fitModes.contains(fit) {
-                fit = fitModes.first ?? .fit
+                fit = fitModes.contains(.fill) ? .fill : fitModes.first ?? .fill
             }
             phase = .ready
         } catch {
@@ -1099,8 +1102,6 @@ private struct ShareComposerView: View {
         } controls: {
             displaysCard
                 .disabled(model.framingSession.isFrozen || model.mediaFrames.isBusy)
-            layoutCard
-                .disabled(model.framingSession.isFrozen || model.mediaFrames.isBusy)
 
             bluetoothStatus
 
@@ -1127,22 +1128,16 @@ private struct ShareComposerView: View {
                 await model.send(imageTargetGroups: groups)
             }
         } label: {
-            if model.isBusy {
-                ProgressView()
-                    .tint(.white)
-                    .controlSize(.small)
-                    .frame(minWidth: 32)
-            } else {
-                Text(model.phase == .failed ? "Retry" : "Send")
-            }
+            TesseraeSendActionLabel(
+                title: model.phase == .failed ? "Retry" : "Send",
+                isSending: model.isBusy
+            )
         }
-        .buttonStyle(.borderedProminent)
-        .tint(TesseraeTheme.accentFill)
-        .foregroundStyle(.white)
+        .buttonStyle(TesseraeToolbarButtonStyle())
         .accessibilityIdentifier("share-send")
         .disabled(!isEnabled)
         .accessibilityLabel(
-            model.phase == .submitting
+            model.isBusy
                 ? "Sending"
                 : model.phase == .failed ? "Retry" : "Send"
         )
@@ -1209,6 +1204,8 @@ private struct ShareComposerView: View {
                         accessibilityIdentifier: "share-panel-preview",
                         imageAccessibilityIdentifier: "shared-image-preview",
                         framing: previewImageFramingBinding,
+                        fitSelection: $model.fit,
+                        availableFitModes: model.fitModes,
                         maximumFramingZoom: model.maximumFramingZoom,
                         prioritizesFramingGesture: true,
                         framingEditingEnabled: !model.framingSession.isFrozen && !model.mediaFrames.isBusy && !model.isPreparingMedia,
@@ -1292,27 +1289,6 @@ private struct ShareComposerView: View {
         .tesseraeCard()
     }
 
-    private var layoutCard: some View {
-        VStack(
-            alignment: .leading,
-            spacing: TesseraeComposerLayout.controlCardSpacing
-        ) {
-            Text("Image Fit")
-                .font(.headline)
-            Picker("Image Fit", selection: $model.fit) {
-                ForEach(model.fitModes, id: \.self) { mode in
-                    Text(LocalizedStringKey(mode.displayName)).tag(mode)
-                }
-            }
-            .tesseraeAdaptivePickerStyle()
-            .accessibilityIdentifier("share-image-fit-picker")
-            Text(LocalizedStringKey(model.fit.helpText))
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-        .tesseraeCard()
-    }
-
     private var displaysCard: some View {
         VStack(
             alignment: .leading,
@@ -1320,24 +1296,26 @@ private struct ShareComposerView: View {
         ) {
             Text("Displays")
                 .font(.headline)
-            ForEach(model.sendTargets) { target in
-                let panel = model.bluetoothSession?.panel(for: target) ?? target.panel
-                Button {
-                    model.select(target)
-                    hapticEvent.trigger(.selection)
-                } label: {
-                    TesseraeDisplaySelectionRow(
-                        name: target.name,
-                        resolution: panel.map { "\($0.width)×\($0.height)" } ?? "—",
-                        isSelected: target.isBluetooth ? model.bluetoothTargetID == target.id
-                            : model.selectedDeviceIDs.contains(target.id),
-                        transport: target.isBluetooth ? String(localized: "Bluetooth") : nil,
-                        isAvailable: model.canSelect(target)
-                    )
+            VStack(spacing: 0) {
+                ForEach(model.sendTargets) { target in
+                    let panel = model.bluetoothSession?.panel(for: target) ?? target.panel
+                    Button {
+                        model.select(target)
+                        hapticEvent.trigger(.selection)
+                    } label: {
+                        TesseraeDisplaySelectionRow(
+                            name: target.name,
+                            resolution: panel.map { "\($0.width)×\($0.height)" } ?? "—",
+                            isSelected: target.isBluetooth ? model.bluetoothTargetID == target.id
+                                : model.selectedDeviceIDs.contains(target.id),
+                            transport: target.isBluetooth ? String(localized: "Bluetooth") : nil,
+                            isAvailable: model.canSelect(target)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!model.canSelect(target))
+                    .accessibilityIdentifier("share-display-\(target.id)")
                 }
-                .buttonStyle(.plain)
-                .disabled(!model.canSelect(target))
-                .accessibilityIdentifier("share-display-\(target.id)")
             }
             if let session = model.bluetoothSession, model.sendTargets.isEmpty {
                 if let message = session.nearby.bluetoothUnavailableMessage {

@@ -188,6 +188,8 @@ struct ReorderDragPreview<Icon: View>: View {
 
 enum TesseraeActionMetrics {
     static let iconSize: CGFloat = 20
+    static let compactIconSize: CGFloat = 14
+    static let compactVisualSize: CGFloat = 28
     static let targetSize: CGFloat = 44
     static let spacing: CGFloat = 4
 }
@@ -220,10 +222,22 @@ extension View {
         modifier(TesseraeScreenBackgroundModifier())
     }
 
-    func tesseraeIconActionLabel() -> some View {
+    func tesseraeIconActionLabel(compact: Bool = false) -> some View {
         labelStyle(.iconOnly)
-            .font(.system(size: TesseraeActionMetrics.iconSize))
+            .font(.system(size: compact ? TesseraeActionMetrics.compactIconSize : TesseraeActionMetrics.iconSize))
             .imageScale(.medium)
+            .frame(
+                width: compact ? TesseraeActionMetrics.compactVisualSize : TesseraeActionMetrics.targetSize,
+                height: compact ? TesseraeActionMetrics.compactVisualSize : TesseraeActionMetrics.targetSize
+            )
+            .background {
+                if compact {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(.regularMaterial)
+                        .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+                }
+            }
+            // Compact visuals retain the same accessible touch target.
             .frame(width: TesseraeActionMetrics.targetSize, height: TesseraeActionMetrics.targetSize)
             .contentShape(Rectangle())
     }
@@ -253,6 +267,36 @@ extension View {
     }
 }
 
+struct TesseraeToolbarButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .tesseraeIconActionLabel()
+            .foregroundStyle(isEnabled ? TesseraeTheme.accent : .secondary)
+            .opacity(configuration.isPressed ? 0.5 : 1)
+    }
+}
+
+struct TesseraeSendActionLabel: View {
+    var title: LocalizedStringKey = "Send"
+    var isSending = false
+
+    var body: some View {
+        Group {
+            if isSending {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Label(title, systemImage: "paperplane.fill")
+            }
+        }
+        .tesseraeIconActionLabel()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(isSending ? Text("Sending") : Text(title))
+    }
+}
+
 struct TesseraeDisplaySelectionRow: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let name: String
@@ -263,14 +307,11 @@ struct TesseraeDisplaySelectionRow: View {
 
     var body: some View {
         HStack(alignment: dynamicTypeSize.isAccessibilitySize ? .top : .center, spacing: 12) {
-            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 24))
-                .foregroundStyle(isSelected ? TesseraeTheme.accent : .secondary)
             let layout = dynamicTypeSize.isAccessibilitySize
                 ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
                 : AnyLayout(HStackLayout())
             layout {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                HStack(alignment: .center, spacing: 6) {
                     Text(name)
                         .foregroundStyle(.primary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -284,10 +325,21 @@ struct TesseraeDisplaySelectionRow: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            .font(.subheadline)
             .frame(maxWidth: .infinity, alignment: .leading)
+
+            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(isSelected ? TesseraeTheme.accent : .secondary)
+                .accessibilityHidden(true)
         }
-        .padding(.vertical, 6)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
         .frame(minHeight: 44)
+        .background(
+            isSelected ? TesseraeTheme.accentSoft.opacity(0.65) : .clear,
+            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+        )
         .contentShape(Rectangle())
         .opacity(isAvailable ? 1 : 0.45)
         .accessibilityElement(children: .ignore)

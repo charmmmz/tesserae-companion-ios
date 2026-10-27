@@ -17,6 +17,8 @@ struct TesseraePanelImagePreview: View {
     let accessibilityIdentifier: String
     let imageAccessibilityIdentifier: String
     let framing: Binding<ImageFraming>?
+    let fitSelection: Binding<ImageFitMode>?
+    let availableFitModes: [ImageFitMode]
     let maximumFramingZoom: Double
     let onCanvasTap: (() -> Void)?
     let prioritizesFramingGesture: Bool
@@ -41,6 +43,8 @@ struct TesseraePanelImagePreview: View {
         accessibilityIdentifier: String,
         imageAccessibilityIdentifier: String,
         framing: Binding<ImageFraming>? = nil,
+        fitSelection: Binding<ImageFitMode>? = nil,
+        availableFitModes: [ImageFitMode] = [.fill, .fit],
         maximumFramingZoom: Double = 1,
         onCanvasTap: (() -> Void)? = nil,
         prioritizesFramingGesture: Bool = false,
@@ -58,6 +62,8 @@ struct TesseraePanelImagePreview: View {
         self.accessibilityIdentifier = accessibilityIdentifier
         self.imageAccessibilityIdentifier = imageAccessibilityIdentifier
         self.framing = framing
+        self.fitSelection = fitSelection
+        self.availableFitModes = availableFitModes
         self.maximumFramingZoom = maximumFramingZoom
         self.onCanvasTap = onCanvasTap
         self.prioritizesFramingGesture = prioritizesFramingGesture
@@ -115,6 +121,12 @@ struct TesseraePanelImagePreview: View {
                             )
                             .allowsHitTesting(!framingInteraction.controlsHidden)
                             .accessibilityHidden(framingInteraction.controlsHidden)
+                    }
+                }
+                .frame(width: proxy.size.width, height: proxy.size.height)
+                .overlay(alignment: .topTrailing) {
+                    if showsFitToggle {
+                        fitToggle.padding(8)
                     }
                 }
             }
@@ -220,9 +232,32 @@ struct TesseraePanelImagePreview: View {
         .accessibilityIdentifier(imageAccessibilityIdentifier)
     }
 
-    private func framingControls(
-        framing: Binding<ImageFraming>
-    ) -> some View {
+    private var showsFitToggle: Bool {
+        image != nil && fitSelection != nil && availableFitModes.contains(.fill) && availableFitModes.contains(.fit)
+    }
+
+    @ViewBuilder private var fitToggle: some View {
+        if let fitSelection {
+            Button {
+                fitSelection.wrappedValue = fit == .fit ? .fill : .fit
+            } label: {
+                Group {
+                    if fit == .fit {
+                        Label("Fill Display", systemImage: "arrow.up.left.and.arrow.down.right")
+                    } else {
+                        Label("Show Entire Photo", systemImage: "arrow.down.right.and.arrow.up.left")
+                    }
+                }
+                .tesseraeIconActionLabel(compact: true)
+            }
+            .buttonStyle(.plain)
+            .disabled(!framingEditingEnabled)
+            .accessibilityValue(fit == .fit ? Text("Show Entire Photo") : Text("Fill Display"))
+            .accessibilityIdentifier("photo-fit-toggle")
+        }
+    }
+
+    private func framingControls(framing: Binding<ImageFraming>) -> some View {
         framingAdjustmentControls(framing: framing)
             .disabled(!framingEditingEnabled)
             .font(.caption)

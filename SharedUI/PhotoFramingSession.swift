@@ -12,7 +12,7 @@ final class PhotoFramingSession {
             case .applied: String(localized: "Adjusted")
             case .unchanged: String(localized: "Unchanged")
             case .noSubject: String(localized: "No subject")
-            case .cannotPreserve: String(localized: "Try Fit")
+            case .cannotPreserve: String(localized: "Show Entire Photo")
             case .failed: String(localized: "Try again")
             }
         }
@@ -22,7 +22,7 @@ final class PhotoFramingSession {
             case .applied: String(localized: "Framing adjusted")
             case .unchanged: String(localized: "Framing already fits")
             case .noSubject: String(localized: "No clear subject found")
-            case .cannotPreserve: String(localized: "Faces won't all fit. Try Fit or Blur.")
+            case .cannotPreserve: String(localized: "Faces won't all fit. Choose Show Entire Photo.")
             case .failed: String(localized: "Couldn't analyze photo. Try again.")
             }
         }

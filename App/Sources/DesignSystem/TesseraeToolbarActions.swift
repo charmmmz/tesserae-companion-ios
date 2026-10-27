@@ -21,17 +21,6 @@ struct TesseraeToolbarActions<Actions: View>: ToolbarContent {
     }
 }
 
-private struct TesseraeToolbarButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .tesseraeIconActionLabel()
-            .foregroundStyle(isEnabled ? TesseraeTheme.accent : .secondary)
-            .opacity(configuration.isPressed ? 0.5 : 1)
-    }
-}
-
 private struct TesseraePageSendEnabledKey: EnvironmentKey {
     static let defaultValue = false
 }

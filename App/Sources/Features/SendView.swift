@@ -161,10 +161,13 @@ struct SendView: View {
         } controls: {
             Group {
                 targetCard
-                fitCard
             }
             .disabled(submission.isSubmitting)
-            submitButton(isEnabled: canSubmit)
+        }
+        .toolbar {
+            TesseraeToolbarActions(identifier: "send-toolbar-actions") {
+                submitButton(isEnabled: canSubmit)
+            }
         }
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
             previewHeight = composerCanvasHeight(in: size)
@@ -301,7 +304,9 @@ struct SendView: View {
             if selectedDeviceIDs.contains(target.id) { selectedDeviceIDs.remove(target.id) }
             else { selectedDeviceIDs.insert(target.id); previewDeviceID = target.id }
         }
-        if !availableFitModes.contains(fitMode) { fitMode = .fill }
+        if !availableFitModes.contains(fitMode) {
+            fitMode = availableFitModes.contains(.fill) ? .fill : availableFitModes.first ?? .fill
+        }
     }
 
     private func reconcileBluetoothSelection() {
@@ -382,13 +387,11 @@ struct SendView: View {
             linkFieldIsFocused = false
             dismiss()
         } label: {
-            Label("Send to Displays", systemImage: "paperplane.fill")
-                .frame(maxWidth: .infinity)
+            TesseraeSendActionLabel(
+                title: "Send to Displays",
+                isSending: submission.isSubmitting
+            )
         }
-        .buttonStyle(.borderedProminent)
-        .tint(TesseraeTheme.accentFill)
-        .foregroundStyle(.white)
-        .controlSize(.large)
         .disabled(!isEnabled)
         .accessibilityIdentifier("send-submit")
     }
@@ -531,6 +534,8 @@ struct SendView: View {
                     accessibilityIdentifier: "send-panel-preview",
                     imageAccessibilityIdentifier: "selected-image-preview",
                     framing: previewImageFramingBinding,
+                    fitSelection: $fitMode,
+                    availableFitModes: availableFitModes,
                     maximumFramingZoom: maximumFramingZoom,
                     onCanvasTap: choosePhotoFromPreview,
                     prioritizesFramingGesture: prioritizesFramingGesture,
@@ -666,27 +671,6 @@ struct SendView: View {
         return "\(previewTargetName) · \(panel.width) × \(panel.height) · \(aspect)"
     }
 
-
-    private var fitCard: some View {
-        VStack(
-            alignment: .leading,
-            spacing: TesseraeComposerLayout.controlCardSpacing
-        ) {
-            Text("Image Fit")
-                .font(.headline)
-            Picker("Image Fit", selection: $fitMode) {
-                ForEach(availableFitModes, id: \.self) { mode in
-                    Text(LocalizedStringKey(mode.displayName)).tag(mode)
-                }
-            }
-            .tesseraeAdaptivePickerStyle()
-            .accessibilityIdentifier("send-image-fit-picker")
-            Text(LocalizedStringKey(fitDescription))
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-        .tesseraeCard()
-    }
 
     private var targetCard: some View {
         VStack(
@@ -890,10 +874,6 @@ struct SendView: View {
         return "\(fitMode.rawValue), \(panel.width) by \(panel.height)"
     }
 
-    private var fitDescription: String {
-        fitMode.helpText
-    }
-
     private var availableFitModes: [ImageFitMode] {
         if bluetoothTargetID != nil { return [.fill, .fit] }
         let advertised = model.capabilities?.limits.imageFitModes
@@ -935,6 +915,7 @@ struct SendView: View {
         }
 
         if let preferredFit = preferences?.imageFitMode,
+           [.fill, .fit].contains(preferredFit),
            availableFitModes.contains(preferredFit)
         {
             fitMode = preferredFit

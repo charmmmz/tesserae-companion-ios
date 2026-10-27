@@ -13,12 +13,20 @@ capabilities.
 
 ### Changed
 
+- Photo composers default to filling the display and replace the Image Fit card
+  with a compact preview button. Tap to show the complete photo or restore the
+  previous Fill crop. App, Share and nearby Bluetooth sending use the same
+  control; Blur, Stretch and Center are no longer offered in these composers.
 - In-app Send closes as soon as a send starts, with progress, confirmation and
   failures shown in the message capsule. Failed sends can retry the submitted
   content and framing. Message progress indicators now use the theme accent.
+- Send and Share use compact display choices with smaller trailing selection
+  marks and a subtle selected background. Both composers now send from a paper
+  plane button in the upper-right corner, keeping progress and readiness visible.
 
 ### Fixed
 
+- Bluetooth icons beside display names are vertically centered in Send and Share.
 - When Photos sharing cannot provide readable Live Photo motion, Share can
   request Photos access and retry the current shared item after approval.
   Limited Access must include that photo; Full Access also works. If access is

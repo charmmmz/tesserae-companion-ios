@@ -208,6 +208,14 @@ import XCTest
         let sharedFrames = timeline(share)
         XCTAssertTrue(sharedFrames.waitForExistence(timeout: 10))
         reveal(sharedFrames, in: share)
+        XCTAssertFalse(share.staticTexts["Image Fit"].exists)
+        let fitToggle = share.buttons["photo-fit-toggle"]
+        reveal(fitToggle, in: share)
+        fitToggle.tap()
+        XCTAssertFalse(share.buttons["send-framing-reset"].exists)
+        XCTAssertTrue(sharedFrames.exists)
+        fitToggle.tap()
+        XCTAssertTrue(share.buttons["send-framing-reset"].exists)
         assertInlinePreviewOrder(share, prefix: "share")
         let sharePanel = share.descendants(matching: .any)["share-panel-preview"].firstMatch.frame
         let shareImage = share.descendants(matching: .any)["shared-image-preview"].firstMatch.frame

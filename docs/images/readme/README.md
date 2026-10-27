@@ -14,14 +14,18 @@ captures accompany the full UI conventions audit. The source revision and captur
 refreshes are recorded in Git history. Changed captures use new filenames for
 both README thumbnails and their links.
 
-`send-photo-centered-preview.png` was refreshed on 27 October 2026 from the
-working tree based on `66ada5d`, with the display canvas vertically centered
-inside the reserved preview area. It is the original `Photo composer compact
-targets` attachment from `AdaptiveLayoutUITests.testPhotoFramingSurvivesDeviceTurn`
-in `/tmp/tesserae-preview-centering-20261027/phone.xcresult`, captured on the
-`Tesserae Branding iPhone` simulator (iOS 27.0) after resetting the demo framing
-to 1.0×. Live Photo and video captures were also compared on the same Kitchen
-800 × 480 target to verify identical canvas placement.
+`send-photo-compact-fit-toggle.png` was refreshed on 28 October 2026 from the
+working tree based on `73e282c`. The separate Image Fit card is removed.
+The preview's compact upper-right button switches directly between Fill Display
+and Show Entire Photo, without opening a menu. Compact display choices and the
+upper-right Send action are retained.
+It is the original `Photo composer compact targets` attachment from
+`AdaptiveLayoutUITests.testPhotoFramingSurvivesDeviceTurn` in
+`output/companion-photo-framing-20261028/Compact-Fit-Toggle.xcresult`, captured on the
+`Live Photo Share QA 20261028` simulator (iPhone 17 Pro, iOS 26.5), with the demo
+framing reset to 1.0×. App, Share and nearby Bluetooth mode switching, retained
+cropping, Live Photo frame selection and Chinese accessibility text were also
+checked in targeted UI flows on the same simulator.
 
 `dashboards-floating-send.png` and `activity-floating-send.png` were refreshed on 26 October 2026 from the working
 tree based on `830c083`, with the independent Send button and top-message layout.
@@ -56,7 +60,7 @@ capture and the Wi-Fi detail signal value were checked separately.
 | `dashboard-settings-actions.png` | Pantry → native settings, shared actions and bounded Push icon, before editing |
 | `lineup-editor-actions.png` | New Manual Lineup, native icon actions, selected display and two Dashboards |
 | `gallery-folder-actions.png` | Library → family folder, square image grid and shared More/Add capsule |
-| `send-photo-centered-preview.png` | Send → Use Sample → reset framing, centered Fill at 1.0× with compact display selection |
+| `send-photo-compact-fit-toggle.png` | Send → Use Sample → reset framing, centered Fill at 1.0×, compact one-tap fit button and display choices |
 | `activity-floating-send.png` | Demo Mode → Activity |
 | `bluetooth-maintenance.png` | Simulated PicPak → authenticated Maintenance, current battery status |
 | `dashboard-components.png` | Pantry → Demo Reminders settings, before searching or editing a field |

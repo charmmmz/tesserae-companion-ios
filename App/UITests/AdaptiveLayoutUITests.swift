@@ -126,7 +126,10 @@ final class AdaptiveLayoutUITests: XCTestCase {
         let send = app.buttons["send-submit"]
         reveal(send, app: app)
         XCTAssertTrue(send.isEnabled)
-        XCTAssertGreaterThan(send.frame.width, 44)
+        XCTAssertGreaterThanOrEqual(send.frame.width, 44)
+        XCTAssertGreaterThanOrEqual(send.frame.height, 44)
+        XCTAssertGreaterThan(send.frame.midX, app.frame.midX)
+        XCTAssertLessThan(send.frame.minY, sample.frame.minY)
         XCTAssertLessThanOrEqual(send.frame.maxX, app.frame.maxX)
         capture("Accessibility composer", app: app)
     }

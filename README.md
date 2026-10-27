@@ -45,7 +45,7 @@ Tesserae Companion connects directly to your own Tesserae server, with a built-i
   </tr>
   <tr>
     <td align="center"><a href="docs/images/readme/gallery-folder-actions.png"><img src="docs/images/readme/gallery-folder-actions.png" width="220" alt="Photo Library showing a square grid of sample images and shared folder action capsule"></a></td>
-    <td align="center"><a href="docs/images/readme/send-photo-centered-preview.png"><img src="docs/images/readme/send-photo-centered-preview.png" width="220" alt="Photo composer with a display-aware preview and Auto Frame controls"></a></td>
+    <td align="center"><a href="docs/images/readme/send-photo-compact-fit-toggle.png"><img src="docs/images/readme/send-photo-compact-fit-toggle.png" width="220" alt="Photo composer with a compact one-tap fit button, compact display choices and the upper-right Send action"></a></td>
     <td align="center"><a href="docs/images/readme/activity-floating-send.png"><img src="docs/images/readme/activity-floating-send.png" width="220" alt="Activity showing recent content and send outcomes"></a></td>
     <td align="center"><a href="docs/images/readme/bluetooth-maintenance.png"><img src="docs/images/readme/bluetooth-maintenance.png" width="220" alt="Authenticated Bluetooth maintenance for a supported PicPak display"></a></td>
   </tr>
@@ -112,10 +112,13 @@ server administration remain in Tesserae's web interface.
 
 ### Photo framing
 
-Use **Fill** and Auto Frame to compose around detected faces and subjects, then
-adjust by dragging or pinching. Each preview aspect ratio keeps its own framing;
-manual edits stay in place until you run Auto Frame again. Use Fit or Blur when
-you want the whole image visible.
+Photos fill the display by default. Use Auto Frame to compose around detected
+faces and subjects, then adjust by dragging or pinching. Each preview aspect
+ratio keeps its own framing; manual edits stay in place until you run Auto Frame
+again. Tap the small button at the preview's upper-right to **Show Entire Photo**
+with white space where needed. Tap again to **Fill Display**, restoring your
+previous crop. These choices replace the separate Image Fit card in Send,
+Share and nearby Bluetooth photo sending.
 
 Analysis runs locally with Apple Vision on iOS 18 or later and does not require
 Apple Intelligence. Framing works in Send and the Share Sheet when the server
