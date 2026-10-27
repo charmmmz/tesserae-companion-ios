@@ -318,7 +318,7 @@ struct TesseraeMessageCapsule<Leading: View, Trailing: View>: View {
         }
         .padding(.horizontal, 15)
         .padding(.vertical, 8)
-        .frame(minHeight: 40)
+        .frame(minHeight: 44)
         .background(.thinMaterial, in: Capsule())
         .overlay {
             Capsule()
@@ -414,6 +414,9 @@ final class TesseraeMessageCenter {
     @ObservationIgnored private var dismissalTask: Task<Void, Never>?
     @ObservationIgnored private var dismissalMarker: String?
     @ObservationIgnored private var automaticMessageHostID: UUID?
+    var windowMessageFrame: CGRect = .zero
+
+    var hasActiveHost: Bool { !activeHostIDs.isEmpty }
 
     var currentMessage: TesseraeMessage? {
         currentEntry?.message
@@ -542,23 +545,24 @@ final class TesseraeMessageCenter {
 private struct TesseraeMessageCenterHost: View {
     let verticalPadding: CGFloat
     @Environment(TesseraeMessageCenter.self) private var center
+    @Environment(\.tesseraeWindowMessagesEnabled) private var windowMessagesEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hostID = UUID()
     @State private var hapticEvent = TesseraeHapticEvent()
 
     var body: some View {
         ZStack {
-            if center.isActiveHost(id: hostID),
+            if !windowMessagesEnabled, center.isActiveHost(id: hostID),
                let message = center.currentMessage
             {
-                presentedMessage(message)
+                TesseraePresentedMessage(message: message)
                     .padding(.vertical, verticalPadding)
                     .id(message.id)
                     .transition(messageTransition)
             }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: center.isActiveHost(id: hostID) && center.currentMessage != nil ? nil : 0)
+        .frame(height: !windowMessagesEnabled && center.isActiveHost(id: hostID) && center.currentMessage != nil ? nil : 0)
         .animation(.easeOut(duration: 0.18), value: center.currentMessage?.id)
         .tesseraeHapticFeedback(trigger: hapticEvent)
         .onAppear {
@@ -586,6 +590,13 @@ private struct TesseraeMessageCenterHost: View {
         guard !reduceMotion else { return .opacity }
         return .opacity.combined(with: .scale(scale: 0.97, anchor: .top))
     }
+}
+
+struct TesseraePresentedMessage: View {
+    let message: TesseraeMessage
+    var frameChanged: ((CGRect) -> Void)? = nil
+
+    var body: some View { presentedMessage(message) }
 
     @ViewBuilder
     private func presentedMessage(_ message: TesseraeMessage) -> some View {
@@ -628,6 +639,7 @@ private struct TesseraeMessageCenterHost: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frameChanged?($0) }
         .frame(maxWidth: 400)
     }
 
@@ -682,7 +694,9 @@ private struct TesseraeMessageCenterModifier<BottomAccessory: View>: ViewModifie
     let bottomAccessoryHeight: CGFloat
     @ViewBuilder let bottomAccessory: BottomAccessory
     @Environment(TesseraeMessageCenter.self) private var center
+    @Environment(\.tesseraeWindowMessagesEnabled) private var windowMessagesEnabled
     @State private var messageHeight: CGFloat = 0
+    @State private var contentTop: CGFloat = 0
 
     private var reservesContentSpace: Bool {
         guard let message = center.currentMessage else { return false }
@@ -690,10 +704,18 @@ private struct TesseraeMessageCenterModifier<BottomAccessory: View>: ViewModifie
         return message.tapAction != nil || message.action != nil
     }
 
+    private var reservedMessageHeight: CGFloat {
+        guard reservesContentSpace else { return 0 }
+        return windowMessagesEnabled
+            ? max(0, center.windowMessageFrame.maxY - contentTop)
+            : messageHeight
+    }
+
     func body(content: Content) -> some View {
         content
+            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { contentTop = $0 }
             .safeAreaInset(edge: .top, spacing: 0) {
-                Color.clear.frame(height: reservesContentSpace ? messageHeight : 0)
+                Color.clear.frame(height: reservedMessageHeight)
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 Color.clear.frame(height: bottomAccessoryHeight)

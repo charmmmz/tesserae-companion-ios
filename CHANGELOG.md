@@ -17,6 +17,8 @@ capabilities.
   Image Fit change.
 - In-app composers keep scrolling available during submission while protecting
   the draft and preventing duplicate sends or dismissal.
+- Message capsules sit directly below the Dynamic Island/status bar, independently
+  of navigation titles and sheet positions, with pass-through background touches.
 - Bluetooth status reports include saved battery percentages and firmware versions
   when the server advertises support, preserving each reading’s collection time.
 

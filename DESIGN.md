@@ -202,12 +202,14 @@ shared button at the tab-container level, outside both split-view columns and
 above the bottom safe area. Both use the same size and margins. The Send sheet
 offers Close without a Settings shortcut.
 Message hosts belong to page content inside navigation containers,
-including modal stacks. Capsules float at the top of page content, 12 points
-below navigation, clear of titles and toolbar actions. The independent Send button
+including modal stacks. Capsules float 8 points below the window's top safe area,
+directly below the Dynamic Island/status bar. A non-key window presents them above
+navigation and sheets; touches outside an actionable capsule pass through.
+The independent Send button
 keeps a fixed position when messages appear; scrolling content reserves its
 height so the final item remains reachable. Transient confirmations do not move
-content. Persistent/actionable messages reserve their measured height at the top
-of page content. Navigation
+content. Persistent/actionable messages reserve only their measured overlap with
+page content. Navigation
 titles and toolbars stay fixed. Gallery density follows the available width without
 overwriting the saved preference. Resizing cancels an unfinished display
 reorder without committing it. BLE connection ownership remains in NearbyDeviceManager;
@@ -230,8 +232,9 @@ remain visible in the capsule.
 
 Every page uses `TesseraeToolbarActions` from `App/Sources/DesignSystem` for its
 trailing actions. `TesseraeRootToolbar` composes it with Settings.
-Compact root pages use `.tesseraeRootPageChrome()` for top messages
-and the independent Send button in the bottom safe area.
+Compact root pages use `.tesseraeRootPageChrome()` for message lifetime/spacing
+and the independent Send button in the bottom safe area. App-level message
+presentation belongs to `.tesseraeWindowMessageOverlay(center:)`.
 The component owns the single native capsule, icon-only labels, 44 × 44-point
 targets, 4-point spacing, symbol sizing, accent tint, and muted disabled state.
 Feature views supply action semantics and availability; they do not override

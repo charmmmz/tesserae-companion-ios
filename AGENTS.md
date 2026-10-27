@@ -8,8 +8,9 @@ For SwiftUI work, follow the UI conventions in `DESIGN.md` and reuse
   Compact root pages use `.tesseraeRootPageChrome()` for a shared 56-point Send
   button at the bottom trailing safe area, 16 points inward and 12 points above
   the tab bar. Wide windows use the same button once at the tab-container level,
-  outside split-view columns. Messages appear below navigation at the top of page content;
-  content reserves space for the Send button and persistent/actionable messages.
+  outside split-view columns. Messages appear 8 points below the window's top
+  safe area, directly below the Dynamic Island/status bar, above navigation and
+  presented sheets. Content reserves space for Send and any persistent message overlap.
   Do not create separate trailing toolbar items, local button sizing, or custom
   capsule backgrounds in feature views.
 - Pushed selection pages use the same capsule, including single Done actions.

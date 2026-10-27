@@ -56,6 +56,7 @@
 		5CC2CC564A1BE6925C43F4D5 /* DashboardSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A05849C6115D35450BA3707F /* DashboardSettingsView.swift */; };
 		5EB4D303FD2F67C98154415C /* DisplayHardwareBadgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 834AF00906D63D9F2A468C94 /* DisplayHardwareBadgeTests.swift */; };
 		5EC9A7DAA43DC020D3D5DE6D /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68D757E72A99A23D9A75B361 /* OnboardingView.swift */; };
+		64934B7F5B6214C6F3A23438 /* TesseraeMessageOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C7978DD383BE1BBCCCDC4BC /* TesseraeMessageOverlay.swift */; };
 		64D3E04F40AB9CBE6306FBC0 /* RemindersBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CBD8BCA89698A1281940F5D /* RemindersBridge.swift */; };
 		65250F43371291617815D0A0 /* ReminderSnapshotFactoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49B49CB5FE65FF3DC08A0081 /* ReminderSnapshotFactoryTests.swift */; };
 		65EC60FE0E110924626C640A /* DisplayHardwareBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36574431BF8F9CAB78DF3088 /* DisplayHardwareBadge.swift */; };
@@ -129,6 +130,7 @@
 		F523C69312AEEDD2C5C25C01 /* AdaptiveLayoutUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1204CDD20048DC222C43E9F8 /* AdaptiveLayoutUITests.swift */; };
 		F5A9B1BCAF561B0C8E8ACB3C /* NearbyDeviceSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 914B26F3EA9F8A2DE58A81B8 /* NearbyDeviceSetupView.swift */; };
 		F962394A38E0D5CACF8D6536 /* OfflineAlbumEditingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAFCA560C45DA2EA689FF7D5 /* OfflineAlbumEditingTests.swift */; };
+		FDE42BD366582AA2FB79CFDD /* TesseraeMessageOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C7978DD383BE1BBCCCDC4BC /* TesseraeMessageOverlay.swift */; };
 		FE4195F9C97F6AD1B91871CE /* RemindersBridgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90014E225C2AB46EE0CA6530 /* RemindersBridgeView.swift */; };
 		FF4C2B0911D8ED227B8224AD /* GalleryViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4901B9808092D465184CABA /* GalleryViewTests.swift */; };
 /* End PBXBuildFile section */
@@ -201,6 +203,7 @@
 		431BEA456C9FDD3620503327 /* NearbyDeviceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearbyDeviceManager.swift; sourceTree = "<group>"; };
 		4330E9660E867A371A28E93F /* BluetoothModeLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothModeLabel.swift; sourceTree = "<group>"; };
 		49B49CB5FE65FF3DC08A0081 /* ReminderSnapshotFactoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderSnapshotFactoryTests.swift; sourceTree = "<group>"; };
+		4C7978DD383BE1BBCCCDC4BC /* TesseraeMessageOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TesseraeMessageOverlay.swift; sourceTree = "<group>"; };
 		4E080EF75EAC8A0C7863578B /* MediaLibraryPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaLibraryPicker.swift; sourceTree = "<group>"; };
 		4EA5F074B206DD2FF54C9767 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		4F548F3379CFFB93726CD704 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
@@ -477,6 +480,7 @@
 				90C9F22206234BD938D1E5B1 /* PhotoFramingSession.swift */,
 				D09B9A585A1539B7342FE714 /* PhotoSubjectAnalyzer.swift */,
 				8B1A88193CB426789297DE51 /* ShareDisplayTarget.swift */,
+				4C7978DD383BE1BBCCCDC4BC /* TesseraeMessageOverlay.swift */,
 				135374B71848FF0E87F4A6D3 /* TesseraePanelImagePreview.swift */,
 				FD8060E9227692A0914DB946 /* TesseraeTheme.swift */,
 			);
@@ -737,6 +741,7 @@
 				EBA1410E74DCE50280302A5A /* PreviewImageState.swift in Sources */,
 				3D0C7A0C72B529B74488017B /* ShareDisplayTarget.swift in Sources */,
 				50F233622A7FB17CD2295534 /* ShareViewController.swift in Sources */,
+				FDE42BD366582AA2FB79CFDD /* TesseraeMessageOverlay.swift in Sources */,
 				4F402A0069B78FDE2256EE9F /* TesseraePanelImagePreview.swift in Sources */,
 				04BA9B524B9B033C0098349C /* TesseraeTheme.swift in Sources */,
 			);
@@ -814,6 +819,7 @@
 				56E8E95D324E6354ACAC62B8 /* ShareViewController.swift in Sources */,
 				38FFA83B75C8B09B8F32AE6E /* TesseraeCompanionApp.swift in Sources */,
 				4B98C3F8FFCE806E85BF0034 /* TesseraeIntents.swift in Sources */,
+				64934B7F5B6214C6F3A23438 /* TesseraeMessageOverlay.swift in Sources */,
 				28315FF4BF85AAE536A42F85 /* TesseraePanelImagePreview.swift in Sources */,
 				EDA7DAFA44340F1BDCBE5FCB /* TesseraeTheme.swift in Sources */,
 				17D2FCCE924BA07994FAEE09 /* TesseraeToolbarActions.swift in Sources */,

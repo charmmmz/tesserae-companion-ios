@@ -179,6 +179,7 @@ struct TesseraeCompanionApp: App {
                 .environment(setupNetworks)
                 .tint(TesseraeTheme.accent)
                 .preferredColorScheme(uiTestColorScheme)
+                .tesseraeWindowMessageOverlay(center: messageCenter)
         }
     }
 

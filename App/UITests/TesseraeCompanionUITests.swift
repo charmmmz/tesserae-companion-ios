@@ -477,7 +477,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         let navigationFrame = app.navigationBars["Nearby Displays"].frame
         XCTAssertEqual(navigationFrame.minY, originalNearbyTitleFrame.minY, accuracy: 1)
         XCTAssertEqual(navigationFrame.height, originalNearbyTitleFrame.height, accuracy: 1)
-        XCTAssertGreaterThanOrEqual(confirmationFrame.minY, navigationFrame.maxY)
+        XCTAssertEqual(confirmationFrame.minY, navigationFrame.minY + 8, accuracy: 2)
         XCTAssertLessThan(confirmationFrame.midY, app.frame.midY)
         let geometry = XCTAttachment(string: "capsule=\(confirmationFrame)\nnavigationBefore=\(originalNearbyTitleFrame)\nnavigationDuring=\(navigationFrame)")
         geometry.name = "Bluetooth Receipt Capsule Geometry"; geometry.lifetime = .keepAlways; add(geometry)
@@ -931,6 +931,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         let capsule = app.buttons["gallery-upload-capsule"]
         XCTAssertTrue(capsule.waitForExistence(timeout: 3))
         XCTAssertEqual(capsule.label, "Uploading 2 of 5")
+        XCTAssertGreaterThanOrEqual(capsule.frame.height, 44)
         XCTAssertFalse(app.navigationBars["Upload Details"].exists)
         let sendAction = app.buttons["root-send-action"]
         XCTAssertTrue(sendAction.exists)
@@ -943,7 +944,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         let navigationFrame = app.navigationBars["Displays"].frame
         XCTAssertEqual(navigationFrame.minY, originalNavigationFrame.minY, accuracy: 1)
         XCTAssertEqual(navigationFrame.height, originalNavigationFrame.height, accuracy: 1)
-        XCTAssertGreaterThanOrEqual(capsule.frame.minY, navigationFrame.maxY)
+        XCTAssertEqual(capsule.frame.minY, navigationFrame.minY + 8, accuracy: 2)
         let tabBar = app.tabBars.firstMatch
         XCTAssertTrue(tabBar.exists)
         XCTAssertLessThan(capsule.frame.midY, app.frame.midY)
@@ -970,6 +971,9 @@ final class TesseraeCompanionUITests: XCTestCase {
         add(detailsScreenshot)
         app.buttons["Done"].tap()
         XCTAssertTrue(capsule.waitForExistence(timeout: 2))
+        app.buttons["root-settings"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
+        app.buttons["Done"].tap()
     }
 
     func testDisplayManufacturerBadges() {
