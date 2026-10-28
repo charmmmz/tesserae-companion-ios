@@ -1,0 +1,23 @@
+{
+  "field_id": "f_66fc85ddd5451c1d7616",
+  "schema_revision": "25a606778da2988e63a0123d2381cb216f010e73f1f828e819a6f5b2548c3869",
+  "status": "ready",
+  "choices": [
+    {
+      "value": {
+        "name": "Shanghai",
+        "country": "China",
+        "admin1": "Shanghai",
+        "latitude": 31.22222,
+        "longitude": 121.45806,
+        "timezone": "Asia/Shanghai"
+      },
+      "label": "Shanghai, China"
+    }
+  ],
+  "total": 1,
+  "offset": 0,
+  "limit": 50,
+  "has_more": false,
+  "message": null
+}

@@ -15,6 +15,9 @@ SPEC = yaml.safe_load((ROOT / "app-v1.openapi.yaml").read_text())
 FIXTURES = ROOT / "Fixtures"
 
 CASES = {
+    "dashboard-native-controls-response.json": "DashboardSettingsResponse",
+    "dashboard-native-controls-patch.json": "DashboardSettingsPatchRequest",
+    "dashboard-native-location-choices.json": "DashboardSettingsChoicesResponse",
     "device-mode-observation.json": "DeviceModeObservation",
     "device-mode-observation-status.json": "DeviceModeObservationStatus",
     "device-lookup-request.json": "DeviceLookupRequest",

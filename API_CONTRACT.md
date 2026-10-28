@@ -802,11 +802,31 @@ Declared inputs take precedence over the corresponding discovered fields.
 Components are grouped by instance even when several fragments use the same
 widget. Component and field IDs are opaque; clients must not construct paths
 into the saved document from a label or widget name. Unknown types and
-unavailable widgets are displayed without erasing their data. The first batch
-supports text, numeric, boolean, single-choice, and ordered multiple-choice
-controls. Fields needing location search, sliders, native color controls, or
-conditional visibility remain read-only when the server cannot safely expose
-them through these controls.
+unavailable widgets are displayed without erasing their data. Native clients send `X-Tesserae-Dashboard-Controls: 1` on settings GET,
+choices GET and settings PATCH. Servers advertising `dashboard_native_controls`
+then also expose conditional fields, sliders, location search and colors.
+Without the header the existing read-only policy remains unchanged. Older
+servers ignore this additive request header.
+
+`visibility_conditions` is an AND array of `{field_id, expected}` entries.
+Controllers use public field IDs, including declared inputs that cover a
+component option. A scalar compares using the web form's primitive text
+normalization; an array is any-of and `{not: scalar-or-array}` negates it.
+A hidden controller hides its dependents. `visible` describes saved state;
+new clients recompute conditions against their shared draft. Unresolvable,
+cyclic, mixed or secret controllers keep an explanatory read-only field.
+Hidden draft values remain available if revealed again; hidden changes and
+resets are omitted from PATCH. The server independently evaluates the combined
+candidate and rejects explicit hidden writes atomically.
+
+Sliders carry `minimum`, `maximum`, `step` and optional `unit`; absent limits
+use 0/100/1. Dragging snaps relative to the minimum, while precise numeric
+entry is validated without silently clamping stored values. Colors keep their
+CSS or theme string until explicitly edited; the native picker writes hex.
+`location_search` values use `{name?, country?, admin1?, latitude, longitude,
+timezone?}`. Coordinates must be finite and in range; zones must be valid IANA
+identifiers. Picking a search result replaces the place; manual coordinate
+edits retain the existing zone and metadata unless explicitly edited.
 
 PATCH adds `component_values` keyed by opaque field ID and `reset_fields` for
 both declared and component fields. New clients send the fetched
@@ -833,6 +853,12 @@ in the draft until explicitly removed. Newly introduced choices are validated
 against the current provider; unchanged missing selections remain intact.
 Secret fields omit values, defaults, and choices, and safe validation errors
 never include submitted values.
+
+Location fields reuse scoped choices: `q` searches Open-Meteo places or accepts
+an explicit `latitude,longitude` pair. An empty query performs no upstream
+request. Choices carry canonical location objects as values; provider failure
+returns `unavailable` without exposing raw errors. Manual coordinate entry
+remains available without search.
 
 The shared examples include `dashboard-component-settings-response.json`,
 `dashboard-component-settings-patch.json`, and

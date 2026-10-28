@@ -203,7 +203,8 @@ public actor LiveTesseraeClient: TesseraeServing {
     }
 
     public func fetchDashboardSettings(id: String, instance: TesseraeInstance) async throws -> DashboardSettings {
-        let request = try await authenticatedRequest(instance: instance, path: ["dashboards", id, "settings"], method: "GET")
+        var request = try await authenticatedRequest(instance: instance, path: ["dashboards", id, "settings"], method: "GET")
+        request.setValue("1", forHTTPHeaderField: "X-Tesserae-Dashboard-Controls")
         return try await perform(request, expectedStatusCodes: [200])
     }
 
@@ -217,14 +218,16 @@ public actor LiveTesseraeClient: TesseraeServing {
             URLQueryItem(name: "offset", value: String(offset)),
         ]
         if let schemaRevision { queryItems.append(URLQueryItem(name: "schema_revision", value: schemaRevision)) }
-        let request = try await authenticatedRequest(
+        var request = try await authenticatedRequest(
             instance: instance, path: ["dashboards", id, "settings", "fields", fieldID, "choices"],
             method: "GET", queryItems: queryItems)
+        request.setValue("1", forHTTPHeaderField: "X-Tesserae-Dashboard-Controls")
         return try await perform(request, expectedStatusCodes: [200])
     }
 
     public func updateDashboardSettings(id: String, patch: DashboardSettingsPatch, instance: TesseraeInstance) async throws -> DashboardSettings {
-        let request = try await authenticatedRequest(instance: instance, path: ["dashboards", id, "settings"], method: "PATCH", body: TesseraeJSON.encoder().encode(patch))
+        var request = try await authenticatedRequest(instance: instance, path: ["dashboards", id, "settings"], method: "PATCH", body: TesseraeJSON.encoder().encode(patch))
+        request.setValue("1", forHTTPHeaderField: "X-Tesserae-Dashboard-Controls")
         let result = try await response(for: request)
         if result.statusCode == 400 {
             struct ValidationResponse: Decodable {

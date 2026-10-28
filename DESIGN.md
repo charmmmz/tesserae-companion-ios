@@ -393,6 +393,17 @@ retain read-only access until granted. Servers without these capabilities keep
 preview/push and the web shortcut. Layout, code and global plugin management
 remain in the web editor.
 
+Conditional content fields follow the shared unsaved draft across pages.
+A dependent field appears only while all its conditions and controllers are
+visible; hiding it retains its saved value and its unsaved draft for a later
+reveal. Sliders offer native dragging plus exact numeric input and show the
+server's unit. Color settings offer a native color picker and an editable CSS
+or theme value without converting it on opening. Location settings offer
+server-scoped place search and manual coordinates, preserving existing time
+zones and place metadata. Search failure leaves coordinate entry available.
+These controls use the existing revision-checked Save, permissions, reset,
+clear and discard protection. Layout and code editing remain on the web.
+
 ### 3.3 Send a family photo from the share sheet
 
 1. User selects one image and taps **Share → Tesserae Companion**.

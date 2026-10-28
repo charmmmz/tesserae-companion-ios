@@ -362,6 +362,14 @@ paths:
   /api/app/v1/dashboards/{dashboard_id}/settings:
     parameters:
     - $ref: '#/components/parameters/DashboardID'
+    - in: header
+      name: X-Tesserae-Dashboard-Controls
+      description: Send 1 to opt into conditional fields, sliders, locations and colors.
+        Omit for legacy read-only behavior.
+      schema:
+        type: string
+        enum:
+        - '1'
     get:
       tags:
       - Dashboards
@@ -1269,6 +1277,13 @@ paths:
   /api/app/v1/dashboards/{dashboard_id}/settings/fields/{field_id}/choices:
     parameters:
     - $ref: '#/components/parameters/DashboardID'
+    - in: header
+      name: X-Tesserae-Dashboard-Controls
+      description: Send 1 to search canonical location choices as well as select choices.
+      schema:
+        type: string
+        enum:
+        - '1'
     - in: path
       name: field_id
       required: true
@@ -1279,6 +1294,10 @@ paths:
       - Dashboards
       operationId: getCompanionDashboardSettingsChoices
       summary: Search current dashboard field choices (dashboards:read)
+      description: For location_search with native controls enabled, q searches Open-Meteo
+        places or a literal latitude,longitude pair; an empty query does no networking.
+        Values are canonical location objects with coordinates and optional IANA timezone.
+        Provider failure returns unavailable with a safe message.
       parameters:
       - in: query
         name: q
@@ -4172,6 +4191,22 @@ components:
           type: number
         step:
           type: number
+        unit:
+          type: string
+          description: Display suffix for a numeric control; never part of its stored
+            JSON number.
+        visibility_conditions:
+          type: array
+          description: All conditions must match and each controller must itself be visible.
+            Values compare as web-form text, arrays match any item and an object with
+            not negates. Unknown or cyclic dependencies remain visible and read-only with
+            a reason. Present only after the native-controls header opt-in.
+          items:
+            $ref: '#/components/schemas/DashboardSettingsVisibilityCondition'
+        visible:
+          type: boolean
+          description: Visibility for the saved values. The client reevaluates conditions
+            against its draft without discarding hidden values.
         default: {}
     DashboardSettingsResponse:
       type: object
@@ -4273,7 +4308,6 @@ components:
             type: string
           description: Declared or component field IDs to remove overrides and restore
             defaults. Requires schema_revision.
-
     DashboardSettingsComponent:
       type: object
       additionalProperties: false
@@ -4312,7 +4346,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/DashboardSettingsInput'
-
     DashboardSettingsCoverage:
       type: object
       additionalProperties: false
@@ -4334,7 +4367,6 @@ components:
           type: integer
         unavailable_components:
           type: integer
-
     DashboardSettingsChoicesResponse:
       type: object
       additionalProperties: false
@@ -4373,3 +4405,15 @@ components:
         message:
           type: string
           nullable: true
+    DashboardSettingsVisibilityCondition:
+      type: object
+      additionalProperties: false
+      required:
+      - field_id
+      - expected
+      properties:
+        field_id:
+          type: string
+          description: Opaque field ID of a controller in this response, including a declared
+            input when it covers the underlying target.
+        expected: {}

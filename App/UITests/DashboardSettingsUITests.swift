@@ -42,6 +42,190 @@ final class DashboardSettingsUITests: XCTestCase {
     return app
   }
 
+  func testHiddenDraftSurvivesSaveAndProtectsExit() {
+    let app = openDashboard()
+    let weather = app.buttons["dashboard-component-demo-weather"]
+    scrollTo(weather, in: app)
+    weather.tap()
+    let title = app.buttons["dashboard-field-detail-demo-weather-title"]
+    scrollTo(title, in: app)
+    title.tap()
+    replaceText(app.textFields["Forecast title"], with: "Hidden draft")
+    navigateBack(in: app)
+    let details = app.switches["Detailed forecast"]
+    scrollTo(details, in: app)
+    details.tap()
+    XCTAssertFalse(title.exists)
+    navigateBack(in: app)
+    scrollToTop(in: app)
+    let save = app.buttons["dashboard-settings-save"]
+    XCTAssertTrue(save.isEnabled)
+    save.tap()
+    XCTAssertTrue(app.staticTexts["Settings saved"].waitForExistence(timeout: 5))
+    XCTAssertFalse(save.isEnabled)
+    app.buttons["Back"].firstMatch.tap()
+    XCTAssertTrue(app.alerts["Discard Changes?"].waitForExistence(timeout: 3))
+    app.alerts.buttons["Keep Editing"].tap()
+    scrollTo(weather, in: app)
+    weather.tap()
+    scrollTo(details, in: app)
+    details.tap()
+    scrollTo(title, in: app)
+    title.tap()
+    XCTAssertEqual(app.textFields["Forecast title"].value as? String, "Hidden draft")
+  }
+
+  func testNativeColorPickerTargetAndPresentation() {
+    let app = openDashboard()
+    let weather = app.buttons["dashboard-component-demo-weather"]
+    scrollTo(weather, in: app)
+    weather.tap()
+    let color = app.buttons["dashboard-field-detail-demo-weather-color"]
+    scrollTo(color, in: app)
+    color.tap()
+    let picker = app.buttons["dashboard-color-demo-weather-color"]
+    XCTAssertTrue(picker.waitForExistence(timeout: 3))
+    XCTAssertGreaterThanOrEqual(picker.frame.height, 44 - 0.5)
+    picker.tap()
+    XCTAssertTrue(app.otherElements["UIColorPickerView"].waitForExistence(timeout: 5))
+    let shot = XCTAttachment(screenshot: app.screenshot())
+    shot.name = "Native Dashboard system color picker"
+    shot.lifetime = .keepAlways
+    add(shot)
+    dismissColorPicker(in: app)
+    XCTAssertEqual(app.textFields["dashboard-color-value-demo-weather-color"].value as? String, "var(--ink)")
+  }
+
+  func testNativeControlsPreserveConditionsLocationAndColor() {
+    let app = openDashboard()
+    let weather = app.buttons["dashboard-component-demo-weather"]
+    scrollTo(weather, in: app)
+    weather.tap()
+    let title = app.buttons["dashboard-field-detail-demo-weather-title"]
+    XCTAssertTrue(title.waitForExistence(timeout: 3))
+    let details = app.switches["Detailed forecast"]
+    scrollTo(details, in: app)
+    details.tap()
+    XCTAssertFalse(title.exists)
+    details.tap()
+    scrollTo(title, in: app)
+    title.tap()
+    replaceText(app.textFields["Forecast title"], with: "Preserved forecast")
+    navigateBack(in: app)
+
+    let size = app.buttons["dashboard-field-detail-demo-weather-size"]
+    scrollTo(size, in: app)
+    size.tap()
+    let slider = app.sliders["dashboard-slider-demo-weather-size"]
+    XCTAssertTrue(slider.waitForExistence(timeout: 3))
+    slider.adjust(toNormalizedSliderPosition: 0.6)
+    let number = app.textFields["dashboard-number-demo-weather-size"]
+    replaceText(number, with: "1.25")
+    let reset = app.buttons["Use widget default"]
+    scrollTo(reset, in: app)
+    reset.tap()
+    scrollTo(number, in: app)
+    XCTAssertEqual(number.value as? String, "1")
+    replaceText(number, with: "1.25")
+    let sliderShot = XCTAttachment(screenshot: app.screenshot())
+    sliderShot.name = "Native Dashboard slider exact value"
+    sliderShot.lifetime = .keepAlways
+    add(sliderShot)
+    navigateBack(in: app)
+
+    let color = app.buttons["dashboard-field-detail-demo-weather-color"]
+    scrollTo(color, in: app)
+    color.tap()
+    let picker = app.buttons["dashboard-color-demo-weather-color"]
+    XCTAssertTrue(picker.waitForExistence(timeout: 3))
+    XCTAssertGreaterThanOrEqual(picker.frame.height, 44 - 0.5)
+    picker.tap()
+    XCTAssertTrue(app.otherElements["UIColorPickerView"].waitForExistence(timeout: 5))
+    dismissColorPicker(in: app)
+    let colorValue = app.textFields["dashboard-color-value-demo-weather-color"]
+    XCTAssertEqual(colorValue.value as? String, "var(--ink)")
+    replaceText(colorValue, with: "#336699")
+    let colorShot = XCTAttachment(screenshot: app.screenshot())
+    colorShot.name = "Native Dashboard color picker and theme text"
+    colorShot.lifetime = .keepAlways
+    add(colorShot)
+    navigateBack(in: app)
+
+    let location = app.buttons["dashboard-field-detail-demo-weather-location"]
+    scrollTo(location, in: app)
+    location.tap()
+    let query = app.textFields["dashboard-location-query"]
+    XCTAssertTrue(query.waitForExistence(timeout: 3))
+    query.tap()
+    query.typeText("Athens")
+    let athens = app.buttons["Athens, Attica, Greece"]
+    XCTAssertTrue(athens.waitForExistence(timeout: 5))
+    athens.tap()
+    let coordinates = app.buttons["dashboard-location-coordinates"]
+    scrollTo(coordinates, in: app)
+    coordinates.tap()
+    XCTAssertEqual(app.textFields["dashboard-location-timezone"].value as? String, "Europe/Athens")
+    replaceText(app.textFields["dashboard-location-latitude"], with: "38")
+    let coordinateShot = XCTAttachment(screenshot: app.screenshot())
+    coordinateShot.name = "Native Dashboard coordinates and preserved timezone"
+    coordinateShot.lifetime = .keepAlways
+    add(coordinateShot)
+    app.buttons["dashboard-location-done"].tap()
+    navigateBack(in: app)
+    navigateBack(in: app)
+    scrollToTop(in: app)
+    app.buttons["dashboard-settings-save"].tap()
+    XCTAssertTrue(app.staticTexts["Settings saved"].waitForExistence(timeout: 5))
+
+    scrollTo(weather, in: app)
+    weather.tap()
+    scrollTo(size, in: app)
+    size.tap()
+    XCTAssertEqual(app.textFields["dashboard-number-demo-weather-size"].value as? String, "1.25")
+    navigateBack(in: app)
+    scrollTo(color, in: app)
+    color.tap()
+    XCTAssertEqual(colorValue.value as? String, "#336699")
+    navigateBack(in: app)
+    scrollTo(location, in: app)
+    location.tap()
+    scrollTo(coordinates, in: app)
+    coordinates.tap()
+    XCTAssertEqual(app.textFields["dashboard-location-latitude"].value as? String, "38.0")
+    XCTAssertEqual(app.textFields["dashboard-location-timezone"].value as? String, "Europe/Athens")
+  }
+
+  func testNativeControlsAtAccessibilitySize() {
+    let app = openDashboard(chineseLargeText: true)
+    let weather = app.buttons["dashboard-component-demo-weather"]
+    scrollTo(weather, in: app)
+    weather.tap()
+    for id in ["demo-weather-size", "demo-weather-color", "demo-weather-location"] {
+      let field = app.buttons["dashboard-field-detail-\(id)"]
+      scrollFullyTo(field, in: app)
+      field.tap()
+      let title = id == "demo-weather-size" ? "Text size" : id == "demo-weather-color" ? "Accent color" : "Location"
+      XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 3))
+      let shot = XCTAttachment(screenshot: app.screenshot())
+      shot.name = "Native Dashboard AX5 \(id)"
+      shot.lifetime = .keepAlways
+      add(shot)
+      if id == "demo-weather-location" {
+        let coordinates = app.buttons["dashboard-location-coordinates"]
+        scrollTo(coordinates, in: app)
+        coordinates.tap()
+        XCTAssertTrue(app.staticTexts["纬度"].exists)
+        XCTAssertTrue(app.staticTexts["经度"].exists)
+        let coordinateShot = XCTAttachment(screenshot: app.screenshot())
+        coordinateShot.name = "Native Dashboard AX5 coordinate labels"
+        coordinateShot.lifetime = .keepAlways
+        add(coordinateShot)
+        app.buttons["dashboard-location-done"].tap()
+      }
+      navigateBack(in: app)
+    }
+  }
+
   func testDetailSaveAndPush() {
     let app = openDashboard()
     let preview = app.descendants(matching: .any)["dashboard-settings-preview"].firstMatch
@@ -473,6 +657,18 @@ final class DashboardSettingsUITests: XCTestCase {
     XCTAssertTrue(app.navigationBars[label].waitForExistence(timeout: 4))
   }
 
+  private func dismissColorPicker(in app: XCUIApplication) {
+    let popup = app.otherElements["UIColorPickerView"]
+    let close = app.buttons.matching(NSPredicate(format: "label ==[c] %@", "close")).firstMatch
+    if close.exists && close.isHittable {
+      close.tap()
+    } else {
+      // iPad uses a popover with an outside dismissal region and no Close button.
+      app.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.15)).tap()
+    }
+    XCTAssertTrue(popup.waitForNonExistence(timeout: 5))
+  }
+
   private func navigateBack(in app: XCUIApplication) {
     // Search focus presents its own Close action before the navigation back button.
     let closeSearch = app.navigationBars.buttons["Close"]
@@ -490,6 +686,22 @@ final class DashboardSettingsUITests: XCTestCase {
     }
     XCTAssertTrue(done.waitForExistence(timeout: 4))
     done.tap()
+  }
+
+  private func scrollFullyTo(_ element: XCUIElement, in app: XCUIApplication) {
+    for _ in 0..<10 {
+      let top = max(app.navigationBars.firstMatch.frame.maxY,
+        app.searchFields.firstMatch.exists ? app.searchFields.firstMatch.frame.maxY : 0) + 8
+      let window = app.windows.firstMatch.frame
+      let tabs = app.tabBars.firstMatch
+      let bottom = tabs.exists && tabs.frame.minY > window.midY ? tabs.frame.minY - 8 : window.maxY - 20
+      if element.exists && element.isHittable && element.frame.minY >= top && element.frame.maxY <= bottom { return }
+      let distance = element.exists ? min(160, max(-160, (top + bottom) / 2 - element.frame.midY)) : -160
+      let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.55))
+      let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.55 + distance / window.height))
+      start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.1)
+    }
+    XCTFail("Expected a fully visible setting row: \(element)")
   }
 
   private func scrollTo(_ element: XCUIElement, in app: XCUIApplication) {

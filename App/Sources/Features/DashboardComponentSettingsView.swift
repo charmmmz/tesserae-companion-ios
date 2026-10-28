@@ -12,9 +12,9 @@ struct DashboardComponentSettingsView: View {
 
   private var matchingFields: [DashboardSettingInput] {
     component.fields.filter { field in
-      query.isEmpty || field.label.localizedStandardContains(query)
+      draft.isVisible(field) && (query.isEmpty || field.label.localizedStandardContains(query)
         || field.name.localizedStandardContains(query)
-        || field.help.localizedStandardContains(query)
+        || field.help.localizedStandardContains(query))
     }
   }
 
@@ -91,7 +91,7 @@ private enum DashboardSettingGroup: String, CaseIterable, Identifiable {
     }
     switch field.type {
     case "select", "multiselect": self = .choices
-    case "number", "integer": self = .numbers
+    case "number", "integer", "slider": self = .numbers
     case "boolean", "switch": self = .switches
     default: self = .text
     }
@@ -184,6 +184,12 @@ struct DashboardSettingsField: View {
         ? String(localized: "Saved value") : String(localized: "Not configured")
     }
     guard let currentValue, currentValue != .null else { return String(localized: "None selected") }
+    if input.type == "slider" {
+      return [currentValue.settingSummary, input.unit ?? ""].filter { !$0.isEmpty }.joined(separator: " ")
+    }
+    if input.type == "location_search", let place = DashboardSettingLocation(currentValue) {
+      return place.summary
+    }
     if !isChoice {
       return currentValue.settingText.isEmpty
         ? String(localized: "Not configured") : currentValue.settingSummary
@@ -227,7 +233,7 @@ private struct DashboardSettingDetailView: View {
     Binding(
       get: { numberText ?? currentValue?.settingText ?? "" },
       set: { new in
-        if ["number", "integer"].contains(input.type) { numberText = new }
+        if ["number", "integer", "slider"].contains(input.type) { numberText = new }
         value.wrappedValue = input.value(from: new)
       })
   }
@@ -243,6 +249,9 @@ private struct DashboardSettingDetailView: View {
         ) {
           details
         }
+      } else if input.isSupported && !mixed && input.type == "location_search" {
+        DashboardLocationSettingView(dashboardID: dashboardID, input: input, value: value,
+          schemaRevision: draft.original.schemaRevision, canEdit: canEdit) { details }
       } else {
         Form {
           if input.isSupported {
@@ -339,6 +348,10 @@ private struct DashboardSettingDetailView: View {
           input.label,
           isOn: Binding(
             get: { currentValue == .bool(true) }, set: { value.wrappedValue = .bool($0) }))
+      case "slider":
+        DashboardSliderSettingControl(input: input, value: value)
+      case "color":
+        DashboardColorSettingControl(input: input, value: value)
       case "number", "integer":
         TextField(input.label, text: text).keyboardType(.numbersAndPunctuation)
       case "url":
@@ -356,7 +369,8 @@ private struct DashboardSettingDetailView: View {
     if let value = input.defaultValue, value != .null { return value }
     switch input.type {
     case "boolean", "switch": return .bool(false)
-    case "number", "integer": return .number(input.min ?? 0)
+    case "number", "integer", "slider": return .number(input.min ?? 0)
+    case "location_search": return .object([:])
     case "multiselect": return .array([])
     default: return .string("")
     }

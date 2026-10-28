@@ -23,6 +23,7 @@ struct DashboardSettingsView: View {
 
   private var dashboard: DashboardSummary? { model.dashboards.first { $0.id == dashboardID } }
   private var dirty: Bool { draft?.hasChanges == true }
+  private var canSave: Bool { draft?.hasSavableChanges == true }
   private var canEdit: Bool {
     draft?.original.canEdit == true && !isSaving && !isLoading && !writeDenied
   }
@@ -54,6 +55,12 @@ struct DashboardSettingsView: View {
               "Editing requires permission in Tesserae Settings. Grant Dashboard editing to this app, then reload."
             )
             Button("Reload Settings") { requestReload() }
+          }
+        }
+        if dirty && !canSave {
+          Section {
+            Text("Some changes are hidden by the current options. Show those settings to save them, or discard changes when leaving.")
+              .foregroundStyle(.secondary)
           }
         }
         generalSettings.disabled(!canEdit)
@@ -107,7 +114,7 @@ struct DashboardSettingsView: View {
             }
           }
           .accessibilityLabel("Save")
-          .disabled(!dirty || !canEdit || conflict)
+          .disabled(!canSave || !canEdit || conflict)
           .accessibilityIdentifier("dashboard-settings-save")
         }
       }
@@ -208,7 +215,7 @@ struct DashboardSettingsView: View {
       let current = binding.wrappedValue
       if !current.original.displayInputs.isEmpty {
         Section("Dashboard Configuration") {
-          ForEach(current.original.displayInputs) { input in
+          ForEach(current.original.displayInputs.filter { current.isVisible($0) }) { input in
             DashboardSettingsField(
               dashboardID: dashboardID, input: input, draft: binding,
               component: false, canEdit: canEdit,
@@ -443,14 +450,14 @@ struct DashboardSettingsView: View {
     } catch is CancellationError {} catch { self.error = error.localizedDescription }
   }
   private func save() async {
-    guard let draft, draft.hasChanges, canEdit, !conflict else { return }
+    guard let draft, draft.hasSavableChanges, canEdit, !conflict else { return }
     isSaving = true
     error = nil
     fieldErrors = [:]
     defer { isSaving = false }
     do {
       let result = try await model.saveDashboardSettings(dashboardID, patch: draft.patch)
-      self.draft = DashboardSettingsDraft(result)
+      self.draft = draft.rebased(afterSaving: result)
       saved = true
       numberText = [:]
       await model.loadDashboardPreview(id: dashboardID, deviceID: previewDeviceID)

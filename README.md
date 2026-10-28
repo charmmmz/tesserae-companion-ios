@@ -96,7 +96,8 @@ controls depend on your server and firmware; the TestFlight build may differ.
   received-photo previews remain available locally across app restarts.
 - **Dashboards:** browse and push saved content. On compatible servers, edit
   names, icons, display bindings, appearance, declared inputs and individual
-  widget settings. Saves preserve other content and keep Push as a separate action.
+  widget settings, including conditional fields, sliders, locations and colors.
+  Saves preserve other content and keep Push as a separate action.
 - **Lineups:** create and edit Daily, Keep Fresh, Cycle and Manual playback on
   servers with Lineup authoring support, or inspect and control existing Lineups.
 - **Library:** browse Gallery folders in square or original-ratio photo grids,

@@ -13,6 +13,21 @@ public struct DashboardSettingChoice: Codable, Hashable, Sendable {
   }
 }
 
+public struct DashboardSettingVisibilityCondition: Codable, Hashable, Sendable {
+  public let fieldID: String
+  public let expected: DashboardSettingValue
+
+  public init(fieldID: String, expected: DashboardSettingValue) {
+    self.fieldID = fieldID
+    self.expected = expected
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case fieldID = "fieldId"
+    case expected
+  }
+}
+
 /// Shared presentation metadata for declared Dashboard inputs and discovered component fields.
 public struct DashboardSettingInput: Codable, Hashable, Sendable, Identifiable {
   public let name: String
@@ -38,6 +53,9 @@ public struct DashboardSettingInput: Codable, Hashable, Sendable, Identifiable {
   public let min: Double?
   public let max: Double?
   public let step: Double?
+  public let unit: String?
+  public let visibilityConditions: [DashboardSettingVisibilityCondition]
+  public let visible: Bool
   public var id: String { fieldID ?? name }
 
   public init(
@@ -47,7 +65,9 @@ public struct DashboardSettingInput: Codable, Hashable, Sendable, Identifiable {
     defaultValue: DashboardSettingValue? = nil, usingDefault: Bool = false,
     mixed: Bool = false, resettable: Bool = false, choicesDynamic: Bool = false,
     readonlyReason: String? = nil, min: Double? = nil, max: Double? = nil, step: Double? = nil,
-    canClear: Bool? = nil, hasOverride: Bool? = nil, valueState: String? = nil
+    canClear: Bool? = nil, hasOverride: Bool? = nil, valueState: String? = nil,
+    unit: String? = nil,
+    visibilityConditions: [DashboardSettingVisibilityCondition] = [], visible: Bool = true
   ) {
     self.name = name
     self.label = label
@@ -70,19 +90,22 @@ public struct DashboardSettingInput: Codable, Hashable, Sendable, Identifiable {
     self.min = min
     self.max = max
     self.step = step
+    self.unit = unit
+    self.visibilityConditions = visibilityConditions
+    self.visible = visible
   }
 
   public var isSupported: Bool {
     editable
       && [
         "string", "text", "textarea", "url", "password", "color", "number", "integer",
-        "boolean", "switch", "select", "multiselect",
+        "boolean", "switch", "select", "multiselect", "slider", "location_search",
       ].contains(type)
   }
   /// Empty secret text means keep; optional numeric text can explicitly clear.
   public func value(from text: String) -> DashboardSettingValue? {
     if secret && text.isEmpty { return nil }
-    if ["number", "integer"].contains(type) {
+    if ["number", "integer", "slider"].contains(type) {
       if text.isEmpty && !required { return .null }
       if let number = Double(text), number.isFinite { return .number(number) }
     }
@@ -97,7 +120,7 @@ public struct DashboardSettingInput: Codable, Hashable, Sendable, Identifiable {
     case choicesDynamic = "dynamicChoices"
     case min = "minimum"
     case max = "maximum"
-    case valueState, hasOverride, canClear, readonlyReason, step
+    case valueState, hasOverride, canClear, readonlyReason, step, unit, visibilityConditions, visible
   }
 
   public init(from decoder: Decoder) throws {
@@ -125,7 +148,10 @@ public struct DashboardSettingInput: Codable, Hashable, Sendable, Identifiable {
       step: try values.decodeIfPresent(Double.self, forKey: .step),
       canClear: try values.decodeIfPresent(Bool.self, forKey: .canClear),
       hasOverride: try values.decodeIfPresent(Bool.self, forKey: .hasOverride),
-      valueState: try values.decodeIfPresent(String.self, forKey: .valueState))
+      valueState: try values.decodeIfPresent(String.self, forKey: .valueState),
+      unit: try values.decodeIfPresent(String.self, forKey: .unit),
+      visibilityConditions: try values.decodeIfPresent([DashboardSettingVisibilityCondition].self, forKey: .visibilityConditions) ?? [],
+      visible: try values.decodeIfPresent(Bool.self, forKey: .visible) ?? true)
   }
 }
 
@@ -377,22 +403,129 @@ public struct DashboardSettingsDraft: Equatable, Sendable {
 
   public func hasChanges(for field: DashboardSettingInput, component: Bool = false) -> Bool {
     if isReset(field, component: component) { return true }
-    return component ? patch.componentValues[field.id] != nil : patch.inputs[field.name] != nil
+    let key = component ? field.id : field.name
+    guard let current = component ? componentValues[key] : inputs[key] else { return false }
+    return Self.baseline([field], component: component)[key] != current
+  }
+
+  /// Conditions refer to public field identities, including declared inputs that
+  /// cover a component option. Evaluate the entire draft so cross-page edits work.
+  public func isVisible(_ field: DashboardSettingInput) -> Bool {
+    let fields = original.displayInputs + original.components.flatMap(\.fields)
+    let byID = Dictionary(grouping: fields, by: \.id)
+    let inputIDs = Set(original.displayInputs.map(\.id))
+    func visible(_ current: DashboardSettingInput, visiting: Set<String>) -> Bool {
+      // Invalid dependencies are deliberately exposed as explanatory readonly rows.
+      if !current.editable { return true }
+      guard !visiting.contains(current.id) else { return false }
+      if current.visibilityConditions.isEmpty { return current.visible }
+      let next = visiting.union([current.id])
+      return current.visibilityConditions.allSatisfy { condition in
+        guard let matches = byID[condition.fieldID], matches.count == 1,
+          let controller = matches.first, !controller.secret,
+          visible(controller, visiting: next),
+          !(controller.mixed && !hasExplicitChange(controller))
+        else { return false }
+        let actual = value(for: controller, component: !inputIDs.contains(controller.id)) ?? .null
+        return Self.matches(actual, expected: condition.expected)
+      }
+    }
+    func hasExplicitChange(_ current: DashboardSettingInput) -> Bool {
+      if isReset(current) { return true }
+      let component = !inputIDs.contains(current.id)
+      return value(for: current, component: component) != current.value
+    }
+    return visible(field, visiting: [])
+  }
+
+  /// Match the web form's primitive text normalization and multiselect any-of.
+  public static func matches(_ actual: DashboardSettingValue, expected: DashboardSettingValue) -> Bool {
+    if case .object(let object) = expected {
+      guard object.count == 1, let excluded = object["not"] else { return false }
+      return !matches(actual, expected: excluded)
+    }
+    let wanted = if case .array(let items) = expected { items } else { [expected] }
+    let actuals = if case .array(let items) = actual { items } else { [actual] }
+    func text(_ value: DashboardSettingValue) -> String {
+      switch value {
+      case .number(let number): Self.conditionNumberText(number)
+      case .object: "[object Object]"
+      case .array(let items): items.map(text).joined(separator: ",")
+      default: value.settingText
+      }
+    }
+    return actuals.contains { value in wanted.contains { text(value) == text($0) } }
+  }
+
+  /// JavaScript form values use decimal notation in [1e-6, 1e21),
+  /// and unpadded exponents outside it. Swift's default cutoffs differ.
+  private static func conditionNumberText(_ number: Double) -> String {
+    if number == 0 { return "0" }
+    let raw = String(number).lowercased()
+    let parts = raw.split(separator: "e")
+    var mantissa = String(parts[0])
+    if mantissa.hasSuffix(".0") { mantissa.removeLast(2) }
+    guard parts.count == 2, let exponent = Int(parts[1]) else { return mantissa }
+    if abs(number) < 1e-6 || abs(number) >= 1e21 {
+      return mantissa + "e" + (exponent >= 0 ? "+" : "") + String(exponent)
+    }
+    let sign = mantissa.hasPrefix("-") ? "-" : ""
+    if !sign.isEmpty { mantissa.removeFirst() }
+    let decimal = mantissa.split(separator: ".", omittingEmptySubsequences: false)
+    let digits = decimal.joined()
+    let position = decimal[0].count + exponent
+    if position <= 0 {
+      return sign + "0." + String(repeating: "0", count: -position) + digits
+    }
+    if position >= digits.count {
+      return sign + digits + String(repeating: "0", count: position - digits.count)
+    }
+    let split = digits.index(digits.startIndex, offsetBy: position)
+    return sign + digits[..<split] + "." + digits[split...]
   }
 
   public var patch: DashboardSettingsPatch {
     let originalInputs = Self.baseline(original.displayInputs, component: false)
     let originalComponents = Self.baseline(original.components.flatMap(\.fields), component: true)
     let resetInputNames = Set(original.displayInputs.filter { isReset($0) }.map(\.name))
+    let hidden = Set((original.displayInputs + original.components.flatMap(\.fields))
+      .filter { !isVisible($0) }.map(\.id))
+    let hiddenInputNames = Set(original.displayInputs.filter { hidden.contains($0.id) }.map(\.name))
     return DashboardSettingsPatch(
       revision: original.revision,
       settings: settings.filter { original.settings[$0.key] != $0.value },
-      inputs: inputs.filter { !resetInputNames.contains($0.key) && originalInputs[$0.key] != $0.value },
+      inputs: inputs.filter { !resetInputNames.contains($0.key) && !hiddenInputNames.contains($0.key) && originalInputs[$0.key] != $0.value },
       schemaRevision: original.schemaRevision,
-      componentValues: componentValues.filter { !resetFields.contains($0.key) && originalComponents[$0.key] != $0.value },
-      resetFields: resetFields.sorted())
+      componentValues: componentValues.filter { !resetFields.contains($0.key) && !hidden.contains($0.key) && originalComponents[$0.key] != $0.value },
+      resetFields: resetFields.subtracting(hidden).sorted())
   }
-  public var hasChanges: Bool { !patch.isEmpty }
+  public var hasSavableChanges: Bool { !patch.isEmpty }
+
+  public var hasChanges: Bool {
+    let originalInputs = Self.baseline(original.displayInputs, component: false)
+    let originalComponents = Self.baseline(original.components.flatMap(\.fields), component: true)
+    return !resetFields.isEmpty || settings.contains { original.settings[$0.key] != $0.value }
+      || inputs.contains { originalInputs[$0.key] != $0.value }
+      || componentValues.contains { originalComponents[$0.key] != $0.value }
+  }
+
+  /// A Save submits visible changes. Keep pending hidden edits in the rebased
+  /// draft so Save/reload cannot silently discard them or bypass exit protection.
+  public func rebased(afterSaving saved: DashboardSettings) -> DashboardSettingsDraft {
+    var next = DashboardSettingsDraft(saved)
+    let inputIDs = Set(original.displayInputs.map(\.id))
+    let savedFields = saved.displayInputs + saved.components.flatMap(\.fields)
+    for field in original.displayInputs + original.components.flatMap(\.fields) {
+      let component = !inputIDs.contains(field.id)
+      guard !isVisible(field), hasChanges(for: field, component: component),
+        let newField = savedFields.first(where: { $0.id == field.id }) else { continue }
+      if isReset(field) { next.reset(newField, component: component) }
+      else if let value = value(for: field, component: component) {
+        next.setValue(value, for: newField, component: component)
+      }
+    }
+    return next
+  }
 }
 
 extension LineupJSONValue {

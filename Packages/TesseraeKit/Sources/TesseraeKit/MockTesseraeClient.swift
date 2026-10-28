@@ -160,7 +160,7 @@ public actor MockTesseraeClient: TesseraeServing {
                 "dashboards",
                 "dashboard_push",
                 "dashboard_settings",
-                "dashboard_component_settings",
+                "dashboard_component_settings", "dashboard_native_controls",
                 "image_push",
                 "image_url_push",
                 "jobs",
@@ -453,7 +453,7 @@ public actor MockTesseraeClient: TesseraeServing {
                 .init(name: "access_key", label: "Access key", type: "password", required: false, help: "", choices: [], secret: true, editable: true, configured: true, value: nil)
             ] : [], webURL: dashboard.webURL ?? "/pages/\(id)",
             schemaRevision: "demo-component-schema-1", components: dashboardSettingComponents(),
-            coverage: .init(status: "complete", editableFields: 6, readonlyFields: 0, unavailableComponents: 0))
+            coverage: .init(status: "complete", editableFields: dashboard.kind == .canvas ? 14 : 11, readonlyFields: 0, unavailableComponents: 0))
         dashboardSettingsByID[id] = result
         return result
     }
@@ -486,11 +486,38 @@ public actor MockTesseraeClient: TesseraeServing {
                       secret: false, editable: true, configured: false, value: .bool(true),
                       fieldID: "demo-album-show", defaultValue: .bool(true), usingDefault: true, resettable: true),
             ], fragment: "album-cover"),
+            .init(id: "demo-weather", label: "Weather", kind: "canvas_element", widget: "weather_now", fields: [
+                .init(name: "show_details", label: "Detailed forecast", type: "boolean", required: false,
+                      help: "", choices: [], secret: false, editable: true, configured: true, value: .bool(true),
+                      fieldID: "demo-weather-details", defaultValue: .bool(true), resettable: true),
+                .init(name: "title", label: "Forecast title", type: "string", required: false,
+                      help: "", choices: [], secret: false, editable: true, configured: true, value: .string("Forecast"),
+                      fieldID: "demo-weather-title", defaultValue: .string("Forecast"), resettable: true,
+                      visibilityConditions: [.init(fieldID: "demo-weather-details", expected: .bool(true))]),
+                .init(name: "text_size", label: "Text size", type: "slider", required: false,
+                      help: "", choices: [], secret: false, editable: true, configured: true, value: .number(1),
+                      fieldID: "demo-weather-size", defaultValue: .number(1), resettable: true,
+                      min: 0.05, max: 2, step: 0.05, unit: "×"),
+                .init(name: "location", label: "Location", type: "location_search", required: false,
+                      help: "Search for a place or enter coordinates.", choices: [], secret: false,
+                      editable: true, configured: true, value: Self.demoLocation,
+                      fieldID: "demo-weather-location", defaultValue: .object([:]), resettable: true, choicesDynamic: true),
+                .init(name: "accent", label: "Accent color", type: "color", required: false,
+                      help: "", choices: [], secret: false, editable: true, configured: true, value: .string("var(--ink)"),
+                      fieldID: "demo-weather-color", defaultValue: .string("var(--ink)"), resettable: true),
+            ]),
         ]
+    }
+
+    private static var demoLocation: DashboardSettingValue {
+        .object(["name": .string("Athens"), "country": .string("Greece"), "admin1": .string("Attica"),
+                 "latitude": .number(37.9838), "longitude": .number(23.7275), "timezone": .string("Europe/Athens")])
     }
 
     private func dashboardChoices(for field: DashboardSettingInput) -> [DashboardSettingChoice] {
         switch field.fieldID {
+        case "demo-weather-location":
+            return [.init(value: Self.demoLocation, label: "Athens, Attica, Greece")]
         case "demo-reminders-list":
             return [
                 .init(value: .string("all"), label: "All reminders"),
@@ -548,6 +575,20 @@ public actor MockTesseraeClient: TesseraeServing {
             throw DashboardSettingsValidationError(message: "Enter a Dashboard name.", fields: ["settings.name": "Enter a Dashboard name."])
         }
         let allFields = current.inputs + current.components.flatMap(\.fields)
+        var candidate = DashboardSettingsDraft(current)
+        candidate.inputs.merge(patch.inputs) { _, new in new }
+        candidate.componentValues.merge(patch.componentValues) { _, new in new }
+        for id in patch.resetFields {
+            if let field = allFields.first(where: { $0.id == id }) { candidate.reset(field) }
+        }
+        for field in allFields {
+            let written = patch.inputs[field.name] != nil && current.inputs.contains(where: { $0.id == field.id })
+                || patch.componentValues[field.id] != nil || patch.resetFields.contains(field.id)
+            if written && !candidate.isVisible(field) {
+                throw DashboardSettingsValidationError(message: "This setting is hidden.",
+                    fields: ["component_values.\(field.id)": "This setting is hidden."])
+            }
+        }
         for name in patch.inputs.keys where !current.inputs.contains(where: { $0.name == name }) {
             throw DashboardSettingsValidationError(message: "Unknown field.", fields: ["inputs.\(name)": "Unknown field."])
         }
@@ -584,12 +625,14 @@ public actor MockTesseraeClient: TesseraeServing {
             } else {
                 let valid: Bool
                 switch field.type {
-                case "number", "integer":
+                case "number", "integer", "slider":
                     if case let .number(number) = value {
                         valid = number.isFinite && (field.min.map { number >= $0 } ?? true)
                             && (field.max.map { number <= $0 } ?? true)
                             && (field.type != "integer" || number.rounded() == number)
                     } else { valid = false }
+                case "location_search":
+                    valid = value == .object([:]) || DashboardSettingLocation(value) != nil
                 case "boolean", "switch":
                     if case .bool = value { valid = true } else { valid = false }
                 case "select", "multiselect":

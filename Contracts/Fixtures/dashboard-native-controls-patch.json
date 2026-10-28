@@ -1,0 +1,20 @@
+{
+  "revision": "6549a27808bccd386a250cbdd556fef8f1a8b3ff1602c23c43dcc50209416721",
+  "schema_revision": "25a606778da2988e63a0123d2381cb216f010e73f1f828e819a6f5b2548c3869",
+  "inputs": {
+    "mode": "yes"
+  },
+  "component_values": {
+    "f_fa9fc1fc5692fc919c40": "Shown",
+    "f_4b9487a6f69b7ee0415b": 1.15,
+    "f_66fc85ddd5451c1d7616": {
+      "name": "Shanghai",
+      "country": "China",
+      "admin1": "Shanghai",
+      "latitude": 31.22222,
+      "longitude": 121.45806,
+      "timezone": "Asia/Shanghai"
+    },
+    "f_572ef3e10d41d51de697": "var(--accent)"
+  }
+}

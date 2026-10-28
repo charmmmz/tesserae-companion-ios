@@ -103,6 +103,7 @@ struct DashboardSettingsTests {
       id: "pantry", patch: draft.patch, instance: instance)
     let requests = await transport.requests
     #expect(requests.map(\.httpMethod) == ["GET", "PATCH"])
+    #expect(requests.allSatisfy { $0.value(forHTTPHeaderField: "X-Tesserae-Dashboard-Controls") == "1" })
     #expect(requests.last?.url?.path == "/api/app/v1/dashboards/pantry/settings")
     #expect(requests.last?.value(forHTTPHeaderField: "Authorization") == "Bearer test-token")
     let data = try #require(requests.last?.httpBody)

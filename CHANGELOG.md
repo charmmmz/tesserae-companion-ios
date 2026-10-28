@@ -11,6 +11,13 @@ capabilities.
 
 ## [Unreleased]
 
+### Added
+
+- Native Dashboard configuration now supports conditional visibility, sliders
+  with exact numeric entry, place search and manual coordinates, and color
+  pickers with preserved CSS/theme values. Hidden values, location time zones,
+  revision conflicts and explicit Save retain their existing protection.
+
 ## [0.8.2] - 2026-10-28
 
 ### Changed

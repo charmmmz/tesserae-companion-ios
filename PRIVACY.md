@@ -170,3 +170,11 @@ Any future analytics, crash reporting, support upload, hosted relay,
 advertising, or other developer-operated data path requires an explicit
 product decision, an update to this document and the privacy manifest, and a
 new App Store privacy review before release.
+
+### Dashboard place search
+
+When you search for a Dashboard location, the app sends the search text to your
+selected Tesserae server. The server queries Open-Meteo and returns place
+choices, coordinates and an optional time zone. Manual coordinate entry does
+not require a place-search request or device location permission. Opening a
+saved location does not automatically send its coordinates to a search service.

@@ -1,0 +1,85 @@
+[
+  {
+    "actual": 1e-06,
+    "expected": "0.000001",
+    "matches": true
+  },
+  {
+    "actual": 1e-07,
+    "expected": "1e-7",
+    "matches": true
+  },
+  {
+    "actual": 1e+20,
+    "expected": "100000000000000000000",
+    "matches": true
+  },
+  {
+    "actual": 1e+21,
+    "expected": "1e+21",
+    "matches": true
+  },
+  {
+    "actual": -0.0,
+    "expected": "0",
+    "matches": true
+  },
+  {
+    "actual": 8.0,
+    "expected": "8",
+    "matches": true
+  },
+  {
+    "actual": 1e-06,
+    "expected": "1e-6",
+    "matches": false
+  },
+  {
+    "actual": -1e-07,
+    "expected": "-1e-7",
+    "matches": true
+  },
+  {
+    "actual": 1.0000000000000001e+18,
+    "expected": "1000000000000000100",
+    "matches": true
+  },
+  {
+    "actual": true,
+    "expected": "true",
+    "matches": true
+  },
+  {
+    "actual": null,
+    "expected": "",
+    "matches": true
+  },
+  {
+    "actual": [
+      "a",
+      "b"
+    ],
+    "expected": {
+      "not": [
+        "c",
+        "d"
+      ]
+    },
+    "matches": true
+  },
+  {
+    "actual": [
+      "a",
+      "b"
+    ],
+    "expected": {
+      "not": "b"
+    },
+    "matches": false
+  },
+  {
+    "actual": {},
+    "expected": "[object Object]",
+    "matches": true
+  }
+]

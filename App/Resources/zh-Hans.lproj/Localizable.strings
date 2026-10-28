@@ -938,3 +938,29 @@
 "Fill Display" = "铺满屏幕";
 "Show Entire Photo" = "显示完整照片";
 "Faces won't all fit. Choose Show Entire Photo." = "无法同时保留所有人脸，请选择“显示完整照片”。";
+
+"Color value" = "颜色值";
+
+"Search places" = "搜索地点";
+
+"No matching places." = "没有匹配的地点。";
+
+"Enter Coordinates" = "输入坐标";
+
+"Coordinates" = "坐标";
+
+"Latitude" = "纬度";
+
+"Longitude" = "经度";
+
+"Place name" = "地点名称";
+
+"Time Zone" = "时区";
+
+"Saved location" = "已保存的地点";
+
+"Place search is unavailable. Try again or enter coordinates." = "地点搜索暂不可用。请重试或输入坐标。";
+
+"Enter a latitude from −90 to 90, a longitude from −180 to 180, and a valid time zone or leave it empty." = "请输入 −90 至 90 的纬度、−180 至 180 的经度，以及有效时区；时区也可以留空。";
+
+"Some changes are hidden by the current options. Show those settings to save them, or discard changes when leaving." = "部分修改被当前选项隐藏。请显示相应设置后保存，或在离开时放弃修改。";

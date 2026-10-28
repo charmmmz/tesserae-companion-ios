@@ -61,6 +61,21 @@ Changes to `/api/app/v1` must update all relevant artifacts together:
 Do not make the client depend on firmware tokens, the global webhook token,
 Flask sessions, privileged MCP, or internal web routes.
 
+### Native Dashboard controls integration
+
+Run the real Swift-to-Python save/reload check from the Companion checkout,
+using the matching server checkout and its Python environment with development
+dependencies installed:
+
+```sh
+/path/to/server/.venv/bin/python Scripts/test_dashboard_native_controls.py \
+  --server-repo /path/to/server
+```
+
+The script creates an isolated localhost API, an unbound QA Dashboard and a
+temporary token, verifies the four native controls and atomic hidden-field
+rejection through the live Swift transport, then removes its temporary data.
+
 ## Commits and pull requests
 
 - Keep one concern per commit and pull request.

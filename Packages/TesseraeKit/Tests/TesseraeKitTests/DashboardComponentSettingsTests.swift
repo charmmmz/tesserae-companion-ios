@@ -267,6 +267,7 @@ struct DashboardComponentSettingsTests {
     #expect(query.first { $0.name == "q" }?.value == "A & B")
     #expect(query.first { $0.name == "schema_revision" }?.value == "schema-1")
     #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer test-token")
+    #expect(request.value(forHTTPHeaderField: "X-Tesserae-Dashboard-Controls") == "1")
   }
 }
 
