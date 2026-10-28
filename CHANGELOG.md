@@ -11,6 +11,8 @@ capabilities.
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-10-28
+
 ### Changed
 
 - Photo composers default to filling the display and replace the Image Fit card
@@ -26,6 +28,12 @@ capabilities.
 
 ### Fixed
 
+- Window-level message capsules animate in and out over 0.18 seconds, using a
+  gentle fade and scale, or a fade alone with Reduce Motion enabled.
+- Displays tracks card sizes instead of scroll-relative frames, avoiding
+  whole-list state updates on every scroll tick while preserving drag reordering.
+- Lineups groups matching records in one pass and reuses the result for its
+  content and empty state instead of repeatedly scanning the collection.
 - Displays uses the server's Lineups icon for its Manage Lineups action.
 - Bluetooth icons beside display names are vertically centered in Send and Share.
 - When Photos sharing cannot provide readable Live Photo motion, Share can
@@ -1320,7 +1328,8 @@ capabilities.
 - Required Keychain storage, scoped credentials, revocation, redacted
   diagnostics, direct-to-instance photo transfer, and idempotent writes.
 
-[Unreleased]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.8.2...HEAD
+[0.8.2]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.8.0...v0.8.2
 [0.8.0]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/charmmmz/tesserae-companion-ios/compare/v0.6.2...v0.6.3

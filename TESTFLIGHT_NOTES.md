@@ -10,7 +10,14 @@ sharing, and Shortcuts.
 Dashboard editing and server administration remain in Tesserae's web
 interface.
 
-## Version 0.8.1 (source build 15)
+## Version 0.8.2 (source build 16)
+
+- Message capsules fade in and out over 0.18 seconds, with a gentle scale effect
+  that is omitted when Reduce Motion is enabled.
+- Displays avoids scroll-driven whole-list state updates; Lineups groups and
+  searches its records with fewer repeated scans.
+- Send closes after submission and keeps progress, confirmation, and explicit
+  retries in the message capsule. Photo previews use a compact Fill/Fit toggle.
 
 - Paper branding: a new ink/red/paper icon, warm surfaces, readable light/dark
   actions, and distinct success, warning, error, and progress colours.
@@ -20,6 +27,14 @@ interface.
   larger touch targets, and custom animations that follow Reduce Motion.
 
 ### Focus for this candidate
+
+1. Send a photo or link, then watch the capsule progress, confirmation, and
+   dismissal. Repeat with Reduce Motion enabled and retry a failed submission.
+2. Scroll Displays, drag cards to reorder them, and open a card after releasing
+   a long press. Search Lineups and clear the query; display groups and controls
+   should remain correct. Compare scrolling on a physical device.
+
+### Broader regression focus
 
 1. Check light and dark appearances, including success, error, disabled, and
    progress states. Photos and Dashboard artwork should keep their original colours.
@@ -36,15 +51,18 @@ interface.
 
 ### 简体中文测试重点
 
-本版更新 Paper 品牌、明暗颜色、中文与大字体布局，并完善 VoiceOver、
-系统开关和触摸区域。请重点检查：
+本版补上消息胶囊的出现与消失动画，减少 Displays 滚动和 Lineups 分组时的
+重复计算。发送后可通过胶囊查看进度、结果或重试。请重点检查：
 
+- 发送照片或链接后，胶囊能否平滑消失；开启“减弱动态效果”后应只保留渐隐。
+- Displays 滚动、长按排序和点击详情是否正常；Lineups 搜索、分组和控制是否正确。
+- 发送失败后，关闭编辑器仍能从胶囊重试；请在真机上比较滚动流畅度。
 - 最大辅助字体、粗体和增强对比度下，长设备名、分辨率、播放队列与设置是否完整显示。
 - VoiceOver 能否清楚读出设备、选中目标和开关状态；弹窗焦点及照片缩放是否正确。
 - 开启“减弱动态效果”后，原生长按排序、捏合、双击、菜单和关闭操作是否正常。
 - 从照片或 Safari 打开分享扩展，以不同适配模式发送到真实显示屏并核对显示结果。
 
-The repository's build number is 15. If Xcode Cloud assigns its own build
+The repository's build number is 16. If Xcode Cloud assigns its own build
 number, use the number shown in App Store Connect when reporting a result.
 
 ## Core regression checklist
@@ -100,5 +118,5 @@ display names, Dashboard names, photos, and household information.
 - History/resend and richer previews appear only when the paired server
   advertises those optional Companion capabilities.
 - Earlier candidates had physical pairing and Photos Share Sheet checks. This
-  0.8.1 candidate has Simulator coverage; physical-device and display acceptance
+  0.8.2 candidate has Simulator coverage; physical-device and display acceptance
   still needs to be completed. These earlier results do not qualify this build.

@@ -3,28 +3,27 @@
 This is a preparation checklist, not evidence that a build has been uploaded
 or approved.
 
-## Current candidate: 0.8.1 (source build 15)
+## Current candidate: 0.8.2 (source build 16)
 
 - Delivery: push the reviewed commits to `origin/main`; the existing Xcode
   Cloud `Default` workflow builds and signs the candidate. Local Apple
   account setup and local TestFlight upload are not part of this delivery.
-- [x] Set app and Share Extension to 0.8.1 / 15 in `project.yml` and regenerate
+- [x] Set app and Share Extension to 0.8.2 / 16 in `project.yml` and regenerate
   the checked-in project with XcodeGen.
-- [x] Separate branding/contrast, Chinese/Dynamic Type, accessibility, and
-  Simulator test-environment changes into reviewable commits.
+- [x] Separate message animation, list performance, and release metadata into
+  reviewable commits.
 - [x] Prepare English and Simplified Chinese test notes in `TESTFLIGHT_NOTES.md`.
-- [x] Confirm application revision `b73521e` passed the Xcode Cloud archive
-  with 0 reported errors and warnings; see the linked acceptance record below.
+- [ ] Confirm the 0.8.2 revision passes the Xcode Cloud archive.
 - [ ] Confirm the actual Xcode Cloud build number in App Store Connect.
 - [ ] Confirm processing completed and the build is available to the intended
   TestFlight group. A successful archive alone does not establish availability.
 - [ ] Complete physical-iPhone, Share Extension, VoiceOver, Bluetooth, and
   real-display checks for this candidate.
 
-See [the candidate acceptance record](docs/releases/0.8.1-beta.md) for executed
-checks, retained audit findings, and evidence locations. The general checklist
-below includes historical results; checked items are not a new physical-device
-acceptance of 0.8.1.
+See [the previous candidate acceptance record](docs/releases/0.8.1-beta.md) for
+historical checks, retained audit findings, and evidence locations. The general
+checklist below includes historical results; checked items are not a new
+physical-device acceptance of 0.8.2.
 
 ## Server compatibility
 
@@ -83,7 +82,7 @@ acceptance of 0.8.1.
       notes, support text, and screenshots for each supported iPhone size.
 - [ ] Confirm the official iOS app designation, Tesserae attribution, and
       publisher details in the listing.
-- [x] Set the source marketing version/build to 0.8.1 / 15; confirm the final
+- [x] Set the source marketing version/build to 0.8.2 / 16; confirm the final
       Xcode Cloud number in App Store Connect.
 
 ## Archive and validation
