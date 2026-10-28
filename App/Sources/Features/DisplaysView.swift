@@ -111,7 +111,7 @@ struct DisplaysView: View {
             }
         }
         .overlay {
-            if model.isRefreshing && model.displays.isEmpty {
+            if model.displays.isEmpty && model.isRefreshing {
                 ProgressView("Loading displays…")
             } else if model.displays.isEmpty {
                 ContentUnavailableView {

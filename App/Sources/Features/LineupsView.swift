@@ -128,8 +128,8 @@ struct LineupsView: View {
             .padding(16)
         }
         .overlay {
-            if (model.isRefreshingLineups || model.isRefreshing)
-                && model.lineups.isEmpty
+            if model.lineups.isEmpty
+                && (model.isRefreshingLineups || model.isRefreshing)
             {
                 ProgressView("Loading Lineups…")
             } else if model.lineups.isEmpty {
