@@ -1542,6 +1542,7 @@ components:
               - dashboards
               - dashboard_settings
               - dashboard_component_settings
+              - dashboard_native_controls
               - dashboard_push
               - image_push
               - jobs

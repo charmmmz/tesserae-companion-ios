@@ -167,6 +167,15 @@ def test_openapi_shape_and_operation_ids_are_stable() -> None:
     assert len(operation_ids) == len(set(operation_ids))
 
 
+def test_native_dashboard_capabilities_match_public_schema() -> None:
+    capability = json.loads((FIXTURES / "capabilities-extended.json").read_text())
+    capability["features"] += [
+        "dashboard_settings", "dashboard_component_settings", "dashboard_native_controls"
+    ]
+    schema = _json_schema(SPEC["components"]["schemas"]["Capabilities"])
+    jsonschema.validate(capability, schema)
+
+
 def test_device_timeline_is_capability_and_limit_gated() -> None:
     capability = json.loads((FIXTURES / "capabilities-timeline.json").read_text())
     assert "device_timeline" in capability["features"]
