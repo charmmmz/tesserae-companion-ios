@@ -24,15 +24,16 @@ struct LineupsView: View {
             searchQuery.isEmpty || $0.name.localizedStandardContains(searchQuery)
         }
         let knownDisplayIDs = Set(model.displays.map(\.id))
+        let groupedLineups = Dictionary(grouping: matchingLineups) {
+            lineupDisplayGrouping(
+                deviceIDs: displayDeviceIDs(for: $0),
+                knownDisplayIDs: knownDisplayIDs
+            )
+        }
         var result: [LineupListSection] = []
 
         for display in model.sortedDisplays {
-            let lineups = matchingLineups.filter {
-                lineupDisplayGrouping(
-                    deviceIDs: displayDeviceIDs(for: $0),
-                    knownDisplayIDs: knownDisplayIDs
-                ) == .display(display.id)
-            }
+            let lineups = groupedLineups[.display(display.id)] ?? []
             if !lineups.isEmpty {
                 result.append(
                     LineupListSection(
@@ -44,12 +45,7 @@ struct LineupsView: View {
             }
         }
 
-        let shared = matchingLineups.filter {
-            lineupDisplayGrouping(
-                deviceIDs: displayDeviceIDs(for: $0),
-                knownDisplayIDs: knownDisplayIDs
-            ) == .shared
-        }
+        let shared = groupedLineups[.shared] ?? []
         if !shared.isEmpty {
             result.append(
                 LineupListSection(
@@ -60,12 +56,7 @@ struct LineupsView: View {
             )
         }
 
-        let unassigned = matchingLineups.filter {
-            lineupDisplayGrouping(
-                deviceIDs: displayDeviceIDs(for: $0),
-                knownDisplayIDs: knownDisplayIDs
-            ) == .unassigned
-        }
+        let unassigned = groupedLineups[.unassigned] ?? []
         if !unassigned.isEmpty {
             result.append(
                 LineupListSection(
@@ -76,12 +67,7 @@ struct LineupsView: View {
             )
         }
 
-        let unavailable = matchingLineups.filter {
-            lineupDisplayGrouping(
-                deviceIDs: displayDeviceIDs(for: $0),
-                knownDisplayIDs: knownDisplayIDs
-            ) == .unavailable
-        }
+        let unavailable = groupedLineups[.unavailable] ?? []
         if !unavailable.isEmpty {
             result.append(
                 LineupListSection(
@@ -103,9 +89,11 @@ struct LineupsView: View {
     }
 
     var body: some View {
+        let listSections = sections
+
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
-                ForEach(sections) { section in
+                ForEach(listSections) { section in
                     VStack(alignment: .leading, spacing: 10) {
                         sectionHeader(section)
 
@@ -173,7 +161,7 @@ struct LineupsView: View {
         }
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Lineups")
         .overlay {
-            if !model.lineups.isEmpty, !searchQuery.isEmpty, sections.isEmpty {
+            if !model.lineups.isEmpty, !searchQuery.isEmpty, listSections.isEmpty {
                 ContentUnavailableView.search(text: searchQuery)
                     .accessibilityIdentifier("lineup-search-empty")
             }
@@ -307,7 +295,7 @@ struct LineupsView: View {
     }
 }
 
-enum LineupDisplayGrouping: Equatable {
+enum LineupDisplayGrouping: Hashable {
     case display(String)
     case shared
     case unassigned

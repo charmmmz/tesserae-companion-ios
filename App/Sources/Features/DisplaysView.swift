@@ -18,7 +18,7 @@ struct DisplaysView: View {
     @State private var draggedDisplayID: String?
     @State private var reorderMotion = DisplayReorderMotion()
     @State private var transientDisplayOrderIDs: [String]?
-    @State private var displayFrames: [String: CGRect] = [:]
+    @State private var displayCardSizes: [String: CGSize] = [:]
     @State private var dragStartFrames: [String: CGRect] = [:]
     @State private var dragStartOrderIDs: [String] = []
     @State private var lastReorderedIndex: Int?
@@ -83,9 +83,6 @@ struct DisplaysView: View {
                 }
             }
             .padding(16)
-            .onPreferenceChange(DisplayCardFrameKey.self) { frames in
-                displayFrames = frames
-            }
             .animation(
                 reduceMotion ? nil : .easeInOut(duration: 0.18),
                 value: displayOrder
@@ -219,18 +216,11 @@ struct DisplaysView: View {
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("display-card-\(display.id)")
         .accessibilityAddTraits(.isButton)
-        .background(
-            GeometryReader { proxy in
-                Color.clear.preference(
-                    key: DisplayCardFrameKey.self,
-                    value: [
-                        display.id: proxy.frame(
-                            in: .named("displays-scroll")
-                        )
-                    ]
-                )
-            }
-        )
+        // Reordering needs size only; the recognizer supplies the current origin.
+        // Tracking scroll-relative frames here invalidated the list on every scroll tick.
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
+            displayCardSizes[display.id] = size
+        }
         .opacity(draggedDisplayID == display.id ? 0 : 1)
         .overlay {
             if draggedDisplayID == display.id {
@@ -349,15 +339,12 @@ struct DisplaysView: View {
         guard
             draggedDisplayID == nil,
             let sourceIndex = displayOrder.firstIndex(of: displayID),
-            let cachedSourceFrame = displayFrames[displayID]
-                ?? displayFrames.values.first
+            let sourceSize = displayCardSizes[displayID]
+                ?? displayCardSizes.values.first
         else { return }
 
-        // Preference values can briefly retain the right slot positions under
-        // the wrong IDs while LazyVStack is animating a previous reorder. Use
-        // them only for card size, then rebuild ordered slots around the exact
-        // frame origin reported by the recognizer for the card being lifted.
-        let slotStride = cachedSourceFrame.height + displayCardSpacing
+        // Build ordered slots around the exact origin reported by the recognizer.
+        let slotStride = sourceSize.height + displayCardSpacing
         let correctedFrames = Dictionary(
             uniqueKeysWithValues: displayOrder.enumerated().map { index, id in
                 let offset = CGFloat(index - sourceIndex) * slotStride
@@ -366,8 +353,8 @@ struct DisplaysView: View {
                     CGRect(
                         x: currentOrigin.x,
                         y: currentOrigin.y + offset,
-                        width: cachedSourceFrame.width,
-                        height: cachedSourceFrame.height
+                        width: sourceSize.width,
+                        height: sourceSize.height
                     )
                 )
             }
@@ -454,16 +441,6 @@ struct DisplaysView: View {
         dragStartFrames = [:]
         dragStartOrderIDs = []
         lastReorderedIndex = nil
-    }
-}
-
-private struct DisplayCardFrameKey: PreferenceKey {
-    static let defaultValue: [String: CGRect] = [:]
-    static func reduce(
-        value: inout [String: CGRect],
-        nextValue: () -> [String: CGRect]
-    ) {
-        value.merge(nextValue()) { _, new in new }
     }
 }
 
