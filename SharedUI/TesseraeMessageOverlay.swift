@@ -108,18 +108,29 @@ private final class MessageWindow: UIWindow {
 private struct MessageWindowContent: View {
     let center: TesseraeMessageCenter
     let frameChanged: (CGRect) -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var visibleMessage: TesseraeMessage? {
+        center.hasActiveHost ? center.currentMessage : nil
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            if center.hasActiveHost, let message = center.currentMessage {
+            if let message = visibleMessage {
                 TesseraePresentedMessage(message: message, frameChanged: frameChanged)
                     .padding(.top, 8)
                     .padding(.horizontal, 16)
-                    .transition(.opacity)
+                    .id(message.id)
+                    .transition(
+                        reduceMotion
+                            ? .opacity
+                            : .opacity.combined(with: .scale(scale: 0.97, anchor: .top))
+                    )
             }
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .animation(.easeOut(duration: 0.18), value: visibleMessage?.id)
     }
 }
 
