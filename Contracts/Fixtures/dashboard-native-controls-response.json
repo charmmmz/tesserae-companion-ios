@@ -39,7 +39,6 @@
       "readonly_reason": null,
       "value": "First",
       "default": "Default",
-      "unit": "",
       "visibility_conditions": [],
       "visible": true
     }
@@ -99,7 +98,6 @@
           "readonly_reason": null,
           "value": "a",
           "default": "a",
-          "unit": "",
           "visibility_conditions": [],
           "visible": true
         },
@@ -122,7 +120,6 @@
           "readonly_reason": null,
           "value": [],
           "default": [],
-          "unit": "",
           "visibility_conditions": [],
           "visible": true
         },
@@ -143,7 +140,6 @@
           "can_clear": true,
           "can_reset": true,
           "readonly_reason": null,
-          "unit": "",
           "visibility_conditions": [],
           "visible": true
         },
@@ -166,7 +162,6 @@
           "readonly_reason": null,
           "value": "{}",
           "default": "{}",
-          "unit": "",
           "visibility_conditions": [],
           "visible": true
         },
@@ -189,7 +184,6 @@
           "readonly_reason": null,
           "value": "fallback",
           "default": "fallback",
-          "unit": "",
           "visibility_conditions": [],
           "visible": true
         },
@@ -212,7 +206,6 @@
           "readonly_reason": null,
           "value": null,
           "default": null,
-          "unit": "",
           "visibility_conditions": [
             {
               "field_id": "i_b6d5c2c378457da0413b",
@@ -266,7 +259,6 @@
           "readonly_reason": null,
           "value": "",
           "default": "",
-          "unit": "",
           "visibility_conditions": [],
           "visible": true
         },
@@ -289,7 +281,6 @@
           "readonly_reason": null,
           "value": "var(--fg)",
           "default": "var(--fg)",
-          "unit": "",
           "visibility_conditions": [],
           "visible": true
         },
@@ -312,7 +303,6 @@
           "readonly_reason": null,
           "value": true,
           "default": true,
-          "unit": "",
           "visibility_conditions": [
             {
               "field_id": "f_fa9fc1fc5692fc919c40",

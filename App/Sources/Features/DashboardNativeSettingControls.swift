@@ -62,7 +62,7 @@ struct DashboardColorSettingControl: View {
           value = .string(DashboardSettingColor(red: Double(red), green: Double(green),
             blue: Double(blue), opacity: Double(alpha)).css)
         }
-      ), supportsOpacity: true) { EmptyView() }
+      ), supportsOpacity: false) { EmptyView() }
       .labelsHidden()
       .scaleEffect(44.0 / 28.0)
       .frame(width: 44, height: 44)
@@ -75,6 +75,8 @@ struct DashboardColorSettingControl: View {
     ))
     .textInputAutocapitalization(.never).autocorrectionDisabled()
     .accessibilityIdentifier("dashboard-color-value-\(input.id)")
+    Text("Use a six-digit hex color, such as #336699.")
+      .font(.footnote).foregroundStyle(.secondary)
   }
 }
 

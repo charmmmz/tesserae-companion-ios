@@ -822,7 +822,8 @@ candidate and rejects explicit hidden writes atomically.
 Sliders carry `minimum`, `maximum`, `step` and optional `unit`; absent limits
 use 0/100/1. Dragging snaps relative to the minimum, while precise numeric
 entry is validated without silently clamping stored values. Colors keep their
-CSS or theme string until explicitly edited; the native picker writes hex.
+existing CSS or theme string until explicitly edited. New color values must be
+six-digit `#rrggbb`, matching the web editor; the native picker writes opaque hex.
 `location_search` values use `{name?, country?, admin1?, latitude, longitude,
 timezone?}`. Coordinates must be finite and in range; zones must be valid IANA
 identifiers. Picking a search result replaces the place; manual coordinate

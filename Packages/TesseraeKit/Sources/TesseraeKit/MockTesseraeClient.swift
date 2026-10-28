@@ -633,6 +633,11 @@ public actor MockTesseraeClient: TesseraeServing {
                     } else { valid = false }
                 case "location_search":
                     valid = value == .object([:]) || DashboardSettingLocation(value) != nil
+                case "color":
+                    if case let .string(text) = value {
+                        valid = value == field.value || (text.count == 7 && text.hasPrefix("#")
+                            && text.dropFirst().allSatisfy { "0123456789abcdefABCDEF".contains($0) })
+                    } else { valid = false }
                 case "boolean", "switch":
                     if case .bool = value { valid = true } else { valid = false }
                 case "select", "multiselect":

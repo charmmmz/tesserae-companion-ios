@@ -397,10 +397,10 @@ Conditional content fields follow the shared unsaved draft across pages.
 A dependent field appears only while all its conditions and controllers are
 visible; hiding it retains its saved value and its unsaved draft for a later
 reveal. Sliders offer native dragging plus exact numeric input and show the
-server's unit. Color settings offer a native color picker and an editable CSS
-or theme value without converting it on opening. Location settings offer
-server-scoped place search and manual coordinates, preserving existing time
-zones and place metadata. Search failure leaves coordinate entry available.
+server's unit. Color settings offer an opaque native color picker and six-digit
+hex input, preserving existing CSS or theme values until explicitly changed.
+Location settings offer server-scoped place search and manual coordinates,
+preserving existing time zones and place metadata. Search failure leaves coordinate entry available.
 These controls use the existing revision-checked Save, permissions, reset,
 clear and discard protection. Layout and code editing remain on the web.
 

@@ -80,8 +80,8 @@ public struct DashboardSettingLocation: Equatable, Sendable {
   }
 }
 
-/// A swatch for common CSS colors. Other CSS/theme expressions remain editable
-/// as their original text; opening a picker never converts that stored text.
+/// Display legacy colors without rewriting them. New selections use the web
+/// editor's opaque six-digit hex format.
 public struct DashboardSettingColor: Equatable, Sendable {
   public let red: Double
   public let green: Double
@@ -122,7 +122,6 @@ public struct DashboardSettingColor: Equatable, Sendable {
     func byte(_ value: Double) -> Int {
       value.isFinite ? Int((min(1, max(0, value)) * 255).rounded()) : 0
     }
-    let rgb = String(format: "#%02X%02X%02X", byte(red), byte(green), byte(blue))
-    return byte(opacity) == 255 ? rgb : rgb + String(format: "%02X", byte(opacity))
+    return String(format: "#%02X%02X%02X", byte(red), byte(green), byte(blue))
   }
 }

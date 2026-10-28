@@ -940,6 +940,7 @@
 "Faces won't all fit. Choose Show Entire Photo." = "无法同时保留所有人脸，请选择“显示完整照片”。";
 
 "Color value" = "颜色值";
+"Use a six-digit hex color, such as #336699." = "请输入六位十六进制颜色，例如 #336699。";
 
 "Search places" = "搜索地点";
 

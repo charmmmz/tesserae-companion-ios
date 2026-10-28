@@ -191,6 +191,19 @@ struct DashboardComponentSettingsTests {
     #expect(values.count == 1)
   }
 
+  @Test(arguments: ["var(--accent)", "red", "#abc", "#11223344"])
+  func demoRejectsNonHexColorWithoutSavingOtherEdits(color: String) async throws {
+    let client = MockTesseraeClient(latency: .zero)
+    let original = try await client.fetchDashboardSettings(id: "pantry", instance: instance)
+    var draft = DashboardSettingsDraft(original)
+    draft.settings["name"] = .string("Must not save")
+    draft.componentValues["demo-weather-color"] = .string(color)
+    await #expect(throws: DashboardSettingsValidationError.self) {
+      _ = try await client.updateDashboardSettings(id: "pantry", patch: draft.patch, instance: instance)
+    }
+    #expect(try await client.fetchDashboardSettings(id: "pantry", instance: instance) == original)
+  }
+
   @Test func demoPersistsOrderedSelectionAndOtherComponentRemainsIntact() async throws {
     let client = MockTesseraeClient(latency: .zero)
     let original = try await client.fetchDashboardSettings(id: "pantry", instance: instance)

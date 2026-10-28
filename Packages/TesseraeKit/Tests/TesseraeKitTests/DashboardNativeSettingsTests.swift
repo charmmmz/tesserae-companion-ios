@@ -77,13 +77,13 @@ struct DashboardNativeSettingsTests {
     draft.setValue(.string("Native"), for: conditional, component: true)
     draft.setValue(.number(1.15), for: slider, component: true)
     draft.setValue(coordinateValue, for: location, component: true)
-    draft.setValue(.string("var(--accent)"), for: color, component: true)
+    draft.setValue(.string("#336699"), for: color, component: true)
     let updated = try await client.updateDashboardSettings(id: config.dashboardID, patch: draft.patch, instance: instance)
     let updatedFields = updated.components.flatMap(\.fields)
     #expect(updatedFields.first { $0.id == conditional.id }?.value == .string("Native"))
     #expect(updatedFields.first { $0.id == slider.id }?.value == .number(1.15))
     #expect(updatedFields.first { $0.id == location.id }?.value == coordinateValue)
-    #expect(updatedFields.first { $0.id == color.id }?.value == .string("var(--accent)"))
+    #expect(updatedFields.first { $0.id == color.id }?.value == .string("#336699"))
     #expect(try await client.fetchDashboardSettings(id: config.dashboardID, instance: instance) == updated)
     let invalid = DashboardSettingsPatch(revision: updated.revision,
       settings: ["name": .string("Must not save")], inputs: [mode.name: .string("no")],
@@ -206,11 +206,12 @@ struct DashboardNativeSettingsTests {
     #expect(DashboardSettingLocation(manual)?.properties["timezone"] == nil)
   }
 
-  @Test func colorPickerRoundTripsHexOpacityAndKeepsThemeText() throws {
+  @Test func colorPickerWritesOpaqueWebColorsAndKeepsLegacyValues() throws {
     #expect(DashboardSettingColor(css: "#abc")?.css == "#AABBCC")
-    #expect(DashboardSettingColor(css: "#1234")?.css == "#11223344")
+    #expect(DashboardSettingColor(css: "#1234")?.css == "#112233")
     #expect(DashboardSettingColor(css: "red")?.css == "#FF0000")
-    #expect(DashboardSettingColor(css: "transparent")?.css == "#00000000")
+    #expect(DashboardSettingColor(css: "transparent")?.css == "#000000")
+    #expect(DashboardSettingColor(red: 0.2, green: 0.4, blue: 0.6, opacity: 0.5).css == "#336699")
     #expect(DashboardSettingColor(css: "var(--ink)") == nil)
     let color = field("color", type: "color", value: .string("var(--ink)"))
     #expect(draft([color]).patch.isEmpty)
