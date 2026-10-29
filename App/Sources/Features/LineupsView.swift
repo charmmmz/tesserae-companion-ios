@@ -218,10 +218,6 @@ struct LineupsView: View {
                 "Enable Create and edit Lineups for this device in Tesserae Settings → Companion. You do not need to pair again."
             )
         }
-        .task(id: model.supportsLineupAuthoring) {
-            guard model.supportsLineupAuthoring else { return }
-            await model.refreshLineupAuthoringPermission()
-        }
         .tesseraeScreenBackground()
     }
 
