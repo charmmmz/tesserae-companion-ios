@@ -7,7 +7,7 @@ struct TesseraeToolbarActions<Actions: View>: ToolbarContent {
     @ViewBuilder let actions: Actions
 
     var body: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
+        ToolbarItem(id: "tesserae-page-actions", placement: .topBarTrailing) {
             // One item keeps all actions in the same native capsule.
             HStack(spacing: TesseraeActionMetrics.spacing) {
                 actions
