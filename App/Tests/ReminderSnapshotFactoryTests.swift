@@ -737,6 +737,33 @@ final class AppModelOrderingTests: XCTestCase {
         )
     }
 
+    func testReorderingPublishesTheMigratedOrderForShareReaders() async throws {
+        let suite = "AppModelOrderingTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        UserDefaults.standard.set(
+            ["picpak-kitchen", "e1004-desk"], forKey: displayOrderKey
+        )
+        let model = makeAppModel(
+            displayOrderPreferences: DisplayOrderPreferences(defaults: defaults)
+        )
+        await model.connectDemo()
+        let share = DisplayOrderPreferences(
+            defaults: try XCTUnwrap(UserDefaults(suiteName: suite))
+        )
+        XCTAssertEqual(
+            share.orderedDisplays(model.displays, for: "demo-home").map(\.id),
+            ["picpak-kitchen", "e1004-desk"]
+        )
+        XCTAssertNil(UserDefaults.standard.object(forKey: displayOrderKey))
+
+        model.moveDisplay("e1004-desk", to: 0)
+        XCTAssertEqual(
+            share.orderedDisplays(model.displays, for: "demo-home").map(\.id),
+            ["e1004-desk", "picpak-kitchen"]
+        )
+    }
+
     func testCollapsedDashboardSectionsSurviveReconnect() async {
         let model = makeAppModel()
 
@@ -764,7 +791,9 @@ final class AppModelOrderingTests: XCTestCase {
         )
     }
 
-    private func makeAppModel() -> AppModel {
+    private func makeAppModel(
+        displayOrderPreferences: DisplayOrderPreferences = .init()
+    ) -> AppModel {
         let client = MockTesseraeClient(latency: .milliseconds(0))
         return AppModel(
             liveClient: client,
@@ -775,7 +804,8 @@ final class AppModelOrderingTests: XCTestCase {
             shareQueue: InMemoryShareQueueStore(),
             linkShareQueue: InMemoryLinkShareQueueStore(),
             activityThumbnails: InMemoryActivityThumbnailStore(),
-            discovery: StaticDiscoveryService(results: [])
+            discovery: StaticDiscoveryService(results: []),
+            displayOrderPreferences: displayOrderPreferences
         )
     }
 }

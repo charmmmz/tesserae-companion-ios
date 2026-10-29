@@ -26,7 +26,6 @@ struct CompanionConnectionSession: Equatable, Sendable {
 @MainActor
 @Observable
 final class AppModel {
-    private static let displayOrderKeyPrefix = "display-order."
     private static let dashboardOrderKeyPrefix = "dashboard-order."
     private static let collapsedDashboardSectionsKeyPrefix =
         "dashboard-collapsed-sections."
@@ -81,6 +80,7 @@ final class AppModel {
     private let credentials: any CredentialStoring
     private let stateStore: any CompanionStateStoring
     private let sendPreferences: any CompanionSendPreferencesStoring
+    private let displayOrderPreferences: DisplayOrderPreferences
     private let shareQueue: any ShareQueueStoring
     private let linkShareQueue: any LinkShareQueueStoring
     private let activityThumbnails: any ActivityThumbnailStoring
@@ -291,7 +291,8 @@ final class AppModel {
         linkShareQueue: any LinkShareQueueStoring,
         activityThumbnails: any ActivityThumbnailStoring,
         discovery: any TesseraeDiscovering,
-        connectionTimeout: Duration = .seconds(8)
+        connectionTimeout: Duration = .seconds(8),
+        displayOrderPreferences: DisplayOrderPreferences = .init()
     ) {
         self.liveClient = liveClient
         self.demoClient = demoClient
@@ -299,6 +300,7 @@ final class AppModel {
         self.credentials = credentials
         self.stateStore = stateStore
         self.sendPreferences = sendPreferences
+        self.displayOrderPreferences = displayOrderPreferences
         self.shareQueue = shareQueue
         self.linkShareQueue = linkShareQueue
         self.activityThumbnails = activityThumbnails
@@ -331,27 +333,7 @@ final class AppModel {
     }
 
     var sortedDisplays: [DisplaySummary] {
-        var ranking: [String: Int] = [:]
-        for displayID in displayOrderIDs where ranking[displayID] == nil {
-            ranking[displayID] = ranking.count
-        }
-
-        return displays.sorted { lhs, rhs in
-            switch (ranking[lhs.id], ranking[rhs.id]) {
-            case let (lhsRank?, rhsRank?):
-                return lhsRank < rhsRank
-            case (_?, nil):
-                return true
-            case (nil, _?):
-                return false
-            case (nil, nil):
-                let nameOrder = lhs.name.localizedStandardCompare(rhs.name)
-                if nameOrder != .orderedSame {
-                    return nameOrder == .orderedAscending
-                }
-                return lhs.id < rhs.id
-            }
-        }
+        DisplayOrderPreferences.orderedDisplays(displays, preferredIDs: displayOrderIDs)
     }
 
     func discoverNearby() async {
@@ -3486,9 +3468,9 @@ final class AppModel {
     }
 
     private func loadDisplayOrder(for instanceID: String) {
-        displayOrderIDs = UserDefaults.standard.stringArray(
-            forKey: Self.displayOrderKeyPrefix + instanceID
-        ) ?? []
+        displayOrderIDs = displayOrderPreferences.load(
+            for: instanceID, migratingFrom: .standard
+        )
     }
 
     private func reconcileDeviceTimelines() {
@@ -3598,10 +3580,7 @@ final class AppModel {
 
     private func saveDisplayOrder() {
         guard let instanceID = activeInstance?.id else { return }
-        UserDefaults.standard.set(
-            displayOrderIDs,
-            forKey: Self.displayOrderKeyPrefix + instanceID
-        )
+        displayOrderPreferences.save(displayOrderIDs, for: instanceID)
     }
 
     private func saveCollapsedDashboardSections() {
