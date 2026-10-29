@@ -78,6 +78,7 @@ private final class ShareComposerModel: ObservableObject {
 
     private let stateStore: any CompanionStateStoring
     private let sendPreferences: any CompanionSendPreferencesStoring
+    private let displayOrderPreferences: DisplayOrderPreferences
     private let queueStore: any ShareQueueStoring
     private let linkQueueStore: any LinkShareQueueStoring
     private let activityThumbnails: any ActivityThumbnailStoring
@@ -88,6 +89,7 @@ private final class ShareComposerModel: ObservableObject {
     private let protectDismissal: (Bool) -> Void
 
     init(extensionContext: NSExtensionContext?, mediaFrames: MediaFrameSession? = nil,
+         displayOrderPreferences: DisplayOrderPreferences? = nil,
          protectDismissal: @escaping (Bool) -> Void) {
         self.extensionContext = extensionContext
         self.mediaFrames = mediaFrames ?? MediaFrameSession()
@@ -121,6 +123,9 @@ private final class ShareComposerModel: ObservableObject {
         sendPreferences = UserDefaultsCompanionSendPreferencesStore(
             suiteName: appGroup
         )
+        self.displayOrderPreferences = displayOrderPreferences ?? DisplayOrderPreferences(
+            defaults: appGroup.flatMap(UserDefaults.init(suiteName:)) ?? .standard
+        )
         queueStore = FileShareQueueStore(directoryURL: containerURL)
         linkQueueStore = FileLinkShareQueueStore(directoryURL: containerURL)
         activityThumbnails = FileActivityThumbnailStore(
@@ -143,7 +148,10 @@ private final class ShareComposerModel: ObservableObject {
     }
 
     var displays: [DisplaySummary] {
-        snapshot?.displays ?? []
+        guard let snapshot else { return [] }
+        return displayOrderPreferences.orderedDisplays(
+            snapshot.displays, for: snapshot.activeInstance.id
+        )
     }
 
     var canSend: Bool {
@@ -390,15 +398,15 @@ private final class ShareComposerModel: ObservableObject {
             let savedPreferences = try? await sendPreferences.preferences(
                 for: snapshot.activeInstance.id
             )
-            let availableDeviceIDs = Set(snapshot.displays.map(\.id))
+            let availableDeviceIDs = Set(displays.map(\.id))
             let preferredDeviceIDs = Set(savedPreferences?.deviceIDs ?? [])
                 .intersection(availableDeviceIDs)
             if !preferredDeviceIDs.isEmpty {
                 selectedDeviceIDs = preferredDeviceIDs
             } else {
-                selectedDeviceIDs = Set(snapshot.displays.prefix(1).map(\.id))
+                selectedDeviceIDs = Set(displays.prefix(1).map(\.id))
             }
-            previewDeviceID = snapshot.displays.first {
+            previewDeviceID = displays.first {
                 selectedDeviceIDs.contains($0.id)
             }?.id
             if let preferredBluetooth = sendTargets.first(where: { selectedDeviceIDs.contains($0.id) && $0.isBluetooth }) {
@@ -898,13 +906,21 @@ private final class ShareComposerModel: ObservableObject {
 extension ShareComposerModel {
     static func fixture(image: UIImage, data: Data, mediaFrames: MediaFrameSession,
                         onBusy: @escaping (Bool) -> Void, onSent: @escaping () -> Void) -> ShareComposerModel {
-        let model = ShareComposerModel(extensionContext: nil, mediaFrames: mediaFrames, protectDismissal: onBusy)
+        let orderSuite = ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_SHARE_DISPLAY_ORDER"] == "1"
+            ? "ShareComposerOrderTests.\(UUID().uuidString)" : nil
+        let orderDefaults = orderSuite.flatMap(UserDefaults.init(suiteName:))
+        let orderPreferences = orderDefaults.map { DisplayOrderPreferences(defaults: $0) }
+        let model = ShareComposerModel(extensionContext: nil, mediaFrames: mediaFrames,
+            displayOrderPreferences: orderPreferences, protectDismissal: onBusy)
         model.imageData = data
         model.previewImage = image
         model.contentKind = .image
         model.fit = .fill
         model.phase = .ready
-        model.testCompletion = onSent
+        model.testCompletion = {
+            if let orderSuite { orderDefaults?.removePersistentDomain(forName: orderSuite) }
+            onSent()
+        }
         let records = BluetoothDisplayStore(fileURL: nil)
         let nearby = NearbyDeviceManager(displayRecords: records, photoSharingOnly: true)
         if ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_UNIFIED_SHARE_TARGETS"] == "1",
@@ -930,6 +946,9 @@ extension ShareComposerModel {
                 panel: PanelProfile(width: 1872, height: 1404, gamut: "gray_16", orientation: "landscape"), freshness: .stale)
             model.snapshot = CompanionSnapshot(activeInstance: snapshot.activeInstance, capabilities: nil,
                 displays: snapshot.displays + [portrait, landscape], dashboards: [], jobs: [])
+        }
+        if let snapshot = model.snapshot, let orderPreferences {
+            orderPreferences.save(snapshot.displays.reversed().map(\.id), for: snapshot.activeInstance.id)
         }
         model.bluetoothSession = BluetoothShareSession(nearby: nearby)
         model.bluetoothSession?.start()

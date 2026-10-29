@@ -13,7 +13,7 @@ final class BluetoothShareUITests: XCTestCase {
     private func launch(unified: Bool = false, noReceipt: Bool = false, unauthorized: Bool = false,
                         systemShare: Bool = false, accessibilityText: Bool = false, unifiedTargets: Bool = false,
                         absent: Bool = false, delayed: Bool = false, aspectSwitch: Bool = false,
-                        connectionDelay: Bool = false) -> XCUIApplication {
+                        connectionDelay: Bool = false, savedDisplayOrder: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
         if accessibilityText {
             app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
@@ -22,6 +22,7 @@ final class BluetoothShareUITests: XCTestCase {
         if connectionDelay { app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_CONNECTION_DELAY_MS"] = "6000" }
         if aspectSwitch { app.launchEnvironment["TESSERAE_UI_TEST_SHARE_ASPECT_SWITCH"] = "1" }
         if unifiedTargets { app.launchEnvironment["TESSERAE_UI_TEST_UNIFIED_SHARE_TARGETS"] = "1" }
+        if savedDisplayOrder { app.launchEnvironment["TESSERAE_UI_TEST_SHARE_DISPLAY_ORDER"] = "1" }
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_BLUETOOTH_SHARE"] = "1"
         app.launchEnvironment[unified ? "TESSERAE_UI_TEST_UNIFIED_BLE" : "TESSERAE_UI_TEST_PICPAK_BLE"] = "1"
@@ -84,6 +85,23 @@ final class BluetoothShareUITests: XCTestCase {
         XCTAssertFalse(server.isSelected)
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "Unified Server and Bluetooth Device List"; shot.lifetime = .keepAlways; add(shot)
+        send(app)
+        XCTAssertTrue(app.staticTexts["share-test-complete"].waitForExistence(timeout: 15))
+    }
+
+    func testShareComposerDisplaysSavedOrderInsteadOfSnapshotOrder() {
+        let app = launch(unifiedTargets: true, savedDisplayOrder: true)
+        let first = app.buttons["share-display-living-room"]
+        let second = app.buttons["share-display-picpak-f85b1ba1b2c3"]
+        XCTAssertTrue(first.waitForExistence(timeout: 8))
+        XCTAssertTrue(second.exists)
+        XCTAssertLessThan(first.frame.minY, second.frame.minY)
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Share composer saved display order"
+        shot.lifetime = .keepAlways
+        add(shot)
+
+        second.tap()
         send(app)
         XCTAssertTrue(app.staticTexts["share-test-complete"].waitForExistence(timeout: 15))
     }

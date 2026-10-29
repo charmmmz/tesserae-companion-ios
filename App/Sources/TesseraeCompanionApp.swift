@@ -138,7 +138,11 @@ struct TesseraeCompanionApp: App {
                 shareQueue: shareQueue,
                 linkShareQueue: linkShareQueue,
                 activityThumbnails: activityThumbnails,
-                discovery: discovery
+                discovery: discovery,
+                displayOrderPreferences: DisplayOrderPreferences(
+                    defaults: AppConfiguration.appGroupIdentifier
+                        .flatMap(UserDefaults.init(suiteName:)) ?? .standard
+                )
             )
         )
         _remindersBridgeModel = State(initialValue: RemindersBridgeModel())
