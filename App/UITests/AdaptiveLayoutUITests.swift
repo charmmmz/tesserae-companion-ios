@@ -49,19 +49,29 @@ final class AdaptiveLayoutUITests: XCTestCase {
     private func capture(_ name: String, app: XCUIApplication) {
         // XCUI's orientation command can return while Core Animation is still
         // presenting the rotation. Wait for stable window bounds before recording.
-        var previous = CGRect.zero
-        var stableObservations = 0
-        let settled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            let frame = app.windows.firstMatch.frame
-            stableObservations = frame == previous ? stableObservations + 1 : 0
-            previous = frame
-            return stableObservations >= 2
-        }, object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 5), .completed)
+        waitForStableFrame(app.windows.firstMatch)
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = name
         shot.lifetime = .keepAlways
         add(shot)
+    }
+
+    private func waitForStableFrame(_ element: XCUIElement) {
+        var previous = CGRect.zero
+        var stableObservations = 0
+        var observedFrames: [CGRect] = []
+        let settled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            let frame = element.frame
+            observedFrames.append(frame)
+            stableObservations = frame == previous ? stableObservations + 1 : 0
+            previous = frame
+            return stableObservations >= 2
+        }, object: nil)
+        // CI snapshots can each take seconds; allow time for three observations.
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [settled], timeout: 15), .completed,
+            "Element bounds did not settle: \(observedFrames)"
+        )
     }
 
     private func reveal(_ element: XCUIElement, app: XCUIApplication) {
@@ -167,7 +177,9 @@ final class AdaptiveLayoutUITests: XCTestCase {
         capture("Dashboard push modal", app: app)
         XCUIDevice.shared.orientation = .landscapeLeft
         XCTAssertTrue(push.isEnabled)
-        app.buttons["Cancel"].tap()
+        waitUntilHittable(cancel)
+        waitForStableFrame(cancel)
+        cancel.tap()
         waitUntilHittable(list)
     }
 
