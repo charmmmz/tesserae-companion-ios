@@ -97,28 +97,30 @@ struct LineupsView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         sectionHeader(section)
 
-                        VStack(spacing: 0) {
+                        LazyVStack(spacing: 0) {
                             ForEach(
                                 Array(section.lineups.enumerated()),
                                 id: \.element.id
                             ) { index, lineup in
-                                if index > 0 {
-                                    Divider()
-                                }
+                                VStack(spacing: 0) {
+                                    if index > 0 {
+                                        Divider()
+                                    }
 
-                                NavigationLink {
-                                    LineupDetailView(lineupID: lineup.id)
-                                } label: {
-                                    LineupListRow(
-                                        lineup: lineup,
-                                        isFirstInCard: index == 0,
-                                        isLastInCard: index == section.lineups.count - 1
+                                    NavigationLink {
+                                        LineupDetailView(lineupID: lineup.id)
+                                    } label: {
+                                        LineupListRow(
+                                            lineup: lineup,
+                                            isFirstInCard: index == 0,
+                                            isLastInCard: index == section.lineups.count - 1
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityIdentifier(
+                                        "lineup-card-\(lineup.id)"
                                     )
                                 }
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier(
-                                    "lineup-card-\(lineup.id)"
-                                )
                             }
                         }
                         .tesseraeCard()
