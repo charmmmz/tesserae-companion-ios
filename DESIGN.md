@@ -281,6 +281,18 @@ targets, 4-point spacing, symbol sizing, accent tint, and muted disabled state.
 Feature views supply action semantics and availability; they do not override
 button style, font, size, or capsule background.
 
+Give a logical toolbar item the same fixed `ToolbarItem` ID across navigation
+destinations, even when its buttons or width change. `TesseraeToolbarActions`
+uses `ToolbarItem(id: "tesserae-page-actions", placement: .topBarTrailing)` for
+the shared capsule. Other logical toolbar items use their own stable IDs.
+Keep these IDs independent of page names, action counts, and random values.
+An `.id(...)` on the content or an `.accessibilityIdentifier(...)` does not
+replace the `ToolbarItem` ID.
+
+On 2026-10-29, the user confirmed that adding this shared ID in
+[`70d2189`](https://github.com/charmmmz/tesserae-companion-ios/commit/70d21894b7bd3c24829f75c96766ecbbbb09fd22)
+removed the Displays-to-Lineups stutter on iPhone 17 Pro with iOS 27.2.
+
 ```swift
 .toolbar {
     TesseraeToolbarActions {
@@ -300,8 +312,9 @@ placements on opposite sides. Complex operations retain text. New ordinary
 pages use the paper background, including nested Forms and Lists. These defaults
 also apply to subsequent agent work through `AGENTS.md`; the UI conventions CI
 check rejects direct trailing `ToolbarItem`/`ToolbarItemGroup` declarations outside
-the shared component. Relevant simulator flows and screenshot inspection still
-verify appearance and behavior.
+the shared component and changes that remove or vary the shared capsule's fixed
+ID. Relevant simulator flows and screenshot inspection still verify appearance
+and behavior.
 
 Pushed selection pages follow the same rule, grouping Refresh and Done in the
 trailing capsule. Custom sheet-header actions use

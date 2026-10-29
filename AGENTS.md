@@ -13,6 +13,11 @@ For SwiftUI work, follow the UI conventions in `DESIGN.md` and reuse
   presented sheets. Content reserves space for Send and any persistent message overlap.
   Do not create separate trailing toolbar items, local button sizing, or custom
   capsule backgrounds in feature views.
+- Keep the same fixed `ToolbarItem` ID for a logical action group across pages,
+  even when its buttons or width change. The shared capsule uses
+  `"tesserae-page-actions"`. Give other logical items their own stable IDs.
+  Do not derive these IDs from the page, action count, or a new UUID. View IDs
+  and accessibility identifiers do not replace the `ToolbarItem` ID.
 - Pushed selection pages use the same capsule, including single Done actions.
   Custom sheet-header icons use `.tesseraeModalChromeButtonStyle()`; preview
   overlays use `.tesseraeIconActionLabel()` so Dynamic Type cannot overflow
