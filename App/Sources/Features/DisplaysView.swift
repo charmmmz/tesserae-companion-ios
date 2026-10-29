@@ -69,6 +69,7 @@ struct DisplaysView: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
+        .tesseraeScreenBackground()
     }
 
     @ViewBuilder
