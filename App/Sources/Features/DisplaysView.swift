@@ -67,6 +67,7 @@ struct DisplaysView: View {
                         .tesseraeScreenBackground()
                 }
             }
+            .lineupDestinations()
         }
         .navigationSplitViewStyle(.balanced)
         .tesseraeScreenBackground()
@@ -134,6 +135,7 @@ struct DisplaysView: View {
         }
         .navigationDestination(isPresented: $lineupsPresented) {
             LineupsView(isActive: isActive && lineupsPresented)
+                .lineupDestinations()
                 .toolbar {
                     if horizontalSizeClass == .regular {
                         ToolbarItem(placement: .topBarLeading) {
@@ -666,7 +668,7 @@ private struct DisplayCard: View {
                     state: local.preview ?? preview,
                     placeholderSystemName: display.previewSymbol,
                     placeholderLabel: "Display preview placeholder, \(display.panel.width) by \(display.panel.height), \(display.panel.orientation)",
-                    imageLabel: local.usesLocalPreview ? String(localized: "Last Bluetooth Send") : String(localized: "Last-served device preview for \(display.name)"),
+                    imageLabel: local.usesLocalPreview ? String(localized: "Last Bluetooth Send") : String(localized: "Server preview for \(display.name)"),
                     accessibilityIdentifier: "display-preview-\(display.id)",
                     placeholderDetail: "\(display.panel.width) × \(display.panel.height)"
                 )
@@ -681,7 +683,7 @@ private struct DisplayCard: View {
                         .accessibilityElement()
                         .accessibilityLabel("Waiting for display refresh")
                         .accessibilityHint(
-                            "The new frame will appear the next time this display wakes."
+                            "A frame is queued. Device collection and screen appearance are not confirmed."
                         )
                         .accessibilityIdentifier(
                             "display-pending-indicator-\(display.id)"
@@ -725,47 +727,100 @@ private struct PendingRenderGlyph: View {
     }
 }
 
-private struct DisplayDetailView: View {
+private struct LineupDestinationModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content.navigationDestination(for: LineupRoute.self) { route in
+            LineupRouteDestination(route: route)
+        }
+    }
+}
+
+private struct LineupRouteDestination: View {
+    @Environment(AppModel.self) private var model
+    let route: LineupRoute
+
+    var body: some View {
+        switch route {
+        case let .lineup(id, displayID):
+            LineupDetailView(lineupID: id, originatingDisplayID: displayID)
+        case let .display(id):
+            if let display = model.displays.first(where: { $0.id == id }) {
+                DisplayDetailView(display: display)
+            } else {
+                ContentUnavailableView {
+                    Label("Display Unavailable", systemImage: "display")
+                } description: {
+                    Text("This display is no longer returned by the server.")
+                } actions: {
+                    Button("Refresh") { Task { await model.refreshDisplays() } }
+                }
+                .tesseraeScreenBackground()
+            }
+        }
+    }
+}
+
+extension View {
+    func lineupDestinations() -> some View { modifier(LineupDestinationModifier()) }
+}
+
+private struct PlannedDashboardThumbnail: View {
+    @Environment(AppModel.self) private var model
+    let dashboardID: String
+    let display: DisplaySummary
+
+    var body: some View {
+        PreviewArtwork(
+            state: model.dashboardPreview(id: dashboardID, deviceID: display.id),
+            placeholderSystemName: "rectangle.grid.2x2",
+            placeholderLabel: "Planned dashboard preview",
+            imageLabel: String(localized: "Planned dashboard preview"),
+            accessibilityIdentifier: "display-planned-thumbnail-\(display.id)"
+        )
+        .aspectRatio(display.panelAspectRatio, contentMode: .fit)
+        .frame(width: 60).frame(maxHeight: 90)
+        .task(id: "\(dashboardID)|\(display.id)|\(model.previewGeneration)") {
+            await model.loadDashboardPreview(id: dashboardID, deviceID: display.id)
+        }
+    }
+}
+
+private enum DisplayEvidencePreview: Identifiable {
+    case server
+    case queued(String)
+    case planned(String)
+
+    var id: String {
+        switch self {
+        case .server: "server"
+        case let .queued(revision): "queued|\(revision)"
+        case let .planned(id): "planned|\(id)"
+        }
+    }
+}
+
+struct DisplayDetailView: View {
     @Environment(NearbyDeviceManager.self) private var nearby
     private var local: DisplayBluetoothPresentation {
         nearby.displayRecords.presentation(for: currentDisplay, serverID: model.activeInstance?.id)
     }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private enum ScreenPage: Hashable {
-        case current
-        case next
-    }
-
-    private struct UpdateAnchor: Equatable {
-        let eventID: String
-        let start: Date
-        let end: Date
-    }
-
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
-    @State private var selectedScreenPage: ScreenPage = .current
-    @State private var updateAnchor: UpdateAnchor?
     @State private var hapticEvent = TesseraeHapticEvent()
+    @State private var planNow = Date()
+    @State private var selectedPreview: DisplayEvidencePreview?
     let display: DisplaySummary
 
     private var currentDisplay: DisplaySummary {
         model.displays.first(where: { $0.id == display.id }) ?? display
     }
 
-    private var visibleScreenPage: ScreenPage {
-        currentDisplay.pendingRender == nil || local.isBluetooth || local.usesLocalPreview ? .current : selectedScreenPage
-    }
-
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
-                screenCarouselCard
-
-                if shouldShowNextUpdateCard {
-                    nextUpdateCard
-                }
+                screenEvidenceCard
 
                 detailCard(
                     "Connection & Power",
@@ -823,6 +878,7 @@ private struct DisplayDetailView: View {
                 }
 
                 DisplayDeviceDetails(display: currentDisplay, firmwareVersion: local.firmwareVersion)
+                displayLineupsCard
             }
             .padding(16)
         }
@@ -841,53 +897,23 @@ private struct DisplayDetailView: View {
         ) {
             await model.loadDisplayPreview(currentDisplay)
         }
+        .task(id: "\(model.connectionRevision)|\(model.supportsLineups)") {
+            await model.refreshLineups(showErrors: false, saveSnapshot: false)
+        }
         .task(id: currentDisplay.pendingRender?.revision) {
             await model.loadPendingDisplayPreview(currentDisplay)
         }
-        .task(id: "\(currentDisplay.id)-\(model.supportsDeviceTimeline)") {
+        .task(id: "\(currentDisplay.id)|\(model.supportsDeviceTimeline)|\(model.connectionRevision)") {
+            guard model.supportsDeviceTimeline, !local.isBluetooth else { return }
             await model.refreshDeviceUpcoming(displayID: currentDisplay.id)
-        }
-        .task(id: nextUpcomingEvent?.id) {
-            if let event = nextUpcomingEvent {
-                let needsReanchor: Bool
-                if let anchor = updateAnchor {
-                    needsReanchor = abs(
-                        anchor.end.timeIntervalSince(event.scheduledAt)
-                    ) > 30
-                } else {
-                    needsReanchor = true
-                }
-                if needsReanchor {
-                    updateAnchor = UpdateAnchor(
-                        eventID: event.id,
-                        start: Date(),
-                        end: event.scheduledAt
-                    )
-                } else if let anchor = updateAnchor,
-                          anchor.eventID != event.id
-                {
-                    updateAnchor = UpdateAnchor(
-                        eventID: event.id,
-                        start: anchor.start,
-                        end: anchor.end
-                    )
-                }
-            }
-            guard let scheduledAt = nextUpcomingEvent?.scheduledAt else { return }
-            let delay = scheduledAt.timeIntervalSinceNow
-            if delay > 0 {
-                try? await Task.sleep(for: .seconds(delay + 1))
-            }
             while !Task.isCancelled {
+                planNow = Date()
+                let deadlines = [plan.next?.event.scheduledAt, plan.response?.throughAt].compactMap { $0 }
+                let delay = deadlines.map { $0.timeIntervalSinceNow + 1 }.filter { $0 > 0 }.min() ?? 15
+                do { try await Task.sleep(for: .seconds(min(delay, 60))) } catch { return }
+                guard !Task.isCancelled else { return }
+                planNow = Date()
                 await model.refreshDeviceUpcoming(displayID: currentDisplay.id)
-                guard
-                    let event = model.deviceUpcomingResponses[currentDisplay.id]?
-                        .events.first,
-                    event.scheduledAt.timeIntervalSinceNow <= 10
-                else {
-                    break
-                }
-                try? await Task.sleep(for: .seconds(15))
             }
         }
         .onChange(of: currentDisplay.lastSeenAt) { _, _ in
@@ -897,6 +923,9 @@ private struct DisplayDetailView: View {
         }
         .refreshable {
             await model.refreshDisplays(showErrors: false)
+            guard !Task.isCancelled else { return }
+            await model.refreshLineups(showErrors: false, saveSnapshot: false)
+            guard !Task.isCancelled else { return }
             await model.refreshDeviceUpcoming(displayID: currentDisplay.id)
         }
         .onChange(of: scenePhase) { _, newPhase in
@@ -905,350 +934,196 @@ private struct DisplayDetailView: View {
                 await model.refreshDeviceUpcoming(displayID: currentDisplay.id)
             }
         }
-        .onChange(of: currentDisplay.pendingRender?.revision) { _, revision in
-            if revision == nil {
-                selectedScreenPage = .current
+        .sheet(item: $selectedPreview) { preview in
+            NavigationStack {
+                ScrollView {
+                    PreviewArtwork(
+                        state: evidencePreviewState(preview),
+                        placeholderSystemName: currentDisplay.previewSymbol,
+                        placeholderLabel: evidencePreviewTitle(preview),
+                        imageLabel: evidencePreviewTitle(preview),
+                        accessibilityIdentifier: "display-evidence-preview-sheet"
+                    )
+                    .aspectRatio(currentDisplay.panelAspectRatio, contentMode: .fit)
+                    .padding(20)
+                }
+                .navigationTitle(evidencePreviewTitle(preview))
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done", systemImage: "checkmark") { selectedPreview = nil }
+                            .labelStyle(.iconOnly)
+                    }
+                }
+                .tesseraeScreenBackground()
             }
-        }
-        .onChange(of: selectedScreenPage) { oldValue, newValue in
-            guard
-                oldValue != newValue,
-                currentDisplay.pendingRender != nil
-            else {
-                return
-            }
-            hapticEvent.trigger(.selection)
         }
         .tesseraeScreenBackground()
         .tesseraeHapticFeedback(trigger: hapticEvent)
     }
 
-    private var upcomingResponse: DeviceUpcomingResponse? {
-        model.deviceUpcomingResponses[currentDisplay.id]
-    }
-
-    private var nextUpcomingEvent: DeviceUpcomingEvent? {
-        upcomingResponse?.events.first
-    }
-
-    private var shouldShowNextUpdateCard: Bool {
-        guard model.supportsDeviceTimeline, !local.isBluetooth else { return false }
-        if model.loadingDeviceTimelineIDs.contains(currentDisplay.id) {
-            return true
+    private func evidencePreviewState(_ preview: DisplayEvidencePreview) -> PreviewImageState? {
+        switch preview {
+        case .server: local.preview ?? model.displayPreviews[currentDisplay.id]
+        case let .queued(revision): currentDisplay.pendingRender?.revision == revision ? model.pendingDisplayPreview(for: currentDisplay) : nil
+        case let .planned(id): model.dashboardPreview(id: id, deviceID: currentDisplay.id)
         }
-        if model.deviceTimelineErrors[currentDisplay.id] != nil {
-            return true
-        }
-        return model.deviceUpcomingResponses[currentDisplay.id]?.events.isEmpty == false
     }
 
-    @ViewBuilder
-    private var nextUpdateCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Label("Next in Line", systemImage: "clock.arrow.circlepath")
-                .font(.headline)
+    private func evidencePreviewTitle(_ preview: DisplayEvidencePreview) -> String {
+        switch preview {
+        case .server: previewTitle
+        case .queued: String(localized: "Queued frame")
+        case .planned: String(localized: "Planned dashboard preview")
+        }
+    }
 
-            if let event = nextUpcomingEvent {
-                TimelineView(.animation) { context in
-                    nextUpdateContent(
-                        event: event,
-                        now: context.date
-                    )
+    private var plan: DisplayPlanProjection {
+        displayPlanProjections(
+            deviceIDs: [currentDisplay.id], displays: model.displays,
+            supported: model.supportsDeviceTimeline, responses: model.deviceUpcomingResponses,
+            refreshing: model.loadingDeviceTimelineIDs, errors: model.deviceTimelineErrors, now: planNow
+        )[0]
+    }
+
+    private var previewTitle: String {
+        local.usesLocalPreview ? String(localized: "Last Bluetooth Send") : String(localized: "Server preview")
+    }
+
+    private var screenEvidenceCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .center, spacing: 16) {
+                Button { selectedPreview = .server } label: {
+                    currentScreenPreview
+                        .aspectRatio(currentDisplay.panelAspectRatio, contentMode: .fit)
+                        .frame(width: 112).frame(maxHeight: 160)
                 }
-
-                if !upcomingQueue.isEmpty {
-                    Divider()
-                    upcomingQueueList
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel(previewTitle)
+                .accessibilityIdentifier("display-open-preview-\(currentDisplay.id)")
+                VStack(alignment: .leading, spacing: 7) {
+                    Label(previewTitle, systemImage: local.usesLocalPreview ? "paperplane" : "display")
+                        .font(.headline)
+                    Text(local.usesLocalPreview ? "Saved from a local Bluetooth Send." : "The latest preview available from the server.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    if local.usesLocalPreview, let date = local.record?.photoReceivedAt {
+                        Text(String(localized: "Local Send record · \(projectionDateText(date, timezone: model.activeInstance?.timezone ?? "UTC"))"))
+                            .font(.caption2).foregroundStyle(.secondary)
+                    } else if let frameAt = plan.response?.currentFrameAt {
+                        Text(String(localized: "Last served or published · \(projectionDateText(frameAt, timezone: plan.response?.timezone ?? model.activeInstance?.timezone ?? "UTC"))"))
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }
+                    Text("Screen appearance is not confirmed.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
-            } else if model.loadingDeviceTimelineIDs.contains(currentDisplay.id),
-                      upcomingResponse == nil
-            {
-                HStack(spacing: 10) {
-                    ProgressView()
-                    Text("Loading scheduled updates…")
-                        .foregroundStyle(.secondary)
-                }
-                .frame(minHeight: 48)
-            } else if let error = model.deviceTimelineErrors[currentDisplay.id] {
-                HStack(alignment: .center, spacing: 12) {
-                    Text(error)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
-                    Spacer(minLength: 8)
-
-                    Button("Retry") {
-                        Task {
-                            await model.refreshDeviceUpcoming(
-                                displayID: currentDisplay.id,
-                                showErrors: true
-                            )
+            if let pending = currentDisplay.pendingRender, !local.isBluetooth, !local.usesLocalPreview {
+                HStack(spacing: 12) {
+                    Image(systemName: "hourglass").foregroundStyle(TesseraeTheme.warning)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Queued frame").font(.subheadline.weight(.semibold))
+                        Text("Waiting for device collection; timing is unknown.")
+                            .font(.caption).foregroundStyle(.secondary)
+                        if let renderedAt = pending.renderedAt {
+                            Text(String(localized: "Rendered · \(projectionDateText(renderedAt, timezone: plan.response?.timezone ?? model.activeInstance?.timezone ?? "UTC"))"))
+                                .font(.caption2).foregroundStyle(.secondary)
                         }
                     }
-                    .buttonStyle(.bordered)
-                }
-            }
-        }
-        .tesseraeCard()
-        .accessibilityIdentifier("display-next-update-\(currentDisplay.id)")
-    }
-
-    private var upcomingQueue: [DeviceUpcomingEvent] {
-        guard let response = upcomingResponse else { return [] }
-        return Array(response.events.dropFirst().prefix(4))
-    }
-
-    private var upcomingQueueList: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ForEach(Array(upcomingQueue.enumerated()), id: \.element.id) {
-                index,
-                event in
-                HStack(spacing: 10) {
-                    upcomingQueueIcon(for: event)
-                        .frame(width: 18)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(upcomingTarget(event))
-                            .font(.subheadline.weight(.medium))
-                            .lineLimit(1)
-                        Text(upcomingReason(event))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Button { selectedPreview = .queued(pending.revision) } label: {
+                        nextScreenPreview
+                            .aspectRatio(currentDisplay.panelAspectRatio, contentMode: .fit)
+                            .frame(width: 60).frame(maxHeight: 90)
                     }
-
-                    Spacer(minLength: 8)
-
-                    Text(
-                        event.scheduledAt,
-                        format: .dateTime.weekday(.abbreviated).hour().minute()
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize()
+                    .buttonStyle(.plain)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("Queued frame")
                 }
-
-                if index < upcomingQueue.count - 1 {
-                    Divider()
-                }
-            }
-        }
-        .accessibilityIdentifier("display-next-in-line-queue-\(currentDisplay.id)")
-    }
-
-    @ViewBuilder
-    private func upcomingQueueIcon(for event: DeviceUpcomingEvent) -> some View {
-        if let dashboardID = event.dashboardID,
-           let dashboard = model.dashboards.first(where: { $0.id == dashboardID })
-        {
-            PhosphorIcon(
-                name: dashboard.iconName,
-                size: 15,
-                color: TesseraeTheme.accent,
-                fallbackSystemName: "rectangle.grid.2x2"
-            )
-        } else {
-            Image(systemName: upcomingSymbol(event))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private func nextUpdateContent(
-        event: DeviceUpcomingEvent,
-        now: Date
-    ) -> some View {
-        let isDue = event.scheduledAt <= now.addingTimeInterval(10)
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(upcomingTarget(event))
-                        .font(.title3.weight(.semibold))
-                        .lineLimit(2)
-                    Text(upcomingReason(event))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer(minLength: 8)
-
-                VStack(alignment: .trailing, spacing: 2) {
-                    if isDue {
-                        Text("Waiting for display…")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(upcomingAccent(event.certainty))
-                    } else {
-                        Text(event.scheduledAt, style: .relative)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(upcomingAccent(event.certainty))
-                    }
-                    Text(
-                        event.scheduledAt,
-                        format: .dateTime.weekday(.abbreviated).hour().minute()
-                    )
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                }
-                .fixedSize(horizontal: true, vertical: false)
-            }
-
-            if let anchor = updateAnchor {
-                let total = max(anchor.end.timeIntervalSince(anchor.start), 1)
-                ProgressView(
-                    value: min(
-                        max(now.timeIntervalSince(anchor.start), 0),
-                        total
-                    ),
-                    total: total
-                )
-                .tint(upcomingAccent(event.certainty))
-                .accessibilityLabel("Time until next update")
-            }
-
-            HStack(spacing: 8) {
-                Image(systemName: upcomingSymbol(event))
-                Text(upcomingEffect(event))
-                if event.certainty != .scheduled {
-                    Text("·")
-                    Text(upcomingCertainty(event.certainty))
-                }
-            }
-            .font(.caption.weight(.medium))
-            .foregroundStyle(.secondary)
-        }
-    }
-
-    private func upcomingEffect(_ event: DeviceUpcomingEvent) -> String {
-        switch event.effect {
-        case .changeScreen:
-            String(localized: "Changes the screen")
-        case .refreshScreen:
-            String(localized: "Refreshes the current screen")
-        }
-    }
-
-    private func upcomingCertainty(_ certainty: DeviceUpcomingCertainty) -> String {
-        switch certainty {
-        case .scheduled:
-            String(localized: "Scheduled")
-        case .conditional:
-            String(localized: "Conditional")
-        case .estimated:
-            String(localized: "Estimated")
-        }
-    }
-
-    private func upcomingTarget(_ event: DeviceUpcomingEvent) -> String {
-        event.dashboardName
-            ?? event.lineupName
-            ?? String(localized: "Lineup update")
-    }
-
-    private func upcomingReason(_ event: DeviceUpcomingEvent) -> String {
-        switch event.cause {
-        case .interval:
-            String(localized: "Keep Fresh")
-        case .cycle:
-            String(localized: "Cycle")
-        case .daily:
-            String(localized: "Daily")
-        case .homeReturn:
-            String(localized: "Home Return")
-        case .dashboardRefresh:
-            String(localized: "Dashboard refresh")
-        case .widgetRefresh:
-            String(localized: "Widget refresh")
-        }
-    }
-
-    private func upcomingAccent(_ certainty: DeviceUpcomingCertainty) -> Color {
-        certainty == .scheduled ? TesseraeTheme.info : TesseraeTheme.warning
-    }
-
-    private func upcomingSymbol(_ event: DeviceUpcomingEvent) -> String {
-        switch event.effect {
-        case .changeScreen:
-            "arrow.left.arrow.right.square"
-        case .refreshScreen:
-            "arrow.clockwise"
-        }
-    }
-
-    private var screenCarouselCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            screenPageHeader
-
-            TabView(selection: Binding(get: { visibleScreenPage }, set: { selectedScreenPage = $0 })) {
-                currentScreenPreview
-                    .tag(ScreenPage.current)
-
-                if currentDisplay.pendingRender != nil && !local.isBluetooth && !local.usesLocalPreview {
-                    nextScreenPreview
-                        .tag(ScreenPage.next)
-                }
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .aspectRatio(currentDisplay.panelAspectRatio, contentMode: .fit)
-            .frame(maxWidth: .infinity)
-            .frame(maxHeight: 380)
-            .accessibilityIdentifier(
-                "display-screen-carousel-\(currentDisplay.id)"
-            )
-
-            if currentDisplay.pendingRender != nil && !local.isBluetooth && !local.usesLocalPreview {
-                screenPageIndicator
-            }
-
-            if currentDisplay.hasPendingRender == true, !local.isBluetooth, !local.usesLocalPreview,
-               currentDisplay.pendingRender == nil
-            {
+                .padding(10)
+                .background(TesseraeTheme.warning.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("display-queued-frame-\(currentDisplay.id)")
+            } else if currentDisplay.hasPendingRender == true, !local.isBluetooth, !local.usesLocalPreview {
                 pendingRefreshExplanation
-                    .transition(
-                        .move(edge: .top)
-                            .combined(with: .opacity)
-                    )
+            }
+
+            if !local.isBluetooth {
+                Divider()
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Next planned update", systemImage: "clock")
+                        .font(.subheadline.weight(.semibold))
+                    HStack(alignment: .top, spacing: 12) {
+                        DisplayPlanSummary(plan: plan, showsNextHeading: false)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        if let next = plan.next, let dashboardID = next.event.dashboardID {
+                            Button { selectedPreview = .planned(dashboardID) } label: {
+                                PlannedDashboardThumbnail(dashboardID: dashboardID, display: currentDisplay)
+                            }
+                            .buttonStyle(.plain)
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                            .accessibilityElement(children: .contain)
+                            .accessibilityLabel("Planned dashboard preview")
+                        }
+                    }
+                    if plan.error != nil {
+                        Button("Retry") {
+                            Task { await model.refreshDeviceUpcoming(displayID: currentDisplay.id, showErrors: true) }
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("display-next-update-\(currentDisplay.id)")
             }
         }
         .tesseraeCard()
-        .animation(
-            reduceMotion ? nil : .easeInOut(duration: 0.22),
-            value: visibleScreenPage
-        )
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("display-evidence-\(currentDisplay.id)")
     }
 
-    private var screenPageHeader: some View {
-        ZStack(alignment: .leading) {
-            Label(local.isBluetooth && !local.usesLocalPreview ? String(localized: "Last Server Preview") : String(localized: "Current Screen"), systemImage: "display")
-                .font(.headline)
-                .opacity(visibleScreenPage == .current ? 1 : 0)
-                .accessibilityHidden(visibleScreenPage != .current)
-
-            HStack(spacing: 10) {
-                Label("Next Screen", systemImage: "clock.arrow.circlepath")
-                    .font(.headline)
-                    .foregroundStyle(TesseraeTheme.warning)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                    .layoutPriority(1)
-
-                Spacer(minLength: 8)
-
-                if let renderedAt = currentDisplay.pendingRender?.renderedAt {
-                    VStack(alignment: .trailing, spacing: 1) {
-                        Text("Rendered")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        Text(renderedAt, style: .relative)
-                            .font(.caption.weight(.medium))
-                    }
-                    .fixedSize(horizontal: true, vertical: false)
+    private var displayLineupsCard: some View {
+        let lineups = model.lineups.filter {
+            model.supportsLineups &&
+            resolvedLineupDeviceIDs(explicitDeviceIDs: $0.deviceIDs, serverResolvedDeviceIDs: $0.resolvedDeviceIDs).contains(currentDisplay.id)
+        }
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Lineups for this display").font(.headline)
+            ForEach(lineups) { lineup in
+                NavigationLink(value: LineupRoute.lineup(id: lineup.id, displayID: currentDisplay.id)) {
+                    LineupListRow(
+                        lineup: lineup,
+                        plans: displayPlanProjections(
+                            deviceIDs: [currentDisplay.id], displays: model.displays,
+                            supported: model.supportsDeviceTimeline, responses: model.deviceUpcomingResponses,
+                            refreshing: model.loadingDeviceTimelineIDs, errors: model.deviceTimelineErrors,
+                            lineupID: lineup.id
+                        )
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("display-lineup-\(lineup.id)")
+            }
+            if !model.supportsLineups {
+                Text("Lineups are not supported by this server.").font(.caption).foregroundStyle(.secondary)
+            } else if let error = model.lineupsReadError {
+                Text(error).font(.caption).foregroundStyle(.secondary)
+            } else if lineups.isEmpty {
+                if model.isRefreshingLineups {
+                    ProgressView("Loading Lineups…")
+                } else if model.hasReadCurrentLineups {
+                    Text("No Lineups assigned").font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Text("Lineups not loaded").font(.caption).foregroundStyle(.secondary)
                 }
             }
-            .frame(maxWidth: .infinity)
-            .opacity(visibleScreenPage == .next ? 1 : 0)
-            .accessibilityHidden(visibleScreenPage != .next)
         }
-        .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: visibleScreenPage)
+        .tesseraeCard()
     }
 
     private var currentScreenPreview: some View {
@@ -1256,7 +1131,7 @@ private struct DisplayDetailView: View {
             state: local.preview ?? model.displayPreviews[currentDisplay.id],
             placeholderSystemName: currentDisplay.previewSymbol,
             placeholderLabel: "Display preview placeholder, \(currentDisplay.panel.width) by \(currentDisplay.panel.height), \(currentDisplay.panel.orientation)",
-            imageLabel: local.usesLocalPreview ? String(localized: "Last Bluetooth Send") : String(localized: "Last-served device preview for \(currentDisplay.name)"),
+            imageLabel: previewTitle,
             accessibilityIdentifier: "display-detail-preview-\(currentDisplay.id)",
             placeholderDetail: "\(currentDisplay.panel.width) × \(currentDisplay.panel.height)"
         )
@@ -1266,61 +1141,10 @@ private struct DisplayDetailView: View {
         PreviewArtwork(
             state: model.pendingDisplayPreview(for: currentDisplay),
             placeholderSystemName: currentDisplay.previewSymbol,
-            placeholderLabel: "Pending display preview, \(currentDisplay.panel.width) by \(currentDisplay.panel.height), \(currentDisplay.panel.orientation)",
-            imageLabel: "Next device preview for \(currentDisplay.name)",
-            accessibilityIdentifier: "display-detail-pending-preview-\(currentDisplay.id)",
-            placeholderDetail: "\(currentDisplay.panel.width) × \(currentDisplay.panel.height)"
+            placeholderLabel: "Queued frame",
+            imageLabel: String(localized: "Queued frame"),
+            accessibilityIdentifier: "display-detail-pending-preview-\(currentDisplay.id)"
         )
-    }
-
-    private var screenPageIndicator: some View {
-        HStack(spacing: 7) {
-            screenPageIndicatorButton(
-                page: .current,
-                label: "Current Screen"
-            )
-            screenPageIndicatorButton(
-                page: .next,
-                label: "Next Screen"
-            )
-        }
-        .frame(maxWidth: .infinity)
-        .accessibilityIdentifier(
-            "display-screen-page-indicator-\(currentDisplay.id)"
-        )
-    }
-
-    private func screenPageIndicatorButton(
-        page: ScreenPage,
-        label: LocalizedStringKey
-    ) -> some View {
-        Button {
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
-                selectedScreenPage = page
-            }
-        } label: {
-            ZStack {
-                Capsule()
-                    .fill(
-                        visibleScreenPage == page
-                            ? TesseraeTheme.accent
-                            : Color.secondary.opacity(0.28)
-                    )
-                    .frame(
-                        width: visibleScreenPage == page ? 20 : 7,
-                        height: 7
-                    )
-                    .animation(
-                        reduceMotion ? nil : .easeInOut(duration: 0.2),
-                        value: visibleScreenPage
-                    )
-            }
-            .frame(width: 44, height: 44)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text(label))
-        .accessibilityAddTraits(visibleScreenPage == page ? .isSelected : [])
     }
 
     private var pendingRefreshExplanation: some View {
@@ -1334,7 +1158,7 @@ private struct DisplayDetailView: View {
                     .foregroundStyle(TesseraeTheme.warning)
 
                 Text(
-                    "The new frame will appear the next time this display wakes."
+                    "A frame is queued. Device collection and screen appearance are not confirmed."
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)

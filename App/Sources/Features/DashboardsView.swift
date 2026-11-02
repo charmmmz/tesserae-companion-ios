@@ -1043,6 +1043,13 @@ struct DashboardPreviewActionSheet: View {
     @State private var isSubmitting = false
     @State private var hapticEvent = TesseraeHapticEvent()
 
+    private var selectedPreviewDeviceID: String? {
+        if case .push = action { return previewDeviceID }
+        let targets = (didLoadInitialSelection ? selectedDeviceIDs : initialDeviceIDs)
+            .intersection(Set(displays.map(\.id)))
+        return targets.count == 1 ? targets.first : nil
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             sheetHeader
@@ -1076,7 +1083,7 @@ struct DashboardPreviewActionSheet: View {
                 selectedDeviceIDs.isEmpty
                     || isSubmitting
                     || isOperating
-                    || isPlayingOnAllSelectedDisplays
+                    || isSelectedScheduleStepOnAllTargets
                     || !canPerformAction
             )
             .padding(.horizontal, TesseraeComposerLayout.pagePadding)
@@ -1085,9 +1092,10 @@ struct DashboardPreviewActionSheet: View {
         .onChange(of: boundDeviceIDs) { _, ids in selectedDeviceIDs.formIntersection(ids) }
         .task(id: taskID) {
             loadInitialSelection()
+            if case .playLineup = action, selectedPreviewDeviceID == nil { return }
             await model.loadDashboardPreview(
                 id: dashboardID,
-                deviceID: previewDeviceID
+                deviceID: selectedPreviewDeviceID
             )
         }
         .tesseraeHapticFeedback(trigger: hapticEvent)
@@ -1224,9 +1232,10 @@ struct DashboardPreviewActionSheet: View {
     }
 
     private var previewImage: UIImage? {
-        model.dashboardPreview(
+        if case .playLineup = action, selectedPreviewDeviceID == nil { return nil }
+        return model.dashboardPreview(
             id: dashboardID,
-            deviceID: previewDeviceID
+            deviceID: selectedPreviewDeviceID
         )?
             .data
             .flatMap(UIImage.init(data:))
@@ -1240,8 +1249,8 @@ struct DashboardPreviewActionSheet: View {
     }
 
     private func previewResolution(for image: UIImage?) -> String? {
-        if let previewDeviceID,
-           let display = displays.first(where: { $0.id == previewDeviceID })
+        if let selectedPreviewDeviceID,
+           let display = displays.first(where: { $0.id == selectedPreviewDeviceID })
         {
             return "\(display.panel.width) × \(display.panel.height)"
         }
@@ -1282,9 +1291,9 @@ struct DashboardPreviewActionSheet: View {
     private var taskID: String {
         switch action {
         case .push:
-            "push|\(dashboardID)|\(previewDeviceID ?? "default")"
+            "push|\(dashboardID)|\(selectedPreviewDeviceID ?? "default")"
         case let .playLineup(lineupID, pageID):
-            "lineup|\(lineupID)|\(pageID)|\(previewDeviceID ?? "default")"
+            "lineup|\(lineupID)|\(pageID)|\(selectedPreviewDeviceID ?? "default")"
         }
     }
 
@@ -1297,7 +1306,7 @@ struct DashboardPreviewActionSheet: View {
         }
     }
 
-    private var isPlayingOnAllSelectedDisplays: Bool {
+    private var isSelectedScheduleStepOnAllTargets: Bool {
         guard
             case let .playLineup(lineupID, pageID) = action,
             !selectedDeviceIDs.isEmpty,
@@ -1322,11 +1331,11 @@ struct DashboardPreviewActionSheet: View {
             case .push:
                 return String(localized: "Sending…")
             case .playLineup:
-                return String(localized: "Playing…")
+                return String(localized: "Sending…")
             }
         }
-        if isPlayingOnAllSelectedDisplays {
-            return String(localized: "Now Playing")
+        if isSelectedScheduleStepOnAllTargets {
+            return String(localized: "Selected schedule step")
         }
         return targetActionTitle
     }

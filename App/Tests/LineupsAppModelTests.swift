@@ -136,6 +136,8 @@ final class LineupsAppModelTests: XCTestCase {
             "http://tesserae.local:8765/settings/companion"
         )
         XCTAssertEqual(model.lineups.map(\.id), ["kitchen-deck"])
+        XCTAssertTrue(model.hasReadCurrentLineups)
+        XCTAssertNil(model.lineupsReadError)
     }
 
     func testCreateAndEditLineupUpdatesLocalCollection() async throws {
@@ -277,6 +279,8 @@ final class LineupsAppModelTests: XCTestCase {
         XCTAssertEqual(model.connectionHealth, .connected)
         XCTAssertNotNil(model.activeInstance)
         XCTAssertTrue(model.lineups.isEmpty)
+        XCTAssertFalse(model.hasReadCurrentLineups)
+        XCTAssertNotNil(model.lineupsReadError)
         XCTAssertEqual(
             model.lastError,
             "This pairing does not include Lineups access. Pair again to use Lineups."
@@ -321,6 +325,78 @@ final class LineupsAppModelTests: XCTestCase {
             preview?.eTag,
             "\"dashboard-preview-\(pageID)-\(deviceID)\""
         )
+    }
+
+    func testScheduleNavigationRetainsMissingTargetCoverage() {
+        XCTAssertEqual(LineupNavigationState(targetIDs: [], current: []), .noTargets)
+        XCTAssertEqual(LineupNavigationState(targetIDs: ["a", "b"], current: []), .noReports(missing: 2))
+        let report = LineupCurrent(deviceID: "a", pageID: "weather")
+        XCTAssertEqual(LineupNavigationState(targetIDs: ["a", "b"], current: [report]), .samePage(id: "weather", missing: 1))
+        XCTAssertEqual(LineupNavigationState(targetIDs: ["a", "b", "missing"], current: [report, .init(deviceID: "b", pageID: "news")]), .mixedPages(missing: 1))
+    }
+
+    func testStepNavigationOnlySuppressesSendWhenEverySelectedTargetMatches() {
+        let current = [LineupCurrent(deviceID: "a", pageID: "weather"), LineupCurrent(deviceID: "b", pageID: "news")]
+        let partial = LineupStepNavigation(pageID: "weather", targetIDs: ["a", "b"], current: current)
+        XCTAssertEqual(partial.matchingTargetIDs, ["a"])
+        XCTAssertFalse(partial.allSelectedTargetsMatch)
+        XCTAssertTrue(LineupStepNavigation(pageID: "weather", targetIDs: ["a"], current: current).allSelectedTargetsMatch)
+        XCTAssertFalse(LineupStepNavigation(pageID: "weather", targetIDs: [], current: current).allSelectedTargetsMatch)
+    }
+
+    func testPlannedUpdatesRequireExactDisplayLineupAndDashboardEvidence() async throws {
+        let model = makeAppModel()
+        await model.connectDemo()
+        let display = try XCTUnwrap(model.displays.first)
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let valid = DeviceUpcomingEvent(id: "right", scheduledAt: now.addingTimeInterval(60), cause: .cycle, effect: .changeScreen, certainty: .conditional, lineupID: "lineup", dashboardID: "page")
+        let other = DeviceUpcomingEvent(id: "wrong", scheduledAt: now.addingTimeInterval(30), cause: .daily, effect: .changeScreen, certainty: .scheduled, lineupID: "other", dashboardID: "page")
+        let beforeProjection = DeviceUpcomingEvent(id: "before", scheduledAt: now.addingTimeInterval(-30), cause: .daily, effect: .changeScreen, certainty: .scheduled, lineupID: "lineup", dashboardID: "page")
+        let afterHorizon = DeviceUpcomingEvent(id: "after", scheduledAt: now.addingTimeInterval(3601), cause: .daily, effect: .changeScreen, certainty: .scheduled, lineupID: "lineup", dashboardID: "page")
+        let response = DeviceUpcomingResponse(deviceID: display.id, generatedAt: now, timezone: "Asia/Shanghai", throughAt: now.addingTimeInterval(3600), events: [other, valid, beforeProjection, afterHorizon])
+        let plans = displayPlanProjections(deviceIDs: [display.id, "missing"], displays: model.displays, supported: true, responses: [display.id: response], refreshing: [], errors: [:], lineupID: "lineup", now: now)
+        XCTAssertEqual(plans.count, 2)
+        XCTAssertEqual(plans[0].next?.event, valid)
+        XCTAssertEqual(plans[0].events.map(\.event.id), ["right"])
+        XCTAssertEqual(plans[0].next?.displayID, display.id)
+        XCTAssertEqual(plans[0].next?.generatedAt, now)
+        XCTAssertEqual(plans[1].availability, .unavailable)
+        let mismatched = DeviceUpcomingResponse(deviceID: "another-display", generatedAt: now, timezone: "UTC", throughAt: now.addingTimeInterval(3600), events: [valid])
+        let rejected = displayPlanProjections(deviceIDs: [display.id], displays: model.displays, supported: true, responses: [display.id: mismatched], refreshing: [], errors: [:], lineupID: "lineup", now: now)
+        XCTAssertNil(rejected[0].next)
+        XCTAssertNil(rejected[0].response)
+        let noMatch = displayPlanProjections(deviceIDs: [display.id], displays: model.displays, supported: true, responses: [display.id: response], refreshing: [], errors: [:], lineupID: "absent", now: now)
+        XCTAssertEqual(noMatch[0].availability, .available)
+        XCTAssertTrue(noMatch[0].events.isEmpty)
+    }
+
+    func testCachedPlanKeepsErrorAndExpiryNeverPromisesFutureUpdates() async throws {
+        let model = makeAppModel()
+        await model.connectDemo()
+        let display = try XCTUnwrap(model.displays.first)
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let event = DeviceUpcomingEvent(id: "cached", scheduledAt: now.addingTimeInterval(60), cause: .interval, effect: .refreshScreen, certainty: .estimated)
+        let response = DeviceUpcomingResponse(deviceID: display.id, generatedAt: now.addingTimeInterval(-60), timezone: "UTC", throughAt: now.addingTimeInterval(120), events: [event])
+        func project(at date: Date, supported: Bool = true) -> DisplayPlanProjection {
+            displayPlanProjections(deviceIDs: [display.id], displays: model.displays, supported: supported, responses: [display.id: response], refreshing: [display.id], errors: [display.id: "Refresh failed"], now: date)[0]
+        }
+        XCTAssertEqual(project(at: now).error, "Refresh failed")
+        XCTAssertEqual(project(at: now).next?.event, event)
+        XCTAssertTrue(project(at: now).isRefreshing)
+        XCTAssertNil(project(at: now.addingTimeInterval(70)).next)
+        XCTAssertEqual(project(at: now.addingTimeInterval(121)).availability, .expired)
+        XCTAssertNil(project(at: now.addingTimeInterval(121)).next)
+        XCTAssertEqual(project(at: now, supported: false).availability, .unsupported)
+        XCTAssertNil(project(at: now, supported: false).next)
+    }
+
+    func testPlannedTimeUsesProjectionTimezoneAcrossMidnight() {
+        let utc = ISO8601DateFormatter().date(from: "2026-11-02T23:30:00Z")!
+        let event = DeviceUpcomingEvent(id: "timezone", scheduledAt: utc, cause: .daily, effect: .changeScreen, certainty: .scheduled)
+        let context = PlannedDisplayEvent(displayID: "a", displayName: "A", event: event, generatedAt: utc, throughAt: utc.addingTimeInterval(3600), timezone: "Asia/Shanghai")
+        let formatted = plannedEventTime(context)
+        XCTAssertTrue(formatted.contains("07:30") || formatted.contains("7:30"), formatted)
+        XCTAssertFalse(formatted.contains("23:30"), formatted)
     }
 
     private func makeAppModel(

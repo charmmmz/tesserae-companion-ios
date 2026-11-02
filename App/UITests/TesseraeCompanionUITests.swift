@@ -508,7 +508,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         display.tap()
         // The full MAC associates the BLE record without opening the advanced picker.
         XCTAssertFalse(app.buttons["bluetooth-record-link-picpak-kitchen"].exists)
-        XCTAssertTrue(app.staticTexts["Current Screen"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Last Bluetooth Send"].waitForExistence(timeout: 3))
         XCTAssertFalse(app.staticTexts["Mode Confirmed"].exists)
         XCTAssertFalse(app.staticTexts["Last Bluetooth Battery"].exists)
         XCTAssertFalse(app.staticTexts["Bluetooth Record"].exists)
@@ -1401,7 +1401,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         let displaysBack = app.navigationBars["Kitchen"].buttons["Displays"]
         XCTAssertTrue(displaysBack.exists || kitchenCard.isHittable)
         XCTAssertFalse(app.navigationBars["Kitchen"].buttons["Close"].exists)
-        XCTAssertTrue(app.staticTexts["Current Screen"].exists)
+        XCTAssertTrue(app.staticTexts["Server preview"].exists)
         XCTAssertFalse(
             app.descendants(matching: .any)[
                 "display-pending-status-picpak-kitchen"
@@ -1414,14 +1414,8 @@ final class TesseraeCompanionUITests: XCTestCase {
             ],
             hasAspectRatio: 800.0 / 480.0
         )
-        let screenCarousel = app.descendants(matching: .any)[
-            "display-screen-carousel-picpak-kitchen"
-        ]
-        XCTAssertTrue(screenCarousel.exists)
-        screenCarousel.swipeLeft()
-        XCTAssertTrue(
-            app.staticTexts["Next Screen"].waitForExistence(timeout: 2)
-        )
+        XCTAssertTrue(app.descendants(matching: .any)["display-evidence-picpak-kitchen"].exists)
+        XCTAssertTrue(app.staticTexts["Queued frame"].waitForExistence(timeout: 2))
         assertPreview(
             app.descendants(matching: .any)[
                 "display-detail-pending-preview-picpak-kitchen"
@@ -1778,10 +1772,10 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(detailNavigation.waitForExistence(timeout: 2))
         XCTAssertFalse(detailNavigation.buttons["Close"].exists)
         XCTAssertTrue(detailNavigation.buttons["Displays"].exists)
-        XCTAssertTrue(app.staticTexts["Current Screen"].exists)
+        XCTAssertTrue(app.staticTexts["Server preview"].exists)
         XCTAssertTrue(
             app.descendants(matching: .any)[
-                "display-screen-page-indicator-picpak-kitchen"
+                "display-queued-frame-picpak-kitchen"
             ].exists
         )
         XCTAssertTrue(app.staticTexts["Connection & Power"].exists)
@@ -1883,7 +1877,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertEqual(lower.frame.minX, upper.frame.minX, accuracy: 1)
         XCTAssertTrue(lower.isHittable, "Dropping a display must leave its card in the list.")
         XCTAssertTrue(upper.isHittable)
-        XCTAssertFalse(app.staticTexts["Current Screen"].exists)
+        XCTAssertFalse(app.staticTexts["Server preview"].exists)
 
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "Reordered Display Cards"
@@ -1920,7 +1914,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(kitchen.isHittable, "Releasing a recognized long press must not open details.")
         XCTAssertTrue(desk.isHittable)
         XCTAssertEqual(kitchen.value as? String, originalPosition)
-        XCTAssertFalse(app.staticTexts["Current Screen"].exists)
+        XCTAssertFalse(app.staticTexts["Server preview"].exists)
 
         kitchen.tap()
         XCTAssertTrue(app.buttons["display-device-details-picpak-kitchen"].waitForExistence(timeout: 3))
@@ -2997,7 +2991,7 @@ final class TesseraeCompanionUITests: XCTestCase {
             .matching(
                 NSPredicate(
                     format: "label BEGINSWITH %@",
-                    "Last-served device preview"
+                    "Server preview"
                 )
             )
             .firstMatch

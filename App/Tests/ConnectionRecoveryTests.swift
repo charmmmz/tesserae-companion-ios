@@ -290,6 +290,34 @@ struct ServerSessionIsolationTests {
         #expect(await fixture.transport.requestCount == 1)
     }
 
+    @Test("A late same-instance planned update cannot overwrite or clear a new request", arguments: [false, true])
+    func oldUpcomingResponse(rejectsWithError: Bool) async throws {
+        let now = Date()
+        let old = DeviceUpcomingResponse(deviceID: "picpak-kitchen", generatedAt: now, timezone: "UTC", throughAt: now.addingTimeInterval(3600), events: [
+            .init(id: "obsolete", scheduledAt: now.addingTimeInterval(60), cause: .daily, effect: .changeScreen, certainty: .scheduled)
+        ])
+        let response = rejectsWithError
+            ? TesseraeHTTPResponse(data: Data(), statusCode: 500)
+            : TesseraeHTTPResponse(data: try TesseraeJSON.encoder().encode(old), statusCode: 200)
+        let fixture = try await makeFixture(response: response)
+        let model = fixture.model
+        let instance = model.activeInstance!
+        model.activeInstance = TesseraeInstance(id: "demo-home", name: instance.name, baseURL: instance.baseURL, serverVersion: instance.serverVersion, timezone: instance.timezone, webURL: instance.webURL)
+        await fixture.credentials.save(token: "old-token", for: "demo-home")
+        let request = Task { await model.refreshDeviceUpcoming(displayID: "picpak-kitchen") }
+        await fixture.transport.gate.waitUntilStarted()
+        await model.connectDemo()
+        #expect(model.activeInstance?.id == "demo-home")
+        let expected = model.deviceUpcomingResponses
+        model.loadingDeviceTimelineIDs.insert("picpak-kitchen")
+        model.deviceTimelineErrors["picpak-kitchen"] = "New request status"
+        await fixture.transport.gate.release()
+        await request.value
+        #expect(model.deviceUpcomingResponses == expected)
+        #expect(model.loadingDeviceTimelineIDs.contains("picpak-kitchen"))
+        #expect(model.deviceTimelineErrors["picpak-kitchen"] == "New request status")
+    }
+
     @Test("Late photo and link errors cannot revoke a new server", arguments: ["photo", "webpage"])
     func oldSendUnauthorized(kind: String) async throws {
         let fixture = try await makeFixture(response: .init(data: Data(), statusCode: 401))

@@ -181,6 +181,16 @@ final class AppModel {
     var deviceUpcomingResponses: [String: DeviceUpcomingResponse] = [:]
     var loadingDeviceTimelineIDs: Set<String> = []
     var deviceTimelineErrors: [String: String] = [:]
+    private var deviceUpcomingRequestIDs: [String: UUID] = [:]
+    private var lineupsReadStatus: (revision: UUID, error: String?)?
+
+    var hasReadCurrentLineups: Bool {
+        lineupsReadStatus?.revision == connectionRevision && lineupsReadStatus?.error == nil
+    }
+
+    var lineupsReadError: String? {
+        lineupsReadStatus?.revision == connectionRevision ? lineupsReadStatus?.error : nil
+    }
     private var dashboardPreviews: [DashboardPreviewKey: PreviewImageState] = [:]
     var previewGeneration = 0
     var displayPreviewGeneration = 0
@@ -670,8 +680,10 @@ final class AppModel {
                     )
                     try checkConnectionRevision(revision)
                     lineups = refreshedLineups
+                    lineupsReadStatus = (revision, nil)
                 } catch let error as TesseraeClientError {
                     try checkConnectionRevision(revision)
+                    lineupsReadStatus = (revision, String(localized: "Lineups are unavailable. Pull to refresh."))
                     guard case .forbidden = error else { throw error }
                     lineups = []
                     if showErrors {
@@ -834,9 +846,17 @@ final class AppModel {
             return
         }
 
+        let revision = connectionRevision
+        let requestID = UUID()
+        deviceUpcomingRequestIDs[displayID] = requestID
         loadingDeviceTimelineIDs.insert(displayID)
         deviceTimelineErrors[displayID] = nil
-        defer { loadingDeviceTimelineIDs.remove(displayID) }
+        defer {
+            if connectionRevision == revision, deviceUpcomingRequestIDs[displayID] == requestID {
+                loadingDeviceTimelineIDs.remove(displayID)
+                deviceUpcomingRequestIDs[displayID] = nil
+            }
+        }
 
         let hours = min(
             24,
@@ -854,13 +874,19 @@ final class AppModel {
                 limit: limit,
                 instance: currentInstance
             )
-            guard activeInstance?.id == currentInstance.id else { return }
+            guard connectionRevision == revision, !Task.isCancelled,
+                  deviceUpcomingRequestIDs[displayID] == requestID else { return }
+            guard response.deviceID == displayID else {
+                deviceTimelineErrors[displayID] = String(localized: "Scheduled updates are unavailable.")
+                return
+            }
             deviceUpcomingResponses[displayID] = response
             deviceTimelineErrors[displayID] = nil
         } catch is CancellationError {
             return
         } catch let error as TesseraeClientError {
-            guard activeInstance?.id == currentInstance.id else { return }
+            guard connectionRevision == revision, !Task.isCancelled,
+                  deviceUpcomingRequestIDs[displayID] == requestID else { return }
             if case .forbidden = error {
                 deviceTimelineErrors[displayID] = String(
                     localized: "Pair again to view scheduled updates."
@@ -874,7 +900,8 @@ final class AppModel {
                 await presentOperationError(error)
             }
         } catch {
-            guard activeInstance?.id == currentInstance.id else { return }
+            guard connectionRevision == revision, !Task.isCancelled,
+                  deviceUpcomingRequestIDs[displayID] == requestID else { return }
             deviceTimelineErrors[displayID] = String(
                 localized: "Scheduled updates are unavailable."
             )
@@ -886,6 +913,7 @@ final class AppModel {
 
     private func refreshDeviceUpcomingIfSupported(deviceIDs: [String]) async {
         for deviceID in deviceIDs {
+            guard !Task.isCancelled else { return }
             await refreshDeviceUpcoming(displayID: deviceID)
         }
     }
@@ -1113,6 +1141,7 @@ final class AppModel {
             }
 
             lineups = refreshedLineups
+            lineupsReadStatus = (revision, nil)
             connectionHealth = .connected
             connectionNotice = nil
             await refreshLineupAuthoringPermission(showErrors: false)
@@ -1124,6 +1153,7 @@ final class AppModel {
             return
         } catch let error as TesseraeClientError {
             guard connectionRevision == revision, !Task.isCancelled else { return }
+            lineupsReadStatus = (revision, String(localized: "Lineups are unavailable. Pull to refresh."))
             if case .forbidden = error {
                 connectionHealth = .connected
                 connectionNotice = nil
@@ -1141,6 +1171,7 @@ final class AppModel {
             }
         } catch {
             guard connectionRevision == revision, !Task.isCancelled else { return }
+            lineupsReadStatus = (revision, String(localized: "Lineups are unavailable. Pull to refresh."))
             if showErrors {
                 connectionHealth = .offline
                 connectionNotice = error.localizedDescription

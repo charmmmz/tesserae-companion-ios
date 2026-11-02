@@ -253,7 +253,7 @@ final class AdaptiveLayoutUITests: XCTestCase {
         capture("Display detail portrait", app: app)
         XCUIDevice.shared.orientation = .landscapeLeft
         XCTAssertTrue(app.navigationBars["Kitchen"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Current Screen"].exists)
+        XCTAssertTrue(app.staticTexts["Server preview"].exists)
         XCTAssertEqual(app.buttons.matching(identifier: "root-send-action").count, 1)
         XCTAssertTrue(send.isHittable)
         XCTAssertGreaterThan(send.frame.minX, app.frame.midX)

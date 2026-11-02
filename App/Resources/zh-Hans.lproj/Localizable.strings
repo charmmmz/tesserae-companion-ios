@@ -965,3 +965,55 @@
 "Enter a latitude from −90 to 90, a longitude from −180 to 180, and a valid time zone or leave it empty." = "请输入 −90 至 90 的纬度、−180 至 180 的经度，以及有效时区；时区也可以留空。";
 
 "Some changes are hidden by the current options. Show those settings to save them, or discard changes when leaving." = "部分修改被当前选项隐藏。请显示相应设置后保存，或在离开时放弃修改。";
+"Search displays and Lineups" = "搜索显示屏和 Lineup";
+"Expand or collapse %@" = "展开或收起%@";
+"Schedule step: %@" = "计划步骤：%@";
+"%lld targets not reported" = "%lld 个目标未报告";
+"Schedule step not reported" = "未报告计划步骤";
+"Different schedule steps" = "计划步骤不同";
+"Planned updates are not supported by this server." = "此服务器不支持计划更新。";
+"Planned updates not loaded" = "尚未载入计划更新";
+"Previous projection has expired" = "上次计划已过期";
+"No matching update within the projection" = "已返回的计划范围内没有匹配更新";
+"Next planned update" = "下一次计划更新";
+"Previous projection · Refresh failed" = "上次计划 · 刷新失败";
+"Other targets: %lld. Open details for each display." = "另有 %lld 个目标，请查看各显示屏详情。";
+"%lld targets · Open details for each display." = "%lld 个目标 · 请查看各显示屏详情。";
+"Steps" = "播放步骤";
+"%lld steps" = "%lld 个步骤";
+"Schedule state does not confirm the screen currently displayed." = "以上为播放计划，不代表屏幕当前已显示。";
+"Schedule step" = "计划步骤";
+"%@ is a schedule step" = "%@是计划步骤";
+"Send %@" = "发送%@";
+"Display previews & updates" = "显示屏画面与更新";
+"Projection generated %@ · Through %@" = "计划生成于 %@ · 截止 %@";
+"Refreshing…" = "正在刷新…";
+"Select one display for step previews" = "选择一台显示屏以预览步骤";
+"Selected schedule step" = "已选计划步骤";
+"Server preview" = "服务器预览";
+"Server preview for %@" = "%@的服务器预览";
+"Saved from a local Bluetooth Send." = "保存在本机的蓝牙发送画面。";
+"The latest preview available from the server." = "服务器提供的最近预览。";
+"Screen appearance is not confirmed." = "屏幕当前显示尚未确认。";
+"Queued frame" = "已排队画面";
+"Waiting for device collection; timing is unknown." = "等待设备领取，时间尚不确定。";
+"Lineups for this display" = "此屏幕的 Lineup";
+"No Lineups assigned" = "未分配 Lineup";
+"Lineups are not supported by this server." = "此服务器不支持 Lineup。";
+"Display Unavailable" = "显示屏不可用";
+"This display is no longer returned by the server." = "服务器不再返回此显示屏。";
+"Planned dashboard preview" = "计划仪表盘预览";
+
+"%lld targets lack a current projection" = "%lld 个目标没有当前计划";
+
+"Local Send record · %@" = "本机发送记录 · %@";
+"Last served or published · %@" = "最近提供或发布于 · %@";
+"Rendered · %@" = "渲染于 · %@";
+"A frame is queued. Device collection and screen appearance are not confirmed." = "有画面已排队，尚未确认设备领取或屏幕显示。";
+
+"Daily at %@" = "每天 %@";
+"Every %lld min" = "每 %lld 分钟";
+"Lineups are unavailable. Pull to refresh." = "Lineup 暂不可用，请下拉刷新。";
+"Lineups not loaded" = "尚未载入 Lineup";
+
+"Schedule step for %@" = "%@的计划步骤";

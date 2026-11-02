@@ -100,6 +100,7 @@
 		ADE2EF08AEC3F760A31BA858 /* Phosphor.ttf in Resources */ = {isa = PBXBuildFile; fileRef = CB98E98A7C6727AE8FE4694E /* Phosphor.ttf */; };
 		B3B4F023539326701EB077DF /* LineupsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCAC4A35BBC2B83469A3411C /* LineupsUITests.swift */; };
 		B42F3D17F6A2C9D863A072B9 /* BluetoothShareSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F5E8EDAA49826101FE30209 /* BluetoothShareSession.swift */; };
+		B57B5DB0F7EB3CC6E968FA6F /* LineupPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34D0FE206E866226FC84C054 /* LineupPresentation.swift */; };
 		B59A3E292E2838C80056E576 /* BLESetupProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68AB5B0479A37A3F55286299 /* BLESetupProtocol.swift */; };
 		B70394B493B56F40CF840CA5 /* DashboardSettingChoicesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB7F1822FF079CC4AABFAFD /* DashboardSettingChoicesView.swift */; };
 		B77A29D5903251374F98C622 /* ActivityJobExpiryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99F8FB591FB5C627BC90D186 /* ActivityJobExpiryTests.swift */; };
@@ -201,6 +202,7 @@
 		2F71FB166C88F622C1873E39 /* SendView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendView.swift; sourceTree = "<group>"; };
 		30CBA6B44083893EBB93FB17 /* LineupsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineupsView.swift; sourceTree = "<group>"; };
 		348EE5DFDB46CEDFD1DBFFEE /* DashboardSettingsAppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardSettingsAppModelTests.swift; sourceTree = "<group>"; };
+		34D0FE206E866226FC84C054 /* LineupPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineupPresentation.swift; sourceTree = "<group>"; };
 		36574431BF8F9CAB78DF3088 /* DisplayHardwareBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayHardwareBadge.swift; sourceTree = "<group>"; };
 		392FCC1E3CDA7DF07E4B4444 /* DashboardComponentSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardComponentSettingsView.swift; sourceTree = "<group>"; };
 		3A4080F0A169BC5BCBF484AC /* PicPakPhotoEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PicPakPhotoEncoder.swift; sourceTree = "<group>"; };
@@ -426,6 +428,7 @@
 			children = (
 				6DABD7AC708239FDC0621487 /* AppConfiguration.swift */,
 				B285D6042818DD9ECF798800 /* AppModel.swift */,
+				34D0FE206E866226FC84C054 /* LineupPresentation.swift */,
 				4F548F3379CFFB93726CD704 /* MainTabView.swift */,
 				61AF530D779237A174E117C6 /* PreviewArtwork.swift */,
 				6BD9BF482144BDCB753B7EF6 /* PreviewImageState.swift */,
@@ -812,6 +815,7 @@
 				051FA9AC56224C1C635989B5 /* HealthBridge.swift in Sources */,
 				04A46CDAB31BFFD156EF06C1 /* HealthBridgeView.swift in Sources */,
 				38605E56F3B8C7C1F8A4B499 /* LineupEditorView.swift in Sources */,
+				B57B5DB0F7EB3CC6E968FA6F /* LineupPresentation.swift in Sources */,
 				0C0D109EF327D44C0755AC62 /* LineupsView.swift in Sources */,
 				46A5F3DD86C95C5254635D25 /* LocalBluetoothPhotoRenderer.swift in Sources */,
 				6934735274B0175C7C2D2AF8 /* MainTabView.swift in Sources */,
