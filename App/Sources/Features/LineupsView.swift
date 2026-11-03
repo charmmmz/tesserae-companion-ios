@@ -94,9 +94,21 @@ struct LineupsView: View {
 
     var body: some View {
         let listSections = sections
+        let deviceIDs = Set(model.lineups.flatMap { displayDeviceIDs(for: $0) })
+        let responses = model.deviceUpcomingResponses.filter { $0.key == $0.value.deviceID && deviceIDs.contains($0.key) }
+            .sorted { $0.key < $1.key }.map(\.value)
+        let timezone = effectiveServerTimezone(model.activeInstance?.timezone, fallbackID: responses.first { TimeZone(identifier: $0.timezone) != nil }?.timezone)
+        let now = Date()
+        let dates = [now] + responses.flatMap { response in
+            response.events.filter { $0.scheduledAt > now && $0.scheduledAt >= response.generatedAt && $0.scheduledAt <= response.throughAt }.map(\.scheduledAt)
+        }
 
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
+                if serverTimezoneDiffers(timezone, at: dates) {
+                    Text("Times use \(timezone.identifier)")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 ForEach(listSections) { section in
                     VStack(alignment: .leading, spacing: 10) {
                         sectionHeader(section)
@@ -115,7 +127,8 @@ struct LineupsView: View {
                                         NavigationLink(value: LineupRoute.lineup(id: lineup.id, displayID: section.displayID)) {
                                             LineupListRow(
                                                 lineup: lineup,
-                                                plans: plans(for: lineup)
+                                                plans: plans(for: lineup),
+                                                timezoneID: timezone.identifier
                                             )
                                         }
                                         .buttonStyle(.plain)
@@ -403,6 +416,8 @@ private struct LineupListSection: Identifiable {
 struct LineupListRow: View {
     let lineup: Lineup
     let plans: [DisplayPlanProjection]
+    var showsPlan = true
+    var timezoneID: String? = nil
 
     var body: some View {
         HStack(spacing: 10) {
@@ -420,7 +435,7 @@ struct LineupListRow: View {
                 }
                 Text([lineupScheduleSummary(lineup), lineupDaysSummary(lineup.daysOfWeek)].compactMap { $0 }.joined(separator: " · "))
                     .font(.caption).foregroundStyle(.secondary)
-                CompactLineupPlanSummary(plans: plans)
+                if showsPlan { CompactLineupPlanSummary(plans: plans, timezoneID: timezoneID) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Image(systemName: "chevron.right")
@@ -443,6 +458,7 @@ struct LineupListRow: View {
 
 struct CompactLineupPlanSummary: View {
     let plans: [DisplayPlanProjection]
+    var timezoneID: String? = nil
 
     private var earliest: PlannedDisplayEvent? {
         plans.compactMap(\.next).min { $0.event.scheduledAt < $1.event.scheduledAt }
@@ -451,7 +467,7 @@ struct CompactLineupPlanSummary: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             if let next = earliest, let plan = plans.first(where: { $0.id == next.displayID }) {
-                Text(String(localized: "Next planned update") + " · " + (plans.count > 1 ? plan.displayName + " · " : "") + plannedEventTime(next) + " · " + plannedCertaintyTitle(next.event.certainty))
+                Text(String(localized: "Next planned update") + " · " + (plans.count > 1 ? plan.displayName + " · " : "") + compactProjectionDateText(next.event.scheduledAt, timezone: effectiveServerTimezone(timezoneID, fallbackID: next.timezone).identifier) + " · " + plannedCertaintyTitle(next.event.certainty))
                     .foregroundStyle(TesseraeTheme.info)
                 if plan.error != nil { Text("Previous projection · Refresh failed").foregroundStyle(.secondary) }
                 if plans.count > 1 {
@@ -533,7 +549,9 @@ struct LineupDetailView: View {
 
                         secondaryDetailsCard(lineup)
                     }
+                    .frame(maxWidth: 720)
                     .padding(16)
+                    .frame(maxWidth: .infinity)
                 }
                 .refreshable {
                     await refreshDetail()
@@ -695,31 +713,53 @@ struct LineupDetailView: View {
         }
     }
 
+    private var lineupTimezone: TimeZone {
+        let deviceIDs = Set(lineup.map { displayDeviceIDs(for: $0) } ?? [])
+        let fallback = model.deviceUpcomingResponses.filter { $0.key == $0.value.deviceID && deviceIDs.contains($0.key) }
+            .sorted { $0.key < $1.key }.map(\.value).first { TimeZone(identifier: $0.timezone) != nil }?.timezone
+        return effectiveServerTimezone(model.activeInstance?.timezone, fallbackID: fallback)
+    }
+
     private func scheduleCard(_ lineup: Lineup) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Label(lineupScheduleSummary(lineup), systemImage: "clock")
                     .font(.headline)
                 Spacer(minLength: 4)
-                if let end = lineup.endAt { Text(end).font(.caption).foregroundStyle(.secondary) }
             }
-            if let days = lineup.daysOfWeek {
-                HStack(spacing: 4) {
-                    ForEach(0..<7, id: \.self) { day in
-                        Text(weekdayName(day))
-                            .font(.caption.weight(.medium))
-                            .frame(maxWidth: .infinity, minHeight: 30)
-                            .foregroundStyle(days.contains(day) ? TesseraeTheme.accent : Color.secondary)
-                            .background(days.contains(day) ? TesseraeTheme.accent.opacity(0.1) : Color.secondary.opacity(0.05), in: Capsule())
-                            .accessibilityLabel(weekdayName(day) + " · " + (days.contains(day) ? String(localized: "Enabled") : String(localized: "Disabled")))
+            if let days = lineupDaysSummary(lineup.daysOfWeek) {
+                Text(days).font(.caption).foregroundStyle(.secondary)
+            }
+            if serverTimezoneDiffers(lineupTimezone, at: [planNow] + detailPlans(lineup).flatMap { $0.futureEvents.map(\.event.scheduledAt) }) {
+                Text("Times use \(lineupTimezone.identifier)")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("lineup-timezone-note")
+            }
+            TimelineView(.periodic(from: .now, by: 60)) { context in
+                if let window = ScheduleTimeWindow.active(for: lineup, timezoneID: model.activeInstance?.timezone, now: context.date) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack {
+                            Text("Schedule time")
+                            Spacer()
+                            Text(window.timeText(context.date)).monospacedDigit()
+                        }
+                        .font(.caption).foregroundStyle(.secondary)
+                        ProgressView(value: window.fractionElapsed(at: context.date))
+                            .tint(TesseraeTheme.accent)
+                            .accessibilityLabel("Schedule time")
+                            .accessibilityValue(window.timeText(context.date) + " / " + window.timeText(window.start) + "–" + window.timeText(window.end))
+                            .accessibilityIdentifier("lineup-schedule-time")
+                        HStack {
+                            Text(window.timeText(window.start))
+                            Spacer()
+                            Text(window.timeText(window.end))
+                        }
+                        .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
                     }
                 }
-                .accessibilityIdentifier("lineup-weekdays")
             }
-            Text([lineupDaysSummary(lineup.daysOfWeek), model.activeInstance?.timezone].compactMap { $0 }.joined(separator: " · "))
-                .font(.caption).foregroundStyle(.secondary)
             ForEach(detailPlans(lineup)) { plan in
-                DisplayPlanSummary(plan: plan, showsDisplayName: true)
+                DisplayPlanSummary(plan: plan, showsDisplayName: true, compact: true, timezoneID: lineupTimezone.identifier)
             }
             if presentationDeviceIDs(for: lineup).isEmpty {
                 Text("Select a target").font(.caption).foregroundStyle(.secondary)
@@ -728,17 +768,12 @@ struct LineupDetailView: View {
         .tesseraeCard()
     }
 
-    private func weekdayName(_ day: Int) -> String {
-        [String(localized: "Mon"), String(localized: "Tue"), String(localized: "Wed"),
-         String(localized: "Thu"), String(localized: "Fri"), String(localized: "Sat"), String(localized: "Sun")][day]
-    }
-
     private func stepPlanTimes(_ dashboard: LineupDashboard, lineup: Lineup) -> some View {
         let plans = detailPlans(lineup)
         return VStack(alignment: .leading, spacing: 3) {
             ForEach(plans) { plan in
                 if let event = plan.events.first(where: { $0.event.dashboardID == dashboard.pageID && $0.event.scheduledAt > plan.now }), plan.availability == .available {
-                    Text((plans.count > 1 ? plan.displayName + " · " : "") + plannedEventTime(event) + " · " + plannedCertaintyTitle(event.event.certainty))
+                    Text(([plans.count > 1 ? plan.displayName : nil, compactProjectionDateText(event.event.scheduledAt, timezone: lineupTimezone.identifier), event.event.certainty != .scheduled ? plannedCertaintyTitle(event.event.certainty) : nil].compactMap { $0 }).joined(separator: " · "))
                         .font(.caption2).foregroundStyle(TesseraeTheme.info)
                     if plan.error != nil { Text("Previous projection · Refresh failed").font(.caption2).foregroundStyle(.secondary) }
                 }
@@ -850,8 +885,6 @@ struct LineupDetailView: View {
             Text(LineupNavigationState(targetIDs: presentationDeviceIDs(for: lineup), current: lineup.current).title(dashboards: lineup.dashboards))
                 .font(.caption).foregroundStyle(.secondary)
                 .accessibilityIdentifier("lineup-playback-status")
-            Text("Schedule state does not confirm the screen currently displayed.")
-                .font(.caption2).foregroundStyle(.secondary)
         }
     }
 
@@ -865,70 +898,66 @@ struct LineupDetailView: View {
         let isCurrent = !navigation.matchingTargetIDs.isEmpty
         let isOperating = model.isOperatingOnLineup(lineup.id)
 
-        return HStack(alignment: .center, spacing: 11) {
-            Button {
-                dashboardToPreview = LineupDashboardPlayContext(
-                    lineupID: lineup.id,
-                    dashboard: dashboard
-                )
-            } label: {
-                HStack(alignment: .center, spacing: 11) {
-                    Text("\(position)")
-                        .font(.caption.monospacedDigit().weight(.semibold))
-                        .foregroundStyle(
-                            isCurrent ? Color.white : Color.secondary
-                        )
-                        .frame(width: positionBadgeSize, height: positionBadgeSize)
-                        .background(
-                            isCurrent
-                                ? TesseraeTheme.accentFill
-                                : Color.primary.opacity(0.055),
-                            in: Circle()
-                        )
+        return detailLayout {
+            HStack(alignment: .center, spacing: 11) {
+                Text("\(position)")
+                    .font(.caption.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(
+                        isCurrent ? Color.white : Color.secondary
+                    )
+                    .frame(width: positionBadgeSize, height: positionBadgeSize)
+                    .background(
+                        isCurrent
+                            ? TesseraeTheme.accentFill
+                            : Color.primary.opacity(0.055),
+                        in: Circle()
+                    )
 
+                Button {
+                    dashboardToPreview = LineupDashboardPlayContext(lineupID: lineup.id, dashboard: dashboard)
+                } label: {
                     LineupStepThumbnail(dashboard: dashboard, display: thumbnailDisplay(for: lineup))
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(dashboard.missing)
+                .accessibilityLabel("Preview \(dashboard.name)")
+                .accessibilityIdentifier("lineup-dashboard-\(dashboard.pageID)")
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        if isCurrent {
-                            Text(navigation.allSelectedTargetsMatch ? String(localized: "Schedule step") : String(localized: "Schedule step for \(displayNames(navigation.matchingTargetIDs.sorted()))"))
-                                .font(.caption2.weight(.medium)).foregroundStyle(TesseraeTheme.accent)
-                        }
-                        HStack(spacing: 6) {
-                            Text(dashboard.name)
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(
-                                    dashboard.missing ? .secondary : .primary
-                                )
+                VStack(alignment: .leading, spacing: 4) {
+                    if isCurrent && !navigation.allSelectedTargetsMatch {
+                        Text(String(localized: "Schedule step for \(displayNames(navigation.matchingTargetIDs.sorted()))"))
+                            .font(.caption2.weight(.medium)).foregroundStyle(TesseraeTheme.accent)
+                    }
+                    HStack(spacing: 6) {
+                        Text(dashboard.name)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(
+                                dashboard.missing ? .secondary : .primary
+                            )
 
-                            if dashboard.missing {
-                                Text("Missing")
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(TesseraeTheme.danger)
-                            }
+                        if dashboard.missing {
+                            Text("Missing")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(TesseraeTheme.danger)
                         }
-
-                        if let metadata = dashboardMetadata(
-                            dashboard,
-                            lineup: lineup
-                        ) {
-                            Text(metadata)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        stepPlanTimes(dashboard, lineup: lineup)
                     }
 
-                    Spacer(minLength: 4)
+                    if let metadata = dashboardMetadata(
+                        dashboard,
+                        lineup: lineup
+                    ) {
+                        Text(metadata)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    stepPlanTimes(dashboard, lineup: lineup)
                 }
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
+
+                Spacer(minLength: 4)
             }
-            .buttonStyle(.plain)
-            .disabled(dashboard.missing)
-            .accessibilityLabel("Preview \(dashboard.name)")
-            .accessibilityIdentifier(
-                "lineup-dashboard-\(dashboard.pageID)"
-            )
+            .frame(minHeight: 44)
 
             if model.supportsLineupControl {
                 if navigation.allSelectedTargetsMatch {
@@ -1048,7 +1077,7 @@ struct LineupDetailView: View {
         VStack(alignment: .leading, spacing: 0) {
             targetRow(lineup)
 
-            if hasBehaviorDetails(lineup) {
+            Group {
                 Divider()
                     .padding(.vertical, 12)
 
@@ -1083,6 +1112,16 @@ struct LineupDetailView: View {
                 .accessibilityIdentifier("lineup-details-disclosure")
 
                 if detailsExpanded {
+                    Text("Schedule time shows elapsed time in the configured window, not playback progress. Schedule state does not confirm the screen currently displayed.")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .padding(.top, 12)
+                    LabeledContent("Time Zone", value: lineupTimezone.identifier)
+                        .font(.caption).foregroundStyle(.secondary)
+                        .padding(.top, 10)
+                    ForEach(detailPlans(lineup)) { plan in
+                        DisplayPlanSummary(plan: plan, showsDisplayName: true, timezoneID: lineupTimezone.identifier)
+                            .padding(.top, 10)
+                    }
                     behaviorDetails(lineup)
                         .padding(.top, 14)
                 }
@@ -1328,46 +1367,6 @@ struct LineupDetailView: View {
         }
     }
 
-    private func hasBehaviorDetails(_ lineup: Lineup) -> Bool {
-        let hasCommonDetails = lineup.refreshIntervalMinutes != nil
-            || lineup.homePageID != nil
-            || (lineup.homeTimeoutMinutes ?? 0) > 0
-            || (
-                lineup.entryPageID != nil
-                    && lineup.entryPageID != lineup.dashboards.first?.pageID
-            )
-
-        switch lineup.intent {
-        case .manual:
-            return hasCommonDetails
-        case .daily:
-            return hasCommonDetails
-                || lineup.firesAt != nil
-                || lineup.daysOfWeek != nil
-                || hasScheduleConstraints(lineup)
-        case .interval:
-            return hasCommonDetails
-                || lineup.intervalMinutes != nil
-                || lineup.daysOfWeek != nil
-                || hasScheduleConstraints(lineup)
-        case .cycle:
-            return hasCommonDetails
-                || lineup.anchor != nil
-                || lineup.daysOfWeek != nil
-                || hasScheduleConstraints(lineup)
-        case nil:
-            return true
-        }
-    }
-
-    private func hasScheduleConstraints(_ lineup: Lineup) -> Bool {
-        lineup.endAt != nil
-            || lineup.windowStart != nil
-            || lineup.windowEnd != nil
-            || lineup.fallbackPageID != nil
-            || lineup.mode == .priority
-    }
-
     private func runPaintAction(
         _ action: LineupPaintAction,
         lineup: Lineup,
@@ -1555,19 +1554,30 @@ struct DisplayPlanSummary: View {
     let plan: DisplayPlanProjection
     var showsDisplayName = false
     var showsNextHeading = true
+    var compact = false
+    var timezoneID: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if showsDisplayName { Text(plan.displayName).font(.caption.weight(.semibold)) }
             if let next = plan.next {
-                Text((showsNextHeading ? String(localized: "Next planned update") + " · " : "") + plannedEventTime(next))
-                    .foregroundStyle(TesseraeTheme.info)
-                Text([next.event.dashboardName, next.event.lineupName, plannedCertaintyTitle(next.event.certainty), next.event.effect == .changeScreen ? String(localized: "Changes the screen") : String(localized: "Refreshes the current screen")].compactMap { $0 }.joined(separator: " · "))
+                if compact {
+                    Text([String(localized: "Next planned"), compactProjectionDateText(next.event.scheduledAt, timezone: timezoneID ?? next.timezone), next.event.dashboardName].compactMap { $0 }.joined(separator: " · "))
+                        .foregroundStyle(TesseraeTheme.info)
+                    if next.event.certainty != .scheduled || next.event.effect == .refreshScreen {
+                        Text([next.event.certainty != .scheduled ? plannedCertaintyTitle(next.event.certainty) : nil,
+                              next.event.effect == .refreshScreen ? String(localized: "Refreshes the current screen") : nil].compactMap { $0 }.joined(separator: " · "))
+                    }
+                } else {
+                    Text((showsNextHeading ? String(localized: "Next planned update") + " · " : "") + projectionDateText(next.event.scheduledAt, timezone: timezoneID ?? next.timezone))
+                        .foregroundStyle(TesseraeTheme.info)
+                    Text([next.event.dashboardName, next.event.lineupName, plannedCertaintyTitle(next.event.certainty), next.event.effect == .changeScreen ? String(localized: "Changes the screen") : String(localized: "Refreshes the current screen")].compactMap { $0 }.joined(separator: " · "))
+                }
             } else {
                 Text(plan.status)
             }
-            if let response = plan.response, plan.next == nil || plan.error != nil {
-                Text(String(localized: "Projection generated \(projectionDateText(response.generatedAt, timezone: response.timezone)) · Through \(projectionDateText(response.throughAt, timezone: response.timezone))"))
+            if !compact, let response = plan.response, plan.next == nil || plan.error != nil {
+                Text(String(localized: "Projection generated \(projectionDateText(response.generatedAt, timezone: timezoneID ?? response.timezone)) · Through \(projectionDateText(response.throughAt, timezone: timezoneID ?? response.timezone))"))
                     .font(.caption2)
             }
             if plan.error != nil, plan.response != nil {

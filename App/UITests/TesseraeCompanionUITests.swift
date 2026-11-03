@@ -1401,7 +1401,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         let displaysBack = app.navigationBars["Kitchen"].buttons["Displays"]
         XCTAssertTrue(displaysBack.exists || kitchenCard.isHittable)
         XCTAssertFalse(app.navigationBars["Kitchen"].buttons["Close"].exists)
-        XCTAssertTrue(app.staticTexts["Server preview"].exists)
+        XCTAssertTrue(app.staticTexts["Latest frame"].exists)
         XCTAssertFalse(
             app.descendants(matching: .any)[
                 "display-pending-status-picpak-kitchen"
@@ -1415,7 +1415,9 @@ final class TesseraeCompanionUITests: XCTestCase {
             hasAspectRatio: 800.0 / 480.0
         )
         XCTAssertTrue(app.descendants(matching: .any)["display-evidence-picpak-kitchen"].exists)
-        XCTAssertTrue(app.staticTexts["Queued frame"].waitForExistence(timeout: 2))
+        let queuedSelector = app.buttons["display-select-queued-picpak-kitchen"]
+        XCTAssertTrue(queuedSelector.waitForExistence(timeout: 2))
+        queuedSelector.tap()
         assertPreview(
             app.descendants(matching: .any)[
                 "display-detail-pending-preview-picpak-kitchen"
@@ -1751,6 +1753,107 @@ final class TesseraeCompanionUITests: XCTestCase {
         )
     }
 
+    func testDisplayPreviewPagingAndPortraitPanelEnglish() {
+        exerciseDisplayPreviewPaging(language: "en")
+    }
+
+    func testDisplayPreviewPagingAndPortraitPanelChinese() {
+        exerciseDisplayPreviewPaging(language: "zh-Hans")
+    }
+
+    func testDisplayPreviewPagingAndPortraitPanelWide() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        defer { XCUIDevice.shared.orientation = .portrait }
+        exerciseDisplayPreviewPaging(language: "en", wide: true)
+    }
+
+    private func exerciseDisplayPreviewPaging(language: String, wide: Bool = false) {
+        let app = XCUIApplication()
+        let english = language == "en"
+        func snapshot(_ name: String) {
+            let attachment = XCTAttachment(screenshot: wide ? XCUIScreen.main.screenshot() : app.screenshot())
+            attachment.name = name
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
+        app.launchArguments += ["-AppleLocale", english ? "en_GB" : "zh_CN", "-AppleLanguages", "(\(language))"]
+        app.launch()
+        let demo = app.buttons[english ? "Explore with Demo Data" : "使用演示数据体验"]
+        XCTAssertTrue(demo.waitForExistence(timeout: 5))
+        demo.tap()
+        let kitchen = app.buttons["display-card-picpak-kitchen"]
+        XCTAssertTrue(kitchen.waitForExistence(timeout: 3))
+        kitchen.tap()
+        if wide {
+            XCTAssertTrue(kitchen.isHittable, "The sidebar stays reachable beside the display detail at wide size.")
+        }
+        let recent = app.buttons["display-select-recent-picpak-kitchen"]
+        let queued = app.buttons["display-select-queued-picpak-kitchen"]
+        XCTAssertTrue(recent.waitForExistence(timeout: 3))
+        XCTAssertEqual(recent.label, english ? "Latest frame" : "最近画面")
+        XCTAssertEqual(queued.label, english ? "Queued frame" : "待更新")
+        XCTAssertTrue(recent.isSelected)
+        for selector in [recent, queued] {
+            XCTAssertGreaterThanOrEqual(selector.frame.height, 44 - 0.01)
+            XCTAssertGreaterThanOrEqual(selector.frame.width, 44 - 0.01)
+        }
+        let recentArtwork = app.descendants(matching: .any)["display-detail-preview-picpak-kitchen"].firstMatch
+        assertPreview(recentArtwork, hasAspectRatio: 800.0 / 480.0)
+        let recentSize = recentArtwork.frame.size
+        XCTAssertLessThanOrEqual(recentSize.height, 240.5)
+        snapshot("Display latest frame \(language)")
+        queued.tap()
+        XCTAssertTrue(queued.isSelected)
+        let queuedArtwork = app.descendants(matching: .any)["display-detail-pending-preview-picpak-kitchen"].firstMatch
+        assertPreview(queuedArtwork, hasAspectRatio: 800.0 / 480.0)
+        XCTAssertEqual(queuedArtwork.frame.width, recentSize.width, accuracy: 0.5)
+        XCTAssertEqual(queuedArtwork.frame.height, recentSize.height, accuracy: 0.5)
+        XCTAssertFalse(recentArtwork.isHittable)
+        snapshot("Display queued frame \(language)")
+        queuedArtwork.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["display-evidence-preview-sheet"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts[english ? "Waiting for device collection; timing is unknown." : "等待设备领取，时间尚不确定。"].exists)
+        snapshot("Queued evidence sheet \(language)")
+        app.buttons[english ? "Done" : "完成"].tap()
+        queuedArtwork.swipeRight()
+        let recentSelected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isSelected == true"), object: recent)
+        XCTAssertEqual(XCTWaiter.wait(for: [recentSelected], timeout: 3), .completed)
+        recentArtwork.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["display-evidence-preview-sheet"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.navigationBars[english ? "Server preview" : "服务器预览"].exists)
+        XCTAssertTrue(app.staticTexts[english ? "The latest preview available from the server." : "服务器提供的最近预览。"].exists)
+        snapshot("Latest evidence sheet \(language)")
+        app.buttons[english ? "Done" : "完成"].tap()
+        recentArtwork.swipeLeft()
+        let queuedSelected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isSelected == true"), object: queued)
+        XCTAssertEqual(XCTWaiter.wait(for: [queuedSelected], timeout: 3), .completed)
+        recent.tap()
+        XCTAssertTrue(recent.isSelected)
+        let plan = app.descendants(matching: .any)["display-evidence-picpak-kitchen"].firstMatch
+        XCTAssertTrue(plan.exists)
+        XCTAssertTrue(app.staticTexts[english ? "Next planned" : "下一次计划"].exists)
+        XCTAssertGreaterThan(plan.frame.minY, recentArtwork.frame.maxY)
+        let back = app.navigationBars["Kitchen"].buttons[english ? "Displays" : "显示屏"]
+        if back.exists { back.tap() }
+        let desk = app.buttons["display-card-e1004-desk"]
+        for _ in 0..<4 where !desk.isHittable { app.swipeUp() }
+        XCTAssertTrue(desk.isHittable)
+        desk.tap()
+        let portrait = app.descendants(matching: .any)["display-detail-preview-e1004-desk"].firstMatch
+        assertPreview(portrait, hasAspectRatio: 1200.0 / 1600.0)
+        XCTAssertEqual(portrait.frame.height, 240, accuracy: 0.5)
+        let portraitCard = app.descendants(matching: .any)["display-latest-frame-e1004-desk"].firstMatch
+        let portraitPlan = app.descendants(matching: .any)["display-evidence-e1004-desk"].firstMatch
+        XCTAssertTrue(portraitPlan.exists)
+        XCTAssertEqual(portraitPlan.frame.width, portraitCard.frame.width, accuracy: 0.5)
+        XCTAssertEqual(portraitPlan.frame.minX, portraitCard.frame.minX, accuracy: 0.5)
+        XCTAssertFalse(app.buttons["display-select-queued-e1004-desk"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["display-detail-pending-preview-e1004-desk"].exists)
+        snapshot("Portrait display without queue \(language)")
+    }
+
     func testDisplayDetailsOpenInNavigation() {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
@@ -1772,17 +1875,17 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(detailNavigation.waitForExistence(timeout: 2))
         XCTAssertFalse(detailNavigation.buttons["Close"].exists)
         XCTAssertTrue(detailNavigation.buttons["Displays"].exists)
-        XCTAssertTrue(app.staticTexts["Server preview"].exists)
+        XCTAssertTrue(app.staticTexts["Latest frame"].exists)
         XCTAssertTrue(
             app.descendants(matching: .any)[
-                "display-queued-frame-picpak-kitchen"
+                "display-select-queued-picpak-kitchen"
             ].exists
         )
-        XCTAssertTrue(app.staticTexts["Connection & Power"].exists)
-        XCTAssertTrue(app.staticTexts["Battery"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["display-connection-summary"].exists)
+        XCTAssertFalse(app.staticTexts["Connection & Power"].exists)
+        XCTAssertFalse(app.staticTexts["Battery"].exists)
         let signal = app.staticTexts["display-signal-picpak-kitchen"]
-        XCTAssertTrue(signal.exists)
-        XCTAssertEqual(signal.label, "-54 dBm")
+        XCTAssertFalse(signal.exists)
         XCTAssertFalse(app.staticTexts["Device ID"].exists)
         XCTAssertFalse(app.staticTexts["Device Type"].exists)
         XCTAssertFalse(app.staticTexts["Colour Gamut"].exists)
@@ -1797,6 +1900,9 @@ final class TesseraeCompanionUITests: XCTestCase {
         for _ in 0..<4 where !details.isHittable { app.swipeUp() }
         XCTAssertTrue(details.isHittable)
         details.tap()
+        XCTAssertTrue(app.staticTexts["Battery"].exists)
+        XCTAssertTrue(signal.exists)
+        XCTAssertEqual(signal.label, "-54 dBm")
         XCTAssertTrue(app.staticTexts["Device ID"].waitForExistence(timeout: 2))
         XCTAssertTrue(app.staticTexts["Manufacturer"].exists)
         XCTAssertTrue(app.staticTexts["Model"].exists)
@@ -1877,7 +1983,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertEqual(lower.frame.minX, upper.frame.minX, accuracy: 1)
         XCTAssertTrue(lower.isHittable, "Dropping a display must leave its card in the list.")
         XCTAssertTrue(upper.isHittable)
-        XCTAssertFalse(app.staticTexts["Server preview"].exists)
+        XCTAssertFalse(app.staticTexts["Latest frame"].exists)
 
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "Reordered Display Cards"
@@ -1914,7 +2020,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(kitchen.isHittable, "Releasing a recognized long press must not open details.")
         XCTAssertTrue(desk.isHittable)
         XCTAssertEqual(kitchen.value as? String, originalPosition)
-        XCTAssertFalse(app.staticTexts["Server preview"].exists)
+        XCTAssertFalse(app.staticTexts["Latest frame"].exists)
 
         kitchen.tap()
         XCTAssertTrue(app.buttons["display-device-details-picpak-kitchen"].waitForExistence(timeout: 3))

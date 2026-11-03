@@ -19,6 +19,16 @@ capabilities.
   Hidden values, location time zones, revision conflicts and explicit Save
   retain their existing protection.
 
+### Changed
+
+- Display details place connection, battery, and last-seen information below the
+  device name. Equal-size latest and queued previews support swiping and visible
+  text selection, followed by an independent planned-update card. Hardware
+  information stays in a disclosure with the brand and model always visible.
+- Lineup details show elapsed schedule time for unambiguous configured windows.
+  English and Chinese screens use shorter labels, tappable preview images, and
+  expandable future updates while preserving schedule and device evidence.
+
 ## [0.8.2] - 2026-10-28
 
 ### Changed

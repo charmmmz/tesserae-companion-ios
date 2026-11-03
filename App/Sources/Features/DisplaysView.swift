@@ -788,13 +788,13 @@ private struct PlannedDashboardThumbnail: View {
 private enum DisplayEvidencePreview: Identifiable {
     case server
     case queued(String)
-    case planned(String)
+    case planned(PlannedDisplayEvent)
 
     var id: String {
         switch self {
         case .server: "server"
         case let .queued(revision): "queued|\(revision)"
-        case let .planned(id): "planned|\(id)"
+        case let .planned(event): "planned|\(event.id)"
         }
     }
 }
@@ -810,7 +810,12 @@ struct DisplayDetailView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var hapticEvent = TesseraeHapticEvent()
     @State private var planNow = Date()
+    private enum ScreenPage: Hashable { case recent, queued }
+
+    @State private var selectedScreenPage: ScreenPage = .recent
     @State private var selectedPreview: DisplayEvidencePreview?
+    @State private var laterExpanded = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let display: DisplaySummary
 
     private var currentDisplay: DisplaySummary {
@@ -820,71 +825,25 @@ struct DisplayDetailView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
-                screenEvidenceCard
-
-                detailCard(
-                    "Connection & Power",
-                    systemImage: "antenna.radiowaves.left.and.right"
-                ) {
-                    detailRow("Status") {
-                        if local.isBluetooth {
-                            BluetoothModeLabel()
-                        } else {
-                            Label(currentDisplay.freshnessLabel, systemImage: currentDisplay.freshnessSymbol)
-                                .foregroundStyle(currentDisplay.freshnessColor)
-                        }
-                    }
-
-                    detailRow("Last Seen") {
-                        if let lastSeenAt = local.lastSeenAt(fallback: currentDisplay.lastSeenAt) {
-                            VStack(alignment: .trailing, spacing: 2) {
-                                Text(lastSeenAt, style: .relative)
-                                Text(
-                                    lastSeenAt,
-                                    format: .dateTime
-                                        .year()
-                                        .month()
-                                        .day()
-                                        .hour()
-                                        .minute()
-                                )
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            }
-                        } else {
-                            Text("Not reported")
-                        }
-                    }
-
-                    detailRow("Battery") {
-                        VStack(alignment: .trailing, spacing: 3) {
-                            Text(local.batteryText)
-                            if let voltage = local.voltageText, voltage != local.batteryText {
-                                Text(voltage).font(.caption).foregroundStyle(.secondary)
-                            }
-                            if let date = local.batteryDate {
-                                Text(date, format: .dateTime.month().day().hour().minute())
-                                    .font(.caption2).foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-
-                    if !local.isBluetooth {
-                        detailRow("Signal") {
-                            Text(currentDisplay.rssiDBM.map { "\($0) dBm" } ?? String(localized: "Not reported"))
-                                .accessibilityIdentifier("display-signal-\(currentDisplay.id)")
-                        }
-                    }
+                connectionStrip
+                if serverTimezoneDiffers(displayTimezone, at: displayedDates) {
+                    Text("Times use \(displayTimezone.identifier)")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityIdentifier("display-timezone-note")
                 }
-
-                DisplayDeviceDetails(display: currentDisplay, firmwareVersion: local.firmwareVersion)
+                screenCarouselCard
+                planCard
                 displayLineupsCard
+                DisplayDeviceDetails(display: currentDisplay, local: local, timezoneID: displayTimezone.identifier)
             }
+            .frame(maxWidth: 720)
             .padding(16)
+            .frame(maxWidth: .infinity)
         }
         .navigationTitle(currentDisplay.name)
         .tesseraeRootPageChrome()
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
         .toolbar {
             TesseraeRootToolbar {
                 EmptyView()
@@ -916,6 +875,12 @@ struct DisplayDetailView: View {
                 await model.refreshDeviceUpcoming(displayID: currentDisplay.id)
             }
         }
+        .onChange(of: screenPages, initial: true) { _, pages in
+            if !pages.contains(selectedScreenPage) { selectedScreenPage = .recent }
+        }
+        .onChange(of: currentDisplay.id) { _, _ in
+            selectedScreenPage = .recent
+        }
         .onChange(of: currentDisplay.lastSeenAt) { _, _ in
             Task {
                 await model.refreshDeviceUpcoming(displayID: currentDisplay.id)
@@ -937,15 +902,21 @@ struct DisplayDetailView: View {
         .sheet(item: $selectedPreview) { preview in
             NavigationStack {
                 ScrollView {
-                    PreviewArtwork(
-                        state: evidencePreviewState(preview),
-                        placeholderSystemName: currentDisplay.previewSymbol,
-                        placeholderLabel: evidencePreviewTitle(preview),
-                        imageLabel: evidencePreviewTitle(preview),
-                        accessibilityIdentifier: "display-evidence-preview-sheet"
-                    )
-                    .aspectRatio(currentDisplay.panelAspectRatio, contentMode: .fit)
+                    VStack(alignment: .leading, spacing: 16) {
+                        PreviewArtwork(
+                            state: evidencePreviewState(preview),
+                            placeholderSystemName: currentDisplay.previewSymbol,
+                            placeholderLabel: evidencePreviewTitle(preview),
+                            imageLabel: evidencePreviewTitle(preview),
+                            accessibilityIdentifier: "display-evidence-preview-sheet"
+                        )
+                        .aspectRatio(currentDisplay.panelAspectRatio, contentMode: .fit)
+                        evidencePreviewExplanation(preview)
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: 720)
                     .padding(20)
+                    .frame(maxWidth: .infinity)
                 }
                 .navigationTitle(evidencePreviewTitle(preview))
                 .navigationBarTitleDisplayMode(.inline)
@@ -966,7 +937,7 @@ struct DisplayDetailView: View {
         switch preview {
         case .server: local.preview ?? model.displayPreviews[currentDisplay.id]
         case let .queued(revision): currentDisplay.pendingRender?.revision == revision ? model.pendingDisplayPreview(for: currentDisplay) : nil
-        case let .planned(id): model.dashboardPreview(id: id, deviceID: currentDisplay.id)
+        case let .planned(event): event.event.dashboardID.flatMap { model.dashboardPreview(id: $0, deviceID: currentDisplay.id) }
         }
     }
 
@@ -986,89 +957,240 @@ struct DisplayDetailView: View {
         )[0]
     }
 
+    private var displayTimezone: TimeZone {
+        effectiveServerTimezone(model.activeInstance?.timezone, fallbackID: plan.response?.timezone)
+    }
+
+    private var displayedDates: [Date] {
+        [planNow, local.lastSeenAt(fallback: currentDisplay.lastSeenAt),
+         local.usesLocalPreview ? local.record?.photoReceivedAt : plan.response?.currentFrameAt,
+         local.usesLocalPreview || local.isBluetooth ? nil : currentDisplay.pendingRender?.renderedAt].compactMap { $0 }
+            + (local.isBluetooth ? [] : plan.futureEvents.map(\.event.scheduledAt))
+    }
+
     private var previewTitle: String {
         local.usesLocalPreview ? String(localized: "Last Bluetooth Send") : String(localized: "Server preview")
     }
 
-    private var screenEvidenceCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .center, spacing: 16) {
-                Button { selectedPreview = .server } label: {
-                    currentScreenPreview
-                        .aspectRatio(currentDisplay.panelAspectRatio, contentMode: .fit)
-                        .frame(width: 112).frame(maxHeight: 160)
-                }
-                .buttonStyle(.plain)
-                .accessibilityElement(children: .contain)
-                .accessibilityLabel(previewTitle)
-                .accessibilityIdentifier("display-open-preview-\(currentDisplay.id)")
-                VStack(alignment: .leading, spacing: 7) {
-                    Label(previewTitle, systemImage: local.usesLocalPreview ? "paperplane" : "display")
-                        .font(.headline)
-                    Text(local.usesLocalPreview ? "Saved from a local Bluetooth Send." : "The latest preview available from the server.")
-                        .font(.caption).foregroundStyle(.secondary)
-                    if local.usesLocalPreview, let date = local.record?.photoReceivedAt {
-                        Text(String(localized: "Local Send record · \(projectionDateText(date, timezone: model.activeInstance?.timezone ?? "UTC"))"))
-                            .font(.caption2).foregroundStyle(.secondary)
-                    } else if let frameAt = plan.response?.currentFrameAt {
-                        Text(String(localized: "Last served or published · \(projectionDateText(frameAt, timezone: plan.response?.timezone ?? model.activeInstance?.timezone ?? "UTC"))"))
-                            .font(.caption2).foregroundStyle(.secondary)
-                    }
-                    Text("Screen appearance is not confirmed.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
+    private var evidenceLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: 16))
+    }
 
-            if let pending = currentDisplay.pendingRender, !local.isBluetooth, !local.usesLocalPreview {
-                HStack(spacing: 12) {
-                    Image(systemName: "hourglass").foregroundStyle(TesseraeTheme.warning)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Queued frame").font(.subheadline.weight(.semibold))
-                        Text("Waiting for device collection; timing is unknown.")
-                            .font(.caption).foregroundStyle(.secondary)
-                        if let renderedAt = pending.renderedAt {
-                            Text(String(localized: "Rendered · \(projectionDateText(renderedAt, timezone: plan.response?.timezone ?? model.activeInstance?.timezone ?? "UTC"))"))
-                                .font(.caption2).foregroundStyle(.secondary)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    Button { selectedPreview = .queued(pending.revision) } label: {
-                        nextScreenPreview
-                            .aspectRatio(currentDisplay.panelAspectRatio, contentMode: .fit)
-                            .frame(width: 60).frame(maxHeight: 90)
-                    }
-                    .buttonStyle(.plain)
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
-                    .accessibilityElement(children: .contain)
-                    .accessibilityLabel("Queued frame")
+    private var connectionStrip: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 14) { connectionMetrics }
+            VStack(alignment: .leading, spacing: 6) { connectionMetrics }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityIdentifier("display-connection-summary")
+    }
+
+    @ViewBuilder
+    private var connectionMetrics: some View {
+        if local.isBluetooth {
+            BluetoothModeLabel()
+        } else {
+            Label("Wi-Fi", systemImage: "wifi")
+                .accessibilityValue(currentDisplay.freshnessLabel)
+                .foregroundStyle(currentDisplay.freshnessColor)
+        }
+        Label(local.batteryText, systemImage: "battery.50percent")
+            .accessibilityLabel(String(localized: "Battery") + " · " + local.batteryText)
+        if let seen = local.lastSeenAt(fallback: currentDisplay.lastSeenAt) {
+            Text("Seen \(compactProjectionDateText(seen, timezone: displayTimezone.identifier))")
+        } else {
+            Text("Seen · Not reported")
+        }
+    }
+
+    @ViewBuilder
+    private func evidencePreviewExplanation(_ preview: DisplayEvidencePreview) -> some View {
+        switch preview {
+        case .server:
+            Text(local.usesLocalPreview ? "Saved from a local Bluetooth Send." : "The latest preview available from the server.")
+            if local.usesLocalPreview, let date = local.record?.photoReceivedAt {
+                Text(String(localized: "Local Send record · \(projectionDateText(date, timezone: displayTimezone.identifier))"))
+            } else if let date = plan.response?.currentFrameAt {
+                Text(String(localized: "Last served or published · \(projectionDateText(date, timezone: displayTimezone.identifier))"))
+            }
+            Text("Screen appearance is not confirmed.")
+        case let .queued(revision):
+            if let pending = currentDisplay.pendingRender, pending.revision == revision {
+                if let date = pending.renderedAt {
+                    Text(String(localized: "Rendered · \(projectionDateText(date, timezone: displayTimezone.identifier))"))
                 }
-                .padding(10)
-                .background(TesseraeTheme.warning.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
-                .accessibilityElement(children: .contain)
-                .accessibilityIdentifier("display-queued-frame-\(currentDisplay.id)")
-            } else if currentDisplay.hasPendingRender == true, !local.isBluetooth, !local.usesLocalPreview {
+                Text("Waiting for device collection; timing is unknown.")
+                Text("Screen appearance is not confirmed.")
+            } else {
+                Text("This queued frame is no longer available.")
+            }
+        case let .planned(event):
+            Text(event.event.dashboardName ?? String(localized: "Planned dashboard preview"))
+            Text(projectionDateText(event.event.scheduledAt, timezone: effectiveServerTimezone(model.activeInstance?.timezone, fallbackID: event.timezone).identifier))
+            Text([plannedCertaintyTitle(event.event.certainty), event.event.effect == .changeScreen ? String(localized: "Changes the screen") : String(localized: "Refreshes the current screen")].joined(separator: " · "))
+            Text("A preview of planned content. It may change before the update runs and does not indicate a rendered or queued frame.")
+        }
+    }
+
+    private var screenPages: [ScreenPage] {
+        currentDisplay.pendingRender != nil && !local.isBluetooth && !local.usesLocalPreview
+            ? [.recent, .queued] : [.recent]
+    }
+
+    private var visibleScreenPage: ScreenPage {
+        screenPages.contains(selectedScreenPage) ? selectedScreenPage : .recent
+    }
+
+    private var screenPageSelection: Binding<ScreenPage> {
+        Binding(get: { visibleScreenPage }, set: { selectedScreenPage = $0 })
+    }
+
+    private func screenPageTitle(_ page: ScreenPage) -> String {
+        switch page {
+        case .recent: local.isBluetooth || local.usesLocalPreview ? previewTitle : String(localized: "Latest frame")
+        case .queued: String(localized: "Queued frame")
+        }
+    }
+
+    private var screenCarouselCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if screenPages.count > 1 {
+                let selectorLayout = dynamicTypeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
+                    : AnyLayout(HStackLayout(spacing: 12))
+                selectorLayout {
+                    ForEach(screenPages, id: \.self) { page in
+                        Button { screenPageSelection.wrappedValue = page } label: {
+                            HStack(spacing: 8) {
+                                Text(screenPageTitle(page))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Image(systemName: "checkmark")
+                                    .opacity(visibleScreenPage == page ? 1 : 0)
+                                    .accessibilityHidden(true)
+                            }
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(visibleScreenPage == page ? TesseraeTheme.accent : Color.secondary)
+                        .accessibilityAddTraits(visibleScreenPage == page ? .isSelected : [])
+                        .accessibilityIdentifier("display-select-\(page == .recent ? "recent" : "queued")-\(currentDisplay.id)")
+                    }
+                }
+                TabView(selection: screenPageSelection) {
+                    ForEach(screenPages, id: \.self) { page in
+                        screenPageArtwork(page)
+                            .tag(page)
+                            .accessibilityHidden(visibleScreenPage != page)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .frame(height: 240)
+            } else {
+                Text(screenPageTitle(.recent)).font(.headline)
+                screenPageArtwork(.recent).frame(height: 240)
+            }
+            screenPageTimestamp
+                .font(.subheadline.monospacedDigit())
+                .foregroundStyle(.secondary)
+            if currentDisplay.hasPendingRender == true && screenPages.count == 1
+                && !local.isBluetooth && !local.usesLocalPreview {
                 pendingRefreshExplanation
             }
+        }
+        .tesseraeCard()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("display-latest-frame-\(currentDisplay.id)")
+    }
 
-            if !local.isBluetooth {
-                Divider()
+    private func screenPageArtwork(_ page: ScreenPage) -> some View {
+        GeometryReader { geometry in
+            let height = min(geometry.size.height, geometry.size.width / currentDisplay.panelAspectRatio)
+            Button {
+                switch page {
+                case .recent: selectedPreview = .server
+                case .queued:
+                    if let pending = currentDisplay.pendingRender { selectedPreview = .queued(pending.revision) }
+                }
+            } label: {
+                switch page {
+                case .recent: currentScreenPreview
+                case .queued: nextScreenPreview
+                }
+            }
+            .buttonStyle(.plain)
+            .frame(width: height * currentDisplay.panelAspectRatio, height: height)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(screenPageTitle(page))
+            .accessibilityIdentifier("display-open-\(page == .recent ? "preview" : "queued-preview")-\(currentDisplay.id)")
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    @ViewBuilder
+    private var screenPageTimestamp: some View {
+        switch visibleScreenPage {
+        case .recent:
+            if local.usesLocalPreview, let date = local.record?.photoReceivedAt {
+                Text(compactProjectionDateText(date, timezone: displayTimezone.identifier))
+            } else if let date = plan.response?.currentFrameAt {
+                Text(compactProjectionDateText(date, timezone: displayTimezone.identifier))
+            }
+        case .queued:
+            if let date = currentDisplay.pendingRender?.renderedAt {
+                Text(String(localized: "Rendered · \(compactProjectionDateText(date, timezone: displayTimezone.identifier))"))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var planCard: some View {
+        if !local.isBluetooth {
+            VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Label("Next planned update", systemImage: "clock")
-                        .font(.subheadline.weight(.semibold))
-                    HStack(alignment: .top, spacing: 12) {
+                    Text("Next planned").font(.subheadline.weight(.semibold))
+                    if let next = plan.next {
+                        plannedEventRow(next)
+                    } else {
                         DisplayPlanSummary(plan: plan, showsNextHeading: false)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        if let next = plan.next, let dashboardID = next.event.dashboardID {
-                            Button { selectedPreview = .planned(dashboardID) } label: {
-                                PlannedDashboardThumbnail(dashboardID: dashboardID, display: currentDisplay)
+                    }
+                    if plan.next != nil {
+                        if plan.error != nil {
+                            Text("Previous projection · Refresh failed").font(.caption).foregroundStyle(.secondary)
+                            if let response = plan.response {
+                                Text(String(localized: "Projection generated \(projectionDateText(response.generatedAt, timezone: response.timezone)) · Through \(projectionDateText(response.throughAt, timezone: response.timezone))"))
+                                    .font(.caption2).foregroundStyle(.secondary)
                             }
-                            .buttonStyle(.plain)
+                            if let error = plan.error { Text(error).font(.caption).foregroundStyle(.secondary) }
+                        }
+                        if plan.isRefreshing { Text("Refreshing…").font(.caption).foregroundStyle(.secondary) }
+                    }
+                    if !plan.subsequentEvents.isEmpty {
+                        Button { laterExpanded.toggle() } label: {
+                            HStack {
+                                Text("\(plan.subsequentEvents.count) more updates")
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .rotationEffect(.degrees(laterExpanded ? 90 : 0))
+                                    .accessibilityHidden(true)
+                            }
+                            .font(.caption).foregroundStyle(.secondary)
                             .frame(minHeight: 44)
                             .contentShape(Rectangle())
-                            .accessibilityElement(children: .contain)
-                            .accessibilityLabel("Planned dashboard preview")
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityValue(laterExpanded ? Text("Expanded") : Text("Collapsed"))
+                        .accessibilityIdentifier("display-later-updates")
+                        if laterExpanded {
+                            ForEach(plan.subsequentEvents) { event in
+                                Divider()
+                                plannedEventRow(event)
+                            }
                         }
                     }
                     if plan.error != nil {
@@ -1081,10 +1203,44 @@ struct DisplayDetailView: View {
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("display-next-update-\(currentDisplay.id)")
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .tesseraeCard()
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("display-evidence-\(currentDisplay.id)")
         }
-        .tesseraeCard()
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("display-evidence-\(currentDisplay.id)")
+    }
+
+
+    private func plannedEventRow(_ event: PlannedDisplayEvent) -> some View {
+        evidenceLayout {
+            if let dashboardID = event.event.dashboardID {
+                Button { selectedPreview = .planned(event) } label: {
+                    PlannedDashboardThumbnail(dashboardID: dashboardID, display: currentDisplay)
+                }
+                .buttonStyle(.plain)
+                .frame(minHeight: 44)
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("Planned dashboard preview")
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text([compactProjectionDateText(event.event.scheduledAt, timezone: displayTimezone.identifier), event.event.dashboardName].compactMap { $0 }.joined(separator: " · "))
+                    .font(.subheadline.weight(.semibold))
+                if event.event.certainty != .scheduled || event.event.effect == .refreshScreen {
+                    Text([event.event.certainty != .scheduled ? plannedCertaintyTitle(event.event.certainty) : nil,
+                          event.event.effect == .refreshScreen ? String(localized: "Refreshes the current screen") : nil].compactMap { $0 }.joined(separator: " · "))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if let lineupID = event.event.lineupID {
+                    NavigationLink(value: LineupRoute.lineup(id: lineupID, displayID: currentDisplay.id)) {
+                        Label(event.event.lineupName ?? lineupID, systemImage: "rectangle.stack")
+                            .font(.caption)
+                            .frame(minHeight: 44, alignment: .leading)
+                    }
+                    .accessibilityIdentifier("display-planned-lineup-\(event.event.id)")
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     private var displayLineupsCard: some View {
@@ -1103,7 +1259,8 @@ struct DisplayDetailView: View {
                             supported: model.supportsDeviceTimeline, responses: model.deviceUpcomingResponses,
                             refreshing: model.loadingDeviceTimelineIDs, errors: model.deviceTimelineErrors,
                             lineupID: lineup.id
-                        )
+                        ),
+                        showsPlan: false
                     )
                 }
                 .buttonStyle(.plain)
@@ -1123,6 +1280,7 @@ struct DisplayDetailView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .tesseraeCard()
     }
 
@@ -1176,42 +1334,14 @@ struct DisplayDetailView: View {
         )
     }
 
-    private func detailCard<Content: View>(
-        _ title: LocalizedStringKey,
-        systemImage: String,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Label(title, systemImage: systemImage)
-                .font(.headline)
 
-            content()
-        }
-        .tesseraeCard()
-    }
-
-    private func detailRow<Value: View>(
-        _ title: LocalizedStringKey,
-        @ViewBuilder value: () -> Value
-    ) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 16) {
-            Text(title)
-                .foregroundStyle(.secondary)
-
-            Spacer(minLength: 12)
-
-            value()
-                .multilineTextAlignment(.trailing)
-        }
-        .font(.subheadline)
-        .frame(maxWidth: .infinity)
-    }
 }
 
 private struct DisplayDeviceDetails: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let display: DisplaySummary
-    let firmwareVersion: String?
+    let local: DisplayBluetoothPresentation
+    let timezoneID: String?
     @State private var isExpanded = false
 
     var body: some View {
@@ -1220,6 +1350,53 @@ private struct DisplayDeviceDetails: View {
 
             if isExpanded {
                 Divider()
+
+                detailRow("Status") {
+                    if local.isBluetooth {
+                        BluetoothModeLabel()
+                    } else {
+                        Label(display.freshnessLabel, systemImage: display.freshnessSymbol)
+                            .foregroundStyle(display.freshnessColor)
+                    }
+                }
+
+                detailRow("Last Seen") {
+                    if let lastSeenAt = local.lastSeenAt(fallback: display.lastSeenAt) {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(lastSeenAt, style: .relative)
+                            Text(lastSeenAt, format: absoluteDateFormat)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        }
+                    } else {
+                        Text("Not reported")
+                    }
+                }
+
+                detailRow("Battery") {
+                    VStack(alignment: .trailing, spacing: 3) {
+                        Text(local.batteryText)
+                        if let voltage = local.voltageText, voltage != local.batteryText {
+                            Text(voltage).font(.caption).foregroundStyle(.secondary)
+                        }
+                        if let date = local.batteryDate {
+                            Text(date, format: absoluteDateFormat)
+                                .font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                if !local.isBluetooth {
+                    detailRow("Signal") {
+                        Text(display.rssiDBM.map { "\($0) dBm" } ?? String(localized: "Not reported"))
+                            .accessibilityIdentifier("display-signal-\(display.id)")
+                    }
+                }
+                Divider()
+
+                if let timezoneID {
+                    detailRow("Time Zone") { Text(timezoneID) }
+                }
 
                 detailRow("Manufacturer") {
                     Text(
@@ -1236,7 +1413,7 @@ private struct DisplayDeviceDetails: View {
                 }
 
                 detailRow("Firmware") {
-                    Text(firmwareVersion ?? String(localized: "Not reported"))
+                    Text(local.firmwareVersion ?? String(localized: "Not reported"))
                         .accessibilityIdentifier("display-firmware-\(display.id)")
                 }
 
@@ -1272,6 +1449,11 @@ private struct DisplayDeviceDetails: View {
         .tesseraeCard()
     }
 
+    private var absoluteDateFormat: Date.FormatStyle {
+        Date.FormatStyle(date: .abbreviated, time: .shortened, timeZone: effectiveServerTimezone(timezoneID))
+            .timeZone(.specificName(.short))
+    }
+
     private var headerButton: some View {
         Button {
             withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
@@ -1280,7 +1462,7 @@ private struct DisplayDeviceDetails: View {
         } label: {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Label("Device Details", systemImage: "cpu")
+                    Label("Device information", systemImage: "cpu")
                         .font(.headline)
                         .foregroundStyle(Color.primary)
 

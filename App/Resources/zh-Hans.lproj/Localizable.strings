@@ -995,7 +995,8 @@
 "Saved from a local Bluetooth Send." = "保存在本机的蓝牙发送画面。";
 "The latest preview available from the server." = "服务器提供的最近预览。";
 "Screen appearance is not confirmed." = "屏幕当前显示尚未确认。";
-"Queued frame" = "已排队画面";
+"Latest frame" = "最近画面";
+"Queued frame" = "待更新";
 "Waiting for device collection; timing is unknown." = "等待设备领取，时间尚不确定。";
 "Lineups for this display" = "此屏幕的 Lineup";
 "No Lineups assigned" = "未分配 Lineup";
@@ -1017,3 +1018,14 @@
 "Lineups not loaded" = "尚未载入 Lineup";
 
 "Schedule step for %@" = "%@的计划步骤";
+
+"Seen %@" = "上次在线 %@";
+"Seen · Not reported" = "上次在线 · 未报告";
+"Next planned" = "下一次计划";
+"%lld more updates" = "后续 %lld 项";
+"Device information" = "设备信息";
+"Schedule time" = "排程时间";
+"Schedule time shows elapsed time in the configured window, not playback progress. Schedule state does not confirm the screen currently displayed." = "排程时间表示设定时段内已过去的时间，不代表播放进度。排程状态不能确认屏幕当前显示的画面。";
+"A preview of planned content. It may change before the update runs and does not indicate a rendered or queued frame." = "计划内容预览，实际运行时可能变化，不代表画面已生成或进入队列。";
+"This queued frame is no longer available." = "此待领取画面已不可用。";
+"Times use %@" = "时间以%@为准";

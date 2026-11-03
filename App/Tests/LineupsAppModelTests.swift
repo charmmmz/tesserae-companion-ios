@@ -399,6 +399,129 @@ final class LineupsAppModelTests: XCTestCase {
         XCTAssertFalse(formatted.contains("23:30"), formatted)
     }
 
+    func testScheduleTimeWindowUsesServerDayAndExactBoundaries() throws {
+        let lineup = try scheduleFixture(["intent": "cycle", "anchor": "09:00", "endAt": "11:00", "daysOfWeek": [0]])
+        let now = ISO8601DateFormatter().date(from: "2026-11-02T02:00:00Z")!
+        let window = try XCTUnwrap(ScheduleTimeWindow.active(for: lineup, timezoneID: "Asia/Shanghai", now: now))
+        XCTAssertEqual(window.fractionElapsed(at: now), 0.5, accuracy: 0.0001)
+        XCTAssertEqual(window.fractionElapsed(at: window.start.addingTimeInterval(-60)), 0)
+        XCTAssertEqual(window.fractionElapsed(at: window.end.addingTimeInterval(60)), 1)
+        XCTAssertNotNil(ScheduleTimeWindow.active(for: lineup, timezoneID: "Asia/Shanghai", now: window.start))
+        XCTAssertNil(ScheduleTimeWindow.active(for: lineup, timezoneID: "Asia/Shanghai", now: window.end))
+        XCTAssertNil(ScheduleTimeWindow.active(for: lineup, timezoneID: "UTC", now: now))
+        XCTAssertNil(ScheduleTimeWindow.active(for: lineup, timezoneID: "Invalid/Zone", now: now))
+        XCTAssertNil(ScheduleTimeWindow.active(for: lineup, timezoneID: nil, now: now))
+        let serverMonday = try scheduleFixture(["intent": "interval", "windowStart": "00:00", "windowEnd": "02:00", "endAt": NSNull(), "daysOfWeek": [0]])
+        let sundayUTC = ISO8601DateFormatter().date(from: "2026-11-01T17:00:00Z")!
+        XCTAssertNotNil(ScheduleTimeWindow.active(for: serverMonday, timezoneID: "Asia/Shanghai", now: sundayUTC))
+    }
+
+    func testScheduleTimeWindowRejectsAmbiguousAndIncompleteMetadata() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-11-02T02:00:00Z")!
+        let invalid: [[String: Any]] = [
+            ["enabled": false], ["daysOfWeek": NSNull()], ["daysOfWeek": []], ["daysOfWeek": [7]],
+            ["intent": "manual"], ["intent": "daily"], ["intent": NSNull()],
+            ["anchor": "11:00", "endAt": "09:00"], ["anchor": "09:00", "endAt": "09:00"],
+            ["anchor": "9:00"], ["anchor": "25:00"], ["endAt": NSNull()],
+            ["windowStart": "09:00"], ["windowStart": "08:00", "windowEnd": "11:00"],
+            ["intent": "interval", "windowStart": "09:00"],
+            ["intent": "interval", "windowStart": "09:00", "windowEnd": "11:00", "endAt": "12:00"]
+        ]
+        for patch in invalid {
+            let lineup = try scheduleFixture(patch)
+            XCTAssertNil(ScheduleTimeWindow.active(for: lineup, timezoneID: "Asia/Shanghai", now: now), "\(patch)")
+        }
+        let interval = try scheduleFixture(["intent": "interval", "anchor": "06:00", "windowStart": "09:00", "windowEnd": "11:00", "endAt": NSNull()])
+        XCTAssertNotNil(ScheduleTimeWindow.active(for: interval, timezoneID: "Asia/Shanghai", now: now))
+        let matching = try scheduleFixture(["windowStart": "09:00", "windowEnd": "11:00"])
+        XCTAssertNotNil(ScheduleTimeWindow.active(for: matching, timezoneID: "Asia/Shanghai", now: now))
+    }
+
+    func testScheduleTimeWindowSuppressesMissingAndRepeatedDSTBounds() throws {
+        let fall = try scheduleFixture(["anchor": "01:30", "endAt": "03:00"])
+        let fallNow = ISO8601DateFormatter().date(from: "2026-11-01T07:00:00Z")!
+        XCTAssertNil(ScheduleTimeWindow.active(for: fall, timezoneID: "America/New_York", now: fallNow))
+        let spring = try scheduleFixture(["anchor": "02:30", "endAt": "04:00"])
+        let springNow = ISO8601DateFormatter().date(from: "2026-03-08T07:30:00Z")!
+        XCTAssertNil(ScheduleTimeWindow.active(for: spring, timezoneID: "America/New_York", now: springNow))
+        let acrossFall = try scheduleFixture(["anchor": "00:00", "endAt": "03:00"])
+        XCTAssertNil(ScheduleTimeWindow.active(for: acrossFall, timezoneID: "America/New_York", now: fallNow))
+        let acrossSpring = try scheduleFixture(["anchor": "00:00", "endAt": "04:00"])
+        XCTAssertNil(ScheduleTimeWindow.active(for: acrossSpring, timezoneID: "America/New_York", now: springNow))
+        let valid = try scheduleFixture(["anchor": "03:00", "endAt": "05:00"])
+        XCTAssertNotNil(ScheduleTimeWindow.active(for: valid, timezoneID: "America/New_York", now: springNow))
+    }
+
+    func testSubsequentPlanEventsAreActualFutureEventsAndDisappearOnExpiry() async throws {
+        let model = makeAppModel()
+        await model.connectDemo()
+        let display = try XCTUnwrap(model.displays.first)
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let events = [-10, 20, 40, 60].map { offset in
+            DeviceUpcomingEvent(id: "event-\(offset)", scheduledAt: now.addingTimeInterval(Double(offset)), cause: .cycle, effect: .changeScreen, certainty: .estimated, lineupID: "explicit-\(offset)")
+        }
+        let response = DeviceUpcomingResponse(deviceID: display.id, generatedAt: now.addingTimeInterval(-60), timezone: "UTC", throughAt: now.addingTimeInterval(120), events: events.reversed())
+        func plan(at date: Date) -> DisplayPlanProjection {
+            displayPlanProjections(deviceIDs: [display.id], displays: model.displays, supported: true, responses: [display.id: response], refreshing: [], errors: [:], now: date)[0]
+        }
+        XCTAssertEqual(plan(at: now).next?.event.id, "event-20")
+        XCTAssertEqual(plan(at: now).subsequentEvents.map(\.event.id), ["event-40", "event-60"])
+        XCTAssertEqual(plan(at: now.addingTimeInterval(30)).next?.event.lineupID, "explicit-40")
+        XCTAssertEqual(plan(at: now.addingTimeInterval(30)).subsequentEvents.map(\.event.id), ["event-60"])
+        XCTAssertTrue(plan(at: now.addingTimeInterval(121)).futureEvents.isEmpty)
+    }
+
+    func testCompactProjectionDatesKeepNonTodayDateInServerTimezone() {
+        let now = ISO8601DateFormatter().date(from: "2026-11-02T17:00:00Z")!
+        let sameServerDay = ISO8601DateFormatter().date(from: "2026-11-02T16:30:00Z")!
+        let previousServerDay = ISO8601DateFormatter().date(from: "2026-11-02T15:30:00Z")!
+        let same = compactProjectionDateText(sameServerDay, timezone: "Asia/Shanghai", now: now)
+        let previous = compactProjectionDateText(previousServerDay, timezone: "Asia/Shanghai", now: now)
+        XCTAssertTrue(same.contains("00:30") || same.contains("0:30"), same)
+        XCTAssertTrue(previous.contains("2"), previous)
+        XCTAssertGreaterThan(previous.count, same.count)
+        let first = ISO8601DateFormatter().date(from: "2026-11-01T05:30:00Z")!
+        let second = first.addingTimeInterval(3600)
+        XCTAssertFalse(same.contains("GMT"), same)
+        XCTAssertFalse(previous.contains("GMT"), previous)
+        XCTAssertEqual(compactProjectionDateText(first, timezone: "America/New_York", now: first),
+                       compactProjectionDateText(second, timezone: "America/New_York", now: first))
+        let firstText = projectionDateText(first, timezone: "America/New_York")
+        let secondText = projectionDateText(second, timezone: "America/New_York")
+        XCTAssertTrue(firstText.contains(":30"), firstText)
+        XCTAssertTrue(secondText.contains(":30"), secondText)
+        XCTAssertNotEqual(firstText, secondText)
+    }
+
+    func testTimezoneNoticeComparesOffsetsForAllDisplayedDates() throws {
+        let winter = ISO8601DateFormatter().date(from: "2026-01-15T12:00:00Z")!
+        let summer = ISO8601DateFormatter().date(from: "2026-07-15T12:00:00Z")!
+        let shanghai = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
+        let alias = try XCTUnwrap(TimeZone(identifier: "Asia/Chongqing"))
+        let london = try XCTUnwrap(TimeZone(identifier: "Europe/London"))
+        let utc = TimeZone(secondsFromGMT: 0)!
+        XCTAssertFalse(serverTimezoneDiffers(shanghai, at: [winter, summer], phoneTimezone: alias))
+        XCTAssertTrue(serverTimezoneDiffers(shanghai, at: [winter], phoneTimezone: utc))
+        XCTAssertFalse(serverTimezoneDiffers(london, at: [winter], phoneTimezone: utc))
+        XCTAssertTrue(serverTimezoneDiffers(london, at: [winter, summer], phoneTimezone: utc))
+        XCTAssertFalse(serverTimezoneDiffers(london, at: [], phoneTimezone: utc))
+        XCTAssertEqual(effectiveServerTimezone(nil, fallbackID: "Asia/Shanghai"), shanghai)
+        XCTAssertEqual(effectiveServerTimezone("invalid", fallbackID: "Asia/Shanghai"), shanghai)
+        XCTAssertEqual(effectiveServerTimezone("Europe/London", fallbackID: "Asia/Shanghai"), london)
+        XCTAssertEqual(effectiveServerTimezone("invalid", fallbackID: "also-invalid"), utc)
+    }
+
+    private func scheduleFixture(_ patch: [String: Any]) throws -> Lineup {
+        var values: [String: Any] = [
+            "id": "schedule", "name": "Schedule", "enabled": true, "intent": "cycle",
+            "deviceIds": [], "dashboards": [], "current": [], "advance": "timer",
+            "anchor": "09:00", "endAt": "11:00", "daysOfWeek": Array(0...6),
+            "nativeEditable": true, "webUrl": "/decks/schedule"
+        ]
+        values.merge(patch) { _, replacement in replacement }
+        return try JSONDecoder().decode(Lineup.self, from: JSONSerialization.data(withJSONObject: values))
+    }
+
     private func makeAppModel(
         client: MockTesseraeClient = MockTesseraeClient(
             latency: .milliseconds(0)

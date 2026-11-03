@@ -368,8 +368,8 @@ public actor MockTesseraeClient: TesseraeServing {
                 cause: .cycle,
                 effect: .changeScreen,
                 certainty: .scheduled,
-                lineupID: "playroom-deck",
-                lineupName: "Playroom Deck",
+                lineupID: compactWindowFixture ? "kitchen-deck" : "playroom-deck",
+                lineupName: compactWindowFixture ? "Morning cycle" : "Playroom Deck",
                 dashboardID: "morning",
                 dashboardName: "Morning"
             ),
@@ -379,8 +379,8 @@ public actor MockTesseraeClient: TesseraeServing {
                 cause: .interval,
                 effect: .refreshScreen,
                 certainty: .scheduled,
-                lineupID: "playroom-deck",
-                lineupName: "Playroom Deck"
+                lineupID: compactWindowFixture ? "kitchen-deck" : "playroom-deck",
+                lineupName: compactWindowFixture ? "Morning cycle" : "Playroom Deck"
             ),
         ]
         let events = candidates
@@ -1693,6 +1693,10 @@ public actor MockTesseraeClient: TesseraeServing {
         )
     }
 
+    private var compactWindowFixture: Bool {
+        ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_COMPACT_WINDOW"] == "1"
+    }
+
     private func demoLineup(enabled: Bool = true) -> Lineup {
         let isManual = lineupIntent == .manual
         let name: String
@@ -1760,12 +1764,12 @@ public actor MockTesseraeClient: TesseraeServing {
             trigger: trigger,
             intervalMinutes: intervalMinutes,
             firesAt: lineupIntent == .daily ? "07:30" : nil,
-            anchor: lineupIntent == .cycle ? "06:00" : nil,
+            anchor: lineupIntent == .cycle ? (compactWindowFixture ? "00:00" : "06:00") : nil,
             entryPageID: "pantry",
             homePageID: nil,
             homeTimeoutMinutes: 0,
             refreshIntervalMinutes: 15,
-            endAt: nil,
+            endAt: lineupIntent == .cycle && compactWindowFixture ? "23:59" : nil,
             daysOfWeek: lineupIntent == .daily
                 ? [0, 1, 2, 3, 4]
                 : [0, 1, 2, 3, 4, 5, 6],

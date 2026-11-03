@@ -81,10 +81,13 @@ struct DisplayPlanProjection: Identifiable {
     let error: String?
     let now: Date
 
-    var next: PlannedDisplayEvent? {
-        guard availability == .available else { return nil }
-        return events.first { $0.event.scheduledAt > now }
+    var futureEvents: [PlannedDisplayEvent] {
+        guard availability == .available else { return [] }
+        return events.filter { $0.event.scheduledAt > now }
     }
+
+    var next: PlannedDisplayEvent? { futureEvents.first }
+    var subsequentEvents: [PlannedDisplayEvent] { Array(futureEvents.dropFirst()) }
 
     var status: String {
         switch availability {
@@ -153,14 +156,36 @@ func projectionDateText(_ date: Date, timezone: String) -> String {
     return formatter.string(from: date)
 }
 
+func effectiveServerTimezone(_ timezoneID: String?, fallbackID: String? = nil) -> TimeZone {
+    timezoneID.flatMap(TimeZone.init(identifier:))
+        ?? fallbackID.flatMap(TimeZone.init(identifier:))
+        ?? TimeZone(secondsFromGMT: 0)!
+}
+
+func serverTimezoneDiffers(_ timezone: TimeZone, at dates: [Date], phoneTimezone: TimeZone = .current) -> Bool {
+    dates.contains { timezone.secondsFromGMT(for: $0) != phoneTimezone.secondsFromGMT(for: $0) }
+}
+
+func compactProjectionDateText(_ date: Date, timezone: String, now: Date = Date()) -> String {
+    let zone = effectiveServerTimezone(timezone)
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = zone
+    let formatter = DateFormatter()
+    formatter.timeZone = zone
+    let template = calendar.isDate(date, inSameDayAs: now) ? "HH:mm" : "MMM d HH:mm"
+    formatter.setLocalizedDateFormatFromTemplate(template)
+    return formatter.string(from: date)
+}
+
 func lineupScheduleSummary(_ lineup: Lineup) -> String {
     switch lineup.intent {
     case .daily:
         lineup.firesAt.map { String(localized: "Daily at \($0)") } ?? String(localized: "Daily")
     case .interval:
-        lineup.intervalMinutes.map { String(localized: "Every \($0) min") } ?? String(localized: "Interval")
+        [lineup.intervalMinutes.map { String(localized: "Every \($0) min") } ?? String(localized: "Interval"),
+         lineup.windowStart.flatMap { start in lineup.windowEnd.map { start + "–" + $0 } }].compactMap { $0 }.joined(separator: " · ")
     case .cycle:
-        lineup.anchor.map { String(localized: "Starts at \($0)") } ?? String(localized: "Timed rotation")
+        lineup.anchor.map { start in lineup.endAt.map { start + "–" + $0 } ?? String(localized: "Starts at \(start)") } ?? String(localized: "Timed rotation")
     case .manual: String(localized: "Manual")
     case nil:
         switch lineup.advance {
@@ -186,5 +211,64 @@ func plannedCertaintyTitle(_ certainty: DeviceUpcomingCertainty) -> String {
     case .scheduled: String(localized: "Scheduled")
     case .conditional: String(localized: "Conditional")
     case .estimated: String(localized: "Estimated")
+    }
+}
+
+struct ScheduleTimeWindow: Equatable {
+    let start: Date
+    let end: Date
+    let timezone: TimeZone
+
+    func fractionElapsed(at now: Date) -> Double {
+        min(max(now.timeIntervalSince(start) / end.timeIntervalSince(start), 0), 1)
+    }
+
+    func timeText(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeZone = timezone
+        formatter.setLocalizedDateFormatFromTemplate("HH:mm")
+        return formatter.string(from: date)
+    }
+
+    static func active(for lineup: Lineup, timezoneID: String?, now: Date) -> Self? {
+        guard lineup.enabled, let timezoneID, let timezone = TimeZone(identifier: timezoneID),
+              let days = lineup.daysOfWeek, !days.isEmpty, days.allSatisfy({ (0...6).contains($0) }) else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timezone
+        guard days.contains((calendar.component(.weekday, from: now) + 5) % 7) else { return nil }
+        let bounds: (String?, String?)
+        switch lineup.intent {
+        case .interval:
+            bounds = (lineup.windowStart, lineup.windowEnd)
+            guard lineup.endAt == nil || lineup.endAt == lineup.windowEnd else { return nil }
+        case .cycle:
+            bounds = (lineup.anchor, lineup.endAt)
+            if lineup.windowStart != nil || lineup.windowEnd != nil {
+                guard lineup.windowStart == lineup.anchor, lineup.windowEnd == lineup.endAt,
+                      lineup.windowStart != nil, lineup.windowEnd != nil else { return nil }
+            }
+        default: return nil
+        }
+        guard let startText = bounds.0, let endText = bounds.1,
+              let start = unambiguousTime(startText, on: now, calendar: calendar),
+              let end = unambiguousTime(endText, on: now, calendar: calendar),
+              start < end, timezone.secondsFromGMT(for: start) == timezone.secondsFromGMT(for: end),
+              now >= start, now < end else { return nil }
+        return Self(start: start, end: end, timezone: timezone)
+    }
+
+    private static func unambiguousTime(_ text: String, on day: Date, calendar: Calendar) -> Date? {
+        let parts = text.split(separator: ":", omittingEmptySubsequences: false)
+        guard parts.count == 2, parts.allSatisfy({ $0.count == 2 && $0.allSatisfy(\.isNumber) }),
+              let hour = Int(parts[0]), (0...23).contains(hour),
+              let minute = Int(parts[1]), (0...59).contains(minute) else { return nil }
+        let midnight = calendar.startOfDay(for: day)
+        let components = DateComponents(hour: hour, minute: minute, second: 0)
+        let first = calendar.nextDate(after: midnight.addingTimeInterval(-1), matching: components,
+                                      matchingPolicy: .strict, repeatedTimePolicy: .first)
+        let last = calendar.nextDate(after: midnight.addingTimeInterval(-1), matching: components,
+                                     matchingPolicy: .strict, repeatedTimePolicy: .last)
+        guard let first, first == last, calendar.isDate(first, inSameDayAs: day) else { return nil }
+        return first
     }
 }
