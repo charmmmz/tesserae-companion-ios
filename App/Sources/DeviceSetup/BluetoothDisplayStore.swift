@@ -473,6 +473,11 @@ struct DisplayBluetoothPresentation {
     var batteryText: String {
         latestBattery.map { "\($0.percent)%" } ?? "—"
     }
+    var batterySymbolName: String {
+        guard let battery = latestBattery else { return "questionmark.circle" }
+        let level = Int((Double(battery.percent) / 25).rounded()) * 25
+        return "battery.\(level)percent"
+    }
     private var latestBattery: (percent: Int, date: Date?)? {
         var latest: (percent: Int, date: Date?)?
         // Prefer the authenticated local sample on a timestamp tie.

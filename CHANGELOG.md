@@ -11,6 +11,11 @@ capabilities.
 
 ## [Unreleased]
 
+### Fixed
+
+- Display battery icons follow the latest reported percentage in list and detail
+  views. Unknown readings show a question mark. Wi-Fi labels use neutral styling.
+
 ### Added
 
 - Native Dashboard configuration now supports conditional visibility, sliders

@@ -608,7 +608,7 @@ private struct DisplayCard: View {
                     ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
                     : AnyLayout(HStackLayout(spacing: 12))) {
                     metric(
-                        "battery.75percent",
+                        local.batterySymbolName,
                         local.batteryText
                     )
                     if local.isBluetooth {
@@ -996,9 +996,8 @@ struct DisplayDetailView: View {
         } else {
             Label("Wi-Fi", systemImage: "wifi")
                 .accessibilityValue(currentDisplay.freshnessLabel)
-                .foregroundStyle(currentDisplay.freshnessColor)
         }
-        Label(local.batteryText, systemImage: "battery.50percent")
+        Label(local.batteryText, systemImage: local.batterySymbolName)
             .accessibilityLabel(String(localized: "Battery") + " · " + local.batteryText)
         if let seen = local.lastSeenAt(fallback: currentDisplay.lastSeenAt) {
             Text("Seen \(compactProjectionDateText(seen, timezone: displayTimezone.identifier))")
