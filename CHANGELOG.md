@@ -26,11 +26,10 @@ capabilities.
 
 ### Changed
 
-- Display details place connection, battery, and last-seen information below the
-  device name in a compact status row. Equal-size latest and queued previews use
-  an icon heading with compact timestamps, aspect-fitted artwork, swipe paging,
-  and tappable page dots, followed by an independent planned-update card. Hardware
-  information stays in a disclosure with the brand and model always visible.
+- Display details return to the layout used on 29 October, with current/next
+  preview paging, Next in Line, a separate Connection & Power card, and expandable
+  hardware information. Reconnection safeguards and battery icons based on the
+  latest reported percentage remain in place.
 - Lineup details show elapsed schedule time for unambiguous configured windows.
   English and Chinese screens use shorter labels, tappable preview images, and
   expandable future updates while preserving schedule and device evidence.
