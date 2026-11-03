@@ -26,14 +26,14 @@ final class LineupsUITests: XCTestCase {
         let lineupCard = app.buttons["lineup-card-kitchen-deck"]
         XCTAssertTrue(lineupCard.waitForExistence(timeout: 3))
         XCTAssertTrue(lineupCard.label.contains("Kitchen deck"))
-        XCTAssertTrue(lineupCard.label.contains("Enabled"))
-        XCTAssertFalse(lineupCard.label.contains("Showing"))
+        XCTAssertTrue(lineupCard.label.contains("enabled"))
+        XCTAssertTrue(lineupCard.label.contains("Schedule step: Pantry"))
         XCTAssertTrue(lineupCard.label.contains("Manual"))
         let lineupList = app.scrollViews.containing(
             .button, identifier: "lineup-card-kitchen-deck"
         ).firstMatch
         XCTAssertTrue(lineupList.exists)
-        XCTAssertTrue(lineupList.staticTexts["Enabled"].exists)
+        XCTAssertFalse(lineupList.staticTexts["Enabled"].exists)
         XCTAssertFalse(
             lineupList.staticTexts["Schedules, decks, and rotations"].exists
         )
@@ -573,51 +573,55 @@ final class LineupsUITests: XCTestCase {
         XCTAssertTrue(app.buttons["lineup-card-kitchen-deck"].exists)
     }
 
-    func testCompactGroupsOpenRestoredDetailScreens() {
+    func testRestoredLineupListOpensCompactDetails() {
         let app = launchLineups(intent: "cycle")
         let lineup = app.buttons["lineup-card-kitchen-deck"]
-        let group = app.buttons["lineup-group-display-picpak-kitchen"]
-        XCTAssertTrue(group.waitForExistence(timeout: 3))
-        group.tap()
-        XCTAssertFalse(lineup.exists)
-        group.tap()
-        XCTAssertTrue(lineup.exists)
-        let search = app.searchFields.firstMatch
-        search.tap()
-        search.typeText("Kitchen")
-        XCTAssertTrue(lineup.exists)
-        search.buttons["Clear text"].tap()
+        XCTAssertTrue(lineup.waitForExistence(timeout: 3))
+        XCTAssertTrue(lineup.label.contains("Morning cycle"))
+        XCTAssertTrue(lineup.label.contains("2 dashboards"))
+        XCTAssertTrue(app.searchFields["Search Lineups"].exists)
+        XCTAssertFalse(app.buttons["lineup-group-display-picpak-kitchen"].exists)
+        XCTAssertFalse(app.buttons["lineup-display-picpak-kitchen"].exists)
+        XCTAssertFalse(app.staticTexts["Enabled"].exists)
+        XCTAssertFalse(app.staticTexts["No matching update within the projection"].exists)
+        attachEditor(app, name: "Restored Lineups list")
         lineup.tap()
-        XCTAssertTrue(app.staticTexts["Dashboards"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["lineup-dashboard-pantry"].exists)
+        XCTAssertTrue(app.buttons["lineup-dashboard-pantry"].waitForExistence(timeout: 3))
         XCTAssertFalse(app.progressIndicators["lineup-schedule-time"].exists)
-        XCTAssertFalse(app.buttons["lineup-detail-display-picpak-kitchen"].exists)
-        attachEditor(app, name: "Restored Lineup detail")
+        attachEditor(app, name: "Restored Lineup detail from original list")
         let schedule = app.buttons["lineup-details-disclosure"]
-        XCTAssertTrue(schedule.exists)
         for _ in 0..<4 where !schedule.isHittable { app.swipeUp() }
         schedule.tap()
         app.swipeUp()
         XCTAssertTrue(app.descendants(matching: .any).matching(
             NSPredicate(format: "label BEGINSWITH %@", "Starts each day at")
         ).firstMatch.waitForExistence(timeout: 3))
-        attachEditor(app, name: "Restored Lineup timing disclosure")
         app.navigationBars.buttons["BackButton"].firstMatch.tap()
-        let display = app.buttons["lineup-display-picpak-kitchen"]
+        XCTAssertTrue(lineup.waitForExistence(timeout: 3))
+        app.navigationBars.buttons["BackButton"].firstMatch.tap()
+        let display = app.buttons["display-card-picpak-kitchen"]
         XCTAssertTrue(display.waitForExistence(timeout: 3))
         display.tap()
         XCTAssertTrue(app.staticTexts["Current Screen"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["Connection & Power"].exists)
-        XCTAssertTrue(app.staticTexts["Battery"].exists)
-        XCTAssertTrue(app.staticTexts["display-signal-picpak-kitchen"].exists)
-        attachEditor(app, name: "Restored Display detail from Lineups")
-        let hardware = app.buttons["display-device-details-picpak-kitchen"]
-        for _ in 0..<5 where !hardware.isHittable { app.swipeUp() }
-        hardware.tap()
-        for label in ["Manufacturer", "Model", "Firmware", "Resolution", "Orientation", "Colour Gamut"] {
-            XCTAssertTrue(app.staticTexts[label].exists, label)
-        }
-        attachEditor(app, name: "Restored Display hardware disclosure")
+    }
+
+    func testRestoredLineupListDarkAppearance() {
+        let app = XCUIApplication()
+        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
+        app.launchEnvironment["TESSERAE_UI_TEST_COLOR_SCHEME"] = "dark"
+        app.launchArguments += ["-AppleLocale", "en_GB", "-AppleLanguages", "(en)"]
+        app.launch()
+        XCTAssertTrue(app.buttons["Explore with Demo Data"].waitForExistence(timeout: 3))
+        app.buttons["Explore with Demo Data"].tap()
+        app.buttons["manage-lineups"].tap()
+        let lineup = app.buttons["lineup-card-kitchen-deck"]
+        XCTAssertTrue(lineup.waitForExistence(timeout: 3))
+        XCTAssertTrue(lineup.label.contains("2 dashboards"))
+        XCTAssertFalse(app.staticTexts["Enabled"].exists)
+        XCTAssertFalse(app.staticTexts["No matching update within the projection"].exists)
+        attachEditor(app, name: "Restored Lineups list dark appearance")
     }
 
     func testRestoredLineupDetailAtAccessibilitySize() {

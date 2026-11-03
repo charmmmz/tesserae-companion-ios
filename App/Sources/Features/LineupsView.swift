@@ -6,7 +6,6 @@ struct LineupsView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
     @State private var query = ""
-    @State private var collapsedSectionIDs: Set<String> = []
     @State private var creatingLineup = false
     @State private var permissionAlertPresented = false
 
@@ -23,9 +22,6 @@ struct LineupsView: View {
     private var sections: [LineupListSection] {
         let matchingLineups = model.lineups.filter {
             searchQuery.isEmpty || $0.name.localizedStandardContains(searchQuery)
-                || displayDeviceIDs(for: $0).contains { id in
-                    model.displays.first { $0.id == id }?.name.localizedStandardContains(searchQuery) == true
-                }
         }
         let knownDisplayIDs = Set(model.displays.map(\.id))
         let groupedLineups = Dictionary(grouping: matchingLineups) {
@@ -94,52 +90,40 @@ struct LineupsView: View {
 
     var body: some View {
         let listSections = sections
-        let deviceIDs = Set(model.lineups.flatMap { displayDeviceIDs(for: $0) })
-        let responses = model.deviceUpcomingResponses.filter { $0.key == $0.value.deviceID && deviceIDs.contains($0.key) }
-            .sorted { $0.key < $1.key }.map(\.value)
-        let timezone = effectiveServerTimezone(model.activeInstance?.timezone, fallbackID: responses.first { TimeZone(identifier: $0.timezone) != nil }?.timezone)
-        let now = Date()
-        let dates = [now] + responses.flatMap { response in
-            response.events.filter { $0.scheduledAt > now && $0.scheduledAt >= response.generatedAt && $0.scheduledAt <= response.throughAt }.map(\.scheduledAt)
-        }
 
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
-                if serverTimezoneDiffers(timezone, at: dates) {
-                    Text("Times use \(timezone.identifier)")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
                 ForEach(listSections) { section in
                     VStack(alignment: .leading, spacing: 10) {
                         sectionHeader(section)
 
-                        if !collapsedSectionIDs.contains(section.id) || !searchQuery.isEmpty {
-                            LazyVStack(spacing: 0) {
-                                ForEach(
-                                    Array(section.lineups.enumerated()),
-                                    id: \.element.id
-                                ) { index, lineup in
-                                    VStack(spacing: 0) {
-                                        if index > 0 {
-                                            Divider()
-                                        }
+                        LazyVStack(spacing: 0) {
+                            ForEach(
+                                Array(section.lineups.enumerated()),
+                                id: \.element.id
+                            ) { index, lineup in
+                                VStack(spacing: 0) {
+                                    if index > 0 {
+                                        Divider()
+                                    }
 
-                                        NavigationLink(value: LineupRoute.lineup(id: lineup.id, displayID: section.displayID)) {
-                                            LineupListRow(
-                                                lineup: lineup,
-                                                plans: plans(for: lineup),
-                                                timezoneID: timezone.identifier
-                                            )
-                                        }
-                                        .buttonStyle(.plain)
-                                        .accessibilityIdentifier(
-                                            "lineup-card-\(lineup.id)"
+                                    NavigationLink {
+                                        LineupDetailView(lineupID: lineup.id)
+                                    } label: {
+                                        LineupListRow(
+                                            lineup: lineup,
+                                            isFirstInCard: index == 0,
+                                            isLastInCard: index == section.lineups.count - 1
                                         )
                                     }
+                                    .buttonStyle(.plain)
+                                    .accessibilityIdentifier(
+                                        "lineup-card-\(lineup.id)"
+                                    )
                                 }
                             }
-                            .tesseraeCard()
                         }
+                        .tesseraeCard()
                     }
                 }
             }
@@ -177,7 +161,7 @@ struct LineupsView: View {
                 }
             }
         }
-        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search displays and Lineups")
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Lineups")
         .overlay {
             if !model.lineups.isEmpty, !searchQuery.isEmpty, listSections.isEmpty {
                 ContentUnavailableView.search(text: searchQuery)
@@ -186,7 +170,6 @@ struct LineupsView: View {
         }
         .refreshable {
             await model.refreshLineups()
-            await refreshPlans()
         }
         .task(id: shouldAutoRefresh) {
             guard shouldAutoRefresh else { return }
@@ -195,7 +178,6 @@ struct LineupsView: View {
                 showErrors: false,
                 saveSnapshot: false
             )
-            await refreshPlans()
             while !Task.isCancelled {
                 do {
                     try await Task.sleep(for: .seconds(15))
@@ -206,8 +188,6 @@ struct LineupsView: View {
                     showErrors: false,
                     saveSnapshot: false
                 )
-                guard !Task.isCancelled else { return }
-                await refreshPlans()
             }
         }
         .navigationTitle("Lineups")
@@ -256,62 +236,36 @@ struct LineupsView: View {
         }
     }
 
-    private func plans(for lineup: Lineup) -> [DisplayPlanProjection] {
-        displayPlanProjections(
-            deviceIDs: displayDeviceIDs(for: lineup), displays: model.displays,
-            supported: model.supportsDeviceTimeline, responses: model.deviceUpcomingResponses,
-            refreshing: model.loadingDeviceTimelineIDs, errors: model.deviceTimelineErrors,
-            lineupID: lineup.id
-        )
-    }
-
-    private func refreshPlans() async {
-        let known = Set(model.displays.map(\.id))
-        let ids = Set(model.lineups.flatMap { displayDeviceIDs(for: $0) }).intersection(known)
-        for id in ids.sorted() {
-            guard !Task.isCancelled else { return }
-            await model.refreshDeviceUpcoming(displayID: id)
-        }
-    }
-
     private func sectionHeader(_ section: LineupListSection) -> some View {
-        let isCollapsed = collapsedSectionIDs.contains(section.id) && searchQuery.isEmpty
-        return HStack(spacing: 10) {
-            if let id = section.displayID {
-                NavigationLink(value: LineupRoute.display(id: id)) {
-                    HStack(spacing: 10) {
-                        sectionIcon(section)
-                        Text(section.title).font(.headline)
-                        Image(systemName: "chevron.right").font(.caption)
-                    }
-                    .foregroundStyle(.primary)
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
+        HStack(spacing: 10) {
+            sectionIcon(section)
+                .foregroundStyle(TesseraeTheme.accent)
+                .frame(width: 34, height: 34)
+                .background(
+                    TesseraeTheme.accent.opacity(0.11),
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(section.title)
+                    .font(.headline)
+                if let subtitle = section.subtitle {
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("lineup-display-\(id)")
-            } else {
-                sectionIcon(section)
-                Text(section.title).font(.headline)
             }
-            Spacer(minLength: 4)
+
+            Spacer()
+
             Text(section.lineups.count, format: .number)
-                .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-            Button {
-                if !collapsedSectionIDs.insert(section.id).inserted {
-                    collapsedSectionIDs.remove(section.id)
-                }
-            } label: {
-                Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
-                    .font(.caption.weight(.semibold))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(String(localized: "Expand or collapse \(section.title)"))
-            .accessibilityValue(isCollapsed ? "Collapsed" : "Expanded")
-            .accessibilityIdentifier("lineup-group-\(section.id)")
+                .font(.caption.monospacedDigit().weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.primary.opacity(0.055), in: Capsule())
         }
+        .padding(.horizontal, 2)
     }
 
     @ViewBuilder
@@ -394,11 +348,6 @@ private struct LineupListSection: Identifiable {
         }
     }
 
-    var displayID: String? {
-        if case let .display(display) = kind { return display.id }
-        return nil
-    }
-
     var subtitle: String? {
         switch kind {
         case .display:
@@ -413,81 +362,172 @@ private struct LineupListSection: Identifiable {
     }
 }
 
-struct LineupListRow: View {
+private struct LineupListRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let lineup: Lineup
-    let plans: [DisplayPlanProjection]
-    var showsPlan = true
-    var timezoneID: String? = nil
+    let isFirstInCard: Bool
+    let isLastInCard: Bool
 
     var body: some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 6) {
-                ViewThatFits(in: .horizontal) {
-                    HStack {
-                        Text(lineup.name).font(.headline)
-                        Spacer(minLength: 8)
-                        enabledLabel
-                    }
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(lineup.name).font(.headline)
-                        enabledLabel
-                    }
+        HStack(spacing: 12) {
+            lineupIdentityIcon
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(lineup.name)
+                    .font(.headline)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+
+                HStack(spacing: 5) {
+                    Image(systemName: currentPresentation.symbolName)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(
+                            currentPresentation.isShowing
+                                ? TesseraeTheme.accent
+                                : Color.secondary
+                        )
+                        .frame(width: 14)
+
+                    Text(currentPresentation.title)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                 }
-                Text([lineupScheduleSummary(lineup), lineupDaysSummary(lineup.daysOfWeek)].compactMap { $0 }.joined(separator: " · "))
-                    .font(.caption).foregroundStyle(.secondary)
-                if showsPlan { CompactLineupPlanSummary(plans: plans, timezoneID: timezoneID) }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                (dynamicTypeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 3))
+                    : AnyLayout(HStackLayout(spacing: 5))) {
+                    Text(
+                        lineup.intent?.displayName
+                            ?? String(localized: "Advanced")
+                    )
+                        .fontWeight(.semibold)
+                        .foregroundStyle(TesseraeTheme.accent)
+
+                    if !dynamicTypeSize.isAccessibilitySize {
+                        Text("·")
+                            .foregroundStyle(.tertiary)
+                    }
+
+                    Text(dashboardCountTitle)
+                        .foregroundStyle(.secondary)
+                }
+                .font(.caption)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
             }
+
+            .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
+
+            Spacer(minLength: 0)
+
             Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.tertiary)
         }
-        .padding(.vertical, 10)
+        .padding(.top, verticalInsets.top)
+        .padding(.bottom, verticalInsets.bottom)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "\(lineup.name), \(lineup.enabled ? "enabled" : "disabled"), \(rowSummary)"
+        )
         .accessibilityHint("Opens Lineup details and controls.")
     }
 
-    private var enabledLabel: some View {
-        Text(lineup.enabled ? "Enabled" : "Disabled")
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(lineup.enabled ? TesseraeTheme.success : Color.secondary)
-            .padding(.horizontal, 7).padding(.vertical, 3)
-            .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
+    private var verticalInsets: (top: CGFloat, bottom: CGFloat) {
+        switch (isFirstInCard, isLastInCard) {
+        case (true, true):
+            (8, 8)
+        case (true, false):
+            (0, 16)
+        case (false, true):
+            (16, 0)
+        case (false, false):
+            (8, 8)
+        }
+    }
+
+    private var lineupIdentityIcon: some View {
+        ZStack(alignment: .bottomTrailing) {
+            Image(systemName: lineup.intent?.symbolName ?? "rectangle.stack")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(TesseraeTheme.accent)
+                .frame(width: 32, height: 32)
+                .background(
+                    TesseraeTheme.accent.opacity(0.09),
+                    in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+                )
+
+            Circle()
+                .fill(
+                    lineup.enabled
+                        ? TesseraeTheme.success
+                        : Color.secondary.opacity(0.55)
+                )
+                .frame(width: 8, height: 8)
+                .overlay {
+                    Circle()
+                        .stroke(cardSurfaceColor, lineWidth: 1.5)
+                }
+                .offset(x: 2, y: 2)
+        }
+        .accessibilityHidden(true)
+    }
+
+    private var cardSurfaceColor: Color {
+        TesseraeTheme.surface
+    }
+
+    private var dashboardCountTitle: String {
+        lineup.dashboards.count == 1
+            ? String(localized: "1 dashboard")
+            : String(localized: "\(lineup.dashboards.count) dashboards")
+    }
+
+    private var rowSummary: String {
+        let intent = lineup.intent?.displayName ?? String(localized: "Advanced")
+        let dashboardCount = lineup.dashboards.count
+        let dashboards = dashboardCount == 1
+            ? String(localized: "1 dashboard")
+            : String(localized: "\(dashboardCount) dashboards")
+        return "\(intent), \(dashboards), \(currentPresentation.accessibilityTitle)"
+    }
+
+    private var currentPresentation: LineupListCurrentPresentation {
+        let pageIDs = Set(lineup.current.map(\.pageID))
+        if pageIDs.isEmpty {
+            return LineupListCurrentPresentation(
+                symbolName: "circle.dashed",
+                title: String(localized: "Not reported"),
+                accessibilityTitle: String(localized: "Schedule step not reported"),
+                isShowing: false
+            )
+        }
+        if pageIDs.count == 1, let pageID = pageIDs.first {
+            let name = lineup.dashboards.first { $0.pageID == pageID }?.name
+                ?? pageID
+            return LineupListCurrentPresentation(
+                symbolName: "play.fill",
+                title: name,
+                accessibilityTitle: String(localized: "Schedule step: \(name)"),
+                isShowing: true
+            )
+        }
+        return LineupListCurrentPresentation(
+            symbolName: "square.stack.3d.up.fill",
+            title: String(localized: "Multiple"),
+            accessibilityTitle: String(localized: "Different schedule steps"),
+            isShowing: true
+        )
     }
 }
 
-struct CompactLineupPlanSummary: View {
-    let plans: [DisplayPlanProjection]
-    var timezoneID: String? = nil
-
-    private var earliest: PlannedDisplayEvent? {
-        plans.compactMap(\.next).min { $0.event.scheduledAt < $1.event.scheduledAt }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            if let next = earliest, let plan = plans.first(where: { $0.id == next.displayID }) {
-                Text(String(localized: "Next planned update") + " · " + (plans.count > 1 ? plan.displayName + " · " : "") + compactProjectionDateText(next.event.scheduledAt, timezone: effectiveServerTimezone(timezoneID, fallbackID: next.timezone).identifier) + " · " + plannedCertaintyTitle(next.event.certainty))
-                    .foregroundStyle(TesseraeTheme.info)
-                if plan.error != nil { Text("Previous projection · Refresh failed").foregroundStyle(.secondary) }
-                if plans.count > 1 {
-                    Text(String(localized: "Other targets: \(plans.count - 1). Open details for each display."))
-                        .foregroundStyle(.secondary)
-                }
-                let missing = plans.filter { $0.availability != .available }.count
-                if missing > 0 {
-                    Text(String(localized: "\(missing) targets lack a current projection")).foregroundStyle(.secondary)
-                }
-            } else if let plan = plans.first {
-                Text(plan.status).foregroundStyle(.secondary)
-                if plans.count > 1 { Text(String(localized: "\(plans.count) targets · Open details for each display.")).foregroundStyle(.secondary) }
-            } else {
-                Text("No display").foregroundStyle(.secondary)
-            }
-        }
-        .font(.caption)
-        .fixedSize(horizontal: false, vertical: true)
-    }
+private struct LineupListCurrentPresentation {
+    let symbolName: String
+    let title: String
+    let accessibilityTitle: String
+    let isShowing: Bool
 }
 
 private struct LineupDashboardPlayContext: Identifiable {

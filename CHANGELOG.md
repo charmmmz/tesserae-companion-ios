@@ -26,6 +26,9 @@ capabilities.
 
 ### Changed
 
+- The Lineups list returns to the layout used on 29 October, with display
+  headings, intent icons, compact status dots and Dashboard counts. Per-row
+  planned-update messages and enabled/disabled badges are removed.
 - Display details return to the layout used on 29 October, with current/next
   preview paging, Next in Line, a separate Connection & Power card, and expandable
   hardware information. Reconnection safeguards and battery icons based on the
