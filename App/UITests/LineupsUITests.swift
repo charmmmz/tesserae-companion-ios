@@ -86,9 +86,6 @@ final class LineupsUITests: XCTestCase {
         XCTAssertTrue(currentDashboard.exists)
         XCTAssertGreaterThanOrEqual(currentDashboard.frame.width, 44 - 0.01)
         XCTAssertGreaterThanOrEqual(currentDashboard.frame.height, 44 - 0.01)
-        XCTAssertLessThan(currentDashboard.frame.width, app.frame.width / 2)
-        app.staticTexts["Pantry"].tap()
-        XCTAssertFalse(app.staticTexts["lineup-dashboard-sheet-title"].exists)
         currentDashboard.tap()
         XCTAssertTrue(
             app.staticTexts["lineup-dashboard-sheet-title"]
@@ -576,14 +573,13 @@ final class LineupsUITests: XCTestCase {
         XCTAssertTrue(app.buttons["lineup-card-kitchen-deck"].exists)
     }
 
-    func testCompactGroupsAndBidirectionalDisplayLinksKeepDeviceInformation() {
+    func testCompactGroupsOpenRestoredDetailScreens() {
         let app = launchLineups(intent: "cycle")
         let lineup = app.buttons["lineup-card-kitchen-deck"]
         let group = app.buttons["lineup-group-display-picpak-kitchen"]
         XCTAssertTrue(group.waitForExistence(timeout: 3))
         group.tap()
         XCTAssertFalse(lineup.exists)
-        attachEditor(app, name: "Compact Lineups collapsed group")
         group.tap()
         XCTAssertTrue(lineup.exists)
         let search = app.searchFields.firstMatch
@@ -591,104 +587,67 @@ final class LineupsUITests: XCTestCase {
         search.typeText("Kitchen")
         XCTAssertTrue(lineup.exists)
         search.buttons["Clear text"].tap()
-        attachEditor(app, name: "Compact Lineups by display")
         lineup.tap()
-        XCTAssertTrue(app.staticTexts["Starts at 06:00"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Dashboards"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["lineup-dashboard-pantry"].exists)
-        XCTAssertFalse(app.staticTexts["Schedule state does not confirm the screen currently displayed."].exists)
-        attachEditor(app, name: "Lineup schedule and thumbnails")
-        let displayLink = app.buttons["lineup-detail-display-picpak-kitchen"]
-        for _ in 0..<5 where !displayLink.isHittable { app.swipeUp() }
-        XCTAssertTrue(displayLink.isHittable)
-        displayLink.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["display-evidence-picpak-kitchen"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["Latest frame"].exists)
-        XCTAssertFalse(app.staticTexts["Screen appearance is not confirmed."].exists)
-        attachEditor(app, name: "Display preview queue and plan")
-        app.descendants(matching: .any)["display-detail-preview-picpak-kitchen"].firstMatch.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["display-evidence-preview-sheet"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["Screen appearance is not confirmed."].exists)
-        app.buttons["Done"].tap()
-        let deviceDetails = app.buttons["display-device-details-picpak-kitchen"]
-        for _ in 0..<5 where !deviceDetails.isHittable { app.swipeUp() }
-        for label in ["Status", "Last Seen", "Battery", "Signal"] {
-            XCTAssertFalse(app.staticTexts[label].exists, label)
-        }
-        deviceDetails.tap()
-        for label in ["Status", "Last Seen", "Battery", "Signal"] {
-            XCTAssertTrue(app.staticTexts[label].exists, label)
-        }
-        for _ in 0..<3 where !app.staticTexts["Resolution"].isHittable { app.swipeUp() }
+        XCTAssertFalse(app.progressIndicators["lineup-schedule-time"].exists)
+        XCTAssertFalse(app.buttons["lineup-detail-display-picpak-kitchen"].exists)
+        attachEditor(app, name: "Restored Lineup detail")
+        let schedule = app.buttons["lineup-details-disclosure"]
+        XCTAssertTrue(schedule.exists)
+        for _ in 0..<4 where !schedule.isHittable { app.swipeUp() }
+        schedule.tap()
+        app.swipeUp()
+        XCTAssertTrue(app.descendants(matching: .any).matching(
+            NSPredicate(format: "label BEGINSWITH %@", "Starts each day at")
+        ).firstMatch.waitForExistence(timeout: 3))
+        attachEditor(app, name: "Restored Lineup timing disclosure")
+        app.navigationBars.buttons["BackButton"].firstMatch.tap()
+        let display = app.buttons["lineup-display-picpak-kitchen"]
+        XCTAssertTrue(display.waitForExistence(timeout: 3))
+        display.tap()
+        XCTAssertTrue(app.staticTexts["Current Screen"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Connection & Power"].exists)
+        XCTAssertTrue(app.staticTexts["Battery"].exists)
+        XCTAssertTrue(app.staticTexts["display-signal-picpak-kitchen"].exists)
+        attachEditor(app, name: "Restored Display detail from Lineups")
+        let hardware = app.buttons["display-device-details-picpak-kitchen"]
+        for _ in 0..<5 where !hardware.isHittable { app.swipeUp() }
+        hardware.tap()
         for label in ["Manufacturer", "Model", "Firmware", "Resolution", "Orientation", "Colour Gamut"] {
             XCTAssertTrue(app.staticTexts[label].exists, label)
         }
-        attachEditor(app, name: "Retained display connection and device details")
-        let backToLineup = app.buttons["display-lineup-kitchen-deck"]
-        for _ in 0..<5 where !backToLineup.isHittable { app.swipeUp() }
-        backToLineup.tap()
-        XCTAssertTrue(app.buttons["lineup-edit"].waitForExistence(timeout: 3))
-        app.navigationBars.buttons["BackButton"].firstMatch.tap()
-        XCTAssertTrue(app.navigationBars["Kitchen"].waitForExistence(timeout: 3))
-        app.navigationBars.buttons["BackButton"].firstMatch.tap()
-        XCTAssertTrue(app.buttons["lineup-edit"].waitForExistence(timeout: 3))
-        app.navigationBars.buttons["BackButton"].firstMatch.tap()
-        XCTAssertTrue(app.buttons["lineup-card-kitchen-deck"].waitForExistence(timeout: 3))
+        attachEditor(app, name: "Restored Display hardware disclosure")
     }
 
-    func testLineupAndDisplayEvidenceAtAccessibilitySize() {
+    func testRestoredLineupDetailAtAccessibilitySize() {
         let app = launchLineups(intent: "cycle", largeText: true)
         app.buttons["lineup-card-kitchen-deck"].tap()
         XCTAssertTrue(app.buttons["lineup-edit"].waitForExistence(timeout: 3))
-        attachEditor(app, name: "Lineup schedule at accessibility size")
-        let displayLink = app.buttons["lineup-detail-display-picpak-kitchen"]
-        for _ in 0..<8 where !displayLink.isHittable { app.swipeUp() }
-        XCTAssertTrue(displayLink.isHittable)
-        displayLink.tap()
-        XCTAssertTrue(app.staticTexts["Latest frame"].waitForExistence(timeout: 3))
-        let recent = app.buttons["display-select-recent-picpak-kitchen"]
-        let queued = app.buttons["display-select-queued-picpak-kitchen"]
-        for selector in [recent, queued] {
-            XCTAssertTrue(selector.isHittable)
-            XCTAssertGreaterThanOrEqual(selector.frame.height, 44 - 0.01)
-            XCTAssertGreaterThanOrEqual(selector.frame.width, 44 - 0.01)
-        }
-        attachEditor(app, name: "Display evidence at accessibility size")
-        let recentArtwork = app.descendants(matching: .any)["display-detail-preview-picpak-kitchen"].firstMatch
-        let recentFrame = recentArtwork.frame
-        queued.tap()
-        XCTAssertTrue(queued.isSelected)
-        let queuedArtwork = app.descendants(matching: .any)["display-detail-pending-preview-picpak-kitchen"].firstMatch
-        var previousFrame = CGRect.null
-        var stableObservations = 0
-        let settledPreview = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            let frame = queuedArtwork.frame
-            stableObservations = frame == previousFrame ? stableObservations + 1 : 0
-            previousFrame = frame
-            return stableObservations >= 2 && abs(frame.minX - recentFrame.minX) < 0.5
-                && abs(frame.width - recentFrame.width) < 0.5
-                && abs(frame.height - recentFrame.height) < 0.5
-        }, object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [settledPreview], timeout: 15), .completed)
-        XCTAssertFalse(recentArtwork.isHittable)
-        attachEditor(app, name: "Queued frame at accessibility size")
-        recent.tap()
-        XCTAssertTrue(recent.isSelected)
-        let details = app.buttons["display-device-details-picpak-kitchen"]
+        let preview = app.buttons["lineup-dashboard-pantry"]
+        XCTAssertTrue(preview.isHittable)
+        XCTAssertGreaterThanOrEqual(preview.frame.height, 44 - 0.01)
+        XCTAssertFalse(app.progressIndicators["lineup-schedule-time"].exists)
+        attachEditor(app, name: "Restored Lineup detail at accessibility size")
+        let details = app.buttons["lineup-details-disclosure"]
         for _ in 0..<8 where !details.isHittable { app.swipeUp() }
-        XCTAssertTrue(details.isHittable)
         details.tap()
-        attachEditor(app, name: "Display device details at accessibility size")
+        app.swipeUp()
+        XCTAssertTrue(app.descendants(matching: .any).matching(
+            NSPredicate(format: "label BEGINSWITH %@", "Starts each day at")
+        ).firstMatch.waitForExistence(timeout: 3))
+        attachEditor(app, name: "Restored Lineup timing at accessibility size")
     }
 
-    func testCompactBoundedWindowAndEvidenceEnglish() {
-        assertCompactWindowAndEvidence(language: "en", dark: false)
+    func testRestoredLineupDetailEnglish() {
+        assertRestoredDetail(language: "en", dark: false)
     }
 
-    func testCompactBoundedWindowAndEvidenceChinese() {
-        assertCompactWindowAndEvidence(language: "zh-Hans", dark: true)
+    func testRestoredLineupDetailChinese() {
+        assertRestoredDetail(language: "zh-Hans", dark: true)
     }
 
-    private func assertCompactWindowAndEvidence(language: String, dark: Bool) {
+    private func assertRestoredDetail(language: String, dark: Bool) {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
@@ -704,39 +663,23 @@ final class LineupsUITests: XCTestCase {
         app.buttons["manage-lineups"].tap()
         XCTAssertTrue(app.buttons["lineup-card-kitchen-deck"].waitForExistence(timeout: 3))
         app.buttons["lineup-card-kitchen-deck"].tap()
-        let bar = app.progressIndicators["lineup-schedule-time"]
-        XCTAssertTrue(bar.waitForExistence(timeout: 3))
-        XCTAssertTrue(bar.isHittable)
-        XCTAssertFalse(app.descendants(matching: .any)["lineup-timezone-note"].exists)
-        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'GMT' OR label CONTAINS 'Asia/Shanghai'")).firstMatch.exists)
-        attachEditor(app, name: "Compact schedule time \(language)")
+        XCTAssertTrue(app.staticTexts[language == "en" ? "Dashboards" : "仪表盘"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.progressIndicators["lineup-schedule-time"].exists)
+        XCTAssertFalse(app.buttons["lineup-detail-display-picpak-kitchen"].exists)
+        XCTAssertFalse(app.staticTexts[language == "en" ? "Starts each day at" : "每天开始于"].exists)
+        attachEditor(app, name: "Restored compact Lineup detail \(language)")
         app.switches["lineup-enabled-on"].tap()
         XCTAssertTrue(app.switches["lineup-enabled-off"].waitForExistence(timeout: 3))
-        XCTAssertFalse(bar.exists)
         app.switches["lineup-enabled-off"].tap()
-        XCTAssertTrue(bar.waitForExistence(timeout: 3))
-        let display = app.buttons["lineup-detail-display-picpak-kitchen"]
-        for _ in 0..<6 where !display.isHittable { app.swipeUp() }
-        display.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["display-latest-frame-picpak-kitchen"].waitForExistence(timeout: 3))
-        XCTAssertFalse(app.descendants(matching: .any)["display-timezone-note"].exists)
-        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'GMT' OR label CONTAINS 'Asia/Shanghai'")).firstMatch.exists)
-        attachEditor(app, name: "Compact display evidence \(language)")
-        let later = app.descendants(matching: .any)["display-later-updates"].firstMatch
-        for _ in 0..<6 where !later.isHittable { app.swipeUp() }
-        XCTAssertTrue(later.isHittable)
-        later.tap()
-        XCTAssertTrue(app.buttons["display-planned-lineup-upcoming-picpak-kitchen-fresh"].waitForExistence(timeout: 3))
-        attachEditor(app, name: "Compact subsequent updates \(language)")
-        let details = app.buttons["display-device-details-picpak-kitchen"]
-        for _ in 0..<6 where !details.isHittable { app.swipeUp() }
+        XCTAssertTrue(app.switches["lineup-enabled-on"].waitForExistence(timeout: 3))
+        let details = app.buttons["lineup-details-disclosure"]
+        for _ in 0..<5 where !details.isHittable { app.swipeUp() }
         details.tap()
-        XCTAssertTrue(app.staticTexts["display-signal-picpak-kitchen"].exists)
-        let timezone = app.staticTexts[language == "en" ? "Time Zone" : "时区"]
-        XCTAssertTrue(timezone.waitForExistence(timeout: 3))
-        for _ in 0..<4 where !timezone.isHittable { app.swipeUp() }
-        XCTAssertTrue(timezone.isHittable)
-        attachEditor(app, name: "Compact device information \(language)")
+        app.swipeUp()
+        XCTAssertTrue(app.descendants(matching: .any).matching(
+            NSPredicate(format: "label BEGINSWITH %@", language == "en" ? "Starts each day at" : "每天开始于")
+        ).firstMatch.waitForExistence(timeout: 3))
+        attachEditor(app, name: "Restored compact Lineup timing \(language)")
     }
 
     func testDailyLineupUsesFocusedScheduleDetails() {

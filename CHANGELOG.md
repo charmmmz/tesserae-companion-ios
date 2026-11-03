@@ -30,9 +30,9 @@ capabilities.
   preview paging, Next in Line, a separate Connection & Power card, and expandable
   hardware information. Reconnection safeguards and battery icons based on the
   latest reported percentage remain in place.
-- Lineup details show elapsed schedule time for unambiguous configured windows.
-  English and Chinese screens use shorter labels, tappable preview images, and
-  expandable future updates while preserving schedule and device evidence.
+- Lineup details return to the compact layout used on 29 October, with text-based
+  Dashboard rows and schedule details behind a disclosure. Target-aware previews
+  and multi-display send controls retain their correctness fixes.
 
 ## [0.8.2] - 2026-10-28
 

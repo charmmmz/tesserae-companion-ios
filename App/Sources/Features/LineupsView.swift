@@ -511,7 +511,6 @@ struct LineupDetailView: View {
 
     @Environment(AppModel.self) private var model
     @Environment(\.openURL) private var openURL
-    @State private var planNow = Date()
     @State private var selectedDeviceIDs: Set<String> = []
     @State private var didLoadInitialTargets = false
     @State private var detailsExpanded = false
@@ -535,9 +534,7 @@ struct LineupDetailView: View {
                 ScrollView {
                     VStack(spacing: 14) {
                         summaryRow(lineup)
-                        scheduleCard(lineup)
                         dashboardsCard(lineup)
-                        displayLinksCard(lineup)
 
                         if !lineup.nativeEditable {
                             webManagedBanner(lineup)
@@ -549,28 +546,13 @@ struct LineupDetailView: View {
 
                         secondaryDetailsCard(lineup)
                     }
-                    .frame(maxWidth: 720)
                     .padding(16)
-                    .frame(maxWidth: .infinity)
                 }
                 .refreshable {
-                    await refreshDetail()
+                    await model.refreshLineups()
                 }
                 .task(id: displayDeviceIDs(for: lineup)) {
                     reconcileTargets(displayDeviceIDs(for: lineup))
-                }
-                .task(id: "\(selectedDeviceIDs.sorted())|\(model.connectionRevision)") {
-                    await refreshDetailPlans()
-                    while !Task.isCancelled {
-                        guard let current = self.lineup, model.supportsDeviceTimeline else { return }
-                        let plans = detailPlans(current)
-                        let deadlines = plans.flatMap { [$0.next?.event.scheduledAt, $0.response?.throughAt].compactMap { $0 } }
-                        let delay = deadlines.map { $0.timeIntervalSinceNow + 1 }.filter { $0 > 0 }.min() ?? 30
-                        do { try await Task.sleep(for: .seconds(min(delay, 60))) } catch { return }
-                        guard !Task.isCancelled else { return }
-                        planNow = Date()
-                        await refreshDetailPlans()
-                    }
                 }
             } else {
                 ContentUnavailableView {
@@ -610,7 +592,7 @@ struct LineupDetailView: View {
                     }
 
                     Button("Refresh", systemImage: "arrow.clockwise") {
-                        Task { await refreshDetail() }
+                        Task { await model.refreshLineups() }
                     }
                 } label: {
                     Label("More", systemImage: "ellipsis")
@@ -679,131 +661,8 @@ struct LineupDetailView: View {
         .tesseraeScreenBackground()
     }
 
-    private func detailPlans(_ lineup: Lineup) -> [DisplayPlanProjection] {
-        displayPlanProjections(
-            deviceIDs: presentationDeviceIDs(for: lineup).sorted(), displays: model.displays,
-            supported: model.supportsDeviceTimeline, responses: model.deviceUpcomingResponses,
-            refreshing: model.loadingDeviceTimelineIDs, errors: model.deviceTimelineErrors,
-            lineupID: lineup.id, now: planNow
-        )
-    }
-
     private func controlTargetIDs(for lineup: Lineup) -> Set<String> {
         presentationDeviceIDs(for: lineup).intersection(Set(model.displays.map(\.id)))
-    }
-
-    private func thumbnailDisplay(for lineup: Lineup) -> DisplaySummary? {
-        let selected = controlTargetIDs(for: lineup)
-        guard selected.count == 1, let id = selected.first else { return nil }
-        return model.displays.first { $0.id == id }
-    }
-
-    private func refreshDetail() async {
-        await model.refreshLineups()
-        guard !Task.isCancelled else { return }
-        await refreshDetailPlans()
-    }
-
-    private func refreshDetailPlans() async {
-        planNow = Date()
-        guard let lineup else { return }
-        for id in controlTargetIDs(for: lineup).sorted() {
-            guard !Task.isCancelled else { return }
-            await model.refreshDeviceUpcoming(displayID: id)
-        }
-    }
-
-    private var lineupTimezone: TimeZone {
-        let deviceIDs = Set(lineup.map { displayDeviceIDs(for: $0) } ?? [])
-        let fallback = model.deviceUpcomingResponses.filter { $0.key == $0.value.deviceID && deviceIDs.contains($0.key) }
-            .sorted { $0.key < $1.key }.map(\.value).first { TimeZone(identifier: $0.timezone) != nil }?.timezone
-        return effectiveServerTimezone(model.activeInstance?.timezone, fallbackID: fallback)
-    }
-
-    private func scheduleCard(_ lineup: Lineup) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label(lineupScheduleSummary(lineup), systemImage: "clock")
-                    .font(.headline)
-                Spacer(minLength: 4)
-            }
-            if let days = lineupDaysSummary(lineup.daysOfWeek) {
-                Text(days).font(.caption).foregroundStyle(.secondary)
-            }
-            if serverTimezoneDiffers(lineupTimezone, at: [planNow] + detailPlans(lineup).flatMap { $0.futureEvents.map(\.event.scheduledAt) }) {
-                Text("Times use \(lineupTimezone.identifier)")
-                    .font(.caption).foregroundStyle(.secondary)
-                    .accessibilityIdentifier("lineup-timezone-note")
-            }
-            TimelineView(.periodic(from: .now, by: 60)) { context in
-                if let window = ScheduleTimeWindow.active(for: lineup, timezoneID: model.activeInstance?.timezone, now: context.date) {
-                    VStack(alignment: .leading, spacing: 5) {
-                        HStack {
-                            Text("Schedule time")
-                            Spacer()
-                            Text(window.timeText(context.date)).monospacedDigit()
-                        }
-                        .font(.caption).foregroundStyle(.secondary)
-                        ProgressView(value: window.fractionElapsed(at: context.date))
-                            .tint(TesseraeTheme.accent)
-                            .accessibilityLabel("Schedule time")
-                            .accessibilityValue(window.timeText(context.date) + " / " + window.timeText(window.start) + "–" + window.timeText(window.end))
-                            .accessibilityIdentifier("lineup-schedule-time")
-                        HStack {
-                            Text(window.timeText(window.start))
-                            Spacer()
-                            Text(window.timeText(window.end))
-                        }
-                        .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
-                    }
-                }
-            }
-            ForEach(detailPlans(lineup)) { plan in
-                DisplayPlanSummary(plan: plan, showsDisplayName: true, compact: true, timezoneID: lineupTimezone.identifier)
-            }
-            if presentationDeviceIDs(for: lineup).isEmpty {
-                Text("Select a target").font(.caption).foregroundStyle(.secondary)
-            }
-        }
-        .tesseraeCard()
-    }
-
-    private func stepPlanTimes(_ dashboard: LineupDashboard, lineup: Lineup) -> some View {
-        let plans = detailPlans(lineup)
-        return VStack(alignment: .leading, spacing: 3) {
-            ForEach(plans) { plan in
-                if let event = plan.events.first(where: { $0.event.dashboardID == dashboard.pageID && $0.event.scheduledAt > plan.now }), plan.availability == .available {
-                    Text(([plans.count > 1 ? plan.displayName : nil, compactProjectionDateText(event.event.scheduledAt, timezone: lineupTimezone.identifier), event.event.certainty != .scheduled ? plannedCertaintyTitle(event.event.certainty) : nil].compactMap { $0 }).joined(separator: " · "))
-                        .font(.caption2).foregroundStyle(TesseraeTheme.info)
-                    if plan.error != nil { Text("Previous projection · Refresh failed").font(.caption2).foregroundStyle(.secondary) }
-                }
-            }
-        }
-    }
-
-    private func displayLinksCard(_ lineup: Lineup) -> some View {
-        let ids = displayDeviceIDs(for: lineup)
-        return VStack(alignment: .leading, spacing: 8) {
-            Text("Display previews & updates").font(.headline)
-            ForEach(ids, id: \.self) { id in
-                if model.displays.contains(where: { $0.id == id }) {
-                    NavigationLink(value: LineupRoute.display(id: id)) {
-                        HStack(spacing: 10) {
-                            Image(systemName: "display")
-                            Text(displayName(id)).frame(maxWidth: .infinity, alignment: .leading)
-                            Image(systemName: "chevron.right").font(.caption)
-                        }
-                        .frame(minHeight: 44)
-                    }
-                    .accessibilityIdentifier("lineup-detail-display-\(id)")
-                } else {
-                    Text(displayName(id) + " · " + String(localized: "Assigned display is not available"))
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            if ids.isEmpty { Text("No display").foregroundStyle(.secondary) }
-        }
-        .tesseraeCard()
     }
 
     private func summaryRow(_ lineup: Lineup) -> some View {
@@ -874,17 +733,43 @@ struct LineupDetailView: View {
         .tesseraeCard()
     }
 
+    @ViewBuilder
     private func dashboardsHeader(_ lineup: Lineup) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack {
-                Text("Steps").font(.headline)
-                Spacer()
-                Text(String(localized: "\(lineup.dashboards.count) steps"))
-                    .font(.caption).foregroundStyle(.secondary)
+        let state = currentState(lineup)
+
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Dashboards")
+                .font(.headline)
+
+            if state.pageID == nil {
+                Text(state.title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("lineup-playback-status")
+            } else if let nextAdvanceEpoch = lineup.nextAdvanceEpoch {
+                Label {
+                    HStack(spacing: 4) {
+                        Text("Next change")
+                        Text(
+                            Date(
+                                timeIntervalSince1970: TimeInterval(
+                                    nextAdvanceEpoch
+                                )
+                            ),
+                            format: .dateTime
+                                .month(.abbreviated)
+                                .day()
+                                .hour()
+                                .minute()
+                        )
+                    }
+                } icon: {
+                    Image(systemName: "clock")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
             }
-            Text(LineupNavigationState(targetIDs: presentationDeviceIDs(for: lineup), current: lineup.current).title(dashboards: lineup.dashboards))
-                .font(.caption).foregroundStyle(.secondary)
-                .accessibilityIdentifier("lineup-playback-status")
         }
     }
 
@@ -894,74 +779,75 @@ struct LineupDetailView: View {
         position: Int
     ) -> some View {
         let selectedTargets = controlTargetIDs(for: lineup)
-        let navigation = LineupStepNavigation(pageID: dashboard.pageID, targetIDs: selectedTargets, current: lineup.current)
+        let navigation = LineupStepNavigation(
+            pageID: dashboard.pageID,
+            targetIDs: selectedTargets,
+            current: lineup.current
+        )
         let isCurrent = !navigation.matchingTargetIDs.isEmpty
         let isOperating = model.isOperatingOnLineup(lineup.id)
 
-        return detailLayout {
-            HStack(alignment: .center, spacing: 11) {
-                Text("\(position)")
-                    .font(.caption.monospacedDigit().weight(.semibold))
-                    .foregroundStyle(
-                        isCurrent ? Color.white : Color.secondary
-                    )
-                    .frame(width: positionBadgeSize, height: positionBadgeSize)
-                    .background(
-                        isCurrent
-                            ? TesseraeTheme.accentFill
-                            : Color.primary.opacity(0.055),
-                        in: Circle()
-                    )
+        return HStack(alignment: .center, spacing: 11) {
+            Button {
+                dashboardToPreview = LineupDashboardPlayContext(
+                    lineupID: lineup.id,
+                    dashboard: dashboard
+                )
+            } label: {
+                HStack(alignment: .center, spacing: 11) {
+                    Text("\(position)")
+                        .font(.caption.monospacedDigit().weight(.semibold))
+                        .foregroundStyle(
+                            isCurrent ? Color.white : Color.secondary
+                        )
+                        .frame(width: positionBadgeSize, height: positionBadgeSize)
+                        .background(
+                            isCurrent
+                                ? TesseraeTheme.accentFill
+                                : Color.primary.opacity(0.055),
+                            in: Circle()
+                        )
 
-                Button {
-                    dashboardToPreview = LineupDashboardPlayContext(lineupID: lineup.id, dashboard: dashboard)
-                } label: {
-                    LineupStepThumbnail(dashboard: dashboard, display: thumbnailDisplay(for: lineup))
-                        .frame(minWidth: 44, minHeight: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(dashboard.missing)
-                .accessibilityLabel("Preview \(dashboard.name)")
-                .accessibilityIdentifier("lineup-dashboard-\(dashboard.pageID)")
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 6) {
+                            Text(dashboard.name)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(
+                                    dashboard.missing ? .secondary : .primary
+                                )
 
-                VStack(alignment: .leading, spacing: 4) {
-                    if isCurrent && !navigation.allSelectedTargetsMatch {
-                        Text(String(localized: "Schedule step for \(displayNames(navigation.matchingTargetIDs.sorted()))"))
-                            .font(.caption2.weight(.medium)).foregroundStyle(TesseraeTheme.accent)
-                    }
-                    HStack(spacing: 6) {
-                        Text(dashboard.name)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(
-                                dashboard.missing ? .secondary : .primary
-                            )
+                            if dashboard.missing {
+                                Text("Missing")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(TesseraeTheme.danger)
+                            }
+                        }
 
-                        if dashboard.missing {
-                            Text("Missing")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(TesseraeTheme.danger)
+                        if let metadata = dashboardMetadata(
+                            dashboard,
+                            lineup: lineup
+                        ) {
+                            Text(metadata)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                     }
 
-                    if let metadata = dashboardMetadata(
-                        dashboard,
-                        lineup: lineup
-                    ) {
-                        Text(metadata)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    stepPlanTimes(dashboard, lineup: lineup)
+                    Spacer(minLength: 4)
                 }
-
-                Spacer(minLength: 4)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
             }
-            .frame(minHeight: 44)
+            .buttonStyle(.plain)
+            .disabled(dashboard.missing)
+            .accessibilityLabel("Preview \(dashboard.name)")
+            .accessibilityIdentifier(
+                "lineup-dashboard-\(dashboard.pageID)"
+            )
 
             if model.supportsLineupControl {
                 if navigation.allSelectedTargetsMatch {
-                    Image(systemName: "arrow.turn.down.right")
+                    Image(systemName: "pause.fill")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(TesseraeTheme.accent)
                         .frame(width: 38, height: 38)
@@ -1077,7 +963,7 @@ struct LineupDetailView: View {
         VStack(alignment: .leading, spacing: 0) {
             targetRow(lineup)
 
-            Group {
+            if hasBehaviorDetails(lineup) {
                 Divider()
                     .padding(.vertical, 12)
 
@@ -1112,16 +998,6 @@ struct LineupDetailView: View {
                 .accessibilityIdentifier("lineup-details-disclosure")
 
                 if detailsExpanded {
-                    Text("Schedule time shows elapsed time in the configured window, not playback progress. Schedule state does not confirm the screen currently displayed.")
-                        .font(.caption).foregroundStyle(.secondary)
-                        .padding(.top, 12)
-                    LabeledContent("Time Zone", value: lineupTimezone.identifier)
-                        .font(.caption).foregroundStyle(.secondary)
-                        .padding(.top, 10)
-                    ForEach(detailPlans(lineup)) { plan in
-                        DisplayPlanSummary(plan: plan, showsDisplayName: true, timezoneID: lineupTimezone.identifier)
-                            .padding(.top, 10)
-                    }
                     behaviorDetails(lineup)
                         .padding(.top, 14)
                 }
@@ -1287,6 +1163,48 @@ struct LineupDetailView: View {
         .font(.subheadline)
     }
 
+    private func currentState(_ lineup: Lineup) -> LineupCurrentPresentation {
+        let selectedTargets = presentationDeviceIDs(for: lineup)
+        let selectedStates = lineup.current.filter {
+            selectedTargets.contains($0.deviceID)
+        }
+        let pageIDs = Set(selectedStates.map(\.pageID))
+
+        guard !selectedTargets.isEmpty else {
+            return LineupCurrentPresentation(
+                title: String(localized: "Select a target"),
+                pageID: nil
+            )
+        }
+
+        if selectedStates.count != selectedTargets.count {
+            return LineupCurrentPresentation(
+                title: LineupNavigationState(targetIDs: selectedTargets, current: lineup.current)
+                    .title(dashboards: lineup.dashboards),
+                pageID: nil
+            )
+        }
+
+        guard pageIDs.count == 1, let pageID = pageIDs.first else {
+            if pageIDs.isEmpty {
+                return LineupCurrentPresentation(
+                    title: String(localized: "Not reported"),
+                    pageID: nil
+                )
+            }
+            return LineupCurrentPresentation(
+                title: String(localized: "Different dashboards"),
+                pageID: nil
+            )
+        }
+
+        let dashboard = lineup.dashboards.first { $0.pageID == pageID }
+        return LineupCurrentPresentation(
+            title: dashboard?.name ?? pageID,
+            pageID: pageID
+        )
+    }
+
     private func effectiveSelectedDeviceIDs(for lineup: Lineup) -> Set<String> {
         didLoadInitialTargets
             ? selectedDeviceIDs
@@ -1365,6 +1283,46 @@ struct LineupDetailView: View {
         case nil:
             String(localized: "Schedule & Details")
         }
+    }
+
+    private func hasBehaviorDetails(_ lineup: Lineup) -> Bool {
+        let hasCommonDetails = lineup.refreshIntervalMinutes != nil
+            || lineup.homePageID != nil
+            || (lineup.homeTimeoutMinutes ?? 0) > 0
+            || (
+                lineup.entryPageID != nil
+                    && lineup.entryPageID != lineup.dashboards.first?.pageID
+            )
+
+        switch lineup.intent {
+        case .manual:
+            return hasCommonDetails
+        case .daily:
+            return hasCommonDetails
+                || lineup.firesAt != nil
+                || lineup.daysOfWeek != nil
+                || hasScheduleConstraints(lineup)
+        case .interval:
+            return hasCommonDetails
+                || lineup.intervalMinutes != nil
+                || lineup.daysOfWeek != nil
+                || hasScheduleConstraints(lineup)
+        case .cycle:
+            return hasCommonDetails
+                || lineup.anchor != nil
+                || lineup.daysOfWeek != nil
+                || hasScheduleConstraints(lineup)
+        case nil:
+            return true
+        }
+    }
+
+    private func hasScheduleConstraints(_ lineup: Lineup) -> Bool {
+        lineup.endAt != nil
+            || lineup.windowStart != nil
+            || lineup.windowEnd != nil
+            || lineup.fallbackPageID != nil
+            || lineup.mode == .priority
     }
 
     private func runPaintAction(
@@ -1550,83 +1508,10 @@ func lineupAdvancedSetupMessage(
     return String(localized: "This Lineup is edited in Tesserae on the web.")
 }
 
-struct DisplayPlanSummary: View {
-    let plan: DisplayPlanProjection
-    var showsDisplayName = false
-    var showsNextHeading = true
-    var compact = false
-    var timezoneID: String? = nil
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if showsDisplayName { Text(plan.displayName).font(.caption.weight(.semibold)) }
-            if let next = plan.next {
-                if compact {
-                    Text([String(localized: "Next planned"), compactProjectionDateText(next.event.scheduledAt, timezone: timezoneID ?? next.timezone), next.event.dashboardName].compactMap { $0 }.joined(separator: " · "))
-                        .foregroundStyle(TesseraeTheme.info)
-                    if next.event.certainty != .scheduled || next.event.effect == .refreshScreen {
-                        Text([next.event.certainty != .scheduled ? plannedCertaintyTitle(next.event.certainty) : nil,
-                              next.event.effect == .refreshScreen ? String(localized: "Refreshes the current screen") : nil].compactMap { $0 }.joined(separator: " · "))
-                    }
-                } else {
-                    Text((showsNextHeading ? String(localized: "Next planned update") + " · " : "") + projectionDateText(next.event.scheduledAt, timezone: timezoneID ?? next.timezone))
-                        .foregroundStyle(TesseraeTheme.info)
-                    Text([next.event.dashboardName, next.event.lineupName, plannedCertaintyTitle(next.event.certainty), next.event.effect == .changeScreen ? String(localized: "Changes the screen") : String(localized: "Refreshes the current screen")].compactMap { $0 }.joined(separator: " · "))
-                }
-            } else {
-                Text(plan.status)
-            }
-            if !compact, let response = plan.response, plan.next == nil || plan.error != nil {
-                Text(String(localized: "Projection generated \(projectionDateText(response.generatedAt, timezone: timezoneID ?? response.timezone)) · Through \(projectionDateText(response.throughAt, timezone: timezoneID ?? response.timezone))"))
-                    .font(.caption2)
-            }
-            if plan.error != nil, plan.response != nil {
-                Text("Previous projection · Refresh failed")
-            }
-            if let error = plan.error, plan.response != nil { Text(error) }
-            if plan.isRefreshing, plan.response != nil { Text("Refreshing…") }
-        }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .fixedSize(horizontal: false, vertical: true)
-    }
-
-
+private struct LineupCurrentPresentation {
+    let title: String
+    let pageID: String?
 }
-
-private struct LineupStepThumbnail: View {
-    @Environment(AppModel.self) private var model
-    let dashboard: LineupDashboard
-    let display: DisplaySummary?
-
-    var body: some View {
-        Group {
-            if let display {
-                PreviewArtwork(
-                    state: model.dashboardPreview(id: dashboard.pageID, deviceID: display.id),
-                    placeholderSystemName: "rectangle.grid.2x2",
-                    placeholderLabel: String(localized: "Preview \(dashboard.name)"),
-                    imageLabel: String(localized: "Preview \(dashboard.name)"),
-                    accessibilityIdentifier: "lineup-step-thumbnail-\(dashboard.pageID)"
-                )
-                .aspectRatio(CGFloat(display.panel.width) / CGFloat(max(display.panel.height, 1)), contentMode: .fit)
-            } else {
-                Image(systemName: "rectangle.grid.2x2")
-                    .foregroundStyle(.secondary)
-                    .frame(width: 64, height: 48)
-                    .background(Color.secondary.opacity(0.06))
-                    .accessibilityLabel("Select one display for step previews")
-            }
-        }
-        .frame(width: 64)
-        .clipShape(RoundedRectangle(cornerRadius: 5))
-        .task(id: "\(dashboard.pageID)|\(display?.id ?? "none")|\(model.previewGeneration)") {
-            guard let display, !dashboard.missing else { return }
-            await model.loadDashboardPreview(id: dashboard.pageID, deviceID: display.id)
-        }
-    }
-}
-
 
 private struct LineupTargetSelectionSheet: View {
     @Environment(\.dismiss) private var dismiss
