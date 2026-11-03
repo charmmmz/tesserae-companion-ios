@@ -1792,6 +1792,22 @@ final class TesseraeCompanionUITests: XCTestCase {
         let recent = app.buttons["display-select-recent-picpak-kitchen"]
         let queued = app.buttons["display-select-queued-picpak-kitchen"]
         XCTAssertTrue(recent.waitForExistence(timeout: 3))
+        let currentTitle = app.staticTexts["display-screen-page-title-picpak-kitchen"]
+        XCTAssertTrue(currentTitle.exists)
+        let header = app.descendants(matching: .any)["display-screen-page-header-picpak-kitchen"].firstMatch
+        let pageDots = app.descendants(matching: .any)["display-screen-page-indicator-picpak-kitchen"].firstMatch
+        let previewCard = app.descendants(matching: .any)["display-latest-frame-picpak-kitchen"].firstMatch
+        func assertCardSpacing(_ artwork: XCUIElement) {
+            XCTAssertTrue(header.exists)
+            XCTAssertTrue(pageDots.exists)
+            XCTAssertGreaterThan(artwork.frame.minY, header.frame.maxY)
+            XCTAssertGreaterThan(pageDots.frame.minY, artwork.frame.maxY)
+            let topInset = artwork.frame.minY - previewCard.frame.minY
+            let bottomInset = previewCard.frame.maxY - artwork.frame.maxY
+            XCTAssertEqual(topInset, bottomInset, accuracy: 1)
+            XCTAssertLessThanOrEqual(topInset, 56)
+        }
+        XCTAssertEqual(currentTitle.label, english ? "Latest frame" : "最近画面")
         XCTAssertEqual(recent.label, english ? "Latest frame" : "最近画面")
         XCTAssertEqual(queued.label, english ? "Queued frame" : "待更新")
         XCTAssertTrue(recent.isSelected)
@@ -1803,13 +1819,16 @@ final class TesseraeCompanionUITests: XCTestCase {
         assertPreview(recentArtwork, hasAspectRatio: 800.0 / 480.0)
         let recentSize = recentArtwork.frame.size
         XCTAssertLessThanOrEqual(recentSize.height, 240.5)
+        assertCardSpacing(recentArtwork)
         snapshot("Display latest frame \(language)")
         queued.tap()
         XCTAssertTrue(queued.isSelected)
+        XCTAssertEqual(currentTitle.label, english ? "Queued frame" : "待更新")
         let queuedArtwork = app.descendants(matching: .any)["display-detail-pending-preview-picpak-kitchen"].firstMatch
         assertPreview(queuedArtwork, hasAspectRatio: 800.0 / 480.0)
         XCTAssertEqual(queuedArtwork.frame.width, recentSize.width, accuracy: 0.5)
         XCTAssertEqual(queuedArtwork.frame.height, recentSize.height, accuracy: 0.5)
+        assertCardSpacing(queuedArtwork)
         XCTAssertFalse(recentArtwork.isHittable)
         snapshot("Display queued frame \(language)")
         queuedArtwork.tap()
@@ -1820,6 +1839,8 @@ final class TesseraeCompanionUITests: XCTestCase {
         queuedArtwork.swipeRight()
         let recentSelected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isSelected == true"), object: recent)
         XCTAssertEqual(XCTWaiter.wait(for: [recentSelected], timeout: 3), .completed)
+        XCTAssertEqual(currentTitle.label, english ? "Latest frame" : "最近画面")
+        XCTAssertFalse(queuedArtwork.isHittable)
         recentArtwork.tap()
         XCTAssertTrue(app.descendants(matching: .any)["display-evidence-preview-sheet"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.navigationBars[english ? "Server preview" : "服务器预览"].exists)
@@ -1829,8 +1850,12 @@ final class TesseraeCompanionUITests: XCTestCase {
         recentArtwork.swipeLeft()
         let queuedSelected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isSelected == true"), object: queued)
         XCTAssertEqual(XCTWaiter.wait(for: [queuedSelected], timeout: 3), .completed)
+        XCTAssertEqual(currentTitle.label, english ? "Queued frame" : "待更新")
+        XCTAssertFalse(recentArtwork.isHittable)
         recent.tap()
         XCTAssertTrue(recent.isSelected)
+        XCTAssertEqual(currentTitle.label, english ? "Latest frame" : "最近画面")
+        XCTAssertFalse(queuedArtwork.isHittable)
         let plan = app.descendants(matching: .any)["display-evidence-picpak-kitchen"].firstMatch
         XCTAssertTrue(plan.exists)
         XCTAssertTrue(app.staticTexts[english ? "Next planned" : "下一次计划"].exists)

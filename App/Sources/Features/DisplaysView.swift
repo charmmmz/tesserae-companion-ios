@@ -825,20 +825,24 @@ struct DisplayDetailView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
-                connectionStrip
-                if serverTimezoneDiffers(displayTimezone, at: displayedDates) {
-                    Text("Times use \(displayTimezone.identifier)")
-                        .font(.caption).foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .accessibilityIdentifier("display-timezone-note")
+                VStack(alignment: .leading, spacing: 8) {
+                    connectionStrip
+                    if serverTimezoneDiffers(displayTimezone, at: displayedDates) {
+                        Text("Times use \(displayTimezone.identifier)")
+                            .font(.caption).foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityIdentifier("display-timezone-note")
+                    }
+                    screenCarouselCard
                 }
-                screenCarouselCard
                 planCard
                 displayLineupsCard
                 DisplayDeviceDetails(display: currentDisplay, local: local, timezoneID: displayTimezone.identifier)
             }
             .frame(maxWidth: 720)
-            .padding(16)
+            .padding(.horizontal, 16)
+            .padding(.top, 4)
+            .padding(.bottom, 16)
             .frame(maxWidth: .infinity)
         }
         .navigationTitle(currentDisplay.name)
@@ -980,7 +984,7 @@ struct DisplayDetailView: View {
 
     private var connectionStrip: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(spacing: 14) { connectionMetrics }
+            HStack(spacing: 10) { connectionMetrics }
             VStack(alignment: .leading, spacing: 6) { connectionMetrics }
         }
         .font(.caption)
@@ -1056,31 +1060,9 @@ struct DisplayDetailView: View {
     }
 
     private var screenCarouselCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: screenPages.count > 1 ? 2 : 10) {
+            screenPageHeader
             if screenPages.count > 1 {
-                let selectorLayout = dynamicTypeSize.isAccessibilitySize
-                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
-                    : AnyLayout(HStackLayout(spacing: 12))
-                selectorLayout {
-                    ForEach(screenPages, id: \.self) { page in
-                        Button { screenPageSelection.wrappedValue = page } label: {
-                            HStack(spacing: 8) {
-                                Text(screenPageTitle(page))
-                                    .fixedSize(horizontal: false, vertical: true)
-                                Image(systemName: "checkmark")
-                                    .opacity(visibleScreenPage == page ? 1 : 0)
-                                    .accessibilityHidden(true)
-                            }
-                            .font(.subheadline.weight(.semibold))
-                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(visibleScreenPage == page ? TesseraeTheme.accent : Color.secondary)
-                        .accessibilityAddTraits(visibleScreenPage == page ? .isSelected : [])
-                        .accessibilityIdentifier("display-select-\(page == .recent ? "recent" : "queued")-\(currentDisplay.id)")
-                    }
-                }
                 TabView(selection: screenPageSelection) {
                     ForEach(screenPages, id: \.self) { page in
                         screenPageArtwork(page)
@@ -1089,22 +1071,86 @@ struct DisplayDetailView: View {
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
-                .frame(height: 240)
+                .aspectRatio(currentDisplay.panelAspectRatio, contentMode: .fit)
+                .frame(maxWidth: .infinity)
+                .frame(maxHeight: 240)
             } else {
-                Text(screenPageTitle(.recent)).font(.headline)
-                screenPageArtwork(.recent).frame(height: 240)
+                screenPageArtwork(.recent)
+                    .aspectRatio(currentDisplay.panelAspectRatio, contentMode: .fit)
+                    .frame(maxWidth: .infinity)
+                    .frame(maxHeight: 240)
             }
-            screenPageTimestamp
-                .font(.subheadline.monospacedDigit())
-                .foregroundStyle(.secondary)
+            if screenPages.count > 1 {
+                screenPageIndicator
+            }
             if currentDisplay.hasPendingRender == true && screenPages.count == 1
                 && !local.isBluetooth && !local.usesLocalPreview {
                 pendingRefreshExplanation
             }
         }
+        .padding(.vertical, screenPages.count > 1 ? -10 : 0)
         .tesseraeCard()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("display-latest-frame-\(currentDisplay.id)")
+    }
+
+    private var screenPageHeader: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                screenPageHeading.fixedSize(horizontal: true, vertical: true)
+                Spacer(minLength: 0)
+                screenPageTimestamp.fixedSize(horizontal: true, vertical: true)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                screenPageHeading
+                screenPageTimestamp.fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .font(.caption.monospacedDigit())
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(minHeight: screenPages.count > 1 ? 44 : nil)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("display-screen-page-header-\(currentDisplay.id)")
+    }
+
+    private var screenPageHeading: some View {
+        Label {
+            Text(screenPageTitle(visibleScreenPage))
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("display-screen-page-title-\(currentDisplay.id)")
+        } icon: {
+            Image(systemName: visibleScreenPage == .recent ? "display" : "clock.arrow.circlepath")
+                .accessibilityHidden(true)
+        }
+        .accessibilityElement(children: .contain)
+        .font(.headline)
+        .foregroundStyle(visibleScreenPage == .queued ? TesseraeTheme.warning : Color.primary)
+    }
+
+    private var screenPageIndicator: some View {
+        HStack(spacing: 7) {
+            ForEach(screenPages, id: \.self) { page in
+                Button {
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+                        screenPageSelection.wrappedValue = page
+                    }
+                } label: {
+                    Capsule()
+                        .fill(visibleScreenPage == page ? TesseraeTheme.accent : Color.secondary.opacity(0.28))
+                        .frame(width: visibleScreenPage == page ? 20 : 7, height: 7)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(screenPageTitle(page))
+                .accessibilityAddTraits(visibleScreenPage == page ? .isSelected : [])
+                .accessibilityIdentifier("display-select-\(page == .recent ? "recent" : "queued")-\(currentDisplay.id)")
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("display-screen-page-indicator-\(currentDisplay.id)")
     }
 
     private func screenPageArtwork(_ page: ScreenPage) -> some View {
@@ -1152,7 +1198,8 @@ struct DisplayDetailView: View {
         if !local.isBluetooth {
             VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Next planned").font(.subheadline.weight(.semibold))
+                    Label("Next planned", systemImage: "calendar")
+                        .font(.headline)
                     if let next = plan.next {
                         plannedEventRow(next)
                     } else {
@@ -1248,7 +1295,8 @@ struct DisplayDetailView: View {
             resolvedLineupDeviceIDs(explicitDeviceIDs: $0.deviceIDs, serverResolvedDeviceIDs: $0.resolvedDeviceIDs).contains(currentDisplay.id)
         }
         return VStack(alignment: .leading, spacing: 8) {
-            Text("Lineups for this display").font(.headline)
+            Label("Lineups for this display", systemImage: "rectangle.stack")
+                .font(.headline)
             ForEach(lineups) { lineup in
                 NavigationLink(value: LineupRoute.lineup(id: lineup.id, displayID: currentDisplay.id)) {
                     LineupListRow(

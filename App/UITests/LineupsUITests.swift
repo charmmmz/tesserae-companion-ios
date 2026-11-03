@@ -653,8 +653,23 @@ final class LineupsUITests: XCTestCase {
             XCTAssertGreaterThanOrEqual(selector.frame.width, 44 - 0.01)
         }
         attachEditor(app, name: "Display evidence at accessibility size")
+        let recentArtwork = app.descendants(matching: .any)["display-detail-preview-picpak-kitchen"].firstMatch
+        let recentFrame = recentArtwork.frame
         queued.tap()
         XCTAssertTrue(queued.isSelected)
+        let queuedArtwork = app.descendants(matching: .any)["display-detail-pending-preview-picpak-kitchen"].firstMatch
+        var previousFrame = CGRect.null
+        var stableObservations = 0
+        let settledPreview = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            let frame = queuedArtwork.frame
+            stableObservations = frame == previousFrame ? stableObservations + 1 : 0
+            previousFrame = frame
+            return stableObservations >= 2 && abs(frame.minX - recentFrame.minX) < 0.5
+                && abs(frame.width - recentFrame.width) < 0.5
+                && abs(frame.height - recentFrame.height) < 0.5
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [settledPreview], timeout: 15), .completed)
+        XCTAssertFalse(recentArtwork.isHittable)
         attachEditor(app, name: "Queued frame at accessibility size")
         recent.tap()
         XCTAssertTrue(recent.isSelected)

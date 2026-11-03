@@ -27,8 +27,9 @@ capabilities.
 ### Changed
 
 - Display details place connection, battery, and last-seen information below the
-  device name. Equal-size latest and queued previews support swiping and visible
-  text selection, followed by an independent planned-update card. Hardware
+  device name in a compact status row. Equal-size latest and queued previews use
+  an icon heading with compact timestamps, aspect-fitted artwork, swipe paging,
+  and tappable page dots, followed by an independent planned-update card. Hardware
   information stays in a disclosure with the brand and model always visible.
 - Lineup details show elapsed schedule time for unambiguous configured windows.
   English and Chinese screens use shorter labels, tappable preview images, and
