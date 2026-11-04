@@ -140,3 +140,6 @@
 "Share one photo or video at a time. No items were sent." = "每次请选择一张照片或一个视频。未发送任何项目。";
 "This photo needs more memory than a system action can use. It has been kept for review in Tesserae Companion." = "这张照片需要的内存超过了系统操作的预算，已保留供你在 Tesserae Companion 中检查。";
 "Cannot Share This Item" = "无法分享此项目";
+
+"This display's panel configuration is not supported." = "暂不支持此屏幕的面板配置。";
+"Some saved displays are unavailable. Review the selected displays before sending." = "部分之前保存的屏幕现已不可用。发送前请检查所选屏幕。";

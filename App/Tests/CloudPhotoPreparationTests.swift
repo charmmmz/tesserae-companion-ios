@@ -90,6 +90,44 @@ import TesseraeKit
         #expect(output.format == .png)
         #expect(CGImageSourceGetType(try #require(CGImageSourceCreateWithData(output.data as CFData, nil))) as String? == UTType.png.identifier)
     }
+    @Test func cloudShareInvalidGeometryCannotBecomeDefaultPreferredOrSelectedSubset() throws {
+        func device(_ id: String, _ width: Int, _ height: Int) throws -> CloudDevice {
+            try JSONDecoder().decode(CloudDevice.self, from: Data("""
+            {"id":"\(id)","name":"\(id)","kind":"opendisplay","panel":{"w":\(width),"h":\(height)},
+             "format":"png","dither":"none","sleep_interval_s":60}
+            """.utf8))
+        }
+        let invalid = try device("invalid", 8_000, 8_000), valid = try device("valid", 160, 96)
+        let invalidOnly = CloudShareSelection(devices: [invalid], preferredIDs: ["invalid"])
+        #expect(invalidOnly.initialIDs.isEmpty)
+        #expect(!invalidOnly.canSend(["invalid"]))
+        let mixed = CloudShareSelection(devices: [invalid, valid], preferredIDs: ["valid", "invalid"])
+        #expect(mixed.initialIDs == ["valid"])
+        #expect(mixed.omittedPreferences)
+        #expect(!mixed.canSend(["valid", "invalid"]))
+        #expect(!mixed.canSend(["valid", "missing"]))
+        #expect(mixed.canSend(["valid"]))
+        #expect(CloudShareSelection(devices: [invalid, valid], preferredIDs: []).initialIDs == ["valid"])
+        let target = ShareDisplayTarget(id: "cloud:invalid", name: "Invalid", display: nil, record: nil,
+            nearby: nil, cloudDeviceID: "invalid", cloudGeometryIsSupported: false)
+        #expect(!target.isAvailable)
+        #expect(target.unavailableReason != nil)
+    }
+
+    @Test func systemCanvasBudgetDoesNotMakeValidPackageGeometryUnselectable() throws {
+        let large = try JSONDecoder().decode(CloudDevice.self, from: Data("""
+        {"id":"large","name":"Large","kind":"opendisplay","panel":{"w":4000,"h":4000},
+         "format":"png","dither":"none","sleep_interval_s":60}
+        """.utf8))
+        let selection = CloudShareSelection(devices: [large], preferredIDs: [])
+        #expect(selection.initialIDs == ["large"])
+        #expect(selection.canSend(["large"]))
+        let target = CloudSubmissionTarget(id: large.id, name: large.name, geometry: try #require(large.panel.compositionGeometry))
+        #expect(throws: CloudSystemMediaError.self) {
+            try CloudSystemRasterBudget.decodeLimit(data: #require(marker().pngData()), targets: [target], fit: .fill, framings: [:])
+        }
+    }
+
     @Test func shareIntakeRejectsMultipleMediaWithoutTruncatingOneLiveProvider() throws {
         let live = NSItemProvider(object: marker())
         live.registerDataRepresentation(forTypeIdentifier: UTType.movie.identifier, visibility: .all) { completion in

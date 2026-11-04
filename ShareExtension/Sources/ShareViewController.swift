@@ -11,6 +11,21 @@ func validateSingleShareMedia(_ providers: [NSItemProvider]) throws {
     guard count <= 1 else { throw ShareCloudError.multipleItems }
 }
 
+struct CloudShareSelection {
+    let availableIDs: Set<String>
+    let initialIDs: Set<String>
+    let omittedPreferences: Bool
+
+    init(devices: [CloudDevice], preferredIDs: [String]) {
+        let available = devices.filter { $0.panel.compositionGeometry != nil }
+        availableIDs = Set(available.map(\.id))
+        let preferred = Set(preferredIDs).intersection(availableIDs)
+        initialIDs = preferred.isEmpty ? Set(available.prefix(1).map(\.id)) : preferred
+        omittedPreferences = !Set(preferredIDs).isSubset(of: availableIDs)
+    }
+    func canSend(_ ids: Set<String>) -> Bool { !ids.isEmpty && ids.isSubset(of: availableIDs) }
+}
+
 @MainActor
 final class ShareViewController: UIViewController {
     override func viewDidLoad() {
@@ -174,7 +189,9 @@ private final class ShareComposerModel: ObservableObject {
             )
             && (bluetoothTargetID != nil
                 ? bluetoothTarget?.isAvailable == true && bluetoothSession?.canSend == true
-                : !selectedDeviceIDs.isEmpty && (snapshot != nil || cloudSnapshot != nil))
+                : !selectedDeviceIDs.isEmpty && (snapshot != nil || cloudSnapshot.map {
+                    CloudShareSelection(devices: $0.devices, preferredIDs: []).canSend(selectedDeviceIDs)
+                } == true))
     }
 
     var sendTargets: [ShareDisplayTarget] {
@@ -185,7 +202,8 @@ private final class ShareComposerModel: ObservableObject {
             ShareDisplayTarget(id: "cloud:\(device.id)", name: device.name, display: nil, record: nil, nearby: nil,
                 cloudDeviceID: device.id,
                 cloudPanel: PanelProfile(width: device.panel.width, height: device.panel.height,
-                    gamut: device.panel.gamut ?? "", orientation: device.panel.width >= device.panel.height ? "landscape" : "portrait"))
+                    gamut: device.panel.gamut ?? "", orientation: device.panel.width >= device.panel.height ? "landscape" : "portrait"),
+                cloudGeometryIsSupported: device.panel.compositionGeometry != nil)
         }
         return cloud + local
     }
@@ -444,9 +462,11 @@ private final class ShareComposerModel: ObservableObject {
             }
             if let cloud = cloudSnapshot, let id = selectedCloudID {
                 let preferences = try? await sendPreferences.preferences(for: id.rawValue)
-                let ids = Set(cloud.devices.map(\.id))
-                let preferred = Set(preferences?.deviceIDs ?? []).intersection(ids)
-                selectedDeviceIDs = preferred.isEmpty ? Set(cloud.devices.prefix(1).map(\.id)) : preferred
+                let selection = CloudShareSelection(devices: cloud.devices, preferredIDs: preferences?.deviceIDs ?? [])
+                selectedDeviceIDs = selection.initialIDs
+                if selection.omittedPreferences {
+                    errorMessage = String(localized: "Some saved displays are unavailable. Review the selected displays before sending.")
+                }
                 previewDeviceID = cloud.devices.first { selectedDeviceIDs.contains($0.id) }?.id
                 if let preferredFit = preferences?.imageFitMode, [.fill, .fit].contains(preferredFit) { fit = preferredFit }
                 phase = .ready
@@ -1438,14 +1458,19 @@ private struct ShareComposerView: View {
                         model.select(target)
                         hapticEvent.trigger(.selection)
                     } label: {
-                        TesseraeDisplaySelectionRow(
-                            name: target.name,
-                            resolution: panel.map { "\($0.width)×\($0.height)" } ?? "—",
-                            isSelected: target.isBluetooth ? model.bluetoothTargetID == target.id
-                                : model.selectedDeviceIDs.contains(target.resourceID),
-                            transport: target.isBluetooth ? String(localized: "Bluetooth") : nil,
-                            isAvailable: model.canSelect(target)
-                        )
+                        VStack(alignment: .leading, spacing: 4) {
+                            TesseraeDisplaySelectionRow(
+                                name: target.name,
+                                resolution: panel.map { "\($0.width)×\($0.height)" } ?? "—",
+                                isSelected: target.isBluetooth ? model.bluetoothTargetID == target.id
+                                    : model.selectedDeviceIDs.contains(target.resourceID),
+                                transport: target.isBluetooth ? String(localized: "Bluetooth") : nil,
+                                isAvailable: model.canSelect(target)
+                            )
+                            if let reason = target.unavailableReason {
+                                Text(reason).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 10)
+                            }
+                        }
                     }
                     .buttonStyle(.plain)
                     .disabled(!model.canSelect(target))

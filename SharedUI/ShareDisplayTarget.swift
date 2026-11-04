@@ -10,14 +10,20 @@ struct ShareDisplayTarget: Identifiable, Equatable {
     let nearby: NearbyTesseraeDevice?
     let cloudDeviceID: String?
     let cloudPanel: PanelProfile?
+    let cloudGeometryIsSupported: Bool
     var resourceID: String { cloudDeviceID ?? id }
     init(id: String, name: String, display: DisplaySummary?, record: BluetoothDisplayRecord?, nearby: NearbyTesseraeDevice?,
-         cloudDeviceID: String? = nil, cloudPanel: PanelProfile? = nil) {
+         cloudDeviceID: String? = nil, cloudPanel: PanelProfile? = nil, cloudGeometryIsSupported: Bool = true) {
         self.id = id; self.name = name; self.display = display; self.record = record; self.nearby = nearby
         self.cloudDeviceID = cloudDeviceID; self.cloudPanel = cloudPanel
+        self.cloudGeometryIsSupported = cloudGeometryIsSupported
     }
     var isBluetooth: Bool { record?.mode == .bluetooth || nearby != nil }
-    var isAvailable: Bool { !isBluetooth || nearby != nil }
+    var isAvailable: Bool { cloudDeviceID != nil ? cloudGeometryIsSupported : (!isBluetooth || nearby != nil) }
+    var unavailableReason: String? {
+        cloudDeviceID != nil && !cloudGeometryIsSupported
+            ? String(localized: "This display's panel configuration is not supported.") : nil
+    }
     var panel: PanelProfile? { display?.panel ?? cloudPanel }
 
     @MainActor
