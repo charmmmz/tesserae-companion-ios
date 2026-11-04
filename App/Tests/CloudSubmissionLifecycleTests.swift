@@ -322,7 +322,7 @@ extension CloudSubmissionLifecycleTests {
             kind: "display", resourceID: "same-device").encoded])
         #expect(entities.count == 1)
         #expect(entities.first?.connectionName?.contains("u1@") == true)
-        var intent = SendImageToTesseraeIntent()
+        let intent = SendImageToTesseraeIntent()
         intent.displays = entities
         intent.image = IntentFile(data: try still().data, filename: "marker.png", type: .png)
         intent.layout = .fit; intent.overrideQuietHours = false
@@ -339,7 +339,7 @@ extension CloudSubmissionLifecycleTests {
         func entity(_ fence: ConnectionFence, kind: String = "display") -> TesseraeDisplayEntity {
             .init(id: ConnectionResourceID(connectionID: fence.connectionID, kind: kind, resourceID: "same-device").encoded, name: "Fixed")
         }
-        var intent = SendImageToTesseraeIntent()
+        let intent = SendImageToTesseraeIntent()
         intent.image = IntentFile(data: try still().data, filename: "marker.png", type: .png)
         intent.layout = .fill; intent.overrideQuietHours = true; intent.displays = [entity(fixture.a)]
         await #expect(throws: TesseraeIntentError.self) { _ = try await intent.perform(using: environment) }
@@ -357,7 +357,7 @@ extension CloudSubmissionLifecycleTests {
     @Test func cloudIntentRefusalDoesNotReturnSuccessOrReplay() async throws {
         let fixture = try await fixture()
         await fixture.http.configurePost(status: 503, reason: "unavailable")
-        var intent = RefreshCurrentCloudPageIntent()
+        let intent = RefreshCurrentCloudPageIntent()
         intent.display = .init(id: ConnectionResourceID(connectionID: fixture.a.connectionID,
             kind: "display", resourceID: "same-device").encoded, name: "Fixed")
         let environment = TesseraeIntentRuntime(runtime: fixture.runtime, directory: fixture.root, suiteName: nil)
@@ -366,7 +366,7 @@ extension CloudSubmissionLifecycleTests {
     }
     @Test func cloudDashboardIntentIsExplicitlyUnsupportedWithoutCreatingPendingInput() async throws {
         let fixture = try await fixture()
-        var intent = PushTesseraeDashboardIntent()
+        let intent = PushTesseraeDashboardIntent()
         intent.dashboard = .init(id: ConnectionResourceID(connectionID: fixture.a.connectionID,
             kind: "dashboard", resourceID: "page").encoded, name: "Page")
         intent.overrideQuietHours = false
@@ -405,7 +405,7 @@ extension CloudSubmissionLifecycleTests {
     @Test func unknownCloudIntentDoesNotReturnSuccess() async throws {
         let fixture = try await fixture()
         await fixture.http.useUnknownPost()
-        var intent = RefreshCurrentCloudPageIntent()
+        let intent = RefreshCurrentCloudPageIntent()
         intent.display = .init(id: ConnectionResourceID(connectionID: fixture.a.connectionID,
             kind: "display", resourceID: "same-device").encoded, name: "Fixed")
         let environment = TesseraeIntentRuntime(runtime: fixture.runtime, directory: fixture.root, suiteName: nil)
@@ -413,5 +413,70 @@ extension CloudSubmissionLifecycleTests {
         #expect(await fixture.http.postCount == 1)
         let history = try await CloudSubmissionService(runtime: fixture.runtime, directory: fixture.root, fence: fixture.a).history()
         guard case .unknown = history.first?.results.first?.outcome else { Issue.record("Expected durable unknown"); return }
+    }
+}
+
+private actor LocalDashboardIntentHTTP: TesseraeHTTPTransporting {
+    var hosts: [String] = []
+    func send(_ request: URLRequest) async throws -> TesseraeHTTPResponse {
+        hosts.append(request.url?.host ?? "")
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        return .init(data: try Data(contentsOf: root.appending(path: "Contracts/Fixtures/job-accepted.json")), statusCode: 202)
+    }
+}
+
+extension CloudSubmissionLifecycleTests {
+    @Test func sameDashboardRawIDKeepsBothLocalConnectionsAndPerformsOnB() async throws {
+        let root = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        let http = LocalDashboardIntentHTTP(), vault = SubmissionGatedVault()
+        let runtime = ConnectionRuntime(directory: root, identity: .init(appVersion: "test", installationID: "test"),
+            credentials: InMemoryCredentialStore(), sessions: SharedSessionStore(directory: root, vault: vault, transport: http),
+            legacy: InMemoryCompanionStateStore(), isPrimary: true, transport: http)
+        var ids: [String] = []
+        for host in ["local-a.invalid", "local-b.invalid"] {
+            let instance = TesseraeInstance(id: "same-instance", name: host, baseURL: URL(string: "http://\(host)")!,
+                serverVersion: "test", timezone: "UTC", webURL: "http://\(host)")
+            let fence = try await runtime.installLocal(.init(instance: instance, token: "token", tokenID: "test", scopes: [], createdAt: Date()))
+            try await runtime.stateStore.save(.init(activeInstance: instance, capabilities: nil, displays: [],
+                dashboards: [.init(id: "same-dashboard", name: host, kind: .canvas, deviceIDs: ["desk"])], jobs: [], connectionFence: fence))
+            ids.append(ConnectionResourceID(connectionID: fence.connectionID, kind: "dashboard", resourceID: "same-dashboard").encoded)
+        }
+        let environment = TesseraeIntentRuntime(runtime: runtime, directory: root, suiteName: nil)
+        let entities = try await environment.dashboards(identifiers: ids)
+        #expect(entities.map(\.id) == ids)
+        #expect(Set(entities.map(\.id)).count == 2)
+        let intent = PushTesseraeDashboardIntent()
+        intent.dashboard = try #require(entities.last); intent.overrideQuietHours = false
+        _ = try await intent.perform(using: environment)
+        #expect(await http.hosts == ["local-b.invalid"])
+    }
+
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["TESSERAE_RUN_CLOUD_SYSTEM_NATIVE"] == "1",
+        "Requires the explicitly owned local C1 namespace; no network by default."))
+    func prepareActualC1PendingPrivacyFixtures() async throws {
+        let environment = try TesseraeIntentRuntime.live()
+        let id = try #require(try environment.runtime.registry.selectedID())
+        guard environment.directory.lastPathComponent.hasPrefix("a4-"),
+              let connection = try environment.runtime.registry.connection(id),
+              case .cloud(let issuer, _, _) = connection.identity,
+              issuer.absoluteString == "http://127.0.0.1:8877" else { throw ConnectionError.invalidIdentity }
+        let fence = try #require(try await environment.runtime.sessions.fence(for: id))
+        var records: [[String: Any]] = []
+        let isContinueFixture = ProcessInfo.processInfo.environment["TESSERAE_CLOUD_SYSTEM_NATIVE_CASE"] == "continue"
+        let cases = isContinueFixture ? [("continue", 86_400.0)] : [("detail", 70.0), ("review", 140.0)]
+        for (name, lifetime) in cases {
+            let created = Date().addingTimeInterval(-7 * 86_400 + lifetime)
+            let entry = CloudSystemEntry(runtime: environment.runtime, directory: environment.directory, clock: { created }) { _, _, _ in
+                throw CloudSystemMediaError.workingSet
+            }
+            let decision = UUID()
+            let result = try await entry.submit(.photo(targets: .init(connectionID: id,
+                deviceIDs: isContinueFixture ? ["a4_land"] : ["a4_land", "a4_removed"]), data: still().data, contentType: "image/png", recipe: .init(fit: .fill)), decision: decision)
+            guard case .retained(let input, _) = result else { Issue.record("Expected unaccepted fixture input"); return }
+            records.append(["case": name, "id": input.id.uuidString, "expires_at": input.expiresAt.timeIntervalSince1970])
+        }
+        try await environment.runtime.sessions.validate(fence)
+        try JSONSerialization.data(withJSONObject: records, options: [.prettyPrinted, .sortedKeys])
+            .write(to: URL.documentsDirectory.appending(path: "A4PendingPrivacyFixtures.json"), options: [.atomic])
     }
 }

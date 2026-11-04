@@ -198,6 +198,51 @@ import XCTest
         XCTAssertTrue(target.label.contains("Frame Generated"))
         capture(app, "Reviewed Photo Result Restored Without Sending")
     }
+    func testPendingInputExpiresWhileDetailOrReviewIsOpen() async throws {
+        let app = launch()
+        try await authorize(app)
+        let identifier = try XCTUnwrap(ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_PENDING_ID"])
+        app.buttons["cloud-send-results"].tap()
+        let row = app.buttons["cloud-pending-" + identifier]
+        XCTAssertTrue(row.waitForExistence(timeout: 15)); reveal(row, in: app); row.tap()
+        let image = app.images["cloud-pending-preview"]
+        XCTAssertTrue(image.waitForExistence(timeout: 15))
+        if ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_EXPIRY_REVIEW"] == "1" {
+            let review = app.buttons["cloud-pending-review"]
+            reveal(review, in: app); review.tap()
+            XCTAssertTrue(app.descendants(matching: .any)["selected-image-preview"].firstMatch.waitForExistence(timeout: 15))
+            let send = app.buttons["send-submit"]
+            XCTAssertFalse(send.isEnabled)
+            let unavailable = app.buttons["cloud-review-unavailable-a4_removed"]
+            reveal(unavailable, in: app); unavailable.tap()
+            XCTAssertTrue(send.isEnabled)
+            capture(app, "Review Explicitly Deselected Unavailable Target Before Expiry")
+        } else { capture(app, "Pending Detail Photo Before Absolute Expiry") }
+        let hidden = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            !app.buttons["cloud-pending-discard"].exists && !app.buttons["send-submit"].exists
+                && !app.images["cloud-pending-preview"].exists
+                && !app.descendants(matching: .any)["selected-image-preview"].firstMatch.exists
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [hidden], timeout: 150), .completed)
+        XCTAssertFalse(row.exists)
+        capture(app, "Absolute Expiry Hid Pending Photo And Actions Without Sending")
+    }
+    func testExplicitContinueShowsSavedResultAfterPendingDismissal() async throws {
+        let app = launch()
+        try await authorize(app)
+        let identifier = try XCTUnwrap(ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_PENDING_ID"])
+        app.buttons["cloud-send-results"].tap()
+        let row = app.buttons["cloud-pending-" + identifier]
+        XCTAssertTrue(row.waitForExistence(timeout: 15)); reveal(row, in: app); row.tap()
+        XCTAssertTrue(app.images["cloud-pending-preview"].waitForExistence(timeout: 15))
+        let next = app.buttons["cloud-pending-continue"]
+        reveal(next, in: app); capture(app, "Explicit Continue Before Acceptance"); next.tap()
+        let result = app.buttons["cloud-result-target-a4_land"]
+        XCTAssertTrue(result.waitForExistence(timeout: 35)); reveal(result, in: app)
+        XCTAssertTrue(result.label.contains("Frame Generated")); XCTAssertTrue(result.isHittable)
+        XCTAssertFalse(app.buttons["cloud-pending-continue"].exists)
+        capture(app, "Accepted Result Visible After Pending Sheet Dismissal")
+    }
     func testShortcutsHostInspect() throws {
         let shortcuts = XCUIApplication(bundleIdentifier: "com.apple.shortcuts")
         shortcuts.launch()

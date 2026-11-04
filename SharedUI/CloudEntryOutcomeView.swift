@@ -34,7 +34,7 @@ struct CloudEntryOutcomeView: View {
                     Label("Not Sent", systemImage: "tray.and.arrow.down").font(.title2.bold())
                     Text("This item has been kept. Open Tesserae Companion to review it and choose Continue.")
                     Text(reason).font(.footnote).foregroundStyle(.secondary)
-                    LabeledContent("Photo Available Until", value: input.expiresAt.formatted(date: .abbreviated, time: .shortened))
+                    LabeledContent("Available Until", value: input.expiresAt.formatted(date: .abbreviated, time: .shortened))
                 case .inProgress:
                     Label("Send in Progress", systemImage: "clock").font(.title2.bold())
                     Text("Another system action is preparing or sending this item. View its result in Tesserae Companion. It will not be sent again automatically.")

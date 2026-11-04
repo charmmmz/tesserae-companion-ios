@@ -1227,3 +1227,13 @@
 "Open Tesserae Companion to review this item. It will not be sent again automatically." = "请打开 Tesserae Companion 复核此内容，不会自动重新发送。";
 
 "This send is still in progress. View its result in Tesserae Companion." = "此次发送仍在进行，请在 Tesserae Companion 中查看结果。";
+
+"Item Expired" = "内容已过期";
+
+"This unsent photo is no longer available." = "此未发送照片已不可用。";
+
+"This display's panel configuration is not supported. Deselect it to continue." = "不支持此屏幕的面板配置，请取消选择后继续。";
+
+"This display is no longer available. Deselect it to continue." = "此屏幕已不可用，请取消选择后继续。";
+
+"Available Until" = "可用期限";

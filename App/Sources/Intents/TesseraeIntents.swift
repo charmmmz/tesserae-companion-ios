@@ -441,7 +441,12 @@ struct TesseraeIntentRuntime: Sendable {
             }
             for dashboard in try await snapshot(for: connection.id).dashboards where requested?.contains(dashboard.id) != false {
                 let encoded = ConnectionResourceID(connectionID: connection.id, kind: "dashboard", resourceID: dashboard.id).encoded
-                let original = identifiers?.first { (ConnectionResourceID(encoded: $0)?.resourceID ?? $0) == dashboard.id }
+                let original = identifiers?.first {
+                    if let value = ConnectionResourceID(encoded: $0) {
+                        return value.connectionID == connection.id && value.kind == "dashboard" && value.resourceID == dashboard.id
+                    }
+                    return $0 == dashboard.id
+                }
                 result.append(.init(id: original ?? encoded, name: dashboard.name))
             }
         }

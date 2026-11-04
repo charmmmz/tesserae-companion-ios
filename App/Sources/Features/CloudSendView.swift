@@ -12,6 +12,7 @@ struct CloudSendSheet: View {
     let model: CloudBrowseModel
     let context: CloudPresentationContext
     var recovery: CloudPendingReview? = nil
+    var onRecoveryAccepted: ((UUID) -> Void)? = nil
     @Environment(ConnectionHost.self) private var host
     @Environment(CompanionPresentation.self) private var presentation
     @State private var media = MediaFrameSession()
@@ -31,6 +32,10 @@ struct CloudSendSheet: View {
     @State private var isLoadingMedia = false
     @State private var error: String?
     @State private var recoveryOutcome: CloudEntryCompletion?
+    @State private var recoveryExpired = false
+    @State private var recoverySubmissionTask: Task<Void, Never>?
+    private var reviewHasExpired: Bool { recoveryExpired || recovery.map { $0.input.expiresAt <= Date() } == true }
+    private var unavailableIDs: [String] { selectedIDs.subtracting(devices.map(\.id)).sorted() }
 
     private var devices: [CloudDevice] { (recovery?.read.devices ?? model.devices).filter { $0.panel.compositionGeometry != nil } }
     private var selected: [CloudDevice] { devices.filter { selectedIDs.contains($0.id) } }
@@ -50,57 +55,75 @@ struct CloudSendSheet: View {
     }
     var body: some View {
         NavigationStack {
-            AdaptiveComposerLayout {
-                VStack(alignment: .leading, spacing: TesseraeComposerLayout.contentCardSpacing) {
-                    TesseraeComposerPreviewHeader(titleAccessibilityIdentifier: "send-preview-title",
-                        changePhotoAccessibilityIdentifier: "send-change-photo", isLoading: isLoadingMedia,
-                        onChoosePhoto: media.output != nil ? { livePhotosOnly = false; pickerPresented = true } : nil)
-                    TesseraeComposerMediaPreview(session: media, canvasHeight: canvasHeight, isSending: isPreparing,
-                        onChooseLivePhoto: { livePhotosOnly = true; pickerPresented = true }) {
-                        canvas
-                    } targets: { previewPicker }
-                    if isPreparing { ProgressView("Preparing Send…").accessibilityIdentifier("cloud-send-preparing") }
-                    if let error { Text(error).foregroundStyle(.red).accessibilityIdentifier("cloud-send-error") }
-                }
-                .tesseraeCard()
-            } controls: {
-                VStack(alignment: .leading, spacing: TesseraeComposerLayout.selectionCardSpacing) {
-                    Text("Displays").font(.headline)
-                    ForEach(devices) { device in
-                        Button {
-                            if selectedIDs.contains(device.id) { selectedIDs.remove(device.id) }
-                            else { selectedIDs.insert(device.id); previewID = device.id }
-                        } label: {
-                            TesseraeDisplaySelectionRow(name: device.name,
-                                resolution: "\(device.panel.width)×\(device.panel.height)",
-                                isSelected: selectedIDs.contains(device.id), transport: nil, isAvailable: true)
+            if reviewHasExpired {
+                ContentUnavailableView("Item Expired", systemImage: "clock.badge.exclamationmark",
+                    description: Text("This unsent photo is no longer available."))
+            } else {
+                AdaptiveComposerLayout {
+                    VStack(alignment: .leading, spacing: TesseraeComposerLayout.contentCardSpacing) {
+                        TesseraeComposerPreviewHeader(titleAccessibilityIdentifier: "send-preview-title",
+                            changePhotoAccessibilityIdentifier: "send-change-photo", isLoading: isLoadingMedia,
+                            onChoosePhoto: media.output != nil ? { livePhotosOnly = false; pickerPresented = true } : nil)
+                        TesseraeComposerMediaPreview(session: media, canvasHeight: canvasHeight, isSending: isPreparing,
+                            onChooseLivePhoto: { livePhotosOnly = true; pickerPresented = true }) {
+                            canvas
+                        } targets: { previewPicker }
+                        if isPreparing { ProgressView("Preparing Send…").accessibilityIdentifier("cloud-send-preparing") }
+                        if let error { Text(error).foregroundStyle(.red).accessibilityIdentifier("cloud-send-error") }
+                    }
+                    .tesseraeCard()
+                } controls: {
+                    VStack(alignment: .leading, spacing: TesseraeComposerLayout.selectionCardSpacing) {
+                        Text("Displays").font(.headline)
+                        ForEach(devices) { device in
+                            Button {
+                                if selectedIDs.contains(device.id) { selectedIDs.remove(device.id) }
+                                else { selectedIDs.insert(device.id); previewID = device.id }
+                            } label: {
+                                TesseraeDisplaySelectionRow(name: device.name,
+                                    resolution: "\(device.panel.width)×\(device.panel.height)",
+                                    isSelected: selectedIDs.contains(device.id), transport: nil, isAvailable: true)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("send-display-\(device.id)")
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("send-display-\(device.id)")
+                        ForEach(unavailableIDs, id: \.self) { id in
+                            Button { selectedIDs.remove(id) } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    TesseraeDisplaySelectionRow(name: recovery?.read.devices.first { $0.id == id }?.name ?? id,
+                                        resolution: "", isSelected: true, transport: nil, isAvailable: false)
+                                    Text(recovery?.read.devices.contains { $0.id == id } == true
+                                        ? "This display's panel configuration is not supported. Deselect it to continue."
+                                        : "This display is no longer available. Deselect it to continue.")
+                                        .font(.footnote).foregroundStyle(.secondary)
+                                }
+                            }
+                            .buttonStyle(.plain).accessibilityIdentifier("cloud-review-unavailable-\(id)")
+                        }
+                        if devices.isEmpty {
+                            Text("Refresh Displays before sending an image.").foregroundStyle(.secondary)
+                        }
+                        Text("A generated frame appears on each display's next wake. Its dashboard binding stays unchanged.")
+                            .font(.footnote).foregroundStyle(.secondary)
                     }
-                    if devices.isEmpty {
-                        Text("Refresh Displays before sending an image.").foregroundStyle(.secondary)
+                    .tesseraeCard()
+                }
+                .disabled(isPreparing)
+                .onGeometryChange(for: CGSize.self) { $0.size } action: { canvasHeight = composerCanvasHeight(in: $0) }
+                .navigationTitle(recovery == nil ? String(localized: "Send") : String(localized: "Review Photo"))
+                .navigationBarTitleDisplayMode(.inline)
+                .tesseraeScreenBackground()
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Close", systemImage: "xmark") { presentation.sheet = nil }
+                            .labelStyle(.iconOnly).disabled(isPreparing)
+                            .accessibilityIdentifier("root-send-close")
                     }
-                    Text("A generated frame appears on each display's next wake. Its dashboard binding stays unchanged.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
-                .tesseraeCard()
-            }
-            .disabled(isPreparing)
-            .onGeometryChange(for: CGSize.self) { $0.size } action: { canvasHeight = composerCanvasHeight(in: $0) }
-            .navigationTitle(recovery == nil ? "Send" : "Review Photo")
-            .navigationBarTitleDisplayMode(.inline)
-            .tesseraeScreenBackground()
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close", systemImage: "xmark") { presentation.sheet = nil }
-                        .labelStyle(.iconOnly).disabled(isPreparing)
-                        .accessibilityIdentifier("root-send-close")
-                }
-                TesseraeToolbarActions(identifier: "send-toolbar-actions") {
-                    Button("Send to Displays", systemImage: "paperplane.fill") { send() }
-                        .disabled(media.output == nil || media.isBusy || media.isScrubbing || isLoadingMedia || selectedIDs.isEmpty || isPreparing)
-                        .accessibilityIdentifier("send-submit")
+                    TesseraeToolbarActions(identifier: "send-toolbar-actions") {
+                        Button("Send to Displays", systemImage: "paperplane.fill") { send() }
+                            .disabled(media.output == nil || media.isBusy || media.isScrubbing || isLoadingMedia || selectedIDs.isEmpty || !unavailableIDs.isEmpty || isPreparing || reviewHasExpired)
+                            .accessibilityIdentifier("send-submit")
+                    }
                 }
             }
         }
@@ -127,8 +150,19 @@ struct CloudSendSheet: View {
             }
         }
         .onAppear { presentation.isSendComposerPresented = true }
-        .onDisappear { media.cancelWork(); framing.discardAnalysis(); presentation.isSendComposerPresented = false }
+        .onDisappear {
+            if recovery != nil { recoverySubmissionTask?.cancel() }
+            media.cancelWork(); framing.discardAnalysis(); presentation.isSendComposerPresented = false
+        }
+        .task(id: recovery?.input.expiresAt) {
+            guard let deadline = recovery?.input.expiresAt else { return }
+            do { if deadline > Date() { try await Task.sleep(for: .seconds(deadline.timeIntervalSinceNow)) } }
+            catch { return }
+            recoveryExpired = true; recoverySubmissionTask?.cancel()
+            previewImage = nil; recoveryOutcome = nil; media.clear(); framing.discardAnalysis()
+        }
         .onChange(of: media.outputRevision) { _, _ in
+            guard !reviewHasExpired else { previewImage = nil; return }
             previewImage = media.output.flatMap { UIImage(data: $0.data) }
             if appliedMediaSourceID != media.source?.id { framing.replaceImage(); appliedMediaSourceID = media.source?.id }
             else { framing.discardAnalysis() }
@@ -184,7 +218,7 @@ struct CloudSendSheet: View {
         didLoadPreferences = true
     }
     private func loadRecovery(_ review: CloudPendingReview) async {
-        guard !didLoadPreferences else { return }
+        guard !didLoadPreferences, !reviewHasExpired else { return }
         isLoadingMedia = true
         defer { isLoadingMedia = false }
         do {
@@ -193,7 +227,7 @@ struct CloudSendSheet: View {
                 try UploadImagePreparer.prepare(data: bytes, fallbackContentType: "image/jpeg", maximumPixelSize: 8192)
             }.value
             try Task.checkCancellation()
-            guard host.cloudPresentationContext == context else { return }
+            guard host.cloudPresentationContext == context, !reviewHasExpired else { return }
             media.adopt(MediaFrameSource(kind: .photo, primaryImage: image, maximumPixelSize: 8192,
                 loadMovie: { throw MediaFrameError.unavailable }))
             previewImage = UIImage(data: image.data)
@@ -223,22 +257,26 @@ struct CloudSendSheet: View {
         do {
             let source = try await selection.load(maximumPixelSize: 8192)
             try Task.checkCancellation()
-            guard self.selection?.id == selectionID else { return }
+            guard self.selection?.id == selectionID, !reviewHasExpired else { return }
             media.adopt(source); error = nil
         } catch is CancellationError { }
         catch { if self.selection?.id == selectionID { self.error = error.localizedDescription } }
     }
     private func send() {
-        guard !isPreparing, !isLoadingMedia, let still = media.output, !media.isBusy, !media.isScrubbing else { return }
+        guard !isPreparing, !isLoadingMedia, let still = media.output, !media.isBusy, !media.isScrubbing,
+              !reviewHasExpired, unavailableIDs.isEmpty else { return }
         framing.freeze(); isPreparing = true; error = nil
         let selected = selectedIDs, fit = fit, framings = framing.framings, decision = decision
-        Task {
+        let task = Task {
             defer { isPreparing = false }
             do {
                 if let recovery {
                     let result = try await host.replaceCloudPending(recovery, media: still, selectedIDs: selected,
                         fit: fit, framings: framings, decision: decision, context: context)
-                    host.withCurrentCloudPresentation(context) { recoveryOutcome = result }
+                    host.withCurrentCloudPresentation(context) {
+                        if case .finished(let batch) = result, let onRecoveryAccepted { onRecoveryAccepted(batch.id) }
+                        else if !reviewHasExpired { recoveryOutcome = result }
+                    }
                     return
                 }
                 let id = try await host.submitCloudPhoto(media: still, selectedIDs: selected, fit: fit,
@@ -248,9 +286,11 @@ struct CloudSendSheet: View {
                     presentation.sheet = .cloudResults
                 }
             } catch {
+                guard !reviewHasExpired else { return }
                 self.error = error.localizedDescription
                 framing.resumeEditing()
             }
         }
+        if recovery != nil { recoverySubmissionTask = task }
     }
 }
