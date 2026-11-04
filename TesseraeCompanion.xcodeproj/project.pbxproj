@@ -158,6 +158,12 @@
 		FDE42BD366582AA2FB79CFDD /* TesseraeMessageOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C7978DD383BE1BBCCCDC4BC /* TesseraeMessageOverlay.swift */; };
 		FE4195F9C97F6AD1B91871CE /* RemindersBridgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90014E225C2AB46EE0CA6530 /* RemindersBridgeView.swift */; };
 		FF4C2B0911D8ED227B8224AD /* GalleryViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4901B9808092D465184CABA /* GalleryViewTests.swift */; };
+		A40000000000000000000001 /* CloudPhotoPreparer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B977FE08CCC5B2BA81944FC /* CloudPhotoPreparer.swift */; };
+		A40000000000000000000002 /* CloudReadFaultTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEA9EF725AB37E65B7357407 /* CloudReadFaultTransport.swift */; };
+		A40000000000000000000003 /* AppConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DABD7AC708239FDC0621487 /* AppConfiguration.swift */; };
+		A40000000000000000000011 /* CloudEntryOutcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A40000000000000000000010 /* CloudEntryOutcomeView.swift */; };
+		A40000000000000000000012 /* CloudEntryOutcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A40000000000000000000010 /* CloudEntryOutcomeView.swift */; };
+		A40000000000000000000021 /* CloudSystemShareUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A40000000000000000000020 /* CloudSystemShareUITests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -326,6 +332,8 @@
 		F87A7131F2CA6614CAD44081 /* CloudSignInCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSignInCard.swift; sourceTree = "<group>"; };
 		F99101E3410A2CB4183DCF85 /* LocalBluetoothPhotoRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalBluetoothPhotoRenderer.swift; sourceTree = "<group>"; };
 		FD8060E9227692A0914DB946 /* TesseraeTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TesseraeTheme.swift; sourceTree = "<group>"; };
+		A40000000000000000000010 /* CloudEntryOutcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudEntryOutcomeView.swift; sourceTree = "<group>"; };
+		A40000000000000000000020 /* CloudSystemShareUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSystemShareUITests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -355,6 +363,7 @@
 				0B1C7C0CE5B9420ECC69B548 /* AlbumsAndActivityUITests.swift */,
 				3C68B3F45C7DAD7BAB5E1B31 /* BluetoothShareUITests.swift */,
 				46531119237D388C0503B814 /* CloudBrowsingUITests.swift */,
+				A40000000000000000000020 /* CloudSystemShareUITests.swift */,
 				0B6417DA7305CB3B7D80D340 /* CloudSubmissionUITests.swift */,
 				64C47BA3E823A287F3AE434E /* ConnectionPerformanceUITests.swift */,
 				F7D732F7AB479072C4C94DA1 /* DashboardSettingsUITests.swift */,
@@ -468,12 +477,9 @@
 		64D0FBA4BF3F184508F3A83C /* Sources */ = {
 			isa = PBXGroup;
 			children = (
-				6DABD7AC708239FDC0621487 /* AppConfiguration.swift */,
 				B285D6042818DD9ECF798800 /* AppModel.swift */,
 				93E5E9C82BC4B17340232D88 /* CloudBrowseModel.swift */,
 				D9C68F8A2F0EDBB33AE55176 /* CloudOAuth.swift */,
-				7B977FE08CCC5B2BA81944FC /* CloudPhotoPreparer.swift */,
-				EEA9EF725AB37E65B7357407 /* CloudReadFaultTransport.swift */,
 				387BBA60F97A76DB7D7A87D4 /* ConnectionHost.swift */,
 				34D0FE206E866226FC84C054 /* LineupPresentation.swift */,
 				4F548F3379CFFB93726CD704 /* MainTabView.swift */,
@@ -537,6 +543,10 @@
 				9A04E5CC172EAC80A6C24F75 /* FittedPreviewLayout.swift */,
 				EEF048F26620C2F5266E0267 /* MediaFrameControls.swift */,
 				3F9E787492913D7809CB9565 /* MediaFrameFixtures.swift */,
+				7B977FE08CCC5B2BA81944FC /* CloudPhotoPreparer.swift */,
+				EEA9EF725AB37E65B7357407 /* CloudReadFaultTransport.swift */,
+				6DABD7AC708239FDC0621487 /* AppConfiguration.swift */,
+				A40000000000000000000010 /* CloudEntryOutcomeView.swift */,
 				7900B085EB33F558356A1E91 /* MediaFrameSession.swift */,
 				4E080EF75EAC8A0C7863578B /* MediaLibraryPicker.swift */,
 				2EA333FF9332F6E7F0A3AAEA /* PhotoFramingGesture.swift */,
@@ -794,6 +804,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A40000000000000000000001 /* CloudPhotoPreparer.swift in Sources */,
+				A40000000000000000000002 /* CloudReadFaultTransport.swift in Sources */,
+				A40000000000000000000003 /* AppConfiguration.swift in Sources */,
+				A40000000000000000000012 /* CloudEntryOutcomeView.swift in Sources */,
 				7878E69E20C0262F96387CA4 /* AdaptiveComposerLayout.swift in Sources */,
 				A74F07DCB5C3C7E92DE86F8A /* BLEPhotoProtocol.swift in Sources */,
 				B59A3E292E2838C80056E576 /* BLESetupProtocol.swift in Sources */,
@@ -831,6 +845,7 @@
 				86913487D95BFCE535E7C38C /* AlbumsAndActivityUITests.swift in Sources */,
 				DB3D1CF7C063E830834E0307 /* BluetoothShareUITests.swift in Sources */,
 				361A5463CC5BEAFB31505204 /* CloudBrowsingUITests.swift in Sources */,
+				A40000000000000000000021 /* CloudSystemShareUITests.swift in Sources */,
 				1095231F46600C7F46E41E04 /* CloudSubmissionUITests.swift in Sources */,
 				946AF053FE682B261FF8B3AD /* ConnectionPerformanceUITests.swift in Sources */,
 				D72F7AB7540DAF09C2FDB102 /* DashboardSettingsUITests.swift in Sources */,
@@ -857,6 +872,7 @@
 				3CDBAE3B31145BCEFE782324 /* BluetoothShareTestHost.swift in Sources */,
 				F7072FB9CACEA24D67A6B305 /* CloudBrowseModel.swift in Sources */,
 				439D21D04B90337F47B6DA30 /* CloudOAuth.swift in Sources */,
+				A40000000000000000000011 /* CloudEntryOutcomeView.swift in Sources */,
 				66DB0CEA246D97E01D7A08C5 /* CloudPhotoPreparer.swift in Sources */,
 				91ED9EF1C7B225D7867FA2AE /* CloudReadFaultTransport.swift in Sources */,
 				4DA9A9E9916C357E61012150 /* CloudRootView.swift in Sources */,

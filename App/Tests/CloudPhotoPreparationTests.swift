@@ -90,6 +90,53 @@ import TesseraeKit
         #expect(output.format == .png)
         #expect(CGImageSourceGetType(try #require(CGImageSourceCreateWithData(output.data as CFData, nil))) as String? == UTType.png.identifier)
     }
+    @Test func shareIntakeRejectsMultipleMediaWithoutTruncatingOneLiveProvider() throws {
+        let live = NSItemProvider(object: marker())
+        live.registerDataRepresentation(forTypeIdentifier: UTType.movie.identifier, visibility: .all) { completion in
+            completion(Data(), nil); return nil
+        }
+        try validateSingleShareMedia([live])
+        let another = NSItemProvider(object: marker())
+        #expect(throws: (any Error).self) { try validateSingleShareMedia([live, another]) }
+    }
+
+    @Test func systemRasterPreservesSupportedFramingAndGeometry() async throws {
+        let bytes = try #require(marker().pngData())
+        let device = try JSONDecoder().decode(CloudDevice.self, from: Data("""
+        {"id":"test","name":"Test","kind":"opendisplay","panel":{"w":80,"h":40},
+         "format":"png","dither":"none","sleep_interval_s":60}
+        """.utf8))
+        let framing = ImageFraming(focusX: 0.75, focusY: 0.5, zoom: 2)
+        let aspect = PanelAspectRatio(width: 80, height: 40)
+        let app = try await CloudPhotoPreparer.prepare(data: bytes, devices: [device], selectedIDs: ["test"],
+            fit: .fill, framings: [aspect: framing])
+        let system = try await CloudPhotoPreparer.prepare(data: bytes, devices: [device], selectedIDs: ["test"],
+            fit: .fill, framings: [aspect: framing], systemEntry: true)
+        #expect(app.outputs[0].data == system.outputs[0].data)
+        #expect(system.outputs[0].geometry == device.panel.compositionGeometry)
+    }
+
+    @Test func systemRasterRejectsUnsupportedCanvasFromMetadataBeforeDecode() throws {
+        let target = CloudSubmissionTarget(id: "huge", name: "Huge", geometry: try .init(width: 4_000, height: 4_000))
+        #expect(throws: CloudSystemMediaError.self) {
+            try CloudSystemRasterBudget.decodeLimit(data: #require(marker().pngData()), targets: [target], fit: .fill, framings: [:])
+        }
+    }
+
+    @Test func systemMemoryEstimateIncludesSourceAndAccumulatedOutputs() throws {
+        let geometry = try CloudCompositionGeometry(width: 1_600, height: 1_200)
+        try CloudSystemRasterBudget.checkWorkingSet(sourceBytes: 1_024, sourcePixels: 2_000_000,
+            geometry: geometry, fit: .fill, accumulatedOutputBytes: 0)
+        #expect(throws: CloudSystemMediaError.self) {
+            try CloudSystemRasterBudget.checkWorkingSet(sourceBytes: CloudSystemRasterBudget.maximumWorkingBytes,
+                sourcePixels: 2_000_000, geometry: geometry, fit: .fill, accumulatedOutputBytes: 0)
+        }
+        #expect(throws: CloudSystemMediaError.self) {
+            try CloudSystemRasterBudget.checkWorkingSet(sourceBytes: 1_024, sourcePixels: 2_000_000,
+                geometry: geometry, fit: .blur, accumulatedOutputBytes: 40 * 1_024 * 1_024)
+        }
+    }
+
     @Test func exportCommittedMediaForCloudAcceptance() async throws {
         let directory = URL.documentsDirectory.appending(path: "CloudMediaEvidence")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

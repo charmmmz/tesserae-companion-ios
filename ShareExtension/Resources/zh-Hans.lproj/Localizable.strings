@@ -119,3 +119,24 @@
 "Fill Display" = "铺满屏幕";
 "Show Entire Photo" = "显示完整照片";
 "Faces won't all fit. Choose Show Entire Photo." = "无法同时保留所有人脸，请选择“显示完整照片”。";
+
+"Not Sent" = "尚未发送";
+"Unknown" = "未知";
+"Not Attempted" = "未尝试";
+"Frame Generated" = "画面已生成";
+"Generated with Warnings" = "已生成，但有警告";
+"Photo Send" = "照片发送";
+"Current Page Refresh" = "刷新当前页面";
+"Photo Available Until" = "照片保留至";
+"Results Available Until" = "结果保留至";
+"A generated frame does not confirm that the physical display has updated." = "画面已生成并不代表实体屏幕已更新。";
+"Check uncertain displays before explicitly sending again in Tesserae Companion." = "请先检查结果不确定的屏幕，再到 Tesserae Companion 中明确选择重新发送。";
+"This item has been kept. Open Tesserae Companion to review it and choose Continue." = "此项目已保留。请打开 Tesserae Companion 检查并选择“继续”。";
+"Send in Progress" = "正在发送";
+"Another system action is preparing or sending this item. View its result in Tesserae Companion. It will not be sent again automatically." = "另一个系统操作正在准备或发送此项目。请在 Tesserae Companion 中查看结果，不会自动再次发送。";
+"Result Not Confirmed" = "结果尚未确认";
+"Open Tesserae Companion to check this decision. It will not be sent again automatically." = "请打开 Tesserae Companion 检查此项操作，不会自动再次发送。";
+"Cloud sharing supports one photo or a selected video frame. Links cannot be sent to Cloud." = "Cloud 分享支持一张照片或选定的视频画面，不支持发送链接。";
+"Share one photo or video at a time. No items were sent." = "每次请选择一张照片或一个视频。未发送任何项目。";
+"This photo needs more memory than a system action can use. It has been kept for review in Tesserae Companion." = "这张照片需要的内存超过了系统操作的预算，已保留供你在 Tesserae Companion 中检查。";
+"Cannot Share This Item" = "无法分享此项目";
