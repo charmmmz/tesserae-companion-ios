@@ -461,10 +461,10 @@ struct CloudSubmissionStore: Sendable {
                 return .batch(batch)
             case .input(let input):
                 guard input.fingerprint == hash else { throw CloudSubmissionError.decisionConflict }
-                return .pending(input)
+                let observer = try CloudRunOwner.acquire(ownerURL(decision))
+                return withExtendedLifetime(observer) { .pending(input, isLive: observer == nil) }
             }
         }) {
-            if case .pending(let input) = existing { return try acquireInput(input.id, revision: input.revision, now: now) }
             return existing
         }
         guard let owner = try CloudRunOwner.acquire(ownerURL(decision)) else { throw CloudSubmissionError.alreadyRunning }
@@ -488,7 +488,7 @@ struct CloudSubmissionStore: Sendable {
             case .batch(let batch): return .batch(batch)
             case .input(let input):
                 guard input.expiresAt > now else { throw CloudSubmissionError.resultChanged }
-                guard let owner else { return .pending(input) }
+                guard let owner else { return .pending(input, isLive: true) }
                 guard input.revision == revision else { throw CloudSubmissionError.resultChanged }
                 return .owned(.init(input: input, owner: owner))
             }

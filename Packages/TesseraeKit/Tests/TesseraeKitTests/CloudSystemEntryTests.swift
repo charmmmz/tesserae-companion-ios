@@ -84,6 +84,11 @@ private struct SystemEntryFixture {
         #expect(await f.http.postCount == 0)
         #expect(try f.store().inputBytes(id, revision: input.revision, now: Date()) == Data([1, 2, 3]))
         await f.http.configure()
+        guard case .retained(let unchanged, _) = try await f.entry.submit(f.request(), decision: id) else {
+            Issue.record("Repeated submit must not acquire a previously retained decision"); return
+        }
+        #expect(unchanged.id == id)
+        #expect(await f.http.postCount == 0)
         let context = try await f.entry.authorizedReadContext(for: f.fence)
         #expect(try await f.entry.pendingInputs(in: context).count == 1)
         guard case .finished(let batch) = try await f.entry.continueExplicitly(id,
@@ -135,9 +140,11 @@ private struct SystemEntryFixture {
         let f = try await SystemEntryFixture.make()
         await f.http.configure(delay: .seconds(1))
         let began = ContinuousClock.now
-        guard case .finished(let batch) = try await f.entry.submit(f.request(), decision: UUID(), timeout: 0.15) else {
-            Issue.record("A normal deadline did not persist an outcome"); return
+        let id = UUID()
+        guard case .notConfirmed = try await f.entry.submit(f.request(), decision: id, timeout: 0.15) else {
+            Issue.record("Expired read budget must not expose a private result"); return
         }
+        let batch = try f.store().result(id, now: Date())
         #expect(began.duration(to: .now) < .seconds(1))
         #expect(!batch.isActive)
         if case .unknown = batch.results.first?.outcome {} else { Issue.record("An in-flight timeout was reported as success") }
@@ -149,16 +156,46 @@ private struct SystemEntryFixture {
         let f = try await SystemEntryFixture.make()
         await f.http.configure(delay: .seconds(2))
         let request = try f.request()
-        let operation = Task { try await f.entry.submit(request, decision: UUID()) }
+        let id = UUID()
+        let operation = Task { try await f.entry.submit(request, decision: id) }
         for _ in 0..<1000 {
             if await f.http.postCount == 1 { break }
             try await Task.sleep(for: .milliseconds(1))
         }
         try #require(await f.http.postCount == 1)
         operation.cancel()
-        guard case .finished(let batch) = try await operation.value else { Issue.record("Cancellation not persisted"); return }
+        guard case .notConfirmed = try await operation.value else { Issue.record("Cancelled read must not expose private results"); return }
+        let batch = try f.store().result(id, now: Date())
         #expect(!batch.isActive)
         if case .unknown = batch.results.first?.outcome {} else { Issue.record("Claimed cancellation was not unknown") }
+        #expect(await f.http.postCount == 1)
+    }
+
+    @Test(arguments: ["logout", "newEpoch", "readRevoked"])
+    func lateCompletionCannotExposeBatchWithoutCurrentFenceAndReadPermission(change: String) async throws {
+        let f = try await SystemEntryFixture.make()
+        await f.http.configure(delay: .milliseconds(150))
+        let id = UUID(), request = try f.request()
+        let operation = Task { try await f.entry.submit(request, decision: id) }
+        for _ in 0..<1000 {
+            if await f.http.postCount == 1 { break }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        try #require(await f.http.postCount == 1)
+        switch change {
+        case "logout": try await f.runtime.closeConnection(f.fence)
+        case "newEpoch":
+            _ = try await f.runtime.installCloud(issuer: URL(string: "http://localhost:9000")!,
+                response: JSONDecoder().decode(CloudTokenResponse.self, from: tokenFixture(expires: 3600, grant: "new")))
+        default: await f.http.configure(status: 403)
+        }
+        guard case .notConfirmed(let decision, _) = try await operation.value else {
+            Issue.record("An old or read-restricted private batch escaped"); return
+        }
+        #expect(decision == id)
+        let saved = try f.store().result(id, now: Date())
+        #expect(saved.identity == f.identity)
+        #expect(!saved.isActive)
         #expect(await f.http.postCount == 1)
     }
 

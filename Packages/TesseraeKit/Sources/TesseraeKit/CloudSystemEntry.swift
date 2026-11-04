@@ -64,7 +64,9 @@ public actor CloudSystemEntry {
     private func perform(_ admission: CloudInputAdmission, store: CloudSubmissionStore,
                          deadline: CloudEntryDeadline, explicitContext: CloudEntryReadContext?) async -> CloudEntryCompletion {
         switch admission {
-        case .pending(let input): return .inProgress(decision: input.id)
+        case .pending(let input, let isLive):
+            return isLive ? .inProgress(decision: input.id)
+                : .retained(input.summary, message: String(localized: "This unsent item has been kept. Continue it explicitly in Tesserae Companion."))
         case .batch(let batch):
             return await existingResult(batch, store: store, deadline: deadline)
         case .owned(let owned):
@@ -104,10 +106,10 @@ public actor CloudSystemEntry {
                 try await service.constrain(to: deadline, directory: directory, identity: store.identity)
                 let prepared = try await service.prepareInput(input, preparation: preparation)
                 let batch = try await service.run(prepared)
-                return batch.isActive ? .inProgress(decision: batch.id) : .finished(batch)
+                return await existingResult(batch, store: store, deadline: deadline)
             } catch {
-                // Acceptance may have committed before cleanup or the caller failed.
-                return completionAfterFailure(owned.input.id, store: store, message: error.localizedDescription)
+                return await completionAfterFailure(owned.input.id, store: store,
+                    deadline: deadline, message: error.localizedDescription)
             }
         }
     }
@@ -116,19 +118,21 @@ public actor CloudSystemEntry {
                                 deadline: CloudEntryDeadline) async -> CloudEntryCompletion {
         do {
             _ = try await readContext(for: original.fence, deadline: deadline)
-            let batch = try store.result(original.id, now: clock())
+            let batch = try store.completionAccess().result(original.id, now: clock())
+            try await runtime.sessions.validate(original.fence, timeout: deadline.remaining(limit: 10))
             return batch.isActive ? .inProgress(decision: batch.id) : .finished(batch)
         } catch { return .notConfirmed(decision: original.id, message: error.localizedDescription) }
     }
 
-    private func completionAfterFailure(_ id: UUID, store: CloudSubmissionStore, message: String) -> CloudEntryCompletion {
+    private func completionAfterFailure(_ id: UUID, store: CloudSubmissionStore, deadline: CloudEntryDeadline,
+                                        message: String) async -> CloudEntryCompletion {
         do {
             let store = store.completionAccess()
             if let input = try store.pendingInputs(now: clock()).first(where: { $0.id == id }) {
                 return .retained(input.summary, message: message)
             }
             let batch = try store.result(id, now: clock())
-            return batch.isActive ? .notConfirmed(decision: id, message: message) : .finished(batch)
+            return await existingResult(batch, store: store, deadline: deadline)
         } catch { return .notConfirmed(decision: id, message: message) }
     }
 

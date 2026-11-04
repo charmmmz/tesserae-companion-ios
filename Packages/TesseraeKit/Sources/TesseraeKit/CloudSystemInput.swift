@@ -84,7 +84,7 @@ struct CloudOwnedInput: Sendable {
 
 enum CloudInputAdmission: Sendable {
     case owned(CloudOwnedInput)
-    case pending(CloudInputRecord)
+    case pending(CloudInputRecord, isLive: Bool)
     case batch(CloudSubmissionBatch)
 }
 
