@@ -83,7 +83,8 @@ private final class ShareComposerModel: ObservableObject {
     private let linkQueueStore: any LinkShareQueueStoring
     private let activityThumbnails: any ActivityThumbnailStoring
     private let credentials: any CredentialStoring
-    private let client: any TesseraeServing
+    private var client: any TesseraeServing
+    private let connectionRuntime: ConnectionRuntime?
     private let bluetoothRecords = BluetoothDisplayStore(fileURL: BluetoothDisplayStore.sharedInventoryURL,
         receiptDirectoryURL: BluetoothDisplayStore.sharedReceiptDirectoryURL, isReadOnly: true)
     private let protectDismissal: (Bool) -> Void
@@ -119,9 +120,16 @@ private final class ShareComposerModel: ObservableObject {
 #endif
         }()
 
-        stateStore = UserDefaultsCompanionStateStore(suiteName: appGroup)
+        let runtime = containerURL.map {
+            ConnectionRuntime(directory: $0, suiteName: appGroup,
+                keychainService: "com.charmmmz.tesseraecompanion.credentials", accessGroup: accessGroup,
+                identity: TesseraeClientIdentity(appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0",
+                                                 installationID: "share-extension"), isPrimary: false)
+        }
+        connectionRuntime = runtime
+        stateStore = runtime?.stateStore ?? UserDefaultsCompanionStateStore(suiteName: appGroup)
         sendPreferences = UserDefaultsCompanionSendPreferencesStore(
-            suiteName: appGroup
+            suiteName: appGroup, directoryURL: containerURL
         )
         self.displayOrderPreferences = displayOrderPreferences ?? DisplayOrderPreferences(
             defaults: appGroup.flatMap(UserDefaults.init(suiteName:)) ?? .standard
@@ -136,7 +144,7 @@ private final class ShareComposerModel: ObservableObject {
             accessGroup: accessGroup
         )
         credentials = keychain
-        client = LiveTesseraeClient(
+        client = runtime?.bootstrapClient() ?? ConnectionRuntime.localClient(
             credentials: keychain,
             identity: TesseraeClientIdentity(
                 appVersion: Bundle.main.object(
@@ -150,7 +158,7 @@ private final class ShareComposerModel: ObservableObject {
     var displays: [DisplaySummary] {
         guard let snapshot else { return [] }
         return displayOrderPreferences.orderedDisplays(
-            snapshot.displays, for: snapshot.activeInstance.id
+            snapshot.displays, for: snapshot.activeInstance.storageID
         )
     }
 
@@ -169,7 +177,7 @@ private final class ShareComposerModel: ObservableObject {
     }
 
     var sendTargets: [ShareDisplayTarget] {
-        ShareDisplayTarget.catalog(displays: displays, serverID: snapshot?.activeInstance.id,
+        ShareDisplayTarget.catalog(displays: displays, serverID: snapshot?.activeInstance.storageID,
             records: bluetoothSession?.nearby.displayRecords ?? bluetoothRecords,
             nearby: bluetoothSession?.devices ?? [])
     }
@@ -294,7 +302,7 @@ private final class ShareComposerModel: ObservableObject {
 
     var automaticFramingContext: PhotoFramingSession.AutomaticContext {
         .init(
-            imageID: framingSession.imageID, instanceID: snapshot?.activeInstance.id,
+            imageID: framingSession.imageID, instanceID: snapshot?.activeInstance.storageID,
             aspect: previewPanel.map(PanelAspectRatio.init(panel:)),
             targetIDs: bluetoothTargetID.map { [$0] } ?? selectedDeviceIDs, maximumZoom: maximumFramingZoom,
             isReady: phase == .ready && framingEditorIsActive
@@ -356,9 +364,15 @@ private final class ShareComposerModel: ObservableObject {
                 expiredBefore: Date().addingTimeInterval(-24 * 60 * 60)
             )
             // Bluetooth photo sharing is independent of server pairing and reachability.
-            if let saved = try? await stateStore.load(),
-               (try? await credentials.token(for: saved.activeInstance.id)) != nil {
-                snapshot = saved
+            if let saved = try await stateStore.load() {
+                if let connectionRuntime {
+                    guard let fence = saved.connectionFence else { throw ConnectionError.invalidIdentity }
+                    try await connectionRuntime.sessions.validate(fence)
+                    client = try connectionRuntime.client(for: saved)
+                    snapshot = saved
+                } else if try await credentials.token(for: saved.activeInstance.id) != nil {
+                    snapshot = saved
+                }
             }
             let snapshot = self.snapshot
             let availableLinkKinds = LinkPushKind.allCases.filter {
@@ -396,7 +410,7 @@ private final class ShareComposerModel: ObservableObject {
                 return
             }
             let savedPreferences = try? await sendPreferences.preferences(
-                for: snapshot.activeInstance.id
+                for: snapshot.activeInstance.storageID
             )
             let availableDeviceIDs = Set(displays.map(\.id))
             let preferredDeviceIDs = Set(savedPreferences?.deviceIDs ?? [])
@@ -494,7 +508,8 @@ private final class ShareComposerModel: ObservableObject {
                     displays: snapshot.displays,
                     dashboards: snapshot.dashboards,
                     jobs: jobs,
-                    activityClearedBefore: snapshot.activityClearedBefore
+                    activityClearedBefore: snapshot.activityClearedBefore,
+                    connectionFence: snapshot.connectionFence
                 )
             )
             if let submissionError {
@@ -533,7 +548,8 @@ private final class ShareComposerModel: ObservableObject {
             }
             queuedImageRequests = targetGroups.map { group in
                 SharedImageRequest(
-                    instanceID: snapshot.activeInstance.id,
+                    instanceID: snapshot.activeInstance.storageID,
+                    connectionEpoch: snapshot.connectionFence?.epoch,
                     fileName: fileName,
                     contentType: contentType,
                     fit: fit,
@@ -575,7 +591,7 @@ private final class ShareComposerModel: ObservableObject {
                 _ = try? await activityThumbnails.save(
                     imageData: imageData,
                     jobID: job.id,
-                    instanceID: snapshot.activeInstance.id,
+                    instanceID: snapshot.activeInstance.storageID,
                     createdAt: job.createdAt
                 )
                 try await queueStore.remove(submitting)
@@ -605,7 +621,8 @@ private final class ShareComposerModel: ObservableObject {
             throw ShareComposerError.linkUnsupported
         }
         let request = queuedLinkRequest ?? SharedLinkRequest(
-            instanceID: snapshot.activeInstance.id,
+            instanceID: snapshot.activeInstance.storageID,
+                    connectionEpoch: snapshot.connectionFence?.epoch,
             url: url,
             kind: linkKind,
             fit: fit,
@@ -718,7 +735,7 @@ private final class ShareComposerModel: ObservableObject {
         guard bluetoothTargetID == nil, let snapshot, !selectedDeviceIDs.isEmpty else { return }
         try? await sendPreferences.save(
             CompanionSendPreferences(
-                instanceID: snapshot.activeInstance.id,
+                instanceID: snapshot.activeInstance.storageID,
                 deviceIDs: Array(selectedDeviceIDs),
                 imageFitMode: fit
             )
@@ -927,7 +944,7 @@ extension ShareComposerModel {
            let device = nearby.nearbyDevices.first {
             let instance = TesseraeInstance(id: "share-test", name: "Test Server",
                 baseURL: URL(string: "http://127.0.0.1")!, serverVersion: "test", timezone: "UTC", webURL: "/")
-            records.activeServerID = instance.id
+            records.activeServerID = instance.storageID
             records.observe(deviceID: "picpak-f85b1ba1b2c3", name: "Kitchen", mode: .bluetooth,
                 batteryMillivolts: nil, peripheralID: device.id)
             let panel = PanelProfile(width: 400, height: 300, gamut: "bwry_4", orientation: "landscape")
@@ -948,7 +965,7 @@ extension ShareComposerModel {
                 displays: snapshot.displays + [portrait, landscape], dashboards: [], jobs: [])
         }
         if let snapshot = model.snapshot, let orderPreferences {
-            orderPreferences.save(snapshot.displays.reversed().map(\.id), for: snapshot.activeInstance.id)
+            orderPreferences.save(snapshot.displays.reversed().map(\.id), for: snapshot.activeInstance.storageID)
         }
         model.bluetoothSession = BluetoothShareSession(nearby: nearby)
         model.bluetoothSession?.start()

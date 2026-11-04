@@ -75,6 +75,8 @@ final class AppModel {
     }
 
     private let liveClient: any TesseraeServing
+    private let connectionRuntime: ConnectionRuntime?
+    private(set) var activeConnectionFence: ConnectionFence?
     private let demoClient: any TesseraeServing
     private var activeClient: any TesseraeServing
     private let credentials: any CredentialStoring
@@ -98,7 +100,7 @@ final class AppModel {
     var connectionSession: CompanionConnectionSession? {
         guard !isDisconnecting else { return nil }
         return activeInstance.map {
-            CompanionConnectionSession(instanceID: $0.id, revision: connectionRevision)
+            CompanionConnectionSession(instanceID: storageID(for: $0), revision: connectionRevision)
         }
     }
 
@@ -128,6 +130,17 @@ final class AppModel {
         }
     }
 
+    var activeStorageID: String? { activeInstance.map(storageID(for:)) }
+
+    func storageID(for instance: TesseraeInstance) -> String {
+        connectionRuntime == nil || connectionMode == .demo ? instance.id : instance.storageID
+    }
+
+    func legacyBinding(for instance: TesseraeInstance) -> String? {
+        guard let connectionRuntime else { return nil }
+        return (try? connectionRuntime.registry.connection(instance.connectionIdentity.id))?.legacyInstanceID
+    }
+
     var activeInstance: TesseraeInstance?
 
     func synchronizeBluetoothModes(_ reports: [BluetoothModeReport], store: BluetoothDisplayStore) async {
@@ -140,7 +153,7 @@ final class AppModel {
                 try checkConnectionSession(session)
                 try await client.reportDeviceMode(report.observation, deviceID: report.displayID, instance: instance)
                 try checkConnectionSession(session)
-                store.markModeReported(report, serverID: instance.id)
+                store.markModeReported(report, serverID: storageID(for: instance))
             } catch {
                 // Keep the saved observation pending. Foreground synchronization retries it.
                 if Task.isCancelled || connectionSession != session { return }
@@ -265,9 +278,7 @@ final class AppModel {
         capabilities?.supportsDeviceTimeline == true
     }
 
-    var activeHealthInstanceID: String? {
-        activeInstance?.id
-    }
+    var activeHealthInstanceID: String? { activeStorageID }
 
     var activeHealthTimeZone: String? {
         activeInstance?.timezone
@@ -293,6 +304,7 @@ final class AppModel {
 
     init(
         liveClient: any TesseraeServing,
+        connectionRuntime: ConnectionRuntime? = nil,
         demoClient: any TesseraeServing,
         credentials: any CredentialStoring,
         stateStore: any CompanionStateStoring,
@@ -305,6 +317,7 @@ final class AppModel {
         displayOrderPreferences: DisplayOrderPreferences = .init()
     ) {
         self.liveClient = liveClient
+        self.connectionRuntime = connectionRuntime
         self.demoClient = demoClient
         activeClient = liveClient
         self.credentials = credentials
@@ -410,10 +423,13 @@ final class AppModel {
             )
             try Task.checkCancellation()
             if mode == .live {
-                try await credentials.save(
-                    token: session.token,
-                    for: session.instance.id
-                )
+                if let connectionRuntime {
+                    activeConnectionFence = try await connectionRuntime.installLocal(session)
+                } else {
+                    try await credentials.save(token: session.token, for: session.instance.id)
+                }
+            } else {
+                activeConnectionFence = nil
             }
             isDisconnecting = false
             connectionRevision = UUID()
@@ -427,7 +443,12 @@ final class AppModel {
             loadingOfflineAlbumFolderIDs = []
             activeOperationIDs = ["pair"]
             connectionNotice = nil
-            activeClient = candidate
+            if let connectionRuntime, let fence = activeConnectionFence, mode == .live {
+                activeClient = try connectionRuntime.client(for: CompanionSnapshot(activeInstance: session.instance,
+                    capabilities: capabilities, displays: [], dashboards: [], jobs: [], connectionFence: fence))
+            } else {
+                activeClient = candidate
+            }
             connectionMode = mode
             connectionHealth = .connected
             self.capabilities = capabilities
@@ -477,9 +498,9 @@ final class AppModel {
             deviceTimelineErrors = [:]
             dashboardPreviews = [:]
             dashboardPreviewRequestIDs = [:]
-            loadDisplayOrder(for: session.instance.id)
-            loadDashboardOrder(for: session.instance.id)
-            loadCollapsedDashboardSections(for: session.instance.id)
+            loadDisplayOrder(for: storageID(for: session.instance))
+            loadDashboardOrder(for: storageID(for: session.instance))
+            loadCollapsedDashboardSections(for: storageID(for: session.instance))
             if mode == .live {
                 await persistSnapshot()
             }
@@ -557,7 +578,16 @@ final class AppModel {
                 return
             }
             try checkConnectionRevision(revision)
-            guard try await credentials.token(for: snapshot.activeInstance.id) != nil else {
+            let hasCredential: Bool
+            if let connectionRuntime {
+                guard let fence = snapshot.connectionFence else { throw ConnectionError.invalidIdentity }
+                try await connectionRuntime.sessions.validate(fence)
+                activeConnectionFence = fence
+                hasCredential = true
+            } else {
+                hasCredential = try await credentials.token(for: snapshot.activeInstance.id) != nil
+            }
+            guard hasCredential else {
                 try await stateStore.clear()
                 connectionHealth = .requiresPairing
                 connectionNotice = String(
@@ -567,12 +597,12 @@ final class AppModel {
             }
             try checkConnectionRevision(revision)
 
-            activeClient = liveClient
+            activeClient = try connectionRuntime?.client(for: snapshot) ?? liveClient
             connectionMode = .live
             activeInstance = snapshot.activeInstance
-            loadDisplayOrder(for: snapshot.activeInstance.id)
-            loadDashboardOrder(for: snapshot.activeInstance.id)
-            loadCollapsedDashboardSections(for: snapshot.activeInstance.id)
+            loadDisplayOrder(for: storageID(for: snapshot.activeInstance))
+            loadDashboardOrder(for: storageID(for: snapshot.activeInstance))
+            loadCollapsedDashboardSections(for: storageID(for: snapshot.activeInstance))
             capabilities = snapshot.capabilities
             lineupAuthoringPermission = supportsLineupAuthoring
                 ? .unknown
@@ -591,7 +621,7 @@ final class AppModel {
             jobs = retainedActivityJobs(snapshot.jobs)
             // Cached screens and Bluetooth maintenance do not depend on the server.
             isRestoringConnection = false
-            await reloadActivityThumbnails(instanceID: snapshot.activeInstance.id)
+            await reloadActivityThumbnails(instanceID: storageID(for: snapshot.activeInstance))
             await reloadQueuedImages()
             await reloadQueuedLinks()
 
@@ -2024,7 +2054,7 @@ final class AppModel {
         guard let activeInstance else { return nil }
         do {
             return try await sendPreferences.preferences(
-                for: activeInstance.id
+                for: storageID(for: activeInstance)
             )
         } catch {
             lastError = error.localizedDescription
@@ -2040,7 +2070,7 @@ final class AppModel {
         do {
             try await sendPreferences.save(
                 CompanionSendPreferences(
-                    instanceID: activeInstance.id,
+                    instanceID: storageID(for: activeInstance),
                     deviceIDs: deviceIDs,
                     imageFitMode: fit
                 )
@@ -2168,7 +2198,7 @@ final class AppModel {
                 await rememberActivityThumbnail(
                     imageData: data,
                     for: job,
-                    instanceID: activeInstance.id
+                    instanceID: storageID(for: activeInstance)
                 )
                 try checkConnectionRevision(revision)
                 if !jobs.contains(where: { $0.id == job.id }) {
@@ -2234,7 +2264,7 @@ final class AppModel {
             await rememberActivityThumbnail(
                 imageData: data,
                 for: job,
-                instanceID: activeInstance.id
+                instanceID: storageID(for: activeInstance)
             )
             try checkConnectionRevision(revision)
             jobs.insert(job, at: 0)
@@ -2396,7 +2426,7 @@ final class AppModel {
                 Date()
             )
             try await activityThumbnails.clear(
-                instanceID: activeInstance.id
+                instanceID: storageID(for: activeInstance)
             )
             jobs = []
             historyItems = []
@@ -2467,7 +2497,7 @@ final class AppModel {
                 expiredBefore: Date().addingTimeInterval(-24 * 60 * 60)
             )
             let requests = try await shareQueue.requests()
-                .filter { $0.instanceID == activeInstance.id }
+                .filter { $0.instanceID == storageID(for: activeInstance) }
                 .sorted {
                     if $0.createdAt != $1.createdAt {
                         return $0.createdAt > $1.createdAt
@@ -2497,7 +2527,7 @@ final class AppModel {
                 expiredBefore: Date().addingTimeInterval(-24 * 60 * 60)
             )
             queuedLinkRequests = try await linkShareQueue.requests()
-                .filter { $0.instanceID == activeInstance.id }
+                .filter { $0.instanceID == storageID(for: activeInstance) }
                 .sorted {
                     if $0.createdAt != $1.createdAt {
                         return $0.createdAt > $1.createdAt
@@ -2535,12 +2565,21 @@ final class AppModel {
         guard
             connectionMode == .live,
             let activeInstance,
-            request.instanceID == activeInstance.id
+            request.instanceID == storageID(for: activeInstance)
         else {
             return
         }
 
-        _ = await submitQueuedImage(request, instance: activeInstance)
+        var authorized = request
+        if let fence = activeConnectionFence, request.connectionEpoch != fence.epoch {
+            do {
+                authorized = try await shareQueue.authorizeLocalRetry(request, instance: activeInstance, fence: fence)
+            } catch {
+                connectionNotice = error.localizedDescription
+                return
+            }
+        }
+        _ = await submitQueuedImage(authorized, instance: activeInstance)
     }
 
     func discardQueuedImage(_ request: SharedImageRequest) async {
@@ -2563,12 +2602,21 @@ final class AppModel {
         guard
             connectionMode == .live,
             let activeInstance,
-            request.instanceID == activeInstance.id
+            request.instanceID == storageID(for: activeInstance)
         else {
             return
         }
 
-        _ = await submitQueuedLink(request, instance: activeInstance)
+        var authorized = request
+        if let fence = activeConnectionFence, request.connectionEpoch != fence.epoch {
+            do {
+                authorized = try await linkShareQueue.authorizeLocalRetry(request, instance: activeInstance, fence: fence)
+            } catch {
+                connectionNotice = error.localizedDescription
+                return
+            }
+        }
+        _ = await submitQueuedLink(authorized, instance: activeInstance)
     }
 
     func discardQueuedLink(_ request: SharedLinkRequest) async {
@@ -2593,9 +2641,11 @@ final class AppModel {
         instance: TesseraeInstance
     ) async -> Bool {
         let revision = connectionRevision
-        guard activeInstance?.id == instance.id else { return false }
+        let client = activeClient
+        guard activeInstance?.connectionIdentity == instance.connectionIdentity else { return false }
         guard
-            request.instanceID == instance.id,
+            request.instanceID == storageID(for: instance),
+            request.connectionEpoch == activeConnectionFence?.epoch,
             !activeQueuedImageRequestIDs.contains(request.id)
         else {
             return false
@@ -2616,7 +2666,7 @@ final class AppModel {
 
             let data = try await shareQueue.imageData(for: submitting)
             try checkConnectionRevision(revision)
-            let job = try await liveClient.sendImage(
+            let job = try await client.sendImage(
                 data: data,
                 fileName: submitting.fileName,
                 contentType: submitting.contentType,
@@ -2632,7 +2682,7 @@ final class AppModel {
                 await rememberActivityThumbnail(
                     imageData: data,
                     for: job,
-                    instanceID: instance.id
+                    instanceID: storageID(for: instance)
                 )
                 try checkConnectionRevision(revision)
                 if !jobs.contains(where: { $0.id == job.id }) {
@@ -2674,9 +2724,11 @@ final class AppModel {
         instance: TesseraeInstance
     ) async -> Bool {
         let revision = connectionRevision
-        guard activeInstance?.id == instance.id else { return false }
+        let client = activeClient
+        guard activeInstance?.connectionIdentity == instance.connectionIdentity else { return false }
         guard
-            request.instanceID == instance.id,
+            request.instanceID == storageID(for: instance),
+            request.connectionEpoch == activeConnectionFence?.epoch,
             !activeQueuedLinkRequestIDs.contains(request.id)
         else {
             return false
@@ -2702,7 +2754,7 @@ final class AppModel {
             let job: PushJob
             switch submitting.kind {
             case .imageURL:
-                job = try await liveClient.sendImageURL(
+                job = try await client.sendImageURL(
                     url: submitting.url,
                     fit: submitting.fit,
                     deviceIDs: submitting.deviceIDs,
@@ -2711,7 +2763,7 @@ final class AppModel {
                     instance: instance
                 )
             case .webpage:
-                job = try await liveClient.sendWebpage(
+                job = try await client.sendWebpage(
                     url: submitting.url,
                     fit: submitting.fit,
                     viewportW: nil,
@@ -2813,7 +2865,8 @@ final class AppModel {
         do {
             guard
                 let snapshot = try await stateStore.load(),
-                snapshot.activeInstance.id == activeInstance.id
+                snapshot.activeInstance.connectionIdentity.id == activeInstance.connectionIdentity.id,
+                snapshot.connectionFence == activeConnectionFence
             else {
                 return
             }
@@ -2827,7 +2880,7 @@ final class AppModel {
                 current: jobs,
                 incoming: retainedActivityJobs(snapshot.jobs)
             )
-            await reloadActivityThumbnails(instanceID: activeInstance.id)
+            await reloadActivityThumbnails(instanceID: storageID(for: activeInstance))
             await persistSnapshot(showErrors: false)
 
             for job in jobs where incomingNonterminalIDs.contains(job.id) {
@@ -2906,7 +2959,7 @@ final class AppModel {
             guard displayPreviewRequestIDs[display.id] == requestID else {
                 return
             }
-            guard activeInstance?.id == instance.id, !Task.isCancelled else {
+            guard activeInstance?.connectionIdentity == instance.connectionIdentity, !Task.isCancelled else {
                 displayPreviews[display.id] = previous
                 displayPreviewRequestIDs[display.id] = nil
                 return
@@ -2987,7 +3040,7 @@ final class AppModel {
                 return
             }
             guard
-                activeInstance?.id == instance.id,
+                activeInstance?.connectionIdentity == instance.connectionIdentity,
                 displays.first(where: { $0.id == display.id })?
                     .pendingRender?.revision == pendingRender.revision,
                 !Task.isCancelled
@@ -3106,7 +3159,7 @@ final class AppModel {
                 guard dashboardPreviewRequestIDs[key] == requestID else {
                     return
                 }
-                guard activeInstance?.id == instance.id, !Task.isCancelled else {
+                guard activeInstance?.connectionIdentity == instance.connectionIdentity, !Task.isCancelled else {
                     dashboardPreviews[key] = previous
                     dashboardPreviewRequestIDs[key] = nil
                     return
@@ -3182,7 +3235,7 @@ final class AppModel {
                 ifNoneMatch: previous.data == nil ? nil : previous.eTag,
                 instance: instance
             )
-            guard activeInstance?.id == instance.id, !Task.isCancelled else {
+            guard activeInstance?.connectionIdentity == instance.connectionIdentity, !Task.isCancelled else {
                 return
             }
             apply(
@@ -3221,7 +3274,7 @@ final class AppModel {
     private func updateUntilTerminal(_ acceptedJob: PushJob, instance: TesseraeInstance) async -> PushJob? {
         let revision = connectionRevision
         let client = activeClient
-        guard activeInstance?.id == instance.id else { return nil }
+        guard activeInstance?.connectionIdentity == instance.connectionIdentity else { return nil }
         var current = acceptedJob
         for _ in 0..<60 where !current.isTerminal {
             do {
@@ -3276,7 +3329,7 @@ final class AppModel {
     private func refreshTrackedJobs(instance: TesseraeInstance) async {
         let revision = connectionRevision
         let client = activeClient
-        guard activeInstance?.id == instance.id else { return }
+        guard activeInstance?.connectionIdentity == instance.connectionIdentity else { return }
         let nonterminalJobIDs = jobs
             .filter { !$0.isTerminal }
             .map(\.id)
@@ -3310,28 +3363,34 @@ final class AppModel {
         connectionRevision = UUID()
         let revision = connectionRevision
         var disconnectError: Error?
-        let disconnectedInstanceID = activeInstance?.id
+        let disconnectedInstanceID = activeStorageID
         if let activeInstance, connectionMode == .live {
-            do {
-                try await activeClient.revokeSession(instance: activeInstance)
-            } catch {
-                disconnectError = error
+            if let connectionRuntime, let fence = activeConnectionFence {
+                do {
+                    try await connectionRuntime.signOut(fence)
+                } catch ConnectionError.remoteRevocationUnconfirmed {
+                    disconnectError = ConnectionError.remoteRevocationUnconfirmed
+                } catch {
+                    guard connectionRevision == revision else { return }
+                    isDisconnecting = false
+                    lastError = error.localizedDescription
+                    return
+                }
+            } else {
+                do { try await activeClient.revokeSession(instance: activeInstance) }
+                catch { disconnectError = error }
+                guard connectionRevision == revision else { return }
+                do { try await credentials.removeToken(for: activeInstance.id) }
+                catch { disconnectError = disconnectError ?? error }
             }
             guard connectionRevision == revision else { return }
-            do {
-                try await credentials.removeToken(for: activeInstance.id)
-            } catch {
-                disconnectError = disconnectError ?? error
-            }
-            guard connectionRevision == revision else { return }
-            do {
-                try await stateStore.clear()
-            } catch {
-                disconnectError = disconnectError ?? error
+            if connectionRuntime == nil {
+                do { try await stateStore.clear() }
+                catch { disconnectError = disconnectError ?? error }
             }
         }
         guard connectionRevision == revision else { return }
-        if let disconnectedInstanceID {
+        if connectionRuntime == nil, let disconnectedInstanceID {
             try? await activityThumbnails.clear(
                 instanceID: disconnectedInstanceID
             )
@@ -3342,6 +3401,7 @@ final class AppModel {
         loadingGalleryFolderIDs = []
         loadingOfflineAlbumFolderIDs = []
         activeInstance = nil
+        activeConnectionFence = nil
         connectionMode = nil
         connectionHealth = .idle
         connectionNotice = nil
@@ -3404,14 +3464,25 @@ final class AppModel {
             isDisconnecting = true
             connectionRevision = UUID()
             let revision = connectionRevision
-            let disconnectedInstanceID = activeInstance?.id
-            if let activeInstance {
+            let disconnectedInstanceID = activeStorageID
+            if let connectionRuntime, let fence = activeConnectionFence {
+                do {
+                    try await connectionRuntime.signOut(fence)
+                } catch ConnectionError.remoteRevocationUnconfirmed {
+                    connectionNotice = ConnectionError.remoteRevocationUnconfirmed.localizedDescription
+                } catch {
+                    isDisconnecting = false
+                    connectionHealth = .offline
+                    connectionNotice = error.localizedDescription
+                    return
+                }
+            } else if let activeInstance {
                 try? await credentials.removeToken(for: activeInstance.id)
             }
             guard connectionRevision == revision else { return }
-            try? await stateStore.clear()
+            if connectionRuntime == nil { try? await stateStore.clear() }
             guard connectionRevision == revision else { return }
-            if let disconnectedInstanceID {
+            if connectionRuntime == nil, let disconnectedInstanceID {
                 try? await activityThumbnails.clear(
                     instanceID: disconnectedInstanceID
                 )
@@ -3423,6 +3494,7 @@ final class AppModel {
             loadingGalleryFolderIDs = []
             loadingOfflineAlbumFolderIDs = []
             activeInstance = nil
+            activeConnectionFence = nil
             connectionMode = nil
             capabilities = nil
             lineupAuthoringPermission = .unknown
@@ -3602,7 +3674,7 @@ final class AppModel {
     }
 
     private func saveDashboardOrder() {
-        guard let instanceID = activeInstance?.id else { return }
+        guard let instanceID = activeStorageID else { return }
         UserDefaults.standard.set(
             dashboardOrderIDs,
             forKey: Self.dashboardOrderKeyPrefix + instanceID
@@ -3610,12 +3682,12 @@ final class AppModel {
     }
 
     private func saveDisplayOrder() {
-        guard let instanceID = activeInstance?.id else { return }
+        guard let instanceID = activeStorageID else { return }
         displayOrderPreferences.save(displayOrderIDs, for: instanceID)
     }
 
     private func saveCollapsedDashboardSections() {
-        guard let instanceID = activeInstance?.id else { return }
+        guard let instanceID = activeStorageID else { return }
         UserDefaults.standard.set(
             collapsedDashboardSectionIDs.sorted(),
             forKey: Self.collapsedDashboardSectionsKeyPrefix + instanceID
@@ -3640,7 +3712,8 @@ final class AppModel {
                     dashboards: dashboards,
                     lineups: lineups,
                     jobs: jobs,
-                    activityClearedBefore: activityClearedBefore
+                    activityClearedBefore: activityClearedBefore,
+                    connectionFence: activeConnectionFence
                 )
             )
             return true
@@ -3656,7 +3729,7 @@ final class AppModel {
     private func refreshHistoryAfterWrite(instance: TesseraeInstance) async {
         let revision = connectionRevision
         let client = activeClient
-        guard activeInstance?.id == instance.id else { return }
+        guard activeInstance?.connectionIdentity == instance.connectionIdentity else { return }
         do {
             let history = try await client.fetchHistory(
                 beforeID: nil,
@@ -3692,7 +3765,7 @@ final class AppModel {
             instanceID: instanceID,
             createdAt: job.createdAt
         ) {
-            guard connectionRevision == revision, activeInstance?.id == instanceID else { return }
+            guard connectionRevision == revision, activeStorageID == instanceID else { return }
             activityThumbnailData[job.id] = thumbnail
         }
     }

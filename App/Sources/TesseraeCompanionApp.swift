@@ -14,7 +14,7 @@ struct TesseraeCompanionApp: App {
 
     init() {
         let credentials: any CredentialStoring
-        let stateStore: any CompanionStateStoring
+        var stateStore: any CompanionStateStoring
         let sendPreferences: any CompanionSendPreferencesStoring
         let shareQueue: any ShareQueueStoring
         let linkShareQueue: any LinkShareQueueStoring
@@ -77,7 +77,7 @@ struct TesseraeCompanionApp: App {
                 suiteName: AppConfiguration.appGroupIdentifier
             )
             sendPreferences = UserDefaultsCompanionSendPreferencesStore(
-                suiteName: AppConfiguration.appGroupIdentifier
+                suiteName: AppConfiguration.appGroupIdentifier, directoryURL: AppConfiguration.sharedContainerURL
             )
             shareQueue = FileShareQueueStore(
                 directoryURL: AppConfiguration.sharedContainerURL
@@ -99,7 +99,7 @@ struct TesseraeCompanionApp: App {
             suiteName: AppConfiguration.appGroupIdentifier
         )
         sendPreferences = UserDefaultsCompanionSendPreferencesStore(
-            suiteName: AppConfiguration.appGroupIdentifier
+            suiteName: AppConfiguration.appGroupIdentifier, directoryURL: AppConfiguration.sharedContainerURL
         )
         shareQueue = FileShareQueueStore(
             directoryURL: AppConfiguration.sharedContainerURL
@@ -116,16 +116,20 @@ struct TesseraeCompanionApp: App {
         demoDisplayNames = [:]
         demoImageSendErrors = []
 #endif
-        let liveClient = LiveTesseraeClient(
-            credentials: credentials,
-            identity: TesseraeClientIdentity(
-                appVersion: AppConfiguration.appVersion,
-                installationID: AppConfiguration.installationID
-            )
-        )
+        let runtime = (credentials is InMemoryCredentialStore) ? nil : AppConfiguration.sharedContainerURL.map {
+            ConnectionRuntime(directory: $0, suiteName: AppConfiguration.appGroupIdentifier,
+                keychainService: AppConfiguration.keychainService, accessGroup: AppConfiguration.keychainAccessGroup,
+                identity: TesseraeClientIdentity(appVersion: AppConfiguration.appVersion,
+                                                 installationID: AppConfiguration.installationID), isPrimary: true)
+        }
+        if let runtime { stateStore = runtime.stateStore }
+        let liveClient = runtime?.bootstrapClient() ?? ConnectionRuntime.localClient(credentials: credentials,
+            identity: TesseraeClientIdentity(appVersion: AppConfiguration.appVersion,
+                                             installationID: AppConfiguration.installationID))
         _model = State(
             initialValue: AppModel(
                 liveClient: liveClient,
+                connectionRuntime: runtime,
                 demoClient: MockTesseraeClient(
                     latency: demoLatency,
                     lineupIntent: demoLineupIntent,

@@ -33,7 +33,7 @@ struct RootView: View {
     @State private var presentation = CompanionPresentation()
 
     private var connectionContext: RootConnectionContext {
-        RootConnectionContext(revision: model.connectionRevision, instanceID: model.activeInstance?.id)
+        RootConnectionContext(revision: model.connectionRevision, instanceID: model.activeStorageID)
     }
 
     private var bluetoothAssociationContext: BluetoothAssociationContext {
@@ -48,7 +48,7 @@ struct RootView: View {
     private var bluetoothModeSyncContext: BluetoothModeSyncContext {
         BluetoothModeSyncContext(connection: connectionContext,
             reports: nearbyDevices.displayRecords.pendingModeReports(
-                displayIDs: model.displays.map(\.id), serverID: model.activeInstance?.id,
+                displayIDs: model.displays.map(\.id), serverID: model.activeStorageID,
                 includeStatus: model.capabilities?.features.contains("device_status_observations") == true),
             enabled: scenePhase == .active && model.connectionMode == .live
                 && model.capabilities?.features.contains("device_mode_observations") == true)
@@ -79,9 +79,12 @@ struct RootView: View {
                 }
             }
         }
-        .animation(.snappy, value: model.activeInstance?.id)
+        .animation(.snappy, value: model.activeStorageID)
         .environment(presentation)
-        .onChange(of: model.activeInstance?.id, initial: true) { _, id in
+        .onChange(of: model.activeStorageID, initial: true) { _, id in
+            if let instance = model.activeInstance, let legacy = model.legacyBinding(for: instance), let id {
+                nearbyDevices.displayRecords.migrateServer(from: legacy, to: id)
+            }
             nearbyDevices.displayRecords.activeServerID = id
             rememberServerDisplays()
         }
@@ -218,7 +221,7 @@ struct RootView: View {
 
     private func rememberServerDisplays() {
         nearbyDevices.displayRecords.observeServer(displays: model.displays, previews: model.displayPreviews,
-                                                   serverID: model.activeInstance?.id)
+                                                   serverID: model.activeStorageID)
     }
 
     private var connectionMessageRevision: String {
@@ -229,7 +232,7 @@ struct RootView: View {
         case .offline: "offline"
         case .requiresPairing: "requires-pairing"
         }
-        return [model.connectionNotice ?? "", health, model.activeInstance?.id ?? ""]
+        return [model.connectionNotice ?? "", health, model.activeStorageID ?? ""]
             .joined(separator: "|")
     }
 

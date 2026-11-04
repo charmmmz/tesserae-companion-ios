@@ -177,9 +177,13 @@ struct NearbyDeviceSetupView: View {
                 selectedDetent = preferredDetent(for: newScreen)
             }
         }
-        .task(id: model.activeInstance?.id) {
-            if let instanceID = model.activeInstance?.id {
+        .task(id: model.activeStorageID) {
+            if let instance = model.activeInstance, let instanceID = model.activeStorageID {
                 setupNetworks.load(instanceID: instanceID)
+                if let legacy = model.legacyBinding(for: instance) {
+                    do { try await setupNetworks.migratePasswords(from: legacy, to: instanceID) }
+                    catch { model.lastError = error.localizedDescription }
+                }
             }
         }
     }
@@ -830,7 +834,7 @@ struct NearbyDeviceSetupView: View {
                         throw NearbyDeviceSetupError.noServer
                     }
                     let pairing = try await model.createFirmwareDevicePairing()
-                    guard model.activeInstance?.id == instance.id,
+                    guard model.activeStorageID == model.storageID(for: instance),
                           model.activeInstance?.baseURL == instance.baseURL,
                           nearby.activeDevice?.id == device.id else {
                         throw NearbyDeviceSetupError.serverConnectionChanged
@@ -881,7 +885,7 @@ struct NearbyDeviceSetupView: View {
     }
 
     private func loadSavedPassword(for ssid: String) {
-        guard let instanceID = model.activeInstance?.id else { return }
+        guard let instanceID = model.activeStorageID else { return }
         Task {
             if let saved = try? await setupNetworks.savedPassword(
                 instanceID: instanceID,
@@ -897,7 +901,7 @@ struct NearbyDeviceSetupView: View {
     }
 
     private func rememberConfiguredNetwork() {
-        guard let instanceID = model.activeInstance?.id else {
+        guard let instanceID = model.activeStorageID else {
             password = ""
             screen = .complete
             return
@@ -1011,7 +1015,7 @@ struct NearbyDisplaysView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .swipeActions {
                             Button("Forget", role: .destructive) {
-                                guard let instanceID = model.activeInstance?.id else { return }
+                                guard let instanceID = model.activeStorageID else { return }
                                 Task {
                                     try? await setupNetworks.remove(
                                         instanceID: instanceID,
@@ -1161,7 +1165,7 @@ struct NearbyDisplaysView: View {
         .tesseraeMessageCenter()
         .onAppear {
             nearby.startScanning()
-            if let instanceID = model.activeInstance?.id {
+            if let instanceID = model.activeStorageID {
                 setupNetworks.load(instanceID: instanceID)
             }
         }

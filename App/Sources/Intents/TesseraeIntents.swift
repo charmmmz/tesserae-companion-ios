@@ -11,6 +11,7 @@ struct TesseraeDashboardEntity: AppEntity {
 
     let id: String
     let name: String
+    var resourceID: String { ConnectionResourceID(encoded: id)?.resourceID ?? id }
 
     var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(
@@ -24,16 +25,21 @@ struct TesseraeDashboardQuery: EntityQuery {
     func entities(
         for identifiers: [TesseraeDashboardEntity.ID]
     ) async throws -> [TesseraeDashboardEntity] {
-        let wanted = Set(identifiers)
-        return try await suggestedEntities().filter {
-            wanted.contains($0.id)
+        var result: [TesseraeDashboardEntity] = []
+        for identifier in identifiers {
+            let snapshot = try await TesseraeIntentRuntime.snapshot(for: [identifier])
+            let raw = ConnectionResourceID(encoded: identifier)?.resourceID ?? identifier
+            if let value = snapshot.dashboards.first(where: { $0.id == raw }) {
+                result.append(TesseraeDashboardEntity(id: identifier, name: value.name))
+            }
         }
+        return result
     }
 
     func suggestedEntities() async throws -> [TesseraeDashboardEntity] {
         let snapshot = try await TesseraeIntentRuntime.snapshot()
         return snapshot.dashboards.map {
-            TesseraeDashboardEntity(id: $0.id, name: $0.name)
+            TesseraeDashboardEntity(id: ConnectionResourceID(connectionID: snapshot.activeInstance.connectionIdentity.id, kind: "dashboard", resourceID: $0.id).encoded, name: $0.name)
         }
     }
 }
@@ -46,6 +52,7 @@ struct TesseraeDisplayEntity: AppEntity {
 
     let id: String
     let name: String
+    var resourceID: String { ConnectionResourceID(encoded: id)?.resourceID ?? id }
 
     var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(
@@ -59,16 +66,21 @@ struct TesseraeDisplayQuery: EntityQuery {
     func entities(
         for identifiers: [TesseraeDisplayEntity.ID]
     ) async throws -> [TesseraeDisplayEntity] {
-        let wanted = Set(identifiers)
-        return try await suggestedEntities().filter {
-            wanted.contains($0.id)
+        var result: [TesseraeDisplayEntity] = []
+        for identifier in identifiers {
+            let snapshot = try await TesseraeIntentRuntime.snapshot(for: [identifier])
+            let raw = ConnectionResourceID(encoded: identifier)?.resourceID ?? identifier
+            if let value = snapshot.displays.first(where: { $0.id == raw }) {
+                result.append(TesseraeDisplayEntity(id: identifier, name: value.name))
+            }
         }
+        return result
     }
 
     func suggestedEntities() async throws -> [TesseraeDisplayEntity] {
         let snapshot = try await TesseraeIntentRuntime.snapshot()
         return snapshot.displays.map {
-            TesseraeDisplayEntity(id: $0.id, name: $0.name)
+            TesseraeDisplayEntity(id: ConnectionResourceID(connectionID: snapshot.activeInstance.connectionIdentity.id, kind: "display", resourceID: $0.id).encoded, name: $0.name)
         }
     }
 }
@@ -125,13 +137,13 @@ struct PushTesseraeDashboardIntent: AppIntent {
     }
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        let snapshot = try await TesseraeIntentRuntime.snapshot()
+        let snapshot = try await TesseraeIntentRuntime.snapshot(for: [dashboard.id] + (displays?.map(\.id) ?? []))
         guard let selectedDashboard = snapshot.dashboards.first(
-            where: { $0.id == dashboard.id }
+            where: { $0.id == dashboard.resourceID }
         ) else {
             throw TesseraeIntentError.deletedEntity("dashboard")
         }
-        let explicitIDs = displays?.map(\.id)
+        let explicitIDs = displays?.map(\.resourceID)
         let targetIDs = explicitIDs?.isEmpty == false
             ? explicitIDs
             : selectedDashboard.deviceIDs
@@ -139,7 +151,7 @@ struct PushTesseraeDashboardIntent: AppIntent {
             throw TesseraeIntentError.noDisplays
         }
 
-        let client = TesseraeIntentRuntime.client()
+        let client = try TesseraeIntentRuntime.client(for: snapshot)
         let job = try await client.pushDashboard(
             id: selectedDashboard.id,
             deviceIDs: targetIDs,
@@ -180,8 +192,8 @@ struct SendImageToTesseraeIntent: AppIntent {
     }
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        let snapshot = try await TesseraeIntentRuntime.snapshot()
-        let displayIDs = displays.map(\.id)
+        let snapshot = try await TesseraeIntentRuntime.snapshot(for: displays.map(\.id))
+        let displayIDs = displays.map(\.resourceID)
         guard !displayIDs.isEmpty else {
             throw TesseraeIntentError.noDisplays
         }
@@ -198,7 +210,8 @@ struct SendImageToTesseraeIntent: AppIntent {
             capabilities: snapshot.capabilities
         )
         let request = SharedImageRequest(
-            instanceID: snapshot.activeInstance.id,
+            instanceID: snapshot.activeInstance.storageID,
+            connectionEpoch: snapshot.connectionFence?.epoch,
             fileName: image.filename,
             contentType: contentType,
             fit: layout.modelValue,
@@ -211,7 +224,7 @@ struct SendImageToTesseraeIntent: AppIntent {
         do {
             let submitting = request.updating(status: .submitting)
             try await queue.update(submitting)
-            let job = try await TesseraeIntentRuntime.client().sendImage(
+            let job = try await TesseraeIntentRuntime.client(for: snapshot).sendImage(
                 data: image.data,
                 fileName: image.filename,
                 contentType: contentType,
@@ -224,7 +237,7 @@ struct SendImageToTesseraeIntent: AppIntent {
             await TesseraeIntentRuntime.recordThumbnail(
                 image.data,
                 for: job,
-                instanceID: snapshot.activeInstance.id
+                instanceID: snapshot.activeInstance.storageID
             )
             try await TesseraeIntentRuntime.record(job, in: snapshot)
             try await queue.remove(submitting)
@@ -293,26 +306,39 @@ struct TesseraeAppShortcuts: AppShortcutsProvider {
 }
 
 private enum TesseraeIntentRuntime {
-    static func snapshot() async throws -> CompanionSnapshot {
-        guard let snapshot = try await stateStore().load() else {
-            throw TesseraeIntentError.notPaired
+    static func runtime() throws -> ConnectionRuntime {
+        guard let directory = AppConfiguration.sharedContainerURL else { throw ConnectionError.unavailable }
+        return ConnectionRuntime(directory: directory, suiteName: AppConfiguration.appGroupIdentifier,
+            keychainService: AppConfiguration.keychainService, accessGroup: AppConfiguration.keychainAccessGroup,
+            identity: TesseraeClientIdentity(appVersion: AppConfiguration.appVersion,
+                                             installationID: AppConfiguration.installationID), isPrimary: false)
+    }
+
+    static func snapshot(for identifiers: [String] = []) async throws -> CompanionSnapshot {
+        let runtime = try runtime()
+        // Import first so old raw entity IDs can use only the recorded local binding.
+        let current = try await runtime.stateStore.load()
+        var resolved = Set<ConnectionID>()
+        let legacy = try runtime.registry.savedConnections().filter { $0.legacyInstanceID != nil }
+        for identifier in identifiers {
+            if let value = ConnectionResourceID(encoded: identifier) {
+                resolved.insert(value.connectionID)
+            } else {
+                guard legacy.count == 1 else { throw TesseraeIntentError.deletedEntity("destination") }
+                resolved.insert(legacy[0].id)
+            }
         }
-        guard try await credentialStore().token(
-            for: snapshot.activeInstance.id
-        ) != nil else {
-            throw TesseraeIntentError.notPaired
-        }
+        guard resolved.count <= 1 else { throw TesseraeIntentError.deletedEntity("destination") }
+        let snapshot: CompanionSnapshot?
+        if let id = resolved.first { snapshot = try await runtime.stateStore.load(for: id) }
+        else { snapshot = current }
+        guard let snapshot, let fence = snapshot.connectionFence else { throw TesseraeIntentError.notPaired }
+        try await runtime.sessions.validate(fence)
         return snapshot
     }
 
-    static func client() -> LiveTesseraeClient {
-        LiveTesseraeClient(
-            credentials: credentialStore(),
-            identity: TesseraeClientIdentity(
-                appVersion: AppConfiguration.appVersion,
-                installationID: AppConfiguration.installationID
-            )
-        )
+    static func client(for snapshot: CompanionSnapshot) throws -> LiveTesseraeClient {
+        try runtime().client(for: snapshot)
     }
 
     static func queue() -> FileShareQueueStore {
@@ -364,7 +390,8 @@ private enum TesseraeIntentRuntime {
                 displays: snapshot.displays,
                 dashboards: snapshot.dashboards,
                 jobs: jobs,
-                activityClearedBefore: snapshot.activityClearedBefore
+                activityClearedBefore: snapshot.activityClearedBefore,
+                connectionFence: snapshot.connectionFence
             )
         )
     }
@@ -387,18 +414,8 @@ private enum TesseraeIntentRuntime {
         }
     }
 
-    private static func stateStore() -> UserDefaultsCompanionStateStore {
-        UserDefaultsCompanionStateStore(
-            suiteName: AppConfiguration.appGroupIdentifier
-        )
-    }
+    private static func stateStore() throws -> ConnectionStateStore { try runtime().stateStore }
 
-    private static func credentialStore() -> KeychainCredentialStore {
-        KeychainCredentialStore(
-            service: AppConfiguration.keychainService,
-            accessGroup: AppConfiguration.keychainAccessGroup
-        )
-    }
 }
 
 private enum TesseraeIntentError: Error, LocalizedError {

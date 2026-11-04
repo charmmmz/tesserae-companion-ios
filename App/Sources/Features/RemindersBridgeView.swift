@@ -109,7 +109,7 @@ struct RemindersBridgeView: View {
         .tesseraeScreenBackground()
         .navigationTitle("Reminders")
         .navigationBarTitleDisplayMode(.inline)
-        .task(id: appModel.activeInstance?.id) {
+        .task(id: appModel.activeStorageID) {
             await bridgeModel.load(using: appModel)
         }
         .onChange(of: scenePhase) { _, newPhase in

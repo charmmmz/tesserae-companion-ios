@@ -472,7 +472,7 @@ struct ActivityView: View {
         let thumbnail = model.activityThumbnailData[job.id]
             .flatMap {
                 ActivityPhotoCache.shared.image(
-                    for: "\(model.activeInstance?.id ?? "unknown")-\(job.id)",
+                    for: "\(model.activeStorageID ?? "unknown")-\(job.id)",
                     data: $0
                 )
             }
@@ -581,7 +581,7 @@ struct ActivityView: View {
     private func historyCard(_ item: HistoryItem) -> some View {
         let preview = model.historyPreviews[item.id]?.data.flatMap {
             ActivityPhotoCache.shared.image(
-                for: "\(model.activeInstance?.id ?? "unknown")-history-\(item.id)",
+                for: "\(model.activeStorageID ?? "unknown")-history-\(item.id)",
                 data: $0
             )
         }

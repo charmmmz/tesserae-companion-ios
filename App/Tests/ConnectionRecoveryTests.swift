@@ -7,6 +7,43 @@ import Testing
 
 @MainActor
 final class ConnectionRecoveryTests: XCTestCase {
+    func testOldEpochTaskStaysPausedUntilExplicitLocalRetry() async throws {
+        let old = try await makeFixture(delay: .zero)
+        let directory = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        let sessions = SharedSessionStore(directory: directory, vault: RecoveryTestVault(directory: directory))
+        let transport = old.transport
+        let identity = TesseraeClientIdentity(appVersion: "test", installationID: "test")
+        let runtime = ConnectionRuntime(directory: directory, identity: identity, credentials: old.credentials,
+            sessions: sessions, legacy: old.store, isPrimary: true, transport: transport)
+        let queue = FileShareQueueStore(directoryURL: directory)
+        let model = AppModel(liveClient: runtime.bootstrapClient(), connectionRuntime: runtime,
+            demoClient: MockTesseraeClient(latency: .zero), credentials: old.credentials, stateStore: runtime.stateStore,
+            sendPreferences: InMemoryCompanionSendPreferencesStore(), shareQueue: queue,
+            linkShareQueue: InMemoryLinkShareQueueStore(), activityThumbnails: InMemoryActivityThumbnailStore(),
+            discovery: StaticDiscoveryService(results: []))
+        await model.restoreConnectionIfNeeded()
+        model.connectionHealth = .connected
+        let fence = try XCTUnwrap(model.activeConnectionFence)
+        let task = SharedImageRequest(instanceID: old.snapshot.activeInstance.storageID, connectionEpoch: UUID(),
+            fileName: "synthetic.jpg", contentType: "image/jpeg", fit: .fit, deviceIDs: ["one"],
+            idempotencyKey: "preserve-this-key")
+        try await queue.enqueue(imageData: Data([1, 2]), request: task)
+        let before = await transport.requestCount
+        await model.retryPendingSharedImages()
+        let afterAutomatic = await transport.requestCount
+        XCTAssertEqual(afterAutomatic, before)
+        var stored = try await queue.requests()
+        XCTAssertEqual(stored.first?.connectionEpoch, task.connectionEpoch)
+        await model.retryQueuedImage(task)
+        let afterManual = await transport.requestCount
+        XCTAssertEqual(afterManual, before + 1)
+        stored = try await queue.requests()
+        XCTAssertEqual(stored.first?.connectionEpoch, fence.epoch)
+        XCTAssertEqual(stored.first?.id, task.id)
+        XCTAssertEqual(stored.first?.idempotencyKey, task.idempotencyKey)
+        XCTAssertEqual(stored.first?.deviceIDs, task.deviceIDs)
+        XCTAssertEqual(stored.first?.createdAt.timeIntervalSince1970 ?? 0, task.createdAt.timeIntervalSince1970, accuracy: 1)
+    }
     func testRestoreReleasesCachedUIBeforeProbeAndTimesOutWithoutLosingPairing() async throws {
         let fixture = try await makeFixture(timeout: .milliseconds(40), delay: .seconds(10))
         let restore = Task { await fixture.model.restoreConnectionIfNeeded() }
@@ -150,6 +187,7 @@ private actor DelayedConnectionTransport: TesseraeHTTPTransporting {
     let delay: Duration
     let unauthorized: Bool
     private(set) var started = false
+    private(set) var requestCount = 0
 
     init(delay: Duration, unauthorized: Bool) {
         self.delay = delay
@@ -158,9 +196,22 @@ private actor DelayedConnectionTransport: TesseraeHTTPTransporting {
 
     func send(_ request: URLRequest) async throws -> TesseraeHTTPResponse {
         started = true
+        requestCount += 1
         try await Task.sleep(for: delay)
         if unauthorized { return TesseraeHTTPResponse(data: Data(), statusCode: 401) }
         throw URLError(.cannotConnectToHost)
+    }
+}
+
+private struct RecoveryTestVault: SessionVault {
+    let directory: URL
+    func read(_ id: ConnectionID) throws -> Data? {
+        let url = directory.appending(path: id.rawValue + ".session")
+        return FileManager.default.fileExists(atPath: url.path) ? try Data(contentsOf: url) : nil
+    }
+    func write(_ data: Data, for id: ConnectionID) throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try data.write(to: directory.appending(path: id.rawValue + ".session"), options: .atomic)
     }
 }
 
