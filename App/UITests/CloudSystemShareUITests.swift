@@ -11,6 +11,9 @@ import XCTest
         let app = XCUIApplication()
         let namespace = ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_EXISTING_NAMESPACE"] ?? "a4-system-\(UUID().uuidString)"
         app.launchEnvironment["TESSERAE_SYSTEM_ENTRY_FIXTURE"] = "1"
+        if ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_SUBMISSION_PROXY"] == "1" {
+            app.launchEnvironment["TESSERAE_SYSTEM_ENTRY_PROXY"] = "1"
+        }
         app.launchEnvironment["TESSERAE_CLOUD_ISSUER"] = "http://127.0.0.1:8877"
         app.launchEnvironment["TESSERAE_CLOUD_BROWSER_ENTRY"] = "http://127.0.0.1:8879/begin"
         app.launchEnvironment["TESSERAE_CLOUD_TEST_NAMESPACE"] = namespace
@@ -24,8 +27,8 @@ import XCTest
         return app
     }
 
-    private func authorize(_ app: XCUIApplication) async throws {
-        if app.buttons["cloud-device-a4_land"].waitForExistence(timeout: 2) { return }
+    private func authorize(_ app: XCUIApplication, allowingExisting: Bool = true) async throws {
+        if allowingExisting && app.buttons["cloud-device-a4_land"].waitForExistence(timeout: 2) { return }
         let account = ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_ACCOUNT"] ?? "owner_a"
         let (_, response) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:8879/select?account=\(account)")!)
         XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
@@ -39,7 +42,12 @@ import XCTest
         app.buttons["Account"].tap()
         let tenantName = account == "owner_b" ? "A4 Studio B (owner)" : (account == "member_a" ? "A4 Studio A (member)" : "A4 Studio A (owner)")
         let tenant = app.buttons[tenantName]
-        XCTAssertTrue(tenant.waitForExistence(timeout: 5)); tenant.tap(); allow.tap()
+        XCTAssertTrue(tenant.waitForExistence(timeout: 5)); tenant.tap()
+        let browser = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        browser.name = "Selected Fixture Tenant Before Authorization"; browser.lifetime = .keepAlways; add(browser)
+        allow.tap()
+        let returned = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        returned.name = "Fixture Authorization Return"; returned.lifetime = .keepAlways; add(returned)
         XCTAssertTrue(app.buttons["cloud-device-a4_land"].waitForExistence(timeout: 15))
     }
 
@@ -56,11 +64,12 @@ import XCTest
     }
     private func capture(_ app: XCUIApplication, _ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
+        let screen = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); screen.name = name + " Full Screen"; screen.lifetime = .keepAlways; add(screen)
         let hierarchy = XCTAttachment(string: app.debugDescription); hierarchy.name = name + " AX"; hierarchy.lifetime = .keepAlways; add(hierarchy)
         print("A4_SYSTEM_AX", name, app.debugDescription)
     }
 
-    private func openCloudLivePhotoShare(expectTargets: Bool = true) async throws -> XCUIApplication {
+    private func openCloudLivePhotoShare(expectTargets: Bool = true, preservingSelectedMedia: Bool = false) async throws -> XCUIApplication {
         let app: XCUIApplication
         if ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_COLD_MAIN"] == "1" {
             app = XCUIApplication()
@@ -73,11 +82,20 @@ import XCTest
         XCTAssertEqual(app.state, .notRunning)
         print("A4_MAIN_APP_AFTER_TERMINATE", app.state.rawValue)
         let photos = XCUIApplication(bundleIdentifier: "com.apple.mobileslideshow")
-        photos.terminate(); photos.launch()
-        if photos.buttons["Continue"].waitForExistence(timeout: 2) { photos.buttons["Continue"].tap() }
+        if preservingSelectedMedia { photos.activate() }
+        else { photos.terminate(); photos.launch() }
+        if !preservingSelectedMedia && photos.buttons["Continue"].waitForExistence(timeout: 2) { photos.buttons["Continue"].tap() }
         let share = photos.buttons["PUOneUpBarButtonItemIdentifierShare"]
-        if !share.exists {
-            let live = photos.images.matching(NSPredicate(format: "label BEGINSWITH 'Live Photo,'")).firstMatch
+        if preservingSelectedMedia {
+            let prefix = try XCTUnwrap(ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_MEDIA_PREFIX"])
+            let selected = photos.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", prefix)).firstMatch
+            XCTAssertTrue(selected.waitForExistence(timeout: 8))
+            if !share.waitForExistence(timeout: 1) {
+                selected.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            }
+            XCTAssertTrue(share.waitForExistence(timeout: 8)); XCTAssertTrue(share.isHittable)
+        } else if !share.exists {
+            let live = photos.images.matching(NSPredicate(format: "label BEGINSWITH %@", ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_LANGUAGE"] == "zh" ? "实况照片," : "Live Photo,")).firstMatch
             XCTAssertTrue(live.waitForExistence(timeout: 8))
             live.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         }
@@ -284,6 +302,101 @@ import XCTest
         XCTAssertFalse(app.buttons["cloud-pending-continue"].exists)
         capture(app, "Accepted Result Visible After Pending Sheet Dismissal")
     }
+    func testAddCloudFixtureConnectionReadOnly() async throws {
+        let app = launch()
+        XCTAssertTrue(app.buttons["cloud-device-a4_land"].waitForExistence(timeout: 15))
+        app.buttons["root-settings"].firstMatch.tap()
+        let choose = app.buttons["Choose Connection"]
+        XCTAssertTrue(choose.waitForExistence(timeout: 5)); reveal(choose, in: app); choose.tap()
+        try await authorize(app, allowingExisting: false)
+        XCTAssertTrue(app.staticTexts["A4 Studio B"].waitForExistence(timeout: 15))
+        capture(app, "Additional Fixed Cloud Account Selected")
+        app.terminate()
+    }
+    func testSelectSavedOwnerAReadOnly() {
+        let app = launch()
+        XCTAssertTrue(app.buttons["cloud-device-a4_land"].waitForExistence(timeout: 15))
+        app.buttons["root-settings"].firstMatch.tap()
+        let choose = app.buttons["Choose Connection"]
+        XCTAssertTrue(choose.waitForExistence(timeout: 5)); choose.tap()
+        let owner = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'saved-connection-' AND label CONTAINS 'a4_owner_a@example.invalid'")).firstMatch
+        XCTAssertTrue(owner.waitForExistence(timeout: 5)); reveal(owner, in: app); owner.tap()
+        XCTAssertTrue(app.buttons["cloud-device-a4_land"].waitForExistence(timeout: 15))
+        capture(app, "Saved Owner A Selected Without New Authorization")
+        app.terminate()
+    }
+    func testPhotosColdCurrentMediaCommitsFrameAndSendsOnce() async throws {
+        let photos = try await openCloudLivePhotoShare(preservingSelectedMedia: true)
+        let land = photos.buttons["share-display-cloud:a4_land"]
+        for row in photos.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'share-display-cloud:'")).allElementsBoundByIndex
+            where row.identifier != land.identifier && row.isSelected {
+            reveal(row, in: photos); row.tap()
+        }
+        reveal(land, in: photos)
+        if !land.isSelected { land.tap() }
+        let timeline = photos.descendants(matching: .any)["media-frame-timeline"].firstMatch
+        if timeline.waitForExistence(timeout: 3) {
+            reveal(timeline, in: photos)
+            timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.5)).press(forDuration: 0.05,
+                thenDragTo: timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.65, dy: 0.5)))
+        }
+        let send = photos.buttons["share-send"]
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: send)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 15), .completed)
+        capture(photos, "Final Current Media Composition Before Explicit Send")
+        send.tap()
+        let result = photos.descendants(matching: .any)["share-cloud-result-a4_land"].firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 35))
+        if ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_EXPECT_UNKNOWN"] == "1" {
+            XCTAssertTrue(result.label.contains("Unknown"))
+        } else { XCTAssertTrue(result.label.contains("Frame Generated")) }
+        capture(photos, "Current Media Durable Result")
+        XCTAssertEqual(XCUIApplication().state, .notRunning)
+        photos.buttons["share-cloud-done"].tap()
+    }
+    func testPhotosColdShareLeaveComposerOpen() async throws {
+        let photos = try await openCloudLivePhotoShare(preservingSelectedMedia: true)
+        let land = photos.buttons["share-display-cloud:a4_land"]
+        for row in photos.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'share-display-cloud:'")).allElementsBoundByIndex
+            where row.identifier != land.identifier && row.isSelected {
+            reveal(row, in: photos); row.tap()
+        }
+        reveal(land, in: photos)
+        if !land.isSelected { land.tap() }
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: photos.buttons["share-send"])
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 15), .completed)
+        capture(photos, "Cold System Composer Ready Before Separate Explicit Send")
+    }
+    func testRetainedReviewReadOnlyLayout() async throws {
+        let app = launch()
+        try await authorize(app)
+        let identifier = try XCTUnwrap(ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_PENDING_ID"])
+        app.buttons["cloud-send-results"].tap()
+        let row = app.buttons["cloud-pending-" + identifier]
+        XCTAssertTrue(row.waitForExistence(timeout: 15)); reveal(row, in: app); row.tap()
+        let review = app.buttons["cloud-pending-review"]
+        reveal(review, in: app); XCTAssertTrue(review.exists); review.tap()
+        let unavailable = app.buttons["cloud-review-unavailable-a4_removed"]
+        reveal(unavailable, in: app); XCTAssertTrue(unavailable.exists)
+        XCTAssertFalse(app.buttons["send-submit"].isEnabled)
+        capture(app, "Retained Review Unavailable Target Localized Layout")
+    }
+    func testPhotosColdShareReadOnlyLayout() async throws {
+        let photos = try await openCloudLivePhotoShare()
+        let send = photos.buttons["share-send"]
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: send)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 15), .completed)
+        capture(photos, "Actual System Share Read Only Layout")
+        reveal(photos.buttons["share-display-cloud:a4_land"], in: photos)
+        capture(photos, "Actual System Share Targets Read Only Layout")
+        photos.buttons["share-cancel"].tap()
+    }
+    func testAuthorizeCloudFixtureReadOnly() async throws {
+        let app = launch()
+        try await authorize(app)
+        capture(app, "Fresh Fixture Cloud Authorization Ready")
+        app.terminate()
+    }
     func testShortcutsHostInspect() throws {
         let shortcuts = XCUIApplication(bundleIdentifier: "com.apple.shortcuts")
         shortcuts.launch()
@@ -311,10 +424,11 @@ import XCTest
         var app = XCUIApplication(bundleIdentifier: "com.apple.shortcuts")
         for (i, step) in steps.enumerated() {
             if let bundle = step.bundle {
-                XCTAssertTrue(["com.apple.shortcuts", "com.apple.mobileslideshow", "com.charmmmz.tesseraecompanion", "com.apple.springboard"].contains(bundle))
+                XCTAssertTrue(["com.apple.shortcuts", "com.apple.mobileslideshow", "com.charmmmz.tesseraecompanion", "com.apple.springboard", "com.apple.mobilesafari", "com.apple.Preferences"].contains(bundle))
                 app = XCUIApplication(bundleIdentifier: bundle)
             }
             print("A4_SYSTEM_DRIVER_STEP \(i) \(step.action) \(step.label ?? step.identifier ?? "")")
+            if step.action == "state" { print("A4_SYSTEM_APP_STATE", step.bundle ?? "current", app.state.rawValue); continue }
             if step.action == "launch" { app.activate(); continue }
             if step.action == "terminate" { app.terminate(); continue }
             if step.action == "capture" { capture(app, step.text ?? "step-\(i)"); continue }
@@ -328,11 +442,13 @@ import XCTest
             case "cell": query = app.cells
             case "image": query = app.images
             case "staticText": query = app.staticTexts
+            case "switch": query = app.switches
             default: query = app.descendants(matching: .any)
             }
             if let label = step.label { query = query.matching(NSPredicate(format: "label == %@", label)) }
             if let identifier = step.identifier { query = query.matching(identifier: identifier) }
             let element = query.element(boundBy: step.index ?? 0)
+            if step.action == "notExists" { XCTAssertFalse(element.waitForExistence(timeout: 3)); continue }
             XCTAssertTrue(element.waitForExistence(timeout: 8))
             switch step.action {
             case "tap": element.tap()
@@ -340,6 +456,9 @@ import XCTest
             case "coordinateTap": element.coordinate(withNormalizedOffset: CGVector(dx: step.dx ?? 0.5, dy: step.dy ?? 0.5)).tap()
             case "type": element.tap(); element.typeText(step.text ?? "")
             case "focusedType": element.typeText(step.text ?? "")
+            case "hittable":
+                let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: element)
+                XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 10), .completed)
             case "exists": break
             default: XCTFail("Unsupported evidence driver action")
             }

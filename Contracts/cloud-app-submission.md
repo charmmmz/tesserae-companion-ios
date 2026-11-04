@@ -7,7 +7,7 @@ OAuth resource checks still apply.
 
 | Operation | Request below `/api/t` | Required scope |
 | --- | --- | --- |
-| Photo | `POST /send/image`, multipart `image`, `device_ids`, `fit`, `rotate` | `app:send` |
+| Photo | `POST /send/image`, multipart `image`, `devices`, `fit`, `rotate` | `app:send` |
 | Current page | `POST /devices/{id}/render` | `app:refresh` |
 
 One photo request supplies one image and one fit/rotation to all its targets.
@@ -46,3 +46,21 @@ leaves a minimal closed decision receipt to prevent duplicate publication.
 
 Local C1 integration and simulator tests do not replace deployed authorization,
 email, signed app/extension Keychain sharing or physical-panel release checks.
+
+## System entry points
+
+Photos sharing and Send Image in Shortcuts use this same once-only contract.
+A shortcut display entity pins the full saved connection and device ID, not the
+currently selected account or a permanent session epoch. Quiet Hours override
+and arbitrary Cloud dashboard pushing are unsupported and fail before admission.
+Refresh Current Cloud Page is a separate action for one fixed Cloud display;
+it does not reinterpret the legacy local Push Dashboard action.
+
+A system input is kept for seven days from its initial creation before it is
+accepted. App Continue is explicit; opening, restarting or repeating the initial
+submission never resumes it. Review creates a new decision only while atomically
+closing the original unaccepted input and inheriting its absolute media deadline.
+Expired, deleted, changed or live-owned inputs cannot be replaced. Once accepted,
+normal batch result retention applies independently of the old pending view.
+Unknown, refused, unstarted or warning outcomes do not produce a success shortcut
+dialog. The App and actual system hosts still do not claim physical display wake.

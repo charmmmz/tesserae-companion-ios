@@ -481,7 +481,8 @@ extension CloudSubmissionLifecycleTests {
         let fence = try #require(try await environment.runtime.sessions.fence(for: id))
         var records: [[String: Any]] = []
         let isContinueFixture = ProcessInfo.processInfo.environment["TESSERAE_CLOUD_SYSTEM_NATIVE_CASE"] == "continue"
-        let cases = isContinueFixture ? [("continue", 86_400.0)] : [("detail", 70.0), ("review", 140.0)]
+        let isLayoutFixture = ProcessInfo.processInfo.environment["TESSERAE_CLOUD_SYSTEM_NATIVE_CASE"] == "layout"
+        let cases = isContinueFixture ? [("continue", 86_400.0)] : isLayoutFixture ? [("review", 86_400.0)] : [("detail", 70.0), ("review", 140.0)]
         for (name, lifetime) in cases {
             let created = Date().addingTimeInterval(-7 * 86_400 + lifetime)
             let entry = CloudSystemEntry(runtime: environment.runtime, directory: environment.directory, clock: { created }) { _, _, _ in
@@ -537,6 +538,31 @@ extension CloudSubmissionLifecycleTests {
               case .cloud(let issuer, _, _) = connection.identity,
               issuer.absoluteString == "http://127.0.0.1:8877" else { throw ConnectionError.invalidIdentity }
         return environment
+    }
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["TESSERAE_RUN_CLOUD_SYSTEM_STATE"] == "1",
+        "Read only sanitized state of the explicitly owned loopback/a4 session; no network."))
+    func readActualC1SessionMetadataWithoutAuthorization() throws {
+        let environment = try nativeFixtureEnvironment()
+        let id = try #require(try environment.runtime.registry.selectedID())
+        let vault = KeychainSessionVault(service: AppConfiguration.keychainService,
+            accessGroup: AppConfiguration.keychainAccessGroup)
+        let data = try #require(try vault.read(id))
+        let envelope = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let state = try #require(envelope["state"] as? [String: Any])
+        let kind = try #require(state.keys.first)
+        var result: [String: Any] = ["namespace": environment.directory.lastPathComponent,
+            "connectionID": id.rawValue, "state": kind,
+            "epoch": envelope["epoch"] ?? NSNull(), "revision": envelope["revision"] ?? NSNull(),
+            "revocationCount": (envelope["revocations"] as? [Any])?.count ?? 0]
+        if let payload = state[kind] as? [String: Any] {
+            if kind == "closed" { result["closure"] = payload["_0"] }
+            if let tokens = payload["_0"] as? [String: Any],
+               let response = tokens["response"] as? [String: Any] {
+                result["grantID"] = response["grant_id"]; result["generation"] = response["generation"]
+            }
+        }
+        try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys])
+            .write(to: URL.documentsDirectory.appending(path: "A4SessionMetadata.json"), options: .atomic)
     }
     @Test(.enabled(if: ProcessInfo.processInfo.environment["TESSERAE_RUN_CLOUD_SYSTEM_CONTROLS"] == "1",
         "Exports only the explicitly owned loopback/a4 fixture grant for local controls; no network by default."))

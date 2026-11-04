@@ -18,19 +18,24 @@ capabilities.
 
 ### Added
 
+- Cloud photos can be sent from Photos sharing or a fixed-device Shortcuts action
+  without opening the main App first. A separate shortcut refreshes the current
+  page. Persisted unsent photos and work refused by the system raster budget
+  are kept for explicit App review and Continue; uncertain results never send again automatically. Account switching
+  cannot redirect a saved target, and expired pending photos disappear from
+  recovery views. Existing local and nearby Bluetooth sending are preserved.
 - Native Cloud photo sending preserves per-screen framing and saves each display's
   generated, refused, unknown or unstarted result. Interrupted sends do not resume
   automatically; selected resend requires an explicit decision and warns when a
   display may already have received the image. Saved photos can be deleted and
   expire independently of the 30-day result history. Refresh Current Page does not change
-  dashboard bindings or Lineup definitions. Cloud Share Extension and shortcuts
-  sending are not included.
+  dashboard bindings or Lineup definitions.
 - Cloud sign-in and read-only display and dashboard browsing, with saved
   connections, tenant selection, existing previews and explicit recovery for
   expired sessions or unavailable access. Switching back to a paired local
   server preserves its credentials. Cloud requests keep private previews out
   of the shared HTTP cache. This requires the Cloud native authorization API;
-  System sharing remains separate follow-up work.
+  System sharing uses the same saved identity and authorization.
 - Native Dashboard configuration now supports conditional visibility, sliders
   with exact numeric entry, place search and manual coordinates, and color
   pickers with six-digit hex input and preserved legacy CSS/theme values.
