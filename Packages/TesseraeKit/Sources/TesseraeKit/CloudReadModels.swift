@@ -71,9 +71,16 @@ public struct CloudDevice: Decodable, Sendable, Identifiable {
         public let nativeWidth: Int?
         public let nativeHeight: Int?
         public let gamut: String?
+        public let underscan: Int?
+
+        public var compositionGeometry: CloudCompositionGeometry? {
+            let inset = underscan ?? 0
+            guard inset >= 0, inset <= min(width, height) / 2 else { return nil }
+            return try? .init(width: width - 2 * inset, height: height - 2 * inset)
+        }
 
         enum CodingKeys: String, CodingKey {
-            case width = "w", height = "h", nativeWidth = "native_w", nativeHeight = "native_h", gamut
+            case width = "w", height = "h", nativeWidth = "native_w", nativeHeight = "native_h", gamut, underscan
         }
     }
 

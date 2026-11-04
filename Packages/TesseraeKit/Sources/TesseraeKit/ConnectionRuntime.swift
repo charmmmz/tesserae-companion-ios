@@ -13,24 +13,24 @@ public struct CloudAuthorizedTransport: Sendable {
         self.transport = transport
     }
 
-    public func send(_ original: URLRequest, timeout: TimeInterval = 10) async throws -> TesseraeHTTPResponse {
+    public func send(_ original: URLRequest, timeout: TimeInterval = 10, authorizationTimeout: TimeInterval? = nil) async throws -> TesseraeHTTPResponse {
         guard let url = original.url, url.scheme == issuer.scheme, url.host == issuer.host, url.port == issuer.port,
               url.path.hasPrefix(issuer.appending(path: "api/t").path + "/") else { throw ConnectionError.invalidIdentity }
         let deadline = ProcessInfo.processInfo.systemUptime + timeout
-        let first = try await sessions.authorization(for: fence, timeout: timeout)
+        let first = try await sessions.authorization(for: fence, timeout: min(timeout, authorizationTimeout ?? timeout))
         var request = original
         request.setValue("Bearer \(first.token)", forHTTPHeaderField: "Authorization")
         request.cachePolicy = .reloadIgnoringLocalCacheData
         let result = try await sendWithinBudget(request, deadline: deadline)
-        try await sessions.validate(fence, timeout: max(0, deadline - ProcessInfo.processInfo.systemUptime))
+        try await sessions.validate(fence, timeout: min(max(0, deadline - ProcessInfo.processInfo.systemUptime), authorizationTimeout ?? timeout))
         // Only safe reads may be repeated. Sending and rendering are owned by A3, without automatic replay.
         guard result.statusCode == 401, ["GET", "HEAD"].contains(request.httpMethod ?? "GET") else { return result }
         let remaining = deadline - ProcessInfo.processInfo.systemUptime
         guard remaining > 0 else { throw ConnectionError.coordinationTimeout }
-        let next = try await sessions.authorization(for: fence, timeout: remaining, rejecting: first)
+        let next = try await sessions.authorization(for: fence, timeout: min(remaining, authorizationTimeout ?? remaining), rejecting: first)
         request.setValue("Bearer \(next.token)", forHTTPHeaderField: "Authorization")
         let retried = try await sendWithinBudget(request, deadline: deadline)
-        try await sessions.validate(fence, timeout: max(0, deadline - ProcessInfo.processInfo.systemUptime))
+        try await sessions.validate(fence, timeout: min(max(0, deadline - ProcessInfo.processInfo.systemUptime), authorizationTimeout ?? timeout))
         return retried
     }
 

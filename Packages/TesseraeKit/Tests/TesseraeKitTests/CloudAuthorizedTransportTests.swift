@@ -75,3 +75,45 @@ private actor ProtectedResourceFixture: TesseraeHTTPTransporting {
         #expect(try await store.authorization(for: fresh).revision == 0)
     }
 }
+
+private actor ValidationLockFixture: TesseraeHTTPTransporting {
+    let lockURL: URL
+    let readyURL: URL
+    var count = 0
+    init(lockURL: URL, readyURL: URL) { self.lockURL = lockURL; self.readyURL = readyURL }
+    func send(_ request: URLRequest) async throws -> TesseraeHTTPResponse {
+        count += 1
+        let lockURL = self.lockURL, readyURL = self.readyURL
+        Task.detached {
+            try SharedFileLock(url: lockURL).withLock {
+                try Data().write(to: readyURL)
+                Thread.sleep(forTimeInterval: 0.4)
+            }
+        }
+        for _ in 0..<1000 {
+            if FileManager.default.fileExists(atPath: readyURL.path) { break }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        return .init(data: Data(), statusCode: 200)
+    }
+}
+
+extension CloudAuthorizedTransportTests {
+    @Test func writeReturnValidationUsesSeparateCoordinationBudgetAndDoesNotReplay() async throws {
+        let root = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        let sessions = SharedSessionStore(directory: root, vault: TestSessionVault(directory: root.appending(path: "vault")))
+        let issuer = URL(string: "http://localhost:9000")!
+        let fence = try await sessions.installCloud(issuer: issuer,
+            response: JSONDecoder().decode(CloudTokenResponse.self, from: tokenFixture(expires: 3600)))
+        let http = ValidationLockFixture(lockURL: root.appending(path: "SessionLocks/\(fence.connectionID.fileComponent).lock"),
+            readyURL: root.appending(path: "validation-lock-ready"))
+        let client = CloudAuthorizedTransport(issuer: issuer, fence: fence, sessions: sessions, transport: http)
+        var request = URLRequest(url: issuer.appending(path: "api/t/send/image")); request.httpMethod = "POST"
+        let start = ContinuousClock.now
+        await #expect(throws: ConnectionError.coordinationTimeout) {
+            try await client.send(request, timeout: 2, authorizationTimeout: 0.04)
+        }
+        #expect(start.duration(to: .now) < .milliseconds(300))
+        #expect(await http.count == 1)
+    }
+}

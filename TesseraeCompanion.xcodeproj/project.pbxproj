@@ -68,6 +68,7 @@
 		64D3E04F40AB9CBE6306FBC0 /* RemindersBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CBD8BCA89698A1281940F5D /* RemindersBridge.swift */; };
 		65250F43371291617815D0A0 /* ReminderSnapshotFactoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49B49CB5FE65FF3DC08A0081 /* ReminderSnapshotFactoryTests.swift */; };
 		65EC60FE0E110924626C640A /* DisplayHardwareBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36574431BF8F9CAB78DF3088 /* DisplayHardwareBadge.swift */; };
+		66DB0CEA246D97E01D7A08C5 /* CloudPhotoPreparer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B977FE08CCC5B2BA81944FC /* CloudPhotoPreparer.swift */; };
 		66ED4DBFBDA5C24CE79DA230 /* AppShortcuts.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = AD24891D7CDB0886913F3675 /* AppShortcuts.xcstrings */; };
 		68C2F68C9EE6D02CB9704612 /* LocalBluetoothPhotoRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F99101E3410A2CB4183DCF85 /* LocalBluetoothPhotoRenderer.swift */; };
 		68F3F911C34454CFAB4148D2 /* PhotoFramingSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E726D6EBD2787B7CEED6CC14 /* PhotoFramingSessionTests.swift */; };
@@ -133,6 +134,7 @@
 		E537E660E8D727EBC31DF725 /* BLESetupProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68AB5B0479A37A3F55286299 /* BLESetupProtocol.swift */; };
 		E54AC51B7720A95C60C3FB96 /* PhotoSubjectAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09B9A585A1539B7342FE714 /* PhotoSubjectAnalyzer.swift */; };
 		E709F26674D4C30631B50A3E /* GalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2580AD3D2102823CA75A8E12 /* GalleryView.swift */; };
+		E78231F4312A870AF05C21D9 /* CloudPhotoPreparationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30A1D1A7941726635A72F675 /* CloudPhotoPreparationTests.swift */; };
 		E8F9020298F307760D7FA918 /* ConnectionRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6BCE92FAB7DF4093DAAE45D /* ConnectionRecoveryTests.swift */; };
 		EA4319DF19D558471BAF8B4D /* PhotoFramingGesture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EA333FF9332F6E7F0A3AAEA /* PhotoFramingGesture.swift */; };
 		EBA1410E74DCE50280302A5A /* PreviewImageState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BD9BF482144BDCB753B7EF6 /* PreviewImageState.swift */; };
@@ -210,6 +212,7 @@
 		2A788C388472DC02CC74EDEB /* OfflineAlbumView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineAlbumView.swift; sourceTree = "<group>"; };
 		2EA333FF9332F6E7F0A3AAEA /* PhotoFramingGesture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoFramingGesture.swift; sourceTree = "<group>"; };
 		2F71FB166C88F622C1873E39 /* SendView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendView.swift; sourceTree = "<group>"; };
+		30A1D1A7941726635A72F675 /* CloudPhotoPreparationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudPhotoPreparationTests.swift; sourceTree = "<group>"; };
 		30CBA6B44083893EBB93FB17 /* LineupsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineupsView.swift; sourceTree = "<group>"; };
 		348EE5DFDB46CEDFD1DBFFEE /* DashboardSettingsAppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardSettingsAppModelTests.swift; sourceTree = "<group>"; };
 		34D0FE206E866226FC84C054 /* LineupPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineupPresentation.swift; sourceTree = "<group>"; };
@@ -247,6 +250,7 @@
 		6F532D2BC8A0893B35702D88 /* TesseraeShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = TesseraeShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		6F5E8EDAA49826101FE30209 /* BluetoothShareSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothShareSession.swift; sourceTree = "<group>"; };
 		7900B085EB33F558356A1E91 /* MediaFrameSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaFrameSession.swift; sourceTree = "<group>"; };
+		7B977FE08CCC5B2BA81944FC /* CloudPhotoPreparer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudPhotoPreparer.swift; sourceTree = "<group>"; };
 		7F7B082A4F4C920F49545310 /* TesseraeCompanionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TesseraeCompanionUITests.swift; sourceTree = "<group>"; };
 		80F13F36D4E7990EF0B890C3 /* LineupsAppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineupsAppModelTests.swift; sourceTree = "<group>"; };
 		82133CF83B163B7E5D046A3B /* BluetoothShareTestHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothShareTestHost.swift; sourceTree = "<group>"; };
@@ -408,6 +412,7 @@
 				A8E3107649C81BDC8A30C213 /* BluetoothPhotoV2Tests.swift */,
 				CE5262A91DF51FA0BEC770C3 /* CloudConnectionTests.swift */,
 				DA6887510EDED34DB4102453 /* CloudLoginLifecycleTests.swift */,
+				30A1D1A7941726635A72F675 /* CloudPhotoPreparationTests.swift */,
 				F6BCE92FAB7DF4093DAAE45D /* ConnectionRecoveryTests.swift */,
 				348EE5DFDB46CEDFD1DBFFEE /* DashboardSettingsAppModelTests.swift */,
 				834AF00906D63D9F2A468C94 /* DisplayHardwareBadgeTests.swift */,
@@ -454,6 +459,7 @@
 				B285D6042818DD9ECF798800 /* AppModel.swift */,
 				93E5E9C82BC4B17340232D88 /* CloudBrowseModel.swift */,
 				D9C68F8A2F0EDBB33AE55176 /* CloudOAuth.swift */,
+				7B977FE08CCC5B2BA81944FC /* CloudPhotoPreparer.swift */,
 				EEA9EF725AB37E65B7357407 /* CloudReadFaultTransport.swift */,
 				387BBA60F97A76DB7D7A87D4 /* ConnectionHost.swift */,
 				34D0FE206E866226FC84C054 /* LineupPresentation.swift */,
@@ -835,6 +841,7 @@
 				3CDBAE3B31145BCEFE782324 /* BluetoothShareTestHost.swift in Sources */,
 				F7072FB9CACEA24D67A6B305 /* CloudBrowseModel.swift in Sources */,
 				439D21D04B90337F47B6DA30 /* CloudOAuth.swift in Sources */,
+				66DB0CEA246D97E01D7A08C5 /* CloudPhotoPreparer.swift in Sources */,
 				91ED9EF1C7B225D7867FA2AE /* CloudReadFaultTransport.swift in Sources */,
 				4DA9A9E9916C357E61012150 /* CloudRootView.swift in Sources */,
 				28D2514B076F314B42EFA141 /* CloudSignInCard.swift in Sources */,
@@ -908,6 +915,7 @@
 				065F51AE903AB65EE0538679 /* BluetoothPhotoV2Tests.swift in Sources */,
 				FA9CAE18A16C28283EE42291 /* CloudConnectionTests.swift in Sources */,
 				A150A48A9BB1E6B3E99D2302 /* CloudLoginLifecycleTests.swift in Sources */,
+				E78231F4312A870AF05C21D9 /* CloudPhotoPreparationTests.swift in Sources */,
 				E8F9020298F307760D7FA918 /* ConnectionRecoveryTests.swift in Sources */,
 				80FF4272E3D31DF51A6245B8 /* DashboardSettingsAppModelTests.swift in Sources */,
 				5EB4D303FD2F67C98154415C /* DisplayHardwareBadgeTests.swift in Sources */,
