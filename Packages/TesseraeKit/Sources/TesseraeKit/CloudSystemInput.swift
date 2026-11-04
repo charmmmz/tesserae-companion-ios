@@ -82,6 +82,12 @@ struct CloudOwnedInput: Sendable {
     let owner: CloudRunOwner
 }
 
+struct CloudPreparedInputReplacement: Sendable {
+    let original: CloudInputRecord
+    let originalOwner: CloudRunOwner
+    let replacement: CloudOwnedInput
+}
+
 enum CloudInputAdmission: Sendable {
     case owned(CloudOwnedInput)
     case pending(CloudInputRecord, isLive: Bool)
@@ -98,6 +104,7 @@ public enum CloudEntryCompletion: Sendable {
 public struct CloudEntryReadContext: Sendable {
     public let fence: ConnectionFence
     let snapshot: CloudBootstrap
+    public var devices: [CloudDevice] { snapshot.devices }
 }
 
 struct CloudEntryDeadline: Sendable {

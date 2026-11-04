@@ -61,6 +61,28 @@ public actor CloudSystemEntry {
         return await perform(admission, store: store, deadline: deadline, explicitContext: current)
     }
 
+    public func replaceExplicitly(_ id: UUID, expectedRevision: Int, with request: CloudEntryRequest,
+                                  decision: UUID, review: CloudEntryReadContext,
+                                  timeout: TimeInterval = 30) async throws -> CloudEntryCompletion {
+        guard case .photo = request, id != decision,
+              request.targets.connectionID == review.fence.connectionID,
+              request.targets.reviewedFence == review.fence,
+              Set(request.targets.reviewedGeometry.keys) == Set(request.targets.deviceIDs) else {
+            throw CloudSubmissionError.invalidPreparation
+        }
+        let deadline = try CloudEntryDeadline(timeout: timeout)
+        let current = try await readContext(for: review.fence, deadline: deadline)
+        let store = try store(for: current.fence.connectionID, deadline: deadline)
+        let prepared = try store.prepareInputReplacement(id, revision: expectedRevision, decision: decision,
+                                                        request: request, now: clock())
+        let clock = self.clock
+        let admission = try await runtime.sessions.commit(current.fence, timeout: deadline.remaining(limit: 10)) {
+            _ = try deadline.remaining()
+            return try store.publishInputReplacement(prepared, now: clock())
+        }
+        return await perform(admission, store: store, deadline: deadline, explicitContext: current)
+    }
+
     private func perform(_ admission: CloudInputAdmission, store: CloudSubmissionStore,
                          deadline: CloudEntryDeadline, explicitContext: CloudEntryReadContext?) async -> CloudEntryCompletion {
         switch admission {

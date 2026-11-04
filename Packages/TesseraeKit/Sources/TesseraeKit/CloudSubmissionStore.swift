@@ -425,7 +425,8 @@ struct CloudSubmissionStore: Sendable {
         return copy
     }
 
-    func retainInput(decision: UUID, request: CloudEntryRequest, now: Date) throws -> CloudInputAdmission {
+    private func makeInput(decision: UUID, request: CloudEntryRequest, now: Date,
+                           expiresAt: Date? = nil) throws -> (CloudInputRecord, Data?) {
         let targets = request.targets
         guard targets.connectionID == identity.id else { throw ConnectionError.invalidIdentity }
         let kind: CloudSubmissionKind
@@ -452,6 +453,16 @@ struct CloudSubmissionStore: Sendable {
         let hash = digest(try ConnectionCoding.encoder().encode(Content(targets: targets, kind: kind,
             fit: recipe?.fit, framings: (recipe?.framings ?? [:]).sorted { $0.key.id < $1.key.id }
                 .map { Framing(aspect: $0.key, value: $0.value) }, digest: source?.digest, type: source?.contentType)))
+        let input = CloudInputRecord(id: decision, identity: identity, createdAt: now,
+            expiresAt: min(now.addingTimeInterval(7 * 86_400), expiresAt ?? .distantFuture),
+            targets: targets, kind: kind, recipe: recipe, revision: 0, boundFence: targets.reviewedFence,
+            source: source, fingerprint: hash)
+        return (input, bytes)
+    }
+
+    func retainInput(decision: UUID, request: CloudEntryRequest, now: Date) throws -> CloudInputAdmission {
+        let (input, bytes) = try makeInput(decision: decision, request: request, now: now)
+        let hash = input.fingerprint
         if let existing = try transaction(now: now, { ledger -> CloudInputAdmission? in
             guard let record = ledger.records[decision.uuidString] else { return nil }
             switch record {
@@ -468,14 +479,43 @@ struct CloudSubmissionStore: Sendable {
             return existing
         }
         guard let owner = try CloudRunOwner.acquire(ownerURL(decision)) else { throw CloudSubmissionError.alreadyRunning }
-        if let source, let bytes { try writeInput(bytes, decision: decision, file: source.id) }
-        let input = CloudInputRecord(id: decision, identity: identity, createdAt: now,
-            expiresAt: now.addingTimeInterval(7 * 86_400), targets: targets, kind: kind, recipe: recipe,
-            revision: 0, boundFence: targets.reviewedFence, source: source, fingerprint: hash)
+        if let source = input.source, let bytes { try writeInput(bytes, decision: decision, file: source.id) }
         return try transaction(now: now) { ledger in
             guard ledger.records[decision.uuidString] == nil else { throw CloudSubmissionError.resultChanged }
             ledger.records[decision.uuidString] = .input(input)
             return .owned(.init(input: input, owner: owner))
+        }
+    }
+
+    func prepareInputReplacement(_ id: UUID, revision: Int, decision: UUID,
+                                 request: CloudEntryRequest, now: Date) throws -> CloudPreparedInputReplacement {
+        guard id != decision, case .photo = request else { throw CloudSubmissionError.invalidPreparation }
+        guard let oldOwner = try CloudRunOwner.acquire(ownerURL(id)) else { throw CloudSubmissionError.alreadyRunning }
+        guard let owner = try CloudRunOwner.acquire(ownerURL(decision)) else { throw CloudSubmissionError.alreadyRunning }
+        let original = try transaction(now: now) { ledger in
+            guard ledger.records[decision.uuidString] == nil, case .input(let input) = ledger.records[id.uuidString], input.kind == .photo,
+                  input.revision == revision, input.expiresAt > now else { throw CloudSubmissionError.resultChanged }
+            return input
+        }
+        let (input, bytes) = try makeInput(decision: decision, request: request, now: now, expiresAt: original.expiresAt)
+        if let source = input.source, let bytes { try writeInput(bytes, decision: decision, file: source.id) }
+        return .init(original: original, originalOwner: oldOwner, replacement: .init(input: input, owner: owner))
+    }
+
+    func publishInputReplacement(_ prepared: CloudPreparedInputReplacement, now: Date) throws -> CloudInputAdmission {
+        let original = prepared.original, input = prepared.replacement.input
+        return try withExtendedLifetime(prepared.originalOwner) {
+            try transaction(now: now) { ledger in
+                if let deadline { _ = try deadline.remaining() }
+                guard !completionOnly, case .input(let current) = ledger.records[original.id.uuidString],
+                      current.revision == original.revision, current.expiresAt > now,
+                      current.fingerprint == original.fingerprint, ledger.records[input.id.uuidString] == nil else {
+                    throw CloudSubmissionError.resultChanged
+                }
+                ledger.records[original.id.uuidString] = .closed(original.id)
+                ledger.records[input.id.uuidString] = .input(input)
+                return .owned(prepared.replacement)
+            }
         }
     }
 

@@ -22,6 +22,19 @@ private actor SystemEntryHTTP: TesseraeHTTPTransporting {
     }
 }
 
+private final class ReplacementClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var index = 0
+    let times: [Date]
+    init(_ times: [Date]) { self.times = times }
+    func now() -> Date {
+        lock.lock(); defer { lock.unlock() }
+        let result = times[min(index, times.count - 1)]
+        index += 1
+        return result
+    }
+}
+
 private struct SystemEntryFixture {
     let root: URL
     let http: SystemEntryHTTP
@@ -283,6 +296,138 @@ private struct SystemEntryFixture {
         #expect(try f.store().pendingInputs(now: Date()).isEmpty)
     }
 
+    @Test func reviewedReplacementAtomicallyClosesOriginalAndPreservesAbsoluteExpiry() async throws {
+        let f = try await SystemEntryFixture.make(), store = try f.store()
+        let now = Date(), originalID = UUID(), replacementID = UUID()
+        func publish() throws -> CloudPendingInput {
+            guard case .owned(let owned) = try store.retainInput(decision: originalID, request: f.request(reviewed: true),
+                now: now.addingTimeInterval(-2 * 86_400)) else { throw CloudSubmissionError.invalidPreparation }
+            return owned.input.summary
+        }
+        let original = try publish()
+        let request = CloudEntryRequest.photo(targets: try .init(connectionID: f.fence.connectionID,
+            deviceIDs: [f.target.id], reviewedFence: f.fence, reviewedGeometry: [f.target.id: f.target.geometry]),
+            data: Data([1, 2, 3]), contentType: "image/png", recipe: .init(fit: .fit))
+        guard case .owned(let replacement) = try store.replaceInput(originalID, revision: original.revision,
+            decision: replacementID, request: request, now: now) else { Issue.record("No replacement"); return }
+        defer { withExtendedLifetime(replacement) {} }
+        #expect(abs(replacement.input.expiresAt.timeIntervalSince(original.expiresAt)) < 0.001)
+        #expect(replacement.input.createdAt > original.createdAt)
+        #expect(try store.pendingInputs(now: now).map(\.id) == [replacementID])
+        #expect(throws: CloudSubmissionError.decisionClosed) { try store.acquireInput(originalID, revision: 0, now: now) }
+        #expect(throws: CloudSubmissionError.mediaUnavailable) { try store.inputBytes(originalID, revision: 0, now: now) }
+        #expect(throws: CloudSubmissionError.resultChanged) {
+            try store.replaceInput(originalID, revision: original.revision, decision: UUID(), request: request, now: now)
+        }
+    }
+
+    @Test(arguments: ["live", "accepted", "expired", "revision"])
+    func replacementRejectsNonrecoverableOriginalWithoutPublishingAnotherDecision(state: String) async throws {
+        let f = try await SystemEntryFixture.make(), store = try f.store()
+        let now = Date(), id = UUID(), next = UUID()
+        func publish() throws -> CloudPendingInput {
+            guard case .owned(let owned) = try store.retainInput(decision: id, request: f.request(reviewed: true),
+                now: state == "expired" ? now.addingTimeInterval(-8 * 86_400) : now) else { throw CloudSubmissionError.invalidPreparation }
+            return owned.input.summary
+        }
+        let input = try publish()
+        var held: CloudInputAdmission?
+        if state == "live" { held = try store.acquireInput(id, revision: input.revision, now: now) }
+        if state == "accepted" || state == "revision" {
+            func change() throws {
+                guard case .owned(let owned) = try store.acquireInput(id, revision: input.revision, now: now) else { return }
+                if state == "revision" {
+                    _ = try store.bindInput(owned, fence: .init(connectionID: f.fence.connectionID, epoch: UUID()), explicitly: true, now: now)
+                } else {
+                    let staged = try store.stage(decision: id, fence: f.fence, kind: .photo, targets: [f.target],
+                        outputs: [.init(data: Data([1]), format: .png, geometry: f.target.geometry, targetIDs: [f.target.id])], now: now, input: owned)
+                    _ = try store.accept(staged, now: now)
+                }
+            }
+            try change()
+        }
+        defer { withExtendedLifetime(held) {} }
+        #expect(throws: (any Error).self) {
+            try store.replaceInput(id, revision: input.revision, decision: next, request: f.request(), now: now)
+        }
+        #expect(try store.pendingInputs(now: now).allSatisfy { $0.id != next })
+    }
+
+    @Test(arguments: ["newEpoch", "readRevoked"])
+    func unauthorizedReplacementNeverClosesOriginalInput(change: String) async throws {
+        let f = try await SystemEntryFixture.make()
+        await f.http.configure(status: 503)
+        guard case .retained(let original, _) = try await f.entry.submit(f.request(), decision: UUID()) else {
+            Issue.record("No retained input"); return
+        }
+        await f.http.configure()
+        let review = try await f.entry.authorizedReadContext(for: f.fence)
+        let request = CloudEntryRequest.photo(targets: try .init(connectionID: f.fence.connectionID,
+            deviceIDs: [f.target.id], reviewedFence: f.fence, reviewedGeometry: [f.target.id: f.target.geometry]),
+            data: Data([9, 8]), contentType: "image/png", recipe: .init(fit: .fit))
+        if change == "newEpoch" {
+            _ = try await f.runtime.installCloud(issuer: URL(string: "http://localhost:9000")!,
+                response: JSONDecoder().decode(CloudTokenResponse.self, from: tokenFixture(expires: 3600, grant: "new")))
+        } else { await f.http.configure(status: 403) }
+        await #expect(throws: (any Error).self) {
+            try await f.entry.replaceExplicitly(original.id, expectedRevision: original.revision,
+                with: request, decision: UUID(), review: review)
+        }
+        let pending = try f.store().pendingInputs(now: Date())
+        #expect(pending.map(\.id) == [original.id])
+        #expect(pending[0].revision == original.revision)
+        #expect(abs(pending[0].expiresAt.timeIntervalSince(original.expiresAt)) < 0.001)
+        #expect(try f.store().inputBytes(original.id, revision: original.revision, now: Date()) == Data([1, 2, 3]))
+        #expect(await f.http.postCount == 0)
+    }
+
+    @Test func replacementRechecksAbsoluteExpiryInsideSessionCommit() async throws {
+        let f = try await SystemEntryFixture.make(), store = try f.store()
+        let now = Date(), oldID = UUID(), nextID = UUID()
+        func publish() throws -> CloudPendingInput {
+            guard case .owned(let owned) = try store.retainInput(decision: oldID, request: f.request(reviewed: true),
+                now: now.addingTimeInterval(-7 * 86_400 + 10)) else { throw CloudSubmissionError.invalidPreparation }
+            return owned.input.summary
+        }
+        let original = try publish()
+        let clock = ReplacementClock([original.expiresAt.addingTimeInterval(-1), original.expiresAt.addingTimeInterval(1)])
+        let entry = CloudSystemEntry(runtime: f.runtime, directory: f.root, clock: clock.now) { _, _, _ in
+            throw CloudSubmissionError.invalidPreparation
+        }
+        let review = try await f.entry.authorizedReadContext(for: f.fence)
+        let request = CloudEntryRequest.photo(targets: try .init(connectionID: f.fence.connectionID,
+            deviceIDs: [f.target.id], reviewedFence: f.fence, reviewedGeometry: [f.target.id: f.target.geometry]),
+            data: Data([1, 2, 3]), contentType: "image/png", recipe: .init(fit: .fit))
+        await #expect(throws: CloudSubmissionError.resultChanged) {
+            try await entry.replaceExplicitly(oldID, expectedRevision: original.revision,
+                with: request, decision: nextID, review: review)
+        }
+        #expect(try store.pendingInputs(now: now).map(\.id) == [oldID])
+        #expect(await f.http.postCount == 0)
+    }
+
+    @Test func explicitContinueAndReviewRaceCannotAcceptTwoSenders() async throws {
+        let f = try await SystemEntryFixture.make()
+        await f.http.configure(status: 503)
+        guard case .retained(let input, _) = try await f.entry.submit(f.request(), decision: UUID()) else {
+            Issue.record("No retained input"); return
+        }
+        await f.http.configure(delay: .milliseconds(50))
+        let review = try await f.entry.authorizedReadContext(for: f.fence)
+        let newDecision = UUID()
+        let request = CloudEntryRequest.photo(targets: try .init(connectionID: f.fence.connectionID,
+            deviceIDs: [f.target.id], reviewedFence: f.fence, reviewedGeometry: [f.target.id: f.target.geometry]),
+            data: Data([1, 2, 3]), contentType: "image/png", recipe: .init(fit: .fit))
+        async let continued = try? f.entry.continueExplicitly(input.id, expectedRevision: input.revision, review: review)
+        async let revised = try? f.entry.replaceExplicitly(input.id, expectedRevision: input.revision,
+            with: request, decision: newDecision, review: review)
+        _ = await (continued, revised)
+        #expect(await f.http.postCount == 1)
+        let accepted = try f.store().history(now: Date())
+        #expect(accepted.count == 1)
+        #expect([input.id, newDecision].contains(accepted[0].id))
+    }
+
     @Test func stopOnlyAffectsOwnServiceNotIndependentFixedDestinationRun() async throws {
         let f = try await SystemEntryFixture.make()
         await f.http.configure(delay: .milliseconds(150))
@@ -339,5 +484,13 @@ private struct SystemEntryFixture {
                     [ConnectionResourceID(connectionID: a.id, kind: "display", resourceID: "").encoded]] {
             #expect(throws: ConnectionError.invalidIdentity) { try resolver.resolve(ids, kind: .display) }
         }
+    }
+}
+
+private extension CloudSubmissionStore {
+    func replaceInput(_ id: UUID, revision: Int, decision: UUID,
+                      request: CloudEntryRequest, now: Date) throws -> CloudInputAdmission {
+        let prepared = try prepareInputReplacement(id, revision: revision, decision: decision, request: request, now: now)
+        return try publishInputReplacement(prepared, now: now)
     }
 }
