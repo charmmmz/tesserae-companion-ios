@@ -426,25 +426,47 @@ private actor LocalDashboardIntentHTTP: TesseraeHTTPTransporting {
 }
 
 extension CloudSubmissionLifecycleTests {
-    @Test func sameDashboardRawIDKeepsBothLocalConnectionsAndPerformsOnB() async throws {
+    @Test(arguments: [false, true])
+    func sameRawIDKeepsBothLocalDisplayAndDashboardConnectionsAndPerformsOnB(useLegacyRaw: Bool) async throws {
         let root = URL.temporaryDirectory.appending(path: UUID().uuidString)
         let http = LocalDashboardIntentHTTP(), vault = SubmissionGatedVault()
         let runtime = ConnectionRuntime(directory: root, identity: .init(appVersion: "test", installationID: "test"),
             credentials: InMemoryCredentialStore(), sessions: SharedSessionStore(directory: root, vault: vault, transport: http),
             legacy: InMemoryCompanionStateStore(), isPrimary: true, transport: http)
         var ids: [String] = []
+        var displayIDs: [String] = []
         for host in ["local-a.invalid", "local-b.invalid"] {
             let instance = TesseraeInstance(id: "same-instance", name: host, baseURL: URL(string: "http://\(host)")!,
                 serverVersion: "test", timezone: "UTC", webURL: "http://\(host)")
             let fence = try await runtime.installLocal(.init(instance: instance, token: "token", tokenID: "test", scopes: [], createdAt: Date()))
-            try await runtime.stateStore.save(.init(activeInstance: instance, capabilities: nil, displays: [],
+            let localDisplay = DisplaySummary(id: "desk", name: host, kind: "test_panel", iconName: "display",
+                panel: .init(width: 160, height: 96, gamut: "mono", orientation: "landscape"), freshness: .fresh)
+            try await runtime.stateStore.save(.init(activeInstance: instance, capabilities: nil, displays: [localDisplay],
                 dashboards: [.init(id: "same-dashboard", name: host, kind: .canvas, deviceIDs: ["desk"])], jobs: [], connectionFence: fence))
-            ids.append(ConnectionResourceID(connectionID: fence.connectionID, kind: "dashboard", resourceID: "same-dashboard").encoded)
+            if useLegacyRaw && ids.isEmpty {
+                try runtime.registry.save(.init(identity: instance.connectionIdentity, name: host,
+                    localInstance: instance, legacyInstanceID: instance.id))
+                ids.append("same-dashboard"); displayIDs.append("desk")
+            } else {
+                ids.append(ConnectionResourceID(connectionID: fence.connectionID, kind: "dashboard", resourceID: "same-dashboard").encoded)
+                displayIDs.append(ConnectionResourceID(connectionID: fence.connectionID, kind: "display", resourceID: "desk").encoded)
+            }
         }
         let environment = TesseraeIntentRuntime(runtime: runtime, directory: root, suiteName: nil)
         let entities = try await environment.dashboards(identifiers: ids)
         #expect(entities.map(\.id) == ids)
         #expect(Set(entities.map(\.id)).count == 2)
+        let displayEntities = try await environment.displays(identifiers: displayIDs)
+        #expect(displayEntities.map(\.id) == displayIDs)
+        #expect(Set(displayEntities.map(\.id)).count == 2)
+        if useLegacyRaw {
+            let connections = try runtime.registry.savedConnections()
+            let legacy = try #require(connections.first { $0.legacyInstanceID != nil })
+            let dashboardAliases = ["same-dashboard", ConnectionResourceID(connectionID: legacy.id, kind: "dashboard", resourceID: "same-dashboard").encoded]
+            let displayAliases = ["desk", ConnectionResourceID(connectionID: legacy.id, kind: "display", resourceID: "desk").encoded]
+            #expect(try await environment.dashboards(identifiers: dashboardAliases).map(\.id) == dashboardAliases)
+            #expect(try await environment.displays(identifiers: displayAliases).map(\.id) == displayAliases)
+        }
         let intent = PushTesseraeDashboardIntent()
         intent.dashboard = try #require(entities.last); intent.overrideQuietHours = false
         _ = try await intent.perform(using: environment)
@@ -478,5 +500,34 @@ extension CloudSubmissionLifecycleTests {
         try await environment.runtime.sessions.validate(fence)
         try JSONSerialization.data(withJSONObject: records, options: [.prettyPrinted, .sortedKeys])
             .write(to: URL.documentsDirectory.appending(path: "A4PendingPrivacyFixtures.json"), options: [.atomic])
+    }
+}
+
+extension CloudSubmissionLifecycleTests {
+    @Test func lateAcceptedPendingCannotDismissAnotherPresentationOrReopenedInput() async throws {
+        let fixture = try await fixture()
+        await fixture.http.configureRead(status: 503)
+        let entry = CloudPhotoPreparer.systemEntry(runtime: fixture.runtime, directory: fixture.root)
+        func pending() async throws -> CloudPendingInput {
+            let result = try await entry.submit(.photo(targets: .init(connectionID: fixture.a.connectionID,
+                deviceIDs: ["same-device"]), data: still().data, contentType: "image/png", recipe: .init(fit: .fit)), decision: UUID())
+            guard case .retained(let input, _) = result else { throw CloudSubmissionError.invalidPreparation }
+            return input
+        }
+        let a = try await pending(), b = try await pending()
+        var presentation = CloudPendingPresentationState()
+        presentation.show(a)
+        let old = try #require(presentation.item?.id)
+        presentation.item = nil
+        presentation.show(b)
+        let current = try #require(presentation.item?.id), batch = UUID()
+        #expect(presentation.accept(batch, from: old) == nil)
+        #expect(presentation.item?.input.id == b.id)
+        #expect(presentation.accept(batch, from: current) == batch)
+        #expect(presentation.item == nil)
+        presentation.show(a)
+        #expect(presentation.item?.id != old)
+        #expect(presentation.accept(batch, from: old) == nil)
+        #expect(presentation.item?.input.id == a.id)
     }
 }

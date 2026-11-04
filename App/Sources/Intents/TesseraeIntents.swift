@@ -392,7 +392,11 @@ struct TesseraeIntentRuntime: Sendable {
         }
     }
 
-    private func destinations(_ identifiers: [String]?, kind: ConnectionResourceKind) async throws -> [(SavedConnection, [String]?)] {
+    private struct ResourceReference {
+        let identifier: String
+        let resourceID: String
+    }
+    private func destinations(_ identifiers: [String]?, kind: ConnectionResourceKind) async throws -> [(SavedConnection, [ResourceReference]?)] {
         guard let identifiers else {
             _ = try await runtime.stateStore.load()
             guard let id = try runtime.registry.selectedID(), let connection = try runtime.registry.connection(id) else {
@@ -400,13 +404,14 @@ struct TesseraeIntentRuntime: Sendable {
             }
             return [(connection, nil)]
         }
-        var grouped: [(SavedConnection, [String])] = []
+        var grouped: [(SavedConnection, [ResourceReference])] = []
         for identifier in identifiers {
             let resolved = try await resolve([identifier], kind: kind)
+            let reference = ResourceReference(identifier: identifier, resourceID: resolved.resourceIDs[0])
             if let index = grouped.firstIndex(where: { $0.0.id == resolved.connection.id }) {
-                grouped[index].1.append(contentsOf: resolved.resourceIDs)
+                grouped[index].1.append(reference)
             } else {
-                grouped.append((resolved.connection, resolved.resourceIDs))
+                grouped.append((resolved.connection, [reference]))
             }
         }
         return grouped.map { ($0.0, $0.1) }
@@ -422,11 +427,13 @@ struct TesseraeIntentRuntime: Sendable {
             } else {
                 values = try await snapshot(for: connection.id).displays.map { ($0.id, $0.name) }
             }
-            for (id, name) in values where requested?.contains(id) != false {
-                let encoded = ConnectionResourceID(connectionID: connection.id, kind: "display", resourceID: id).encoded
-                let original = identifiers?.first { (ConnectionResourceID(encoded: $0)?.resourceID ?? $0) == id &&
-                    (ConnectionResourceID(encoded: $0)?.connectionID ?? connection.id) == connection.id }
-                result.append(.init(id: original ?? encoded, name: name, connectionName: connection.name))
+            let references = requested ?? values.map {
+                ResourceReference(identifier: ConnectionResourceID(connectionID: connection.id, kind: "display", resourceID: $0.0).encoded,
+                                  resourceID: $0.0)
+            }
+            for reference in references {
+                guard let value = values.first(where: { $0.0 == reference.resourceID }) else { continue }
+                result.append(.init(id: reference.identifier, name: value.1, connectionName: connection.name))
             }
         }
         return result
@@ -439,15 +446,14 @@ struct TesseraeIntentRuntime: Sendable {
                 if identifiers != nil { throw TesseraeIntentError.cloudDashboardUnsupported }
                 continue
             }
-            for dashboard in try await snapshot(for: connection.id).dashboards where requested?.contains(dashboard.id) != false {
-                let encoded = ConnectionResourceID(connectionID: connection.id, kind: "dashboard", resourceID: dashboard.id).encoded
-                let original = identifiers?.first {
-                    if let value = ConnectionResourceID(encoded: $0) {
-                        return value.connectionID == connection.id && value.kind == "dashboard" && value.resourceID == dashboard.id
-                    }
-                    return $0 == dashboard.id
-                }
-                result.append(.init(id: original ?? encoded, name: dashboard.name))
+            let dashboards = try await snapshot(for: connection.id).dashboards
+            let references = requested ?? dashboards.map {
+                ResourceReference(identifier: ConnectionResourceID(connectionID: connection.id, kind: "dashboard", resourceID: $0.id).encoded,
+                                  resourceID: $0.id)
+            }
+            for reference in references {
+                guard let dashboard = dashboards.first(where: { $0.id == reference.resourceID }) else { continue }
+                result.append(.init(id: reference.identifier, name: dashboard.name))
             }
         }
         return result

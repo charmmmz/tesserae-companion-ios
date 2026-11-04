@@ -2,6 +2,21 @@ import SwiftUI
 import ImageIO
 import TesseraeKit
 
+struct CloudPendingPresentationState {
+    struct Item: Identifiable {
+        let id = UUID()
+        let input: CloudPendingInput
+    }
+    var item: Item?
+
+    mutating func show(_ input: CloudPendingInput) { item = Item(input: input) }
+    mutating func accept(_ batchID: UUID, from presentationID: UUID) -> UUID? {
+        guard item?.id == presentationID else { return nil }
+        item = nil
+        return batchID
+    }
+}
+
 struct CloudSubmissionResultsSheet: View {
     let context: CloudPresentationContext
     let initialID: UUID?
@@ -11,7 +26,7 @@ struct CloudSubmissionResultsSheet: View {
     @State private var reloadRevision = UUID()
     @State private var history: [CloudSubmissionBatch] = []
     @State private var pending: [CloudPendingInput] = []
-    @State private var selectedPending: CloudPendingInput?
+    @State private var pendingPresentation = CloudPendingPresentationState()
     @State private var error: String?
     @State private var path: [UUID]
 
@@ -26,7 +41,7 @@ struct CloudSubmissionResultsSheet: View {
                 if !pending.isEmpty {
                     Section("Not Sent") {
                         ForEach(pending) { input in
-                            Button { selectedPending = input } label: {
+                            Button { pendingPresentation.show(input) } label: {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(String(localized: input.kind == .photo ? "Photo Send" : "Current Page Refresh")).font(.headline)
                                     Text(input.createdAt.formatted()).font(.caption).foregroundStyle(.secondary)
@@ -62,9 +77,9 @@ struct CloudSubmissionResultsSheet: View {
         }
         .frame(idealWidth: 800, idealHeight: 720)
         .presentationDetents([.large])
-        .sheet(item: $selectedPending, onDismiss: { reloadRevision = UUID() }) { input in
-            CloudPendingInputSheet(input: input, context: context) { id in
-                selectedPending = nil; path.append(id)
+        .sheet(item: $pendingPresentation.item, onDismiss: { reloadRevision = UUID() }) { selection in
+            CloudPendingInputSheet(input: selection.input, context: context) { id in
+                if let accepted = pendingPresentation.accept(id, from: selection.id) { path.append(accepted) }
             }
         }
         .task(id: HistoryLoadKey(context: context, isVisible: path.isEmpty, revision: reloadRevision)) {
@@ -81,15 +96,16 @@ struct CloudSubmissionResultsSheet: View {
                 do { try await Task.sleep(for: .seconds(delay)) } catch { return }
             }
         }
-        .task(id: selectedPending?.expiresAt) {
-            guard let selected = selectedPending else { return }
-            do { if selected.expiresAt > Date() { try await Task.sleep(for: .seconds(selected.expiresAt.timeIntervalSinceNow)) } }
+        .task(id: pendingPresentation.item?.id) {
+            guard let selected = pendingPresentation.item else { return }
+            let deadline = selected.input.expiresAt
+            do { if deadline > Date() { try await Task.sleep(for: .seconds(deadline.timeIntervalSinceNow)) } }
             catch { return }
-            if selectedPending?.id == selected.id { selectedPending = nil; reloadRevision = UUID() }
+            if pendingPresentation.item?.id == selected.id { pendingPresentation.item = nil; reloadRevision = UUID() }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
-                if let selected = selectedPending, selected.expiresAt <= Date() { selectedPending = nil }
+                if let selected = pendingPresentation.item, selected.input.expiresAt <= Date() { pendingPresentation.item = nil }
                 reloadRevision = UUID()
             }
         }
