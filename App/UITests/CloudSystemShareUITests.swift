@@ -26,7 +26,8 @@ import XCTest
 
     private func authorize(_ app: XCUIApplication) async throws {
         if app.buttons["cloud-device-a4_land"].waitForExistence(timeout: 2) { return }
-        let (_, response) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:8879/select?account=owner_a")!)
+        let account = ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_ACCOUNT"] ?? "owner_a"
+        let (_, response) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:8879/select?account=\(account)")!)
         XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
         let signIn = app.buttons["cloud-signin"]
         XCTAssertTrue(signIn.waitForExistence(timeout: 15)); reveal(signIn, in: app); signIn.tap()
@@ -36,7 +37,8 @@ import XCTest
         let allow = app.buttons["Allow"]
         XCTAssertTrue(allow.waitForExistence(timeout: 20))
         app.buttons["Account"].tap()
-        let tenant = app.buttons["A4 Studio A (owner)"]
+        let tenantName = account == "owner_b" ? "A4 Studio B (owner)" : (account == "member_a" ? "A4 Studio A (member)" : "A4 Studio A (owner)")
+        let tenant = app.buttons[tenantName]
         XCTAssertTrue(tenant.waitForExistence(timeout: 5)); tenant.tap(); allow.tap()
         XCTAssertTrue(app.buttons["cloud-device-a4_land"].waitForExistence(timeout: 15))
     }
@@ -58,10 +60,16 @@ import XCTest
         print("A4_SYSTEM_AX", name, app.debugDescription)
     }
 
-    private func openCloudLivePhotoShare() async throws -> XCUIApplication {
-        let app = launch()
-        try await authorize(app)
-        app.terminate()
+    private func openCloudLivePhotoShare(expectTargets: Bool = true) async throws -> XCUIApplication {
+        let app: XCUIApplication
+        if ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_COLD_MAIN"] == "1" {
+            app = XCUIApplication()
+            if app.state != .notRunning { app.terminate() }
+        } else {
+            app = launch()
+            try await authorize(app)
+            app.terminate()
+        }
         XCTAssertEqual(app.state, .notRunning)
         print("A4_MAIN_APP_AFTER_TERMINATE", app.state.rawValue)
         let photos = XCUIApplication(bundleIdentifier: "com.apple.mobileslideshow")
@@ -76,6 +84,7 @@ import XCTest
         XCTAssertTrue(share.waitForExistence(timeout: 5)); share.tap()
         let activity = photos.cells["Tesserae"]
         XCTAssertTrue(activity.waitForExistence(timeout: 8)); activity.tap()
+        guard expectTargets else { return photos }
         let landscape = photos.buttons["share-display-cloud:a4_land"]
         if !landscape.waitForExistence(timeout: 15) {
             capture(photos, "A4-cloud-share-load-failure"); print("A4_SHARE_LOAD_AX", photos.debugDescription)
@@ -130,6 +139,38 @@ import XCTest
         XCTAssertTrue(second.label.contains("Frame Generated"))
         capture(photos, "A4-system-share-durable-results")
         photos.buttons["share-cloud-done"].tap()
+    }
+    func testPhotosColdCloudAuthorizationRenewsAndSendsOnce() async throws {
+        let photos = try await openCloudLivePhotoShare()
+        let land = photos.buttons["share-display-cloud:a4_land"]
+        for row in photos.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'share-display-cloud:'")).allElementsBoundByIndex
+            where row.identifier != land.identifier && row.isSelected {
+            reveal(row, in: photos); row.tap()
+        }
+        reveal(land, in: photos)
+        if !land.isSelected { land.tap() }
+        let send = photos.buttons["share-send"]
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: send)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 15), .completed)
+        capture(photos, "Cold Share Restored Fixed Cloud Target Before Send")
+        send.tap()
+        let result = photos.descendants(matching: .any)["share-cloud-result-a4_land"].firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 35)); XCTAssertTrue(result.label.contains("Frame Generated"))
+        capture(photos, "Cold Share Durable Generated Result")
+        XCTAssertEqual(XCUIApplication().state, .notRunning)
+        photos.buttons["share-cloud-done"].tap()
+    }
+    func testPhotosColdRestrictedCloudHidesTargetsAndCannotSend() async throws {
+        let photos = try await openCloudLivePhotoShare(expectTargets: false)
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            photos.buttons["share-send"].exists && !photos.staticTexts["Loading shared item…"].exists
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 25), .completed)
+        XCTAssertEqual(photos.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'share-display-cloud:'")).count, 0)
+        XCTAssertFalse(photos.buttons["share-send"].isEnabled)
+        capture(photos, "Restricted Cold Share Hides Cloud Targets And Cannot Send")
+        XCTAssertEqual(XCUIApplication().state, .notRunning)
+        photos.buttons["share-cancel"].tap()
     }
     func testPhotosOversizedCloudCanvasRetainsInputWithoutSending() async throws {
         let photos = try await openCloudLivePhotoShare()

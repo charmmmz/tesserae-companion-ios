@@ -476,12 +476,8 @@ extension CloudSubmissionLifecycleTests {
     @Test(.enabled(if: ProcessInfo.processInfo.environment["TESSERAE_RUN_CLOUD_SYSTEM_NATIVE"] == "1",
         "Requires the explicitly owned local C1 namespace; no network by default."))
     func prepareActualC1PendingPrivacyFixtures() async throws {
-        let environment = try TesseraeIntentRuntime.live()
+        let environment = try nativeFixtureEnvironment()
         let id = try #require(try environment.runtime.registry.selectedID())
-        guard environment.directory.lastPathComponent.hasPrefix("a4-"),
-              let connection = try environment.runtime.registry.connection(id),
-              case .cloud(let issuer, _, _) = connection.identity,
-              issuer.absoluteString == "http://127.0.0.1:8877" else { throw ConnectionError.invalidIdentity }
         let fence = try #require(try await environment.runtime.sessions.fence(for: id))
         var records: [[String: Any]] = []
         let isContinueFixture = ProcessInfo.processInfo.environment["TESSERAE_CLOUD_SYSTEM_NATIVE_CASE"] == "continue"
@@ -529,5 +525,36 @@ extension CloudSubmissionLifecycleTests {
         #expect(presentation.item?.id != old)
         #expect(presentation.accept(batch, from: old) == nil)
         #expect(presentation.item?.input.id == a.id)
+    }
+}
+
+extension CloudSubmissionLifecycleTests {
+    private func nativeFixtureEnvironment() throws -> TesseraeIntentRuntime {
+        let environment = try TesseraeIntentRuntime.live()
+        guard environment.directory.lastPathComponent.hasPrefix("a4-"),
+              let id = try environment.runtime.registry.selectedID(),
+              let connection = try environment.runtime.registry.connection(id),
+              case .cloud(let issuer, _, _) = connection.identity,
+              issuer.absoluteString == "http://127.0.0.1:8877" else { throw ConnectionError.invalidIdentity }
+        return environment
+    }
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["TESSERAE_RUN_CLOUD_SYSTEM_CONTROLS"] == "1",
+        "Exports only the explicitly owned loopback/a4 fixture grant for local controls; no network by default."))
+    func exportActualC1GrantForPrivateFixtureControls() async throws {
+        let environment = try nativeFixtureEnvironment()
+        let id = try #require(try environment.runtime.registry.selectedID())
+        let transport = try await environment.runtime.cloudTransport(for: id)
+        let bootstrap = try await CloudReadClient(transport: transport).bootstrap()
+        let auth = try await environment.runtime.sessions.authorization(for: transport.fence)
+        guard !auth.token.isEmpty else { throw ConnectionError.authorizationRequired }
+        let folder = URL.documentsDirectory.appending(path: ".A4FixtureControls")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        let path = folder.appending(path: "active-grant.json")
+        let body: [String: Any] = ["issuer": "http://127.0.0.1:8877", "fence_epoch": transport.fence.epoch.uuidString,
+            "namespace": environment.directory.lastPathComponent, "connection_id": id.rawValue,
+            "token_response": ["grant_id": bootstrap.account.auth.grantID, "generation": bootstrap.account.auth.generation,
+                "access_token": auth.token, "tenant": ["id": bootstrap.account.tenant.id, "name": bootstrap.account.tenant.name]]]
+        try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys]).write(to: path, options: [.atomic])
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path.path)
     }
 }
