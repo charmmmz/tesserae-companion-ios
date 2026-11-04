@@ -177,8 +177,12 @@ again.
 
 Cloud browsing shows displays, dashboards and their existing previews. Missing
 previews remain placeholders; browsing does not request renders. Device setup
-opens the Cloud website. Cloud photo sending, system sharing, shortcuts and
-editing are not enabled by this development stage.
+opens the Cloud website. Native photo sending reuses the screen preview and
+Fit/Fill framing controls, keeps a result for each display, and supports explicit
+selected resend. Refresh Current Page uses the device's existing binding.
+Generated frames are available for the next display wake; the App does not claim
+that the physical screen has updated. Cloud system sharing, shortcuts and editing
+remain follow-up work.
 
 This integration requires Cloud's native authorization endpoints. Local
 integration is tested separately from deployment, real email delivery and
@@ -189,6 +193,8 @@ and fault server. Enable them with the test-runner environment variable
 `TESSERAE_RUN_CLOUD_UI=1`; external-browser tests also read the private handoff
 file named by `TESSERAE_CLOUD_BROWSER_TRACE`. Connection performance tests use
 `TESSERAE_RUN_CONNECTION_PERF=1` and require the baseline simulator bundle.
+Cloud submission UI tests use `TESSERAE_RUN_CLOUD_SUBMISSION_UI=1`, the same owned
+local fixture, and a marker image seeded into the simulator Photos library.
 These suites skip by default without contacting a service.
 
 ### Server and firmware support

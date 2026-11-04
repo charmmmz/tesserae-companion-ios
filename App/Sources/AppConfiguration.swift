@@ -32,11 +32,14 @@ enum AppConfiguration {
 #if DEBUG
         if cloudIssuer.scheme == "http", cloudIssuer.host == "127.0.0.1", cloudIssuer.port == 8877,
            cloudIssuer.path.isEmpty,
-           let raw = ProcessInfo.processInfo.environment["TESSERAE_CLOUD_READ_PROXY"],
+           let raw = ProcessInfo.processInfo.environment["TESSERAE_CLOUD_READ_PROXY"]
+                ?? ProcessInfo.processInfo.environment["TESSERAE_CLOUD_SUBMISSION_PROXY"],
            let proxy = URL(string: raw), proxy.scheme == "http", proxy.host == "127.0.0.1",
            proxy.port == 8882, proxy.query == nil, proxy.fragment == nil,
            proxy.user == nil, proxy.password == nil, ["", "/"].contains(proxy.path) {
-            return CloudReadFaultTransport(issuer: cloudIssuer, proxy: proxy)
+            return CloudReadFaultTransport(issuer: cloudIssuer, proxy: proxy,
+                interceptsReads: ProcessInfo.processInfo.environment["TESSERAE_CLOUD_READ_PROXY"] != nil,
+                interceptsSubmissions: ProcessInfo.processInfo.environment["TESSERAE_CLOUD_SUBMISSION_PROXY"] != nil)
         }
 #endif
         return nil

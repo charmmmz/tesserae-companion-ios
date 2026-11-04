@@ -198,6 +198,11 @@ struct RootView: View {
             galleryUploads.cancelAndClear()
             messageCenter.dismiss(id: "gallery.uploads")
         }
+        .onChange(of: connectionHost.cloudContextRevision) { _, _ in
+            presentation.sheet = nil
+            presentation.cloudResultID = nil
+            presentation.isSendComposerPresented = false
+        }
         .onChange(of: connectionMessageRevision) { _, _ in
             synchronizeConnectionMessage()
         }

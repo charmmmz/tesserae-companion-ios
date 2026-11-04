@@ -30,3 +30,5 @@ JSON reads and device frames are `no-store`. Page thumbnails may be privately ca
 | Network failure | Offline recovery; no automatic credential removal. |
 
 The web setup route is `${issuer}/app/#/setup`. The browser manages its own session and tenant, so the App must not imply that opening a web link transfers its native token. Cloud send, render, editing, Library and Lineups are outside A2.
+
+Native photo submission and current-page refresh are described separately in [cloud-app-submission.md](cloud-app-submission.md).

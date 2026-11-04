@@ -63,6 +63,13 @@ struct CloudSubmissionClientTests {
         let result = CloudSubmissionClient.parse(reply, targetIDs: ["a"], isPhoto: true)[0]
         if case .refused(_, _, _) = result.outcome {} else { Issue.record("Expected proven refusal") }
     }
+    @Test(arguments: ["1e300", "9223372036854775808", "inf", "-1"])
+    func hugeRetryHeaderDoesNotBecomeANumericCountdown(value: String) throws {
+        let reply = try response(["status": 429, "error": "rate limit"], status: 429, headers: ["Retry-After": value])
+        let result = CloudSubmissionClient.parse(reply, targetIDs: ["a"], isPhoto: true)[0]
+        if case .refused(.rateLimited, _, let retry) = result.outcome { #expect(retry == nil) }
+        else { Issue.record("Rate refusal must remain explicit and non-replaying") }
+    }
     @Test(arguments: [400, 402, 429, 503, 500])
     func statusAloneCannotProveRefusal(status: Int) {
         let reply = TesseraeHTTPResponse(data: Data("<html>gateway</html>".utf8), statusCode: status)

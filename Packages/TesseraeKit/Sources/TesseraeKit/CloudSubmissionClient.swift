@@ -54,12 +54,17 @@ struct CloudSubmissionClient: Sendable {
             let oauthError = json?["error"] as? String
             let reason = json?["reason"] as? String
             let retryHeader = response.headers.first { $0.key.lowercased() == "retry-after" }?.value
-            let retry = retryHeader.flatMap { Double($0) }.flatMap { $0.isFinite && $0 >= 0 ? $0 : nil }
+            let retry = retryHeader.flatMap { Double($0) }.flatMap { $0.isFinite && $0 >= 0 && $0 <= 86_400 ? $0 : nil }
             var refusal: CloudSubmissionProblem?
             switch response.statusCode {
             case 401 where oauthError == "invalid_token": refusal = .authorization
             case 403 where ["insufficient_scope", "membership_removed", "tenant_unavailable", "resource_mismatch"].contains(reason ?? oauthError ?? ""):
-                refusal = .permission
+                refusal = switch reason ?? oauthError ?? "" {
+                case "membership_removed": .membershipRemoved
+                case "tenant_unavailable": .tenantUnavailable
+                case "resource_mismatch": .resourceMismatch
+                default: .permission
+                }
             case 400, 413, 415:
                 if bodyStatus == response.statusCode && error != nil { refusal = isPhoto ? .invalidImage : .noFrame }
             case 404 where bodyStatus == 404 && error != nil: refusal = .missingTarget

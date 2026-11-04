@@ -165,12 +165,12 @@ final class CloudBrowsingUITests: XCTestCase {
         XCTAssertTrue(button.waitForExistence(timeout: 5)); button.tap()
         XCTAssertTrue(app.navigationBars["Tesserae Connections"].waitForExistence(timeout: 5))
     }
-    func testRealCloudLoginAndExistingPreviewHasNoLocalSend() {
+    func testRealCloudLoginAndExistingPreviewHasNativeCloudSend() {
         let app = launch()
         authorize(app)
         let tenant = app.staticTexts["cloud-current-tenant"].firstMatch
         XCTAssertTrue(tenant.waitForExistence(timeout: 20))
-        XCTAssertFalse(app.buttons["root-send-action"].exists)
+        XCTAssertTrue(app.buttons["root-send-action"].exists)
         capture(app, "cloud-devices")
         let first = app.buttons.matching(identifier: "cloud-device-a2_shared").firstMatch
         XCTAssertTrue(first.waitForExistence(timeout: 10)); first.tap()

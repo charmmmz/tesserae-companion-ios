@@ -1,4 +1,6 @@
+import CryptoKit
 import ImageIO
+import Photos
 import Testing
 import UIKit
 import UniformTypeIdentifiers
@@ -88,4 +90,76 @@ import TesseraeKit
         #expect(output.format == .png)
         #expect(CGImageSourceGetType(try #require(CGImageSourceCreateWithData(output.data as CFData, nil))) as String? == UTType.png.identifier)
     }
+    @Test func exportCommittedMediaForCloudAcceptance() async throws {
+        let directory = URL.documentsDirectory.appending(path: "CloudMediaEvidence")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        var records: [[String: Any]] = []
+        func export(_ name: String, source: Data, committed: PreparedUploadImage,
+                    selectedSeconds: Double? = nil) throws {
+            let image = try #require(UIImage(data: committed.data))
+            let output = try CloudPhotoPreparer.raster(image: image, geometry: .init(width: 160, height: 96),
+                fit: .fill, framing: .centeredFill)
+            let digest: (Data) -> String = { SHA256.hash(data: $0).map { String(format: "%02x", $0) }.joined() }
+            try source.write(to: directory.appending(path: "\(name)-source"))
+            try committed.data.write(to: directory.appending(path: "\(name)-selected"))
+            try output.data.write(to: directory.appending(path: "\(name)-raster.png"))
+            let decoded = try #require(CGImageSourceCreateWithData(output.data as CFData, nil))
+            #expect(CGImageSourceGetType(decoded) as String? == UTType.png.identifier)
+            records.append(["kind": name, "sourceSHA256": digest(source), "committedSHA256": digest(committed.data), "committedContentType": committed.contentType,
+                "rasterSHA256": digest(output.data), "selectedSeconds": selectedSeconds.map { $0 as Any } ?? NSNull(),
+                "pixelWidth": committed.pixelWidth, "pixelHeight": committed.pixelHeight, "format": "image/png"])
+        }
+        let heic = NSMutableData()
+        let destination = try #require(CGImageDestinationCreateWithData(heic, UTType.heic.identifier as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, try #require(marker().cgImage), nil)
+        try #require(CGImageDestinationFinalize(destination))
+        #expect(CGImageSourceGetType(try #require(CGImageSourceCreateWithData(heic, nil))) as String? == UTType.heic.identifier)
+        try export("heic", source: heic as Data,
+            committed: UploadImagePreparer.prepare(data: heic as Data, fallbackContentType: "image/heic"))
+
+        let identifier = UUID().uuidString
+        let movie = try await MediaFrameFixtureWriter().makeMovie(contentIdentifier: identifier)
+        let key = try await VideoFrameReader(file: movie, maximumPixelSize: 320).image(at: 1.5)
+        let still = try MediaTemporaryFile(fileExtension: "jpg")
+        let imageSource = try #require(CGImageSourceCreateWithData(key.data as CFData, nil))
+        let stillDestination = try #require(CGImageDestinationCreateWithURL(still.url as CFURL, UTType.jpeg.identifier as CFString, 1, nil))
+        CGImageDestinationAddImageFromSource(stillDestination, imageSource, 0,
+            [kCGImagePropertyMakerAppleDictionary: ["17": identifier]] as CFDictionary)
+        try #require(CGImageDestinationFinalize(stillDestination))
+        let exported = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<MediaTemporaryFile, Error>) in
+            PHLivePhoto.request(withResourceFileURLs: [still.url, movie.url], placeholderImage: nil,
+                targetSize: .zero, contentMode: .aspectFit) { photo, info in
+                guard (info[PHLivePhotoInfoIsDegradedKey] as? Bool) != true else { return }
+                if let photo { MediaPickerSelection.exportMovie(from: photo) { continuation.resume(with: $0) } }
+                else { continuation.resume(throwing: (info[PHLivePhotoInfoErrorKey] as? Error) ?? MediaFrameError.unavailable) }
+            }
+        }
+        #expect(try Data(contentsOf: exported.url) == Data(contentsOf: movie.url))
+        try Data(contentsOf: still.url).write(to: directory.appending(path: "livephoto-paired-key.jpg"))
+        try Data(contentsOf: exported.url).write(to: directory.appending(path: "livephoto-paired.mov"))
+        for kind in [MediaFrameSource.Kind.livePhoto, .video] {
+            let reader = VideoFrameReader(file: exported, maximumPixelSize: 320)
+            let primary = kind == .livePhoto ? key : try await reader.image(at: 0)
+            let source = MediaFrameSource(kind: kind, primaryImage: primary, maximumPixelSize: 320) { exported }
+            let session = MediaFrameSession(); session.adopt(source)
+            let deadline = ContinuousClock.now + .seconds(10)
+            while (session.duration == 0 || session.isBusy), ContinuousClock.now < deadline {
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            try #require(session.duration > 0)
+            session.select(position: 0.8, immediately: true)
+            while session.isBusy, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(20)) }
+            let committed = try #require(session.output)
+            let expected = try await reader.image(at: 0.8 * session.duration)
+            #expect(committed.data == expected.data)
+            #expect(committed.data != primary.data)
+            #expect(!session.usesPrimaryImage)
+            try export(kind == .livePhoto ? "livephoto" : "video", source: Data(contentsOf: exported.url),
+                committed: committed, selectedSeconds: 0.8 * session.duration)
+            session.cancelWork()
+        }
+        try JSONSerialization.data(withJSONObject: records, options: [.prettyPrinted, .sortedKeys])
+            .write(to: directory.appending(path: "manifest.json"))
+    }
+
 }

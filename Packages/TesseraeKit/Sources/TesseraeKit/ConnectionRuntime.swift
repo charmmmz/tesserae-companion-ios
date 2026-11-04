@@ -125,7 +125,7 @@ public struct ConnectionRuntime: Sendable {
         try await sessions.commit(fence) { try registry.select(id) }
     }
 
-    public func signOut(_ fence: ConnectionFence) async throws {
+    public func closeConnection(_ fence: ConnectionFence) async throws {
         try await sessions.close(fence)
         do {
             try await sessions.whileClosed(fence) {
@@ -134,6 +134,10 @@ public struct ConnectionRuntime: Sendable {
         } catch ConnectionError.sessionChanged {
             // A newer login owns the selection. Only this old grant's revocation remains.
         }
+    }
+
+    public func signOut(_ fence: ConnectionFence) async throws {
+        try await closeConnection(fence)
         do { try await sessions.retryRevocations(for: fence.connectionID) }
         catch { throw ConnectionError.remoteRevocationUnconfirmed }
     }

@@ -51,7 +51,8 @@ public struct CloudFrameEvidence: Codable, Hashable, Sendable {
 }
 
 public enum CloudSubmissionProblem: String, Codable, Sendable {
-    case authorization, permission, quota, rateLimited, unavailable, invalidImage, missingTarget
+    case authorization, permission, membershipRemoved, tenantUnavailable, resourceMismatch
+    case quota, rateLimited, unavailable, invalidImage, missingTarget
     case interrupted, connectionChanged, invalidResponse, noFrame, network, storage, cancelled
     case deleted, mediaExpired, stopped
 }
@@ -160,17 +161,17 @@ public enum CloudSubmissionError: Error, LocalizedError, Equatable, Sendable {
 
     public var errorDescription: String? {
         switch self {
-        case .invalidPreparation: "This photo could not be prepared for the selected displays."
-        case .decisionConflict: "This send decision already contains different content. Choose the photo again."
-        case .decisionClosed: "This send has been deleted or expired. Create a new send."
-        case .missingResult: "This send result is no longer available."
-        case .resultChanged: "This result changed. Review the latest results before sending again."
-        case .alreadyRunning: "This send is still in progress. Wait for its result."
-        case .mediaUnavailable: "This photo was deleted or expired. Choose a photo to create a new send."
-        case .changedGeometry: "The display changed. Review its preview before sending."
-        case .duplicateConfirmationRequired: "Some displays may already have received this photo. Confirm before sending again."
-        case .interrupted: "This send was interrupted. Check its results before sending again."
-        case .storageUnavailable: "The send result could not be saved. Check the displays before sending again."
+        case .invalidPreparation: String(localized: "This photo could not be prepared for the selected displays.")
+        case .decisionConflict: String(localized: "This send decision already contains different content. Choose the photo again.")
+        case .decisionClosed: String(localized: "This send has been deleted or expired. Create a new send.")
+        case .missingResult: String(localized: "This send result is no longer available.")
+        case .resultChanged: String(localized: "This result changed. Review the latest results before sending again.")
+        case .alreadyRunning: String(localized: "This send is still in progress. Wait for its result.")
+        case .mediaUnavailable: String(localized: "This photo was deleted or expired. Choose a photo to create a new send.")
+        case .changedGeometry: String(localized: "The display changed. Review its preview before sending.")
+        case .duplicateConfirmationRequired: String(localized: "Some displays may already have received this photo. Confirm before sending again.")
+        case .interrupted: String(localized: "This send was interrupted. Check its results before sending again.")
+        case .storageUnavailable: String(localized: "The send result could not be saved. Check the displays before sending again.")
         }
     }
 }

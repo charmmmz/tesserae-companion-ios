@@ -167,6 +167,8 @@ final class CloudBrowseModel {
             previews[key] = nil; previewDates[key] = nil; pageVersions[key] = nil
         }
     }
+    func reportReadAuthorizationError(_ error: Error) { handle(error) }
+
     private func handle(_ error: Error) {
         problem = Self.message(error)
         switch error {

@@ -4,6 +4,8 @@ import TesseraeKit
 struct CloudRootView: View {
     let model: CloudBrowseModel
     @Environment(CompanionPresentation.self) private var presentation
+    @Environment(ConnectionHost.self) private var host
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     var body: some View {
         @Bindable var presentation = presentation
         TabView {
@@ -12,9 +14,32 @@ struct CloudRootView: View {
             CloudResourceList(model: model, isDevice: false)
                 .tabItem { Label("Dashboards", systemImage: "rectangle.stack").accessibilityIdentifier("cloud-pages-tab") }
         }
-        .environment(\.tesseraePageSendEnabled, false)
-        .sheet(item: $presentation.sheet) { _ in SettingsView() }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if horizontalSizeClass != .compact && canSend { TesseraeFloatingSendAction() }
+        }
+        .environment(\.tesseraePageSendEnabled, horizontalSizeClass == .compact && canSend)
+        .sheet(item: $presentation.sheet) { sheet in
+            switch sheet {
+            case .settings: SettingsView()
+            case .send:
+                if let context = host.cloudPresentationContext, host.cloud === model {
+                    CloudSendSheet(model: model, context: context)
+                }
+            case .cloudResults:
+                if let context = host.cloudPresentationContext, host.cloud === model {
+                    CloudSubmissionResultsSheet(context: context, initialID: presentation.cloudResultID)
+                }
+            case .uploads: EmptyView()
+            }
+        }
+        .onChange(of: model.needsSignIn || model.isRestricted) { _, _ in
+            Task { await host.cloudReadAccessChanged() }
+        }
         .task { if model.snapshot == nil { await model.refresh() } }
+    }
+    private var canSend: Bool {
+        host.canUseCloudSubmissions && !model.devices.isEmpty
+            && model.snapshot?.account.auth.scopes.contains("app:send") == true
     }
 }
 
@@ -22,6 +47,7 @@ private struct CloudResourceList: View {
     let model: CloudBrowseModel
     let isDevice: Bool
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(CompanionPresentation.self) private var presentation
     @State private var selectedID: String?
     @State private var connectionsPresented = false
     private var ids: [String] { isDevice ? model.devices.map(\.id) : model.pages.map(\.id) }
@@ -99,6 +125,12 @@ private struct CloudResourceList: View {
                     Button("Refresh List", systemImage: "arrow.clockwise") { Task { await model.refresh() } }
                         .disabled(model.isLoading)
                         .accessibilityIdentifier("cloud-refresh-list")
+                    if horizontalSizeClass == .compact || selectedID == nil {
+                        Button("Send Results", systemImage: "clock") {
+                            presentation.cloudResultID = nil; presentation.sheet = .cloudResults
+                        }
+                        .accessibilityIdentifier("cloud-send-results")
+                    }
                 }
             }
             .tesseraeRootPageChrome()
@@ -122,6 +154,11 @@ private struct CloudResourceDetail: View {
     let model: CloudBrowseModel
     let id: String
     let isDevice: Bool
+    @Environment(ConnectionHost.self) private var host
+    @Environment(CompanionPresentation.self) private var presentation
+    @State private var refreshDecision = UUID()
+    @State private var startingRefresh = false
+    @State private var refreshError: String?
     private var device: CloudDevice? { model.devices.first { $0.id == id } }
     private var page: CloudPage? { model.pages.first { $0.id == id } }
     private var exists: Bool { isDevice ? device != nil : page != nil }
@@ -140,6 +177,7 @@ private struct CloudResourceDetail: View {
                         if let frame = device.frame { LabeledContent("Frame Generated", value: frame.renderedAt.formatted()) }
                     }
                     if let page { LabeledContent("Updated", value: page.updatedAt.formatted()) }
+                    if let refreshError { Text(refreshError).foregroundStyle(.red) }
                     Text("Existing preview only. Browsing does not refresh the physical display.")
                         .font(.footnote).foregroundStyle(.secondary)
                 } else if model.previews[CloudBrowseModel.key(id, isDevice)] == nil
@@ -157,6 +195,16 @@ private struct CloudResourceDetail: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             TesseraeRootToolbar {
+                Button("Send Results", systemImage: "clock") {
+                    presentation.cloudResultID = nil; presentation.sheet = .cloudResults
+                }
+                .accessibilityIdentifier("cloud-send-results")
+                if isDevice, device?.pageID != nil,
+                   model.snapshot?.account.auth.scopes.contains("app:refresh") == true {
+                    Button("Refresh Current Page", systemImage: "arrow.triangle.2.circlepath") { refreshCurrentPage() }
+                        .disabled(startingRefresh || !host.canUseCloudSubmissions)
+                        .accessibilityIdentifier("cloud-refresh-current")
+                }
                 Button("Refresh Preview", systemImage: "arrow.clockwise") {
                     Task { await model.openDetail(id: id, isDevice: isDevice, reuseCached: false) }
                 }
@@ -167,6 +215,21 @@ private struct CloudResourceDetail: View {
             await model.openDetail(id: id, isDevice: isDevice)
         }
         .onDisappear { model.closeDetail(id: id, isDevice: isDevice) }
+    }
+    private func refreshCurrentPage() {
+        guard !startingRefresh, host.cloud === model, let context = host.cloudPresentationContext else { return }
+        startingRefresh = true; refreshError = nil
+        let decision = refreshDecision
+        Task {
+            defer { startingRefresh = false }
+            do {
+                let id = try await host.refreshCloudCurrentPage(id, decision: decision, context: context)
+                refreshDecision = UUID()
+                host.withCurrentCloudPresentation(context) {
+                    presentation.cloudResultID = id; presentation.sheet = .cloudResults
+                }
+            } catch { refreshError = error.localizedDescription }
+        }
     }
     @ViewBuilder private var preview: some View {
         switch model.previews[CloudBrowseModel.key(id, isDevice)] {

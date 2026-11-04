@@ -219,8 +219,10 @@ final class AppModel {
     var loadingOfflineAlbumFolderIDs: Set<String> = []
     var isDiscovering = false
     var isRestoringConnection = true
-    var isRetryingSharedImages = false
-    var isRetryingSharedLinks = false
+    private var retryingImageRevision: UUID?
+    private var retryingLinkRevision: UUID?
+    var isRetryingSharedImages: Bool { retryingImageRevision == connectionRevision }
+    var isRetryingSharedLinks: Bool { retryingLinkRevision == connectionRevision }
     var isLoadingMoreHistory = false
     var isClearingLocalActivity = false
     var activeQueuedImageRequestIDs: Set<String> = []
@@ -403,122 +405,160 @@ final class AppModel {
         )
     }
 
-    private func connect(
-        using candidate: any TesseraeServing,
-        mode: ConnectionMode,
-        baseURL: URL,
-        code: String,
-        clientName: String,
-        onFailure: ((String) -> Void)? = nil
-    ) async -> Bool {
-        guard !activeOperationIDs.contains("pair") else { return false }
+    @ObservationIgnored private var pairingAttemptID: UUID?
+
+    struct PreparedConnection {
+        let attemptID: UUID
+        let candidate: any TesseraeServing
+        let mode: ConnectionMode
+        let capabilities: ServerCapabilities
+        let session: PairedSession
+    }
+
+    func prepareLocalConnection(baseURL: URL, code: String, clientName: String) async throws -> PreparedConnection {
+        try await prepareConnection(using: liveClient, mode: .live, baseURL: baseURL, code: code, clientName: clientName)
+    }
+
+    func prepareDemoConnection() async throws -> PreparedConnection {
+        try await prepareConnection(using: demoClient, mode: .demo, baseURL: URL(string: "http://tesserae.local:8765")!,
+            code: "482193", clientName: "Demo iPhone")
+    }
+
+    private func prepareConnection(using candidate: any TesseraeServing, mode: ConnectionMode,
+                                   baseURL: URL, code: String, clientName: String) async throws -> PreparedConnection {
+        guard !activeOperationIDs.contains("pair") else { throw CancellationError() }
+        let attemptID = UUID()
+        pairingAttemptID = attemptID
         activeOperationIDs.insert("pair")
-        defer { activeOperationIDs.remove("pair") }
+        defer {
+            if pairingAttemptID == attemptID { activeOperationIDs.remove("pair"); pairingAttemptID = nil }
+        }
+        let capabilities = try await probeConnection(using: candidate, baseURL: baseURL)
+        let session = try await candidate.pair(baseURL: baseURL, code: code, clientName: clientName)
+        try Task.checkCancellation()
+        return .init(attemptID: attemptID, candidate: candidate, mode: mode, capabilities: capabilities, session: session)
+    }
+
+    @discardableResult
+    func commitConnection(_ prepared: PreparedConnection) async throws -> UUID {
+        try Task.checkCancellation()
+        let candidate = prepared.candidate, mode = prepared.mode
+        let session = prepared.session, capabilities = prepared.capabilities
+        if mode == .live {
+            if let connectionRuntime {
+                activeConnectionFence = try await connectionRuntime.installLocal(session)
+            } else {
+                try await credentials.save(token: session.token, for: session.instance.id)
+            }
+        } else {
+            activeConnectionFence = nil
+        }
+        isDisconnecting = false
+        connectionRevision = UUID()
+        isRestoringConnection = false
+        isRefreshing = false
+        isRefreshingDashboards = false
+        isRefreshingLineups = false
+        isRefreshingGallery = false
+        isLoadingMoreHistory = false
+        loadingGalleryFolderIDs = []
+        loadingOfflineAlbumFolderIDs = []
+        pairingAttemptID = prepared.attemptID
+        activeOperationIDs = ["pair"]
+        connectionNotice = nil
+        if let connectionRuntime, let fence = activeConnectionFence, mode == .live {
+            activeClient = try connectionRuntime.client(for: CompanionSnapshot(activeInstance: session.instance,
+                capabilities: capabilities, displays: [], dashboards: [], jobs: [], connectionFence: fence))
+        } else {
+            activeClient = candidate
+        }
+        connectionMode = mode
+        connectionHealth = .connected
+        self.capabilities = capabilities
+        lineupAuthoringPermission = if capabilities.features.contains(
+            "lineup_authoring"
+        ) {
+            session.scopes.contains("lineups:write") ? .granted : .denied
+        } else {
+            .unavailable
+        }
+        lineupAuthoringSettingsURL = nil
+        galleryWritePermission = if capabilities.supportsGallery {
+            session.scopes.contains("gallery:write") ? .granted : .denied
+        } else {
+            .unavailable
+        }
+        galleryWriteSettingsURL = nil
+        offlineAlbumAuthoringPermission = capabilities.supportsOfflineAlbums
+            ? .unknown
+            : .unavailable
+        offlineAlbumSettingsURL = nil
+        activeInstance = session.instance.updatingServerVersion(
+            to: capabilities.serverVersion
+        )
+        displays = []
+        dashboards = []
+        activityThumbnailData = [:]
+        queuedImageRequests = []
+        queuedLinkRequests = []
+        queuedImagePreviewData = [:]
+        historyItems = []
+        historyNextBeforeID = nil
+        activityClearedBefore = nil
+        lineups = []
+        galleryFolders = []
+        galleryFolderDetails = [:]
+        offlineAlbumsByFolderID = [:]
+        offlineAlbumETagsByFolderID = [:]
+        galleryThumbnailStates = [:]
+        historyPreviews = [:]
+        displayPreviews = [:]
+        displayPreviewRequestIDs = [:]
+        pendingDisplayPreviews = [:]
+        pendingDisplayPreviewRequestIDs = [:]
+        deviceUpcomingResponses = [:]
+        loadingDeviceTimelineIDs = []
+        deviceTimelineErrors = [:]
+        dashboardPreviews = [:]
+        dashboardPreviewRequestIDs = [:]
+        loadDisplayOrder(for: storageID(for: session.instance))
+        loadDashboardOrder(for: storageID(for: session.instance))
+        loadCollapsedDashboardSections(for: storageID(for: session.instance))
+        if mode == .live {
+            await persistSnapshot()
+        }
+        return connectionRevision
+    }
+
+    func finishConnection(revision: UUID, attemptID: UUID) async {
+        guard connectionRevision == revision else { return }
+        defer {
+            if connectionRevision == revision, pairingAttemptID == attemptID { activeOperationIDs.remove("pair"); pairingAttemptID = nil }
+        }
+        await refresh(probeCapabilities: false)
+        guard connectionRevision == revision else { return }
+        await reloadQueuedImages()
+        guard connectionRevision == revision else { return }
+        await reloadQueuedLinks()
+        guard connectionRevision == revision else { return }
+        await retryPendingSharedImages()
+        guard connectionRevision == revision else { return }
+        await retryPendingSharedLinks()
+    }
+
+    private func connect(using candidate: any TesseraeServing, mode: ConnectionMode, baseURL: URL,
+                         code: String, clientName: String, onFailure: ((String) -> Void)? = nil) async -> Bool {
         do {
-            let capabilities = try await probeConnection(using: candidate, baseURL: baseURL)
-            let session = try await candidate.pair(
-                baseURL: baseURL,
-                code: code,
-                clientName: clientName
-            )
-            try Task.checkCancellation()
-            if mode == .live {
-                if let connectionRuntime {
-                    activeConnectionFence = try await connectionRuntime.installLocal(session)
-                } else {
-                    try await credentials.save(token: session.token, for: session.instance.id)
-                }
-            } else {
-                activeConnectionFence = nil
-            }
-            isDisconnecting = false
-            connectionRevision = UUID()
-            isRestoringConnection = false
-            isRefreshing = false
-            isRefreshingDashboards = false
-            isRefreshingLineups = false
-            isRefreshingGallery = false
-            isLoadingMoreHistory = false
-            loadingGalleryFolderIDs = []
-            loadingOfflineAlbumFolderIDs = []
-            activeOperationIDs = ["pair"]
-            connectionNotice = nil
-            if let connectionRuntime, let fence = activeConnectionFence, mode == .live {
-                activeClient = try connectionRuntime.client(for: CompanionSnapshot(activeInstance: session.instance,
-                    capabilities: capabilities, displays: [], dashboards: [], jobs: [], connectionFence: fence))
-            } else {
-                activeClient = candidate
-            }
-            connectionMode = mode
-            connectionHealth = .connected
-            self.capabilities = capabilities
-            lineupAuthoringPermission = if capabilities.features.contains(
-                "lineup_authoring"
-            ) {
-                session.scopes.contains("lineups:write") ? .granted : .denied
-            } else {
-                .unavailable
-            }
-            lineupAuthoringSettingsURL = nil
-            galleryWritePermission = if capabilities.supportsGallery {
-                session.scopes.contains("gallery:write") ? .granted : .denied
-            } else {
-                .unavailable
-            }
-            galleryWriteSettingsURL = nil
-            offlineAlbumAuthoringPermission = capabilities.supportsOfflineAlbums
-                ? .unknown
-                : .unavailable
-            offlineAlbumSettingsURL = nil
-            activeInstance = session.instance.updatingServerVersion(
-                to: capabilities.serverVersion
-            )
-            displays = []
-            dashboards = []
-            activityThumbnailData = [:]
-            queuedImageRequests = []
-            queuedLinkRequests = []
-            queuedImagePreviewData = [:]
-            historyItems = []
-            historyNextBeforeID = nil
-            activityClearedBefore = nil
-            lineups = []
-            galleryFolders = []
-            galleryFolderDetails = [:]
-            offlineAlbumsByFolderID = [:]
-            offlineAlbumETagsByFolderID = [:]
-            galleryThumbnailStates = [:]
-            historyPreviews = [:]
-            displayPreviews = [:]
-            displayPreviewRequestIDs = [:]
-            pendingDisplayPreviews = [:]
-            pendingDisplayPreviewRequestIDs = [:]
-            deviceUpcomingResponses = [:]
-            loadingDeviceTimelineIDs = []
-            deviceTimelineErrors = [:]
-            dashboardPreviews = [:]
-            dashboardPreviewRequestIDs = [:]
-            loadDisplayOrder(for: storageID(for: session.instance))
-            loadDashboardOrder(for: storageID(for: session.instance))
-            loadCollapsedDashboardSections(for: storageID(for: session.instance))
-            if mode == .live {
-                await persistSnapshot()
-            }
-            await refresh(probeCapabilities: false)
-            await reloadQueuedImages()
-            await reloadQueuedLinks()
-            await retryPendingSharedImages()
-            await retryPendingSharedLinks()
+            let prepared = try await prepareConnection(using: candidate, mode: mode, baseURL: baseURL,
+                                                       code: code, clientName: clientName)
+            let revision = try await commitConnection(prepared)
+            await finishConnection(revision: revision, attemptID: prepared.attemptID)
             return true
-        } catch is CancellationError {
-            return false
-        } catch {
+        } catch is CancellationError { return false }
+        catch {
             if !Task.isCancelled {
-                if let onFailure {
-                    onFailure(error.localizedDescription)
-                } else {
-                    lastError = error.localizedDescription
-                }
+                if let onFailure { onFailure(error.localizedDescription) }
+                else { lastError = error.localizedDescription }
             }
             return false
         }
@@ -573,7 +613,9 @@ final class AppModel {
                 ))
             }
 #endif
-            guard let snapshot = try await stateStore.load() else {
+            let restoredSnapshot = try await stateStore.load()
+            try checkConnectionRevision(revision)
+            guard let snapshot = restoredSnapshot else {
                 connectionHealth = .idle
                 return
             }
@@ -582,13 +624,16 @@ final class AppModel {
             if let connectionRuntime {
                 guard let fence = snapshot.connectionFence else { throw ConnectionError.invalidIdentity }
                 try await connectionRuntime.sessions.validate(fence)
+                try checkConnectionRevision(revision)
                 activeConnectionFence = fence
                 hasCredential = true
             } else {
                 hasCredential = try await credentials.token(for: snapshot.activeInstance.id) != nil
             }
+            try checkConnectionRevision(revision)
             guard hasCredential else {
                 try await stateStore.clear()
+                try checkConnectionRevision(revision)
                 connectionHealth = .requiresPairing
                 connectionNotice = String(
                     localized: "The saved Tesserae pairing is no longer available. Pair again to reconnect."
@@ -2451,11 +2496,14 @@ final class AppModel {
             return
         }
 
-        isRetryingSharedImages = true
-        defer { isRetryingSharedImages = false }
+        let revision = connectionRevision
+        retryingImageRevision = revision
+        defer { if retryingImageRevision == revision { retryingImageRevision = nil } }
 
         await reloadQueuedImages()
+        guard connectionRevision == revision else { return }
         for request in queuedImageRequests {
+            guard connectionRevision == revision else { return }
             _ = await submitQueuedImage(
                 request,
                 instance: activeInstance
@@ -2473,11 +2521,14 @@ final class AppModel {
             return
         }
 
-        isRetryingSharedLinks = true
-        defer { isRetryingSharedLinks = false }
+        let revision = connectionRevision
+        retryingLinkRevision = revision
+        defer { if retryingLinkRevision == revision { retryingLinkRevision = nil } }
 
         await reloadQueuedLinks()
+        guard connectionRevision == revision else { return }
         for request in queuedLinkRequests {
+            guard connectionRevision == revision else { return }
             _ = await submitQueuedLink(
                 request,
                 instance: activeInstance
@@ -2492,24 +2543,29 @@ final class AppModel {
             return
         }
 
+        let revision = connectionRevision
+        let instanceID = storageID(for: activeInstance)
         do {
             try await shareQueue.purge(
                 expiredBefore: Date().addingTimeInterval(-24 * 60 * 60)
             )
+            guard connectionRevision == revision, activeStorageID == instanceID else { return }
             let requests = try await shareQueue.requests()
-                .filter { $0.instanceID == storageID(for: activeInstance) }
+                .filter { $0.instanceID == instanceID }
                 .sorted {
                     if $0.createdAt != $1.createdAt {
                         return $0.createdAt > $1.createdAt
                     }
                     return $0.id < $1.id
                 }
+            guard connectionRevision == revision, activeStorageID == instanceID else { return }
             queuedImageRequests = requests
             let retainedIDs = Set(requests.map(\.id))
             queuedImagePreviewData = queuedImagePreviewData.filter {
                 retainedIDs.contains($0.key)
             }
         } catch {
+            guard connectionRevision == revision, activeStorageID == instanceID else { return }
             if showErrors {
                 connectionNotice = error.localizedDescription
             }
@@ -2522,19 +2578,25 @@ final class AppModel {
             return
         }
 
+        let revision = connectionRevision
+        let instanceID = storageID(for: activeInstance)
         do {
             try await linkShareQueue.purge(
                 expiredBefore: Date().addingTimeInterval(-24 * 60 * 60)
             )
-            queuedLinkRequests = try await linkShareQueue.requests()
-                .filter { $0.instanceID == storageID(for: activeInstance) }
+            guard connectionRevision == revision, activeStorageID == instanceID else { return }
+            let requests = try await linkShareQueue.requests()
+                .filter { $0.instanceID == instanceID }
                 .sorted {
                     if $0.createdAt != $1.createdAt {
                         return $0.createdAt > $1.createdAt
                     }
                     return $0.id < $1.id
                 }
+            guard connectionRevision == revision, activeStorageID == instanceID else { return }
+            queuedLinkRequests = requests
         } catch {
+            guard connectionRevision == revision, activeStorageID == instanceID else { return }
             if showErrors {
                 connectionNotice = error.localizedDescription
             }
@@ -2549,8 +2611,11 @@ final class AppModel {
             return
         }
 
+        let revision = connectionRevision
+        let instanceID = activeStorageID
         do {
             let data = try await shareQueue.imageData(for: request)
+            guard connectionRevision == revision, activeStorageID == instanceID else { return }
             guard queuedImageRequests.contains(where: { $0.id == request.id }) else {
                 return
             }
@@ -3358,6 +3423,8 @@ final class AppModel {
         }
     }
 
+    var activeFenceForSignOut: ConnectionFence? { activeConnectionFence }
+
     func disconnect() async {
         isDisconnecting = true
         connectionRevision = UUID()
@@ -3414,12 +3481,14 @@ final class AppModel {
         isRefreshingLineups = false
     }
 
-    func restoreSelectedLocalConnection() async {
+    func restoreSelectedLocalConnection(ifRevision revision: UUID? = nil) async {
+        guard revision == nil || connectionRevision == revision else { return }
         didAttemptRestore = false
         await restoreConnectionIfNeeded()
     }
 
     private func clearPresentedConnection() {
+        pairingAttemptID = nil
         activeOperationIDs = []
         isRefreshingGallery = false
         loadingGalleryFolderIDs = []
@@ -3792,16 +3861,21 @@ final class AppModel {
     }
 
     private func reloadActivityThumbnails(instanceID: String) async {
+        let revision = connectionRevision
+        let jobs = self.jobs
         try? await activityThumbnails.purge(referenceDate: Date())
+        guard connectionRevision == revision, activeStorageID == instanceID else { return }
         var loaded: [String: Data] = [:]
         for job in jobs where job.kind == .imagePush {
             if let data = try? await activityThumbnails.data(
                 forJobID: job.id,
                 instanceID: instanceID
             ) {
+                guard connectionRevision == revision, activeStorageID == instanceID else { return }
                 loaded[job.id] = data
             }
         }
+        guard connectionRevision == revision, activeStorageID == instanceID else { return }
         activityThumbnailData = loaded
     }
 

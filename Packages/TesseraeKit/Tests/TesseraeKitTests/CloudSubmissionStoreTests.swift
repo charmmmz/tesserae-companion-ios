@@ -159,8 +159,9 @@ struct CloudSubmissionStoreTests {
         let bytesURL = folder.appending(path: raster.fileID.uuidString)
         try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: folder.path)
         defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: folder.path) }
-        do { try fixture.store.deleteMedia(accepted.batch.id, now: now) }
-        catch { /* Logical deletion must remain authoritative when physical cleanup fails. */ }
+        #expect(throws: (any Error).self) {
+            try fixture.store.deleteMedia(accepted.batch.id, now: now)
+        }
         #expect(FileManager.default.fileExists(atPath: bytesURL.path))
         #expect(throws: CloudSubmissionError.mediaUnavailable) {
             try fixture.store.media(accepted.batch, raster: raster, now: now)

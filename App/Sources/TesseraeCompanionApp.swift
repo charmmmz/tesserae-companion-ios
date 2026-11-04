@@ -153,7 +153,8 @@ struct TesseraeCompanionApp: App {
         _connectionHost = State(initialValue: ConnectionHost(local: appModel, runtime: runtime,
             vault: CloudLoginVault(directory: AppConfiguration.sharedContainerURL
                 ?? URL.applicationSupportDirectory.appending(path: "CloudLogin"),
-                service: AppConfiguration.keychainService + ".oauth", accessGroup: AppConfiguration.keychainAccessGroup)))
+                service: AppConfiguration.keychainService + ".oauth", accessGroup: AppConfiguration.keychainAccessGroup),
+            sendPreferences: sendPreferences))
         _remindersBridgeModel = State(initialValue: RemindersBridgeModel())
         _healthBridgeModel = State(initialValue: HealthBridgeModel())
         _galleryUploads = State(initialValue: GalleryUploadCoordinator())

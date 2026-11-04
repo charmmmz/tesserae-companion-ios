@@ -57,6 +57,7 @@ public actor CloudSubmissionService {
     }
 
     public func start(_ prepared: PreparedCloudSubmission) async throws -> UUID {
+        try Task.checkCancellation()
         guard !stopped, prepared.serviceID == serviceID, prepared.fence == fence else { throw ConnectionError.sessionChanged }
         let staged = prepared.staged
         let store = self.store
