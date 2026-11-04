@@ -150,13 +150,13 @@ struct CloudOAuthHTTP: Sendable {
     }
 }
 
-private final class HTTPCompletion: @unchecked Sendable {
+private final class AsyncCompletion<Value: Sendable>: @unchecked Sendable {
     private let lock = NSLock()
-    private var continuation: CheckedContinuation<TesseraeHTTPResponse, any Error>?
-    private var outcome: Result<TesseraeHTTPResponse, any Error>?
+    private var continuation: CheckedContinuation<Value, any Error>?
+    private var outcome: Result<Value, any Error>?
     private var tasks: [Task<Void, Never>] = []
 
-    func attach(_ continuation: CheckedContinuation<TesseraeHTTPResponse, any Error>) {
+    func attach(_ continuation: CheckedContinuation<Value, any Error>) {
         lock.lock()
         let finished = outcome
         if finished == nil { self.continuation = continuation }
@@ -172,7 +172,7 @@ private final class HTTPCompletion: @unchecked Sendable {
         if finished { task.cancel() }
     }
 
-    func finish(_ result: Result<TesseraeHTTPResponse, any Error>) {
+    func finish(_ result: Result<Value, any Error>) {
         lock.lock()
         guard outcome == nil else { lock.unlock(); return }
         outcome = result
@@ -188,8 +188,13 @@ private final class HTTPCompletion: @unchecked Sendable {
 
 func boundedHTTP(timeout: TimeInterval,
                  operation: @escaping @Sendable () async throws -> TesseraeHTTPResponse) async throws -> TesseraeHTTPResponse {
+    try await boundedOperation(timeout: timeout, operation: operation)
+}
+
+func boundedOperation<Value: Sendable>(timeout: TimeInterval,
+                 operation: @escaping @Sendable () async throws -> Value) async throws -> Value {
     guard timeout > 0 else { throw ConnectionError.coordinationTimeout }
-    let completion = HTTPCompletion()
+    let completion = AsyncCompletion<Value>()
     return try await withTaskCancellationHandler {
         try await withCheckedThrowingContinuation { continuation in
             completion.attach(continuation)

@@ -130,6 +130,7 @@ public struct CloudSubmissionBatch: Codable, Sendable, Identifiable {
     public var revision: Int
     let fingerprint: String
     var resendReservation: UUID?
+    var inputFingerprint: String? = nil
 
     public var results: [CloudTargetResult] {
         tasks.flatMap { task -> [CloudTargetResult] in

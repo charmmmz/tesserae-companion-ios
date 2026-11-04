@@ -4,7 +4,7 @@ import Foundation
 struct SharedFileLock: Sendable {
     let url: URL
 
-    func withLock<T>(timeout: TimeInterval = 10, _ body: () throws -> T) throws -> T {
+    func withLock<T>(timeout: TimeInterval = 10, checksCancellation: Bool = true, _ body: () throws -> T) throws -> T {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let descriptor = open(url.path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
         guard descriptor >= 0 else { throw ConnectionError.unavailable }
@@ -12,7 +12,7 @@ struct SharedFileLock: Sendable {
         let deadline = ProcessInfo.processInfo.systemUptime + max(0, timeout)
         while flock(descriptor, LOCK_EX | LOCK_NB) != 0 {
             guard errno == EWOULDBLOCK || errno == EAGAIN else { throw ConnectionError.unavailable }
-            try Task.checkCancellation()
+            if checksCancellation { try Task.checkCancellation() }
             guard ProcessInfo.processInfo.systemUptime < deadline else { throw ConnectionError.coordinationTimeout }
             Thread.sleep(forTimeInterval: 0.01)
         }

@@ -26,6 +26,12 @@ struct CloudStagedBatch: Sendable {
     let owner: CloudRunOwner?
     let expectedSourceRevision: Int?
     let confirmsDuplicates: Bool
+    let inputRevision: Int?
+    init(batch: CloudSubmissionBatch, owner: CloudRunOwner?, expectedSourceRevision: Int?,
+         confirmsDuplicates: Bool, inputRevision: Int? = nil) {
+        self.batch = batch; self.owner = owner; self.expectedSourceRevision = expectedSourceRevision
+        self.confirmsDuplicates = confirmsDuplicates; self.inputRevision = inputRevision
+    }
 }
 
 struct CloudAcceptedBatch: Sendable {
@@ -34,6 +40,7 @@ struct CloudAcceptedBatch: Sendable {
 }
 
 private enum CloudLedgerRecord: Codable {
+    case input(CloudInputRecord)
     case batch(CloudSubmissionBatch)
     case closed(UUID)
 }
@@ -46,18 +53,22 @@ struct CloudSubmissionStore: Sendable {
     let identity: ConnectionIdentity
     let directory: URL
     private let metadataLock: SharedFileLock
+    private var deadline: CloudEntryDeadline?
+    private var completionOnly = false
 
-    init(directory: URL, identity: ConnectionIdentity) throws {
+    init(directory: URL, identity: ConnectionIdentity, deadline: CloudEntryDeadline? = nil) throws {
         guard case let .cloud(issuer, user, tenant) = identity,
               try ConnectionIdentity.canonicalService(issuer) == issuer,
               !user.isEmpty, !tenant.isEmpty else { throw ConnectionError.invalidIdentity }
         self.identity = identity
+        self.deadline = deadline
         self.directory = directory.appending(path: "CloudSubmissions/\(identity.id.fileComponent)")
         metadataLock = SharedFileLock(url: self.directory.appending(path: "Locks/metadata.lock"))
     }
 
     func stage(decision: UUID, fence: ConnectionFence, kind: CloudSubmissionKind,
-               targets: [CloudSubmissionTarget], outputs: [CloudPhotoOutput], now: Date) throws -> CloudStagedBatch {
+               targets: [CloudSubmissionTarget], outputs: [CloudPhotoOutput], now: Date,
+               input: CloudOwnedInput? = nil) throws -> CloudStagedBatch {
         guard fence.connectionID == identity.id, !targets.isEmpty,
               Set(targets.map(\.id)).count == targets.count,
               targets.allSatisfy({ !$0.id.isEmpty && !$0.id.contains(",") }),
@@ -73,10 +84,19 @@ struct CloudSubmissionStore: Sendable {
                   }) else { throw CloudSubmissionError.invalidPreparation }
         }
         let fingerprint = try fingerprint(kind: kind, targets: targets, outputs: outputs, parent: nil)
-        if let existing = try existing(decision, fingerprint: fingerprint, now: now) {
+        if input == nil, let existing = try existing(decision, fingerprint: fingerprint, now: now) {
             return .init(batch: existing, owner: nil, expectedSourceRevision: nil, confirmsDuplicates: false)
         }
-        guard let owner = try CloudRunOwner.acquire(ownerURL(decision)) else { throw CloudSubmissionError.alreadyRunning }
+        let owner: CloudRunOwner
+        if let input {
+            guard input.input.id == decision, input.input.boundFence == fence,
+                  input.input.kind == kind, Set(input.input.targets.deviceIDs) == Set(targets.map(\.id)),
+                  input.input.expiresAt > now else { throw CloudSubmissionError.resultChanged }
+            owner = input.owner
+        } else {
+            guard let acquired = try CloudRunOwner.acquire(ownerURL(decision)) else { throw CloudSubmissionError.alreadyRunning }
+            owner = acquired
+        }
         let tasks: [CloudSubmissionTask]
         if kind == .photo {
             tasks = try outputs.map { output in
@@ -89,11 +109,13 @@ struct CloudSubmissionStore: Sendable {
         } else {
             tasks = [.init(id: UUID(), targetIDs: targets.map(\.id), raster: nil, state: .prepared)]
         }
-        let batch = CloudSubmissionBatch(id: decision, identity: identity, fence: fence, kind: kind,
+        var batch = CloudSubmissionBatch(id: decision, identity: identity, fence: fence, kind: kind,
             parentID: nil, sourceRevision: nil, confirmedPossibleDuplicates: false, createdAt: now, resultsExpireAt: now.addingTimeInterval(30 * 86_400),
-            mediaExpiresAt: kind == .photo ? now.addingTimeInterval(7 * 86_400) : nil,
+            mediaExpiresAt: kind == .photo ? min(now.addingTimeInterval(7 * 86_400), input?.input.expiresAt ?? .distantFuture) : nil,
             targets: targets, tasks: tasks, execution: .active(UUID()), revision: 0, fingerprint: fingerprint)
-        return .init(batch: batch, owner: owner, expectedSourceRevision: nil, confirmsDuplicates: false)
+        batch.inputFingerprint = input?.input.fingerprint
+        return .init(batch: batch, owner: owner, expectedSourceRevision: nil, confirmsDuplicates: false,
+                     inputRevision: input?.input.revision)
     }
 
     func stageResend(decision: UUID, sourceID: UUID, expectedRevision: Int,
@@ -154,10 +176,20 @@ struct CloudSubmissionStore: Sendable {
 
     func accept(_ staged: CloudStagedBatch, now: Date) throws -> CloudAcceptedBatch {
         try transaction(now: now) { ledger in
+            guard !completionOnly else { throw CloudSubmissionError.invalidPreparation }
+            if let deadline { _ = try deadline.remaining() }
             let key = staged.batch.id.uuidString
             if let record = ledger.records[key] {
-                return .init(batch: try matching(record, fingerprint: staged.batch.fingerprint), owner: nil)
-            }
+                if case .input(let input) = record {
+                    guard staged.inputRevision == input.revision, input.boundFence == staged.batch.fence,
+                          input.expiresAt > now, input.identity == identity,
+                          Set(input.targets.deviceIDs) == Set(staged.batch.targets.map(\.id)) else {
+                        throw CloudSubmissionError.resultChanged
+                    }
+                } else {
+                    return .init(batch: try matching(record, fingerprint: staged.batch.fingerprint), owner: nil)
+                }
+            } else if staged.inputRevision != nil { throw CloudSubmissionError.resultChanged }
             guard staged.owner != nil, staged.batch.identity == identity else { throw CloudSubmissionError.interrupted }
             for task in staged.batch.tasks {
                 if let raster = task.raster { try requireMediaFile(staged.batch, raster: raster, now: now) }
@@ -182,6 +214,8 @@ struct CloudSubmissionStore: Sendable {
 
     func claim(batchID: UUID, taskID: UUID, runID: UUID, fence: ConnectionFence, now: Date) throws -> CloudSubmissionClaim? {
         try transaction(now: now) { ledger in
+            guard !completionOnly else { throw CloudSubmissionError.invalidPreparation }
+            if let deadline { _ = try deadline.remaining() }
             guard case .batch(var batch) = ledger.records[batchID.uuidString], batch.fence == fence,
                   case .active(let activeRun) = batch.execution, activeRun == runID,
                   let index = batch.tasks.firstIndex(where: { $0.id == taskID }),
@@ -326,6 +360,7 @@ struct CloudSubmissionStore: Sendable {
 
     private func matching(_ record: CloudLedgerRecord, fingerprint: String) throws -> CloudSubmissionBatch {
         switch record {
+        case .input: throw CloudSubmissionError.decisionConflict
         case .closed: throw CloudSubmissionError.decisionClosed
         case .batch(let batch):
             guard batch.fingerprint == fingerprint else { throw CloudSubmissionError.decisionConflict }
@@ -334,11 +369,16 @@ struct CloudSubmissionStore: Sendable {
     }
 
     private func transaction<T>(now: Date, _ operation: (inout CloudLedger) throws -> T) throws -> T {
-        try metadataLock.withLock {
+        try metadataLock.withLock(timeout: deadline.map { max(0, min(10, $0.uptime - ProcessInfo.processInfo.systemUptime)) } ?? 10, checksCancellation: !completionOnly) {
             let url = directory.appending(path: "ledger.json")
             var ledger = try FileManager.default.fileExists(atPath: url.path)
                 ? ConnectionCoding.decoder().decode(CloudLedger.self, from: Data(contentsOf: url)) : CloudLedger()
             for (key, record) in ledger.records {
+                if case .input(let input) = record {
+                    guard input.identity == identity, input.id.uuidString == key else { throw ConnectionError.invalidIdentity }
+                    if input.expiresAt <= now { ledger.records[key] = .closed(input.id) }
+                    continue
+                }
                 guard case .batch(var batch) = record else { continue }
                 guard batch.identity == identity, key == batch.id.uuidString else { throw ConnectionError.invalidIdentity }
                 if batch.resultsExpireAt <= now { ledger.records[key] = .closed(batch.id) }
@@ -350,6 +390,7 @@ struct CloudSubmissionStore: Sendable {
             let value = try operation(&ledger)
             try writeProtected(ledger, to: url)
             try cleanupMedia(ledger, now: now)
+            try cleanupInputs(ledger)
             return value
         }
     }
@@ -363,10 +404,156 @@ struct CloudSubmissionStore: Sendable {
             case .batch(let batch):
                 if let expiry = batch.mediaExpiresAt, expiry <= now { try removeMedia(id) }
             case .closed: try removeMedia(id)
+            case .input:
+                if let owner = try CloudRunOwner.acquire(ownerURL(id)) {
+                    try withExtendedLifetime(owner) { try removeMedia(id) }
+                }
             case nil:
                 if let owner = try CloudRunOwner.acquire(ownerURL(id)) {
                     try withExtendedLifetime(owner) { try removeMedia(id) }
                 }
+            }
+        }
+    }
+
+
+    func completionAccess() -> CloudSubmissionStore {
+        var copy = self
+        copy.deadline = CloudEntryDeadline(uptime: min(ProcessInfo.processInfo.systemUptime + 1,
+                                                       deadline.map { $0.uptime + 1 } ?? .greatestFiniteMagnitude))
+        copy.completionOnly = true
+        return copy
+    }
+
+    func retainInput(decision: UUID, request: CloudEntryRequest, now: Date) throws -> CloudInputAdmission {
+        let targets = request.targets
+        guard targets.connectionID == identity.id else { throw ConnectionError.invalidIdentity }
+        let kind: CloudSubmissionKind
+        let source: CloudInputFile?
+        let recipe: CloudPhotoRecipe?
+        let bytes: Data?
+        switch request {
+        case .photo(_, let data, let contentType, let composition):
+            guard !data.isEmpty, data.count <= 64 * 1_024 * 1_024,
+                  contentType.hasPrefix("image/") else { throw CloudSubmissionError.invalidPreparation }
+            kind = .photo; recipe = composition; bytes = data
+            source = .init(id: UUID(), contentType: contentType, digest: digest(data), byteCount: data.count)
+        case .currentPage:
+            guard targets.deviceIDs.count == 1 else { throw CloudSubmissionError.invalidPreparation }
+            kind = .currentPage; source = nil; recipe = nil; bytes = nil
+        }
+        struct Content: Encodable {
+            let targets: CloudEntryTargets; let kind: CloudSubmissionKind
+            let fit: ImageFitMode?; let framings: [Framing]; let digest: String?; let type: String?
+        }
+        struct Framing: Encodable {
+            let aspect: PanelAspectRatio; let value: ImageFraming
+        }
+        let hash = digest(try ConnectionCoding.encoder().encode(Content(targets: targets, kind: kind,
+            fit: recipe?.fit, framings: (recipe?.framings ?? [:]).sorted { $0.key.id < $1.key.id }
+                .map { Framing(aspect: $0.key, value: $0.value) }, digest: source?.digest, type: source?.contentType)))
+        if let existing = try transaction(now: now, { ledger -> CloudInputAdmission? in
+            guard let record = ledger.records[decision.uuidString] else { return nil }
+            switch record {
+            case .closed: throw CloudSubmissionError.decisionClosed
+            case .batch(let batch):
+                guard batch.inputFingerprint == hash else { throw CloudSubmissionError.decisionConflict }
+                return .batch(batch)
+            case .input(let input):
+                guard input.fingerprint == hash else { throw CloudSubmissionError.decisionConflict }
+                return .pending(input)
+            }
+        }) {
+            if case .pending(let input) = existing { return try acquireInput(input.id, revision: input.revision, now: now) }
+            return existing
+        }
+        guard let owner = try CloudRunOwner.acquire(ownerURL(decision)) else { throw CloudSubmissionError.alreadyRunning }
+        if let source, let bytes { try writeInput(bytes, decision: decision, file: source.id) }
+        let input = CloudInputRecord(id: decision, identity: identity, createdAt: now,
+            expiresAt: now.addingTimeInterval(7 * 86_400), targets: targets, kind: kind, recipe: recipe,
+            revision: 0, boundFence: targets.reviewedFence, source: source, fingerprint: hash)
+        return try transaction(now: now) { ledger in
+            guard ledger.records[decision.uuidString] == nil else { throw CloudSubmissionError.resultChanged }
+            ledger.records[decision.uuidString] = .input(input)
+            return .owned(.init(input: input, owner: owner))
+        }
+    }
+
+    func acquireInput(_ id: UUID, revision: Int, now: Date) throws -> CloudInputAdmission {
+        let owner = try CloudRunOwner.acquire(ownerURL(id))
+        return try transaction(now: now) { ledger in
+            guard let record = ledger.records[id.uuidString] else { throw CloudSubmissionError.missingResult }
+            switch record {
+            case .closed: throw CloudSubmissionError.decisionClosed
+            case .batch(let batch): return .batch(batch)
+            case .input(let input):
+                guard input.expiresAt > now else { throw CloudSubmissionError.resultChanged }
+                guard let owner else { return .pending(input) }
+                guard input.revision == revision else { throw CloudSubmissionError.resultChanged }
+                return .owned(.init(input: input, owner: owner))
+            }
+        }
+    }
+
+    func bindInput(_ owned: CloudOwnedInput, fence: ConnectionFence, explicitly: Bool, now: Date) throws -> CloudOwnedInput {
+        try transaction(now: now) { ledger in
+            guard case .input(var input) = ledger.records[owned.input.id.uuidString],
+                  input.revision == owned.input.revision, input.expiresAt > now,
+                  fence.connectionID == identity.id else { throw CloudSubmissionError.resultChanged }
+            guard explicitly || input.boundFence == nil || input.boundFence == fence else { throw ConnectionError.sessionChanged }
+            if input.boundFence != fence {
+                input.boundFence = fence; input.revision += 1
+                ledger.records[input.id.uuidString] = .input(input)
+            }
+            return .init(input: input, owner: owned.owner)
+        }
+    }
+
+    func pendingInputs(now: Date) throws -> [CloudInputRecord] {
+        try transaction(now: now) { ledger in
+            ledger.records.values.compactMap { if case .input(let input) = $0 { input } else { nil } }
+                .sorted { $0.createdAt > $1.createdAt }
+        }
+    }
+
+    func inputBytes(_ id: UUID, revision: Int, now: Date) throws -> Data? {
+        try transaction(now: now) { ledger in
+            guard case .input(let input) = ledger.records[id.uuidString], input.revision == revision,
+                  input.expiresAt > now else { throw CloudSubmissionError.mediaUnavailable }
+            guard let source = input.source else { return nil }
+            let bytes = try Data(contentsOf: inputURL(id, source.id))
+            guard bytes.count == source.byteCount, digest(bytes) == source.digest else { throw CloudSubmissionError.mediaUnavailable }
+            return bytes
+        }
+    }
+
+    func deleteInput(_ id: UUID, revision: Int, now: Date) throws {
+        try transaction(now: now) { ledger in
+            guard case .input(let input) = ledger.records[id.uuidString], input.revision == revision else {
+                throw CloudSubmissionError.resultChanged
+            }
+            ledger.records[id.uuidString] = .closed(id)
+        }
+    }
+
+    private func inputURL(_ id: UUID, _ file: UUID) -> URL {
+        directory.appending(path: "Inputs/\(id.uuidString)/\(file.uuidString)")
+    }
+    private func writeInput(_ data: Data, decision: UUID, file: UUID) throws {
+        let url = inputURL(decision, file)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+    }
+    private func cleanupInputs(_ ledger: CloudLedger) throws {
+        let root = directory.appending(path: "Inputs")
+        guard FileManager.default.fileExists(atPath: root.path) else { return }
+        for url in try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) {
+            guard let id = UUID(uuidString: url.lastPathComponent) else { continue }
+            if case .input = ledger.records[id.uuidString] { continue }
+            if ledger.records[id.uuidString] != nil { try FileManager.default.removeItem(at: url) }
+            else if let owner = try CloudRunOwner.acquire(ownerURL(id)) {
+                try withExtendedLifetime(owner) { try FileManager.default.removeItem(at: url) }
             }
         }
     }

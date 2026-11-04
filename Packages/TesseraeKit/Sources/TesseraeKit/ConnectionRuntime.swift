@@ -113,10 +113,12 @@ public struct ConnectionRuntime: Sendable {
         return fence
     }
 
-    public func cloudTransport(for id: ConnectionID) async throws -> CloudAuthorizedTransport {
+    public func cloudTransport(for id: ConnectionID, timeout: TimeInterval = 10) async throws -> CloudAuthorizedTransport {
+        let deadline = try CloudEntryDeadline(timeout: timeout)
         guard let connection = try registry.connection(id), case let .cloud(issuer, _, _) = connection.identity,
-              let fence = try await sessions.fence(for: id) else { throw ConnectionError.invalidIdentity }
-        try await sessions.validate(fence)
+              let fence = try await sessions.fence(for: id, timeout: deadline.remaining()) else { throw ConnectionError.invalidIdentity }
+        try await sessions.validate(fence, timeout: deadline.remaining())
+        _ = try deadline.remaining()
         return CloudAuthorizedTransport(issuer: issuer, fence: fence, sessions: sessions, transport: cloudHTTPTransport)
     }
 

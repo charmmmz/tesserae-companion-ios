@@ -108,8 +108,8 @@ public struct SharedSessionStore: Sendable {
         }
     }
 
-    public func fence(for id: ConnectionID) async throws -> ConnectionFence? {
-        try await transaction(id) { envelope in (nil, envelope?.fence) }
+    public func fence(for id: ConnectionID, timeout: TimeInterval = 10) async throws -> ConnectionFence? {
+        try await transaction(id, timeout: timeout) { envelope in (nil, envelope?.fence) }
     }
 
     public func validate(_ fence: ConnectionFence, timeout: TimeInterval = 10) async throws {
@@ -120,8 +120,8 @@ public struct SharedSessionStore: Sendable {
         }
     }
 
-    func commit<T: Sendable>(_ fence: ConnectionFence, _ operation: @escaping @Sendable () throws -> T) async throws -> T {
-        try await transaction(fence.connectionID) { envelope in
+    func commit<T: Sendable>(_ fence: ConnectionFence, timeout: TimeInterval = 10, _ operation: @escaping @Sendable () throws -> T) async throws -> T {
+        try await transaction(fence.connectionID, timeout: timeout) { envelope in
             let current = try checked(envelope, fence: fence)
             if case let .closed(reason) = current.state { throw reason.error }
             return (nil, try operation())

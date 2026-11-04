@@ -5,7 +5,10 @@ public struct CloudReadClient: Sendable {
     public var issuer: URL { transport.issuer }
     private let transport: CloudAuthorizedTransport
 
-    public init(transport: CloudAuthorizedTransport) { self.transport = transport }
+    private let timeout: TimeInterval
+    public init(transport: CloudAuthorizedTransport, timeout: TimeInterval = 10) {
+        self.transport = transport; self.timeout = timeout
+    }
 
     public func bootstrap() async throws -> CloudBootstrap {
         let result: CloudBootstrap = try await read(["bootstrap"])
@@ -79,7 +82,7 @@ public struct CloudReadClient: Sendable {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue(accept, forHTTPHeaderField: "Accept")
-        return try await transport.send(request)
+        return try await transport.send(request, timeout: timeout, authorizationTimeout: min(10, timeout))
     }
 
     private func requireSuccess(_ response: TesseraeHTTPResponse) throws {
