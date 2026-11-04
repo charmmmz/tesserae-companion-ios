@@ -12,6 +12,7 @@ public struct CompanionSnapshot: Codable, Hashable, Sendable {
     public let jobs: [PushJob]
     public let activityClearedBefore: Date?
     public let updatedAt: Date
+    public let connectionFence: ConnectionFence?
 
     public init(
         schemaVersion: Int = currentSchemaVersion,
@@ -22,7 +23,8 @@ public struct CompanionSnapshot: Codable, Hashable, Sendable {
         lineups: [Lineup]? = nil,
         jobs: [PushJob],
         activityClearedBefore: Date? = nil,
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        connectionFence: ConnectionFence? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.activeInstance = activeInstance
@@ -33,6 +35,7 @@ public struct CompanionSnapshot: Codable, Hashable, Sendable {
         self.jobs = jobs
         self.activityClearedBefore = activityClearedBefore
         self.updatedAt = updatedAt
+        self.connectionFence = connectionFence
     }
 
     public static func mergingJobs(
@@ -60,6 +63,12 @@ public struct CompanionSnapshot: Codable, Hashable, Sendable {
             }
             return lhs.id < rhs.id
         }
+    }
+
+    public func binding(_ fence: ConnectionFence) -> CompanionSnapshot {
+        CompanionSnapshot(schemaVersion: schemaVersion, activeInstance: activeInstance, capabilities: capabilities,
+            displays: displays, dashboards: dashboards, lineups: lineups, jobs: jobs,
+            activityClearedBefore: activityClearedBefore, updatedAt: updatedAt, connectionFence: fence)
     }
 }
 

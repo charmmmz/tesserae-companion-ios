@@ -14,15 +14,21 @@ public actor LiveTesseraeClient: TesseraeServing {
     private let transport: any TesseraeHTTPTransporting
     private let credentials: any CredentialStoring
     private let identity: TesseraeClientIdentity
+    private let sessions: SharedSessionStore?
+    private let connectionFence: ConnectionFence?
 
     public init(
         credentials: any CredentialStoring,
         identity: TesseraeClientIdentity,
-        transport: any TesseraeHTTPTransporting = URLSessionTesseraeTransport()
+        transport: any TesseraeHTTPTransporting = URLSessionTesseraeTransport(),
+        sessions: SharedSessionStore? = nil,
+        connectionFence: ConnectionFence? = nil
     ) {
         self.credentials = credentials
         self.identity = identity
         self.transport = transport
+        self.sessions = sessions
+        self.connectionFence = connectionFence
     }
 
     public func probe(baseURL: URL) async throws -> ServerCapabilities {
@@ -907,9 +913,7 @@ public actor LiveTesseraeClient: TesseraeServing {
         queryItems: [URLQueryItem] = [],
         accept: String = "application/json"
     ) async throws -> URLRequest {
-        guard let token = try await credentials.token(for: instance.id) else {
-            throw TesseraeClientError.missingCredential
-        }
+        let token = try await authorizationToken(instance)
         var request = try makeRequest(
             baseURL: instance.baseURL,
             path: path,
@@ -927,9 +931,7 @@ public actor LiveTesseraeClient: TesseraeServing {
         instance: TesseraeInstance,
         path: String
     ) async throws -> URLRequest {
-        guard let token = try await credentials.token(for: instance.id) else {
-            throw TesseraeClientError.missingCredential
-        }
+        let token = try await authorizationToken(instance)
         let baseURL = try normalized(instance.baseURL)
         guard
             let endpoint = URL(string: path, relativeTo: baseURL)?.absoluteURL,
@@ -989,6 +991,17 @@ public actor LiveTesseraeClient: TesseraeServing {
             request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         }
         return request
+    }
+
+    private func authorizationToken(_ instance: TesseraeInstance) async throws -> String {
+        if let sessions {
+            guard let connectionFence, connectionFence.connectionID == instance.connectionIdentity.id else {
+                throw ConnectionError.sessionChanged
+            }
+            return try await sessions.authorization(for: connectionFence).token
+        }
+        guard let token = try await credentials.token(for: instance.id) else { throw TesseraeClientError.missingCredential }
+        return token
     }
 
     private func normalized(_ baseURL: URL) throws -> URL {
