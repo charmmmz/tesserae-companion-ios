@@ -1197,3 +1197,33 @@
 
 "This display's panel configuration is not supported." = "暂不支持此屏幕的面板配置。";
 "Some saved displays are unavailable. Review the selected displays before sending." = "部分之前保存的屏幕现已不可用。发送前请检查所选屏幕。";
+
+"Review Photo" = "复核照片";
+
+"Open to review and explicitly continue." = "打开后复核，并手动继续。";
+
+"This item will not be sent automatically. Review its fixed displays before continuing." = "此内容不会自动发送。继续前请复核固定的目标屏幕。";
+
+"Discard this unsent item?" = "丢弃此未发送内容？";
+
+"Its photo and pending send will be removed. Nothing will be sent." = "将移除照片及待发送内容，不会发送任何内容。";
+
+"Frame generated. The physical display update is not confirmed." = "画面已生成，尚未确认实体屏幕已更新。";
+
+"Refresh Current Cloud Page" = "刷新当前云端页面";
+
+"Refresh Cloud Page" = "刷新云端页面";
+
+"Generate a new frame from the page currently assigned to a fixed Cloud display." = "为固定云端屏幕当前绑定的页面生成新画面。";
+
+"Cloud does not support pushing an arbitrary dashboard. Use Refresh Current Cloud Page instead." = "云端不支持推送任意仪表盘，请使用“刷新当前云端页面”。";
+
+"Quiet Hours override is not supported by Cloud. Turn it off before sending." = "云端不支持覆盖勿扰时段，请关闭该选项后再发送。";
+
+"Choose a Cloud display for this action." = "请为此操作选择云端屏幕。";
+
+"Check this send's results in Tesserae Companion. It will not be sent again automatically." = "请在 Tesserae Companion 中查看此次发送结果，不会自动重新发送。";
+
+"Open Tesserae Companion to review this item. It will not be sent again automatically." = "请打开 Tesserae Companion 复核此内容，不会自动重新发送。";
+
+"This send is still in progress. View its result in Tesserae Companion." = "此次发送仍在进行，请在 Tesserae Companion 中查看结果。";

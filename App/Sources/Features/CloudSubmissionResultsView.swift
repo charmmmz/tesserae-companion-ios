@@ -1,4 +1,5 @@
 import SwiftUI
+import ImageIO
 import TesseraeKit
 
 struct CloudSubmissionResultsSheet: View {
@@ -9,6 +10,8 @@ struct CloudSubmissionResultsSheet: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var reloadRevision = UUID()
     @State private var history: [CloudSubmissionBatch] = []
+    @State private var pending: [CloudPendingInput] = []
+    @State private var selectedPending: CloudPendingInput?
     @State private var error: String?
     @State private var path: [UUID]
 
@@ -20,6 +23,20 @@ struct CloudSubmissionResultsSheet: View {
         NavigationStack(path: $path) {
             List {
                 if let error { Text(error).foregroundStyle(.secondary).accessibilityIdentifier("cloud-results-error") }
+                if !pending.isEmpty {
+                    Section("Not Sent") {
+                        ForEach(pending) { input in
+                            Button { selectedPending = input } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(String(localized: input.kind == .photo ? "Photo Send" : "Current Page Refresh")).font(.headline)
+                                    Text(input.createdAt.formatted()).font(.caption).foregroundStyle(.secondary)
+                                    Text("Open to review and explicitly continue.").font(.subheadline)
+                                }
+                            }
+                            .accessibilityIdentifier("cloud-pending-\(input.id.uuidString)")
+                        }
+                    }
+                }
                 ForEach(history) { batch in
                     NavigationLink(value: batch.id) {
                         VStack(alignment: .leading, spacing: 4) {
@@ -30,7 +47,7 @@ struct CloudSubmissionResultsSheet: View {
                     }
                     .accessibilityIdentifier("cloud-result-\(batch.id.uuidString)")
                 }
-                if history.isEmpty, error == nil {
+                if history.isEmpty, pending.isEmpty, error == nil {
                     ContentUnavailableView("No Cloud Send Results", systemImage: "clock",
                         description: Text("Your Cloud sends and page refreshes appear here. Opening results never sends again."))
                 }
@@ -45,12 +62,20 @@ struct CloudSubmissionResultsSheet: View {
         }
         .frame(idealWidth: 800, idealHeight: 720)
         .presentationDetents([.large])
+        .sheet(item: $selectedPending, onDismiss: { reloadRevision = UUID() }) { input in
+            CloudPendingInputSheet(input: input, context: context)
+        }
         .task(id: HistoryLoadKey(context: context, isVisible: path.isEmpty, revision: reloadRevision)) {
             guard path.isEmpty else { return }
             while !Task.isCancelled {
-                do { history = try await host.cloudSubmissionHistory(context: context); error = nil }
-                catch { history = []; self.error = error.localizedDescription; return }
-                guard let delay = nextCloudResultUpdate(history) else { return }
+                do {
+                    let values = try await host.cloudPendingInputs(context: context)
+                    let results = try await host.cloudSubmissionHistory(context: context)
+                    guard !Task.isCancelled else { return }
+                    host.withCurrentCloudPresentation(context) { pending = values; history = results; error = nil }
+                } catch { history = []; pending = []; self.error = error.localizedDescription; return }
+                let pendingDelay = pending.map { $0.expiresAt.timeIntervalSinceNow }.filter { $0 > 0 }.min()
+                guard let delay = [nextCloudResultUpdate(history), pendingDelay].compactMap({ $0 }).min() else { return }
                 do { try await Task.sleep(for: .seconds(delay)) } catch { return }
             }
         }
@@ -325,4 +350,126 @@ private func nextCloudResultUpdate(_ batches: [CloudSubmissionBatch]) -> TimeInt
     let deadlines = batches.flatMap { [$0.mediaExpiresAt, Optional($0.resultsExpireAt)].compactMap { $0 } }
         .filter { $0 > now }
     return deadlines.min().map { max(0.05, $0.timeIntervalSince(now)) }
+}
+
+private struct CloudPendingInputSheet: View {
+    let input: CloudPendingInput
+    let context: CloudPresentationContext
+    @Environment(ConnectionHost.self) private var host
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var review: CloudPendingReview?
+    @State private var preview: UIImage?
+    @State private var actionError: String?
+    @State private var completion: CloudEntryCompletion?
+    @State private var isBusy = false
+    @State private var showReview = false
+    @State private var confirmDiscard = false
+    @State private var revision = UUID()
+    @State private var previewRevision = UUID()
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                if let completion { CloudEntryOutcomeView(completion: completion) }
+                else {
+                    Section {
+                        Label("Not Sent", systemImage: "tray.and.arrow.down")
+                        Text("This item will not be sent automatically. Review its fixed displays before continuing.")
+                        LabeledContent("Photo Available Until", value: input.expiresAt.formatted(date: .abbreviated, time: .shortened))
+                    }
+                    if let review {
+                        Section("Displays") {
+                            ForEach(input.targets.deviceIDs, id: \.self) { id in
+                                Text(review.read.devices.first { $0.id == id }?.name ?? id)
+                            }
+                        }
+                    }
+                    if let preview {
+                        Section("Photo") {
+                            Image(uiImage: preview).resizable().scaledToFit().frame(maxHeight: 260)
+                                .accessibilityIdentifier("cloud-pending-preview")
+                        }
+                    }
+                    if let actionError { Text(actionError).foregroundStyle(.secondary).accessibilityIdentifier("cloud-pending-error") }
+                    Section {
+                        Button("Continue") { continueInput() }
+                            .disabled(isBusy || review == nil).accessibilityIdentifier("cloud-pending-continue")
+                        if input.kind == .photo {
+                            Button("Review Photo") { showReview = true }
+                                .disabled(isBusy || review == nil).accessibilityIdentifier("cloud-pending-review")
+                        }
+                        Button("Discard", role: .destructive) { confirmDiscard = true }
+                            .disabled(isBusy).accessibilityIdentifier("cloud-pending-discard")
+                    }
+                    if isBusy { ProgressView("Preparing Send…") }
+                }
+            }
+            .scrollContentBackground(.hidden).tesseraeScreenBackground()
+            .navigationTitle("Not Sent")
+            .toolbar { ToolbarItem(placement: .cancellationAction) {
+                Button("Close", systemImage: "xmark") { dismiss() }.labelStyle(.iconOnly).disabled(isBusy)
+            } }
+        }
+        .presentationDetents([.large])
+        .interactiveDismissDisabled(isBusy)
+        .task(id: revision) { await load() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { previewRevision = UUID(); preview = nil; review = nil; completion = nil }
+            else { revision = UUID() }
+        }
+        .sheet(isPresented: $showReview, onDismiss: { preview = nil; review = nil; revision = UUID() }) {
+            if let review, let model = host.cloud { CloudSendSheet(model: model, context: context, recovery: review) }
+        }
+        .confirmationDialog("Discard this unsent item?", isPresented: $confirmDiscard, titleVisibility: .visible) {
+            Button("Discard", role: .destructive) { discard() }
+        } message: { Text("Its photo and pending send will be removed. Nothing will be sent.") }
+    }
+    private func load() async {
+        let token = UUID()
+        previewRevision = token
+        preview = nil; review = nil
+        do {
+            if input.kind == .photo {
+                let value = try await host.cloudPendingReview(input, context: context)
+                let bytes = value.data
+                let thumbnail = await Task.detached {
+                    guard let source = CGImageSourceCreateWithData(bytes as CFData, nil) else { return nil as CGImage? }
+                    return CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                        kCGImageSourceCreateThumbnailFromImageAlways: true,
+                        kCGImageSourceCreateThumbnailWithTransform: true,
+                        kCGImageSourceThumbnailMaxPixelSize: 2048] as CFDictionary)
+                }.value
+                guard !Task.isCancelled, previewRevision == token else { return }
+                host.withCurrentCloudPresentation(context) { review = value; preview = thumbnail.map(UIImage.init(cgImage:)); actionError = nil }
+            } else {
+                let value = try await host.cloudPendingReadContext(context: context)
+                guard !Task.isCancelled, previewRevision == token else { return }
+                host.withCurrentCloudPresentation(context) { review = .init(input: input, data: Data(), read: value); actionError = nil }
+            }
+        } catch {
+            guard previewRevision == token else { return }
+            preview = nil; review = nil; actionError = error.localizedDescription
+        }
+    }
+    private func continueInput() {
+        guard !isBusy, let currentReview = review else { return }
+        isBusy = true; actionError = nil
+        Task {
+            defer { isBusy = false }
+            do {
+                let result = try await host.continueCloudPending(input, review: currentReview.read, context: context)
+                host.withCurrentCloudPresentation(context) { preview = nil; review = nil; completion = result }
+            } catch { preview = nil; review = nil; actionError = error.localizedDescription }
+        }
+    }
+    private func discard() {
+        guard !isBusy else { return }
+        previewRevision = UUID(); preview = nil; review = nil; isBusy = true
+        Task {
+            defer { isBusy = false }
+            do { try await host.discardCloudPending(input, context: context); dismiss() }
+            catch { actionError = error.localizedDescription; revision = UUID() }
+        }
+    }
 }

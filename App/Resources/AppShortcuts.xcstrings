@@ -1,6 +1,27 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Refresh the current Cloud page with ${applicationName}": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringSet": {
+            "state": "new",
+            "values": [
+              "Refresh the current Cloud page with ${applicationName}"
+            ]
+          }
+        },
+        "zh-Hans": {
+          "stringSet": {
+            "state": "translated",
+            "values": [
+              "用 ${applicationName} 刷新当前云端页面"
+            ]
+          }
+        }
+      }
+    },
     "Open ${applicationName}" : {
       "extractionState" : "stale",
       "localizations" : {

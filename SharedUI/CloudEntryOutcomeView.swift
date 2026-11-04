@@ -48,6 +48,7 @@ struct CloudEntryOutcomeView: View {
             .frame(maxWidth: 680, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
+        .tesseraeScreenBackground()
         .accessibilityIdentifier("share-cloud-outcome")
     }
 

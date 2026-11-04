@@ -18,6 +18,7 @@ final class ConnectionHost {
     private(set) var cloud: CloudBrowseModel?
     private(set) var cloudContextRevision = UUID()
     private var submissions: CloudSubmissionService?
+    private var recoveryTask: Task<CloudEntryCompletion, Error>?
     private var acceptedCloudDecisions: Set<UUID> = []
     private var permissionCheckedResults: Set<UUID> = []
     private let submissionDirectory: URL
@@ -283,6 +284,10 @@ final class ConnectionHost {
         submissions = try CloudSubmissionService(runtime: runtime, directory: submissionDirectory, fence: client.fence)
     }
     private func stopCloudExecution() async throws {
+        let recovery = recoveryTask
+        recoveryTask = nil
+        recovery?.cancel()
+        _ = await recovery?.result
         try await submissions?.stopExecution()
         submissions = nil
         acceptedCloudDecisions = []
@@ -341,6 +346,101 @@ final class ConnectionHost {
                 expectedRevision: expectedRevision, selection: selection)
             return try await acceptCloud(prepared, context: context, model: model, service: service)
         } catch { await handleCloudReadError(error, model: model); throw error }
+    }
+    private func recoveryEntry() throws -> CloudSystemEntry {
+        guard let runtime else { throw ConnectionError.unavailable }
+        return CloudSystemEntry(runtime: runtime, directory: submissionDirectory) { data, recipe, devices in
+            try await CloudPhotoPreparer.prepare(data: data, devices: devices, selectedIDs: Set(devices.map(\.id)),
+                fit: recipe.fit, framings: recipe.framings)
+        }
+    }
+    func cloudPendingReadContext(context: CloudPresentationContext) async throws -> CloudEntryReadContext {
+        let (model, _) = try cloudAccess(context)
+        do {
+            let result = try await recoveryEntry().authorizedReadContext(for: context.fence)
+            _ = try cloudAccess(context)
+            return result
+        } catch { await handleCloudReadError(error, model: model); throw error }
+    }
+    func cloudPendingInputs(context: CloudPresentationContext) async throws -> [CloudPendingInput] {
+        let (model, _) = try cloudAccess(context)
+        do {
+            let entry = try recoveryEntry()
+            let read = try await entry.authorizedReadContext(for: context.fence)
+            let inputs = try await entry.pendingInputs(in: read)
+            _ = try cloudAccess(context)
+            return inputs
+        } catch { await handleCloudReadError(error, model: model); throw error }
+    }
+    func cloudPendingReview(_ input: CloudPendingInput, context: CloudPresentationContext) async throws -> CloudPendingReview {
+        let (model, _) = try cloudAccess(context)
+        let entry = try recoveryEntry()
+        do {
+            let read = try await entry.authorizedReadContext(for: context.fence)
+            guard let data = try await entry.previewInput(input.id, expectedRevision: input.revision, in: read) else {
+                throw CloudSubmissionError.mediaUnavailable
+            }
+            _ = try cloudAccess(context)
+            return CloudPendingReview(input: input, data: data, read: read)
+        } catch { await handleCloudReadError(error, model: model); throw error }
+    }
+    func discardCloudPending(_ input: CloudPendingInput, context: CloudPresentationContext) async throws {
+        let (model, _) = try cloudAccess(context)
+        do {
+            let entry = try recoveryEntry()
+            let read = try await entry.authorizedReadContext(for: context.fence)
+            _ = try cloudAccess(context)
+            try await entry.discardInput(input.id, expectedRevision: input.revision, in: read)
+        } catch { await handleCloudReadError(error, model: model); throw error }
+    }
+    func continueCloudPending(_ input: CloudPendingInput, review: CloudEntryReadContext,
+                              context: CloudPresentationContext) async throws -> CloudEntryCompletion {
+        _ = try cloudAccess(context)
+        guard review.fence == context.fence else { throw ConnectionError.sessionChanged }
+        let entry = try recoveryEntry()
+        return try await runRecovery(context: context) {
+            try await entry.continueExplicitly(input.id, expectedRevision: input.revision, review: review)
+        }
+    }
+    func replaceCloudPending(_ review: CloudPendingReview, media: PreparedUploadImage, selectedIDs: Set<String>,
+                             fit: ImageFitMode, framings: [PanelAspectRatio: ImageFraming], decision: UUID,
+                             context: CloudPresentationContext) async throws -> CloudEntryCompletion {
+        _ = try cloudAccess(context)
+        let devices = review.read.devices.filter { selectedIDs.contains($0.id) }
+        guard devices.count == selectedIDs.count else { throw CloudSubmissionError.changedGeometry }
+        var geometry: [String: CloudCompositionGeometry] = [:]
+        for device in devices {
+            guard let value = device.panel.compositionGeometry else { throw CloudSubmissionError.changedGeometry }
+            geometry[device.id] = value
+        }
+        let targets = try CloudEntryTargets(connectionID: context.fence.connectionID, deviceIDs: devices.map(\.id),
+            reviewedFence: context.fence, reviewedGeometry: geometry)
+        let request = CloudEntryRequest.photo(targets: targets, data: media.data, contentType: media.contentType,
+            recipe: .init(fit: fit, framings: framings))
+        let entry = try recoveryEntry()
+        return try await runRecovery(context: context) {
+            try await entry.replaceExplicitly(review.input.id, expectedRevision: review.input.revision,
+                with: request, decision: decision, review: review.read)
+        }
+    }
+    private func runRecovery(context: CloudPresentationContext,
+                             operation: @escaping @Sendable () async throws -> CloudEntryCompletion) async throws -> CloudEntryCompletion {
+        let (model, _) = try cloudAccess(context)
+        guard recoveryTask == nil else { throw ConnectionError.unavailable }
+        let task = Task { try await operation() }
+        recoveryTask = task
+        defer { if cloudPresentationContext == context { recoveryTask = nil } }
+        do {
+            let result = try await withTaskCancellationHandler { try await task.value } onCancel: { task.cancel() }
+            _ = try cloudAccess(context)
+            await model.refresh()
+            _ = try cloudAccess(context)
+            if model.needsSignIn || model.isRestricted { await cloudReadAccessChanged(); throw ConnectionError.authorizationRequired }
+            return result
+        } catch {
+            await handleCloudReadError(error, model: model)
+            throw error
+        }
     }
     func cloudSubmissionHistory(context: CloudPresentationContext) async throws -> [CloudSubmissionBatch] {
         let (_, service) = try cloudAccess(context)

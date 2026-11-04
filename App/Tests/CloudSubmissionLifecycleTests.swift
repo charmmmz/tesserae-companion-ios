@@ -1,4 +1,5 @@
 import Foundation
+import AppIntents
 import Synchronization
 import TesseraeKit
 import Testing
@@ -34,6 +35,7 @@ private final class SubmissionGatedVault: SessionVault, @unchecked Sendable {
 private actor SubmissionLifecycleHTTP: TesseraeHTTPTransporting {
     let template: [String: Any]
     var postStatus = 200
+    var unknownPost = false
     var postReason = "invalid_token"
     var readStatus = 200
     var holdPost = false
@@ -50,6 +52,7 @@ private actor SubmissionLifecycleHTTP: TesseraeHTTPTransporting {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         template = try JSONSerialization.jsonObject(with: Data(contentsOf: root.appending(path: "Contracts/Fixtures/cloud-bootstrap.json"))) as! [String: Any]
     }
+    func useUnknownPost() { unknownPost = true }
     func configurePost(status: Int, reason: String = "invalid_token") { postStatus = status; postReason = reason }
     func failNextRefreshAfterPost() { failRefreshAfterPost = true }
     func configureRead(status: Int) { readStatus = status }
@@ -64,6 +67,7 @@ private actor SubmissionLifecycleHTTP: TesseraeHTTPTransporting {
             let status = postStatus, reason = postReason
             if holdPost { postWaiting = true; await withCheckedContinuation { postContinuation = $0 } }
             if status == 200 {
+                if unknownPost { return .init(data: Data("{\"sent\":[{\"device_id\":\"same-device\",\"error\":\"late failure\"}]}".utf8), statusCode: 200) }
                 if failRefreshAfterPost { readStatus = 503 }
                 return .init(data: Data("{\"sent\":[{\"device_id\":\"same-device\",\"digest\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":12,\"errors\":[]}]}".utf8), statusCode: 200)
             }
@@ -306,5 +310,108 @@ private actor SubmissionLifecycleHTTP: TesseraeHTTPTransporting {
         #expect(fixture.host.cloud?.isRestricted == false)
         #expect(fixture.host.canUseCloudSubmissions)
         #expect(await fixture.http.accountCount == 0)
+    }
+}
+
+extension CloudSubmissionLifecycleTests {
+    @Test func fixedCloudIntentUsesOriginalIdentityWhenSelectionIsAnotherAccount() async throws {
+        let fixture = try await fixture()
+        await fixture.host.select(fixture.b.connectionID)
+        let environment = TesseraeIntentRuntime(runtime: fixture.runtime, directory: fixture.root, suiteName: nil)
+        let entities = try await environment.displays(identifiers: [ConnectionResourceID(connectionID: fixture.a.connectionID,
+            kind: "display", resourceID: "same-device").encoded])
+        #expect(entities.count == 1)
+        #expect(entities.first?.connectionName?.contains("u1@") == true)
+        var intent = SendImageToTesseraeIntent()
+        intent.displays = entities
+        intent.image = IntentFile(data: try still().data, filename: "marker.png", type: .png)
+        intent.layout = .fit; intent.overrideQuietHours = false
+        _ = try await intent.perform(using: environment)
+        #expect(await fixture.http.postCount == 1)
+        let historyA = try await CloudSubmissionService(runtime: fixture.runtime, directory: fixture.root, fence: fixture.a).history()
+        let historyB = try await CloudSubmissionService(runtime: fixture.runtime, directory: fixture.root, fence: fixture.b).history()
+        #expect(historyA.count == 1); #expect(historyB.isEmpty)
+        #expect(try fixture.runtime.registry.selectedID() == fixture.b.connectionID)
+    }
+    @Test func cloudIntentRejectsQuietHoursAndMixedOrWrongKindBeforeAdmission() async throws {
+        let fixture = try await fixture()
+        let environment = TesseraeIntentRuntime(runtime: fixture.runtime, directory: fixture.root, suiteName: nil)
+        func entity(_ fence: ConnectionFence, kind: String = "display") -> TesseraeDisplayEntity {
+            .init(id: ConnectionResourceID(connectionID: fence.connectionID, kind: kind, resourceID: "same-device").encoded, name: "Fixed")
+        }
+        var intent = SendImageToTesseraeIntent()
+        intent.image = IntentFile(data: try still().data, filename: "marker.png", type: .png)
+        intent.layout = .fill; intent.overrideQuietHours = true; intent.displays = [entity(fixture.a)]
+        await #expect(throws: TesseraeIntentError.self) { _ = try await intent.perform(using: environment) }
+        intent.overrideQuietHours = false
+        for targets in [[entity(fixture.a), entity(fixture.b)], [entity(fixture.a, kind: "dashboard")],
+                        [.init(id: "tesserae-resource-v2:malformed", name: "Invalid")]] {
+            intent.displays = targets
+            await #expect(throws: ConnectionError.invalidIdentity) { _ = try await intent.perform(using: environment) }
+        }
+        #expect(await fixture.http.postCount == 0)
+        let entry = environment.systemEntry()
+        let read = try await entry.authorizedReadContext(for: fixture.a)
+        #expect(try await entry.pendingInputs(in: read).isEmpty)
+    }
+    @Test func cloudIntentRefusalDoesNotReturnSuccessOrReplay() async throws {
+        let fixture = try await fixture()
+        await fixture.http.configurePost(status: 503, reason: "unavailable")
+        var intent = RefreshCurrentCloudPageIntent()
+        intent.display = .init(id: ConnectionResourceID(connectionID: fixture.a.connectionID,
+            kind: "display", resourceID: "same-device").encoded, name: "Fixed")
+        let environment = TesseraeIntentRuntime(runtime: fixture.runtime, directory: fixture.root, suiteName: nil)
+        await #expect(throws: TesseraeIntentError.self) { _ = try await intent.perform(using: environment) }
+        #expect(await fixture.http.postCount == 1)
+    }
+    @Test func cloudDashboardIntentIsExplicitlyUnsupportedWithoutCreatingPendingInput() async throws {
+        let fixture = try await fixture()
+        var intent = PushTesseraeDashboardIntent()
+        intent.dashboard = .init(id: ConnectionResourceID(connectionID: fixture.a.connectionID,
+            kind: "dashboard", resourceID: "page").encoded, name: "Page")
+        intent.overrideQuietHours = false
+        let environment = TesseraeIntentRuntime(runtime: fixture.runtime, directory: fixture.root, suiteName: nil)
+        await #expect(throws: TesseraeIntentError.self) { _ = try await intent.perform(using: environment) }
+        #expect(await fixture.http.postCount == 0)
+    }
+    @Test func pendingReadDoesNotSendAndSwitchCancelsOnlyOwnedRecovery() async throws {
+        let fixture = try await fixture()
+        let context = try #require(fixture.host.cloudPresentationContext)
+        await fixture.http.configureRead(status: 503)
+        let entry = CloudPhotoPreparer.systemEntry(runtime: fixture.runtime, directory: fixture.root)
+        let outcome = try await entry.submit(.photo(targets: .init(connectionID: fixture.a.connectionID,
+            deviceIDs: ["same-device"]), data: still().data, contentType: "image/png", recipe: .init(fit: .fit)), decision: UUID())
+        guard case .retained = outcome else { Issue.record("Expected retained input"); return }
+        await fixture.http.configureRead(status: 200)
+        let pending = try await fixture.host.cloudPendingInputs(context: context)
+        #expect(pending.count == 1); #expect(await fixture.http.postCount == 0)
+        let review = try await fixture.host.cloudPendingReview(try #require(pending.first), context: context)
+        #expect(!review.data.isEmpty); #expect(await fixture.http.postCount == 0)
+        await fixture.http.blockPost()
+        let task = Task { try await fixture.host.continueCloudPending(pending[0], review: review.read, context: context) }
+        try await wait { await fixture.http.postWaiting }
+        let switchTask = Task { await fixture.host.select(fixture.b.connectionID) }
+        await Task.yield()
+        await fixture.http.releasePost()
+        await switchTask.value
+        _ = try? await task.value
+        #expect(fixture.host.cloudPresentationContext?.fence == fixture.b)
+        #expect(await fixture.http.postCount == 1)
+        #expect(!fixture.host.withCurrentCloudPresentation(context) {})
+    }
+}
+
+extension CloudSubmissionLifecycleTests {
+    @Test func unknownCloudIntentDoesNotReturnSuccess() async throws {
+        let fixture = try await fixture()
+        await fixture.http.useUnknownPost()
+        var intent = RefreshCurrentCloudPageIntent()
+        intent.display = .init(id: ConnectionResourceID(connectionID: fixture.a.connectionID,
+            kind: "display", resourceID: "same-device").encoded, name: "Fixed")
+        let environment = TesseraeIntentRuntime(runtime: fixture.runtime, directory: fixture.root, suiteName: nil)
+        await #expect(throws: TesseraeIntentError.self) { _ = try await intent.perform(using: environment) }
+        #expect(await fixture.http.postCount == 1)
+        let history = try await CloudSubmissionService(runtime: fixture.runtime, directory: fixture.root, fence: fixture.a).history()
+        guard case .unknown = history.first?.results.first?.outcome else { Issue.record("Expected durable unknown"); return }
     }
 }

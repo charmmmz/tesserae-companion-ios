@@ -14,7 +14,11 @@ import XCTest
         app.launchEnvironment["TESSERAE_CLOUD_ISSUER"] = "http://127.0.0.1:8877"
         app.launchEnvironment["TESSERAE_CLOUD_BROWSER_ENTRY"] = "http://127.0.0.1:8879/begin"
         app.launchEnvironment["TESSERAE_CLOUD_TEST_NAMESPACE"] = namespace
-        app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        let chinese = ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_LANGUAGE"] == "zh"
+        app.launchArguments += ["-AppleLanguages", chinese ? "(zh-Hans)" : "(en)", "-AppleLocale", chinese ? "zh_CN" : "en_US"]
+        app.launchArguments += ["-UIPreferredContentSizeCategoryName",
+            ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_AX"] == "1"
+                ? "UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge" : "UICTContentSizeCategoryL"]
         print("A4_SYSTEM_NAMESPACE", namespace)
         app.launch()
         return app
@@ -39,7 +43,9 @@ import XCTest
 
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
         for _ in 0..<8 where !element.isHittable {
-            let surface = app.scrollViews.containing(.any, identifier: element.identifier).allElementsBoundByIndex.last ?? app
+            let surface: XCUIElement
+            if element.exists { surface = app.scrollViews.containing(.any, identifier: element.identifier).allElementsBoundByIndex.last ?? app }
+            else { surface = app }
             let above = element.exists && element.frame.midY < surface.frame.midY
             surface.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: above ? 0.25 : 0.8))
                 .press(forDuration: 0.05, thenDragTo: surface.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: above ? 0.8 : 0.25)))
@@ -48,6 +54,8 @@ import XCTest
     }
     private func capture(_ app: XCUIApplication, _ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
+        let hierarchy = XCTAttachment(string: app.debugDescription); hierarchy.name = name + " AX"; hierarchy.lifetime = .keepAlways; add(hierarchy)
+        print("A4_SYSTEM_AX", name, app.debugDescription)
     }
 
     private func openCloudLivePhotoShare() async throws -> XCUIApplication {
@@ -152,4 +160,104 @@ import XCTest
         photos.buttons["share-cancel"].tap()
     }
 
+    func testRetainedInputReadOnlyThenExplicitReviewSendsOnce() async throws {
+        let app = launch()
+        try await authorize(app)
+        let identifier = try XCTUnwrap(ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_PENDING_ID"])
+        let results = app.buttons["cloud-send-results"]
+        if !results.exists {
+            app.buttons["root-settings"].tap()
+            let entry = app.buttons["Send Results"]
+            XCTAssertTrue(entry.waitForExistence(timeout: 5)); reveal(entry, in: app); entry.tap()
+        } else { results.tap() }
+        let row = app.buttons["cloud-pending-" + identifier]
+        XCTAssertTrue(row.waitForExistence(timeout: 15)); reveal(row, in: app); row.tap()
+        let review = app.buttons["cloud-pending-review"]
+        reveal(review, in: app)
+        XCTAssertTrue(review.waitForExistence(timeout: 15))
+        capture(app, "Unsent Photo Before Explicit Review")
+        review.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["selected-image-preview"].firstMatch.waitForExistence(timeout: 15))
+        let send = app.buttons["send-submit"]
+        XCTAssertTrue(send.waitForExistence(timeout: 10)); XCTAssertTrue(send.isEnabled)
+        capture(app, "Review Existing Photo With Current Geometry")
+        send.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["share-cloud-outcome"].firstMatch.waitForExistence(timeout: 35))
+        capture(app, "Explicit Review Durable Completion")
+        XCTAssertTrue(app.staticTexts["Frame Generated"].exists)
+    }
+    func testExplicitReviewResultReadOnly() async throws {
+        let app = launch()
+        try await authorize(app)
+        let identifier = try XCTUnwrap(ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_RESULT_ID"])
+        app.buttons["cloud-send-results"].tap()
+        let result = app.buttons["cloud-result-" + identifier]
+        XCTAssertTrue(result.waitForExistence(timeout: 15)); reveal(result, in: app); result.tap()
+        let target = app.buttons["cloud-result-target-a4_land"]
+        XCTAssertTrue(target.waitForExistence(timeout: 15)); reveal(target, in: app)
+        XCTAssertTrue(target.label.contains("Frame Generated"))
+        capture(app, "Reviewed Photo Result Restored Without Sending")
+    }
+    func testShortcutsHostInspect() throws {
+        let shortcuts = XCUIApplication(bundleIdentifier: "com.apple.shortcuts")
+        shortcuts.launch()
+        for label in ["Continue", "Not Now"] {
+            if shortcuts.buttons[label].waitForExistence(timeout: 2) { shortcuts.buttons[label].tap() }
+        }
+        print("A4_SHORTCUTS_AX_BEGIN", shortcuts.debugDescription, "A4_SHORTCUTS_AX_END")
+        capture(shortcuts, "Actual Shortcuts Host")
+    }
+
+    func testShortcutsDriver() throws {
+        struct Step: Decodable {
+            let action: String
+            let bundle: String?
+            let type: String?
+            let label: String?
+            let identifier: String?
+            let index: Int?
+            let text: String?
+            let dx: Double?
+            let dy: Double?
+        }
+        let raw = try XCTUnwrap(ProcessInfo.processInfo.environment["TESSERAE_CLOUD_SYSTEM_DRIVER_STEPS"], "Supply explicit owned-simulator steps.")
+        let steps = try JSONDecoder().decode([Step].self, from: Data(raw.utf8))
+        var app = XCUIApplication(bundleIdentifier: "com.apple.shortcuts")
+        for (i, step) in steps.enumerated() {
+            if let bundle = step.bundle {
+                XCTAssertTrue(["com.apple.shortcuts", "com.apple.mobileslideshow", "com.charmmmz.tesseraecompanion", "com.apple.springboard"].contains(bundle))
+                app = XCUIApplication(bundleIdentifier: bundle)
+            }
+            print("A4_SYSTEM_DRIVER_STEP \(i) \(step.action) \(step.label ?? step.identifier ?? "")")
+            if step.action == "launch" { app.activate(); continue }
+            if step.action == "terminate" { app.terminate(); continue }
+            if step.action == "capture" { capture(app, step.text ?? "step-\(i)"); continue }
+            if step.action == "swipeUp" { app.swipeUp(); continue }
+            if step.action == "swipeDown" { app.swipeDown(); continue }
+            var query: XCUIElementQuery
+            switch step.type {
+            case "button": query = app.buttons
+            case "textField": query = app.textFields
+            case "searchField": query = app.searchFields
+            case "cell": query = app.cells
+            case "image": query = app.images
+            case "staticText": query = app.staticTexts
+            default: query = app.descendants(matching: .any)
+            }
+            if let label = step.label { query = query.matching(NSPredicate(format: "label == %@", label)) }
+            if let identifier = step.identifier { query = query.matching(identifier: identifier) }
+            let element = query.element(boundBy: step.index ?? 0)
+            XCTAssertTrue(element.waitForExistence(timeout: 8))
+            switch step.action {
+            case "tap": element.tap()
+            case "press": element.press(forDuration: 1)
+            case "coordinateTap": element.coordinate(withNormalizedOffset: CGVector(dx: step.dx ?? 0.5, dy: step.dy ?? 0.5)).tap()
+            case "type": element.tap(); element.typeText(step.text ?? "")
+            case "focusedType": element.typeText(step.text ?? "")
+            case "exists": break
+            default: XCTFail("Unsupported evidence driver action")
+            }
+        }
+        capture(app, "shortcuts-driver-final")
+    }
 }

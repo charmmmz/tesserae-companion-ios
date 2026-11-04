@@ -1,9 +1,17 @@
 import SwiftUI
 import TesseraeKit
 
+struct CloudPendingReview: Identifiable {
+    let input: CloudPendingInput
+    let data: Data
+    let read: CloudEntryReadContext
+    var id: UUID { input.id }
+}
+
 struct CloudSendSheet: View {
     let model: CloudBrowseModel
     let context: CloudPresentationContext
+    var recovery: CloudPendingReview? = nil
     @Environment(ConnectionHost.self) private var host
     @Environment(CompanionPresentation.self) private var presentation
     @State private var media = MediaFrameSession()
@@ -22,8 +30,9 @@ struct CloudSendSheet: View {
     @State private var isPreparing = false
     @State private var isLoadingMedia = false
     @State private var error: String?
+    @State private var recoveryOutcome: CloudEntryCompletion?
 
-    private var devices: [CloudDevice] { model.devices.filter { $0.panel.compositionGeometry != nil } }
+    private var devices: [CloudDevice] { (recovery?.read.devices ?? model.devices).filter { $0.panel.compositionGeometry != nil } }
     private var selected: [CloudDevice] { devices.filter { selectedIDs.contains($0.id) } }
     private var preview: CloudDevice? { selected.first { $0.id == previewID } ?? selected.first ?? devices.first }
     private var aspect: PanelAspectRatio? {
@@ -79,7 +88,7 @@ struct CloudSendSheet: View {
             }
             .disabled(isPreparing)
             .onGeometryChange(for: CGSize.self) { $0.size } action: { canvasHeight = composerCanvasHeight(in: $0) }
-            .navigationTitle("Send")
+            .navigationTitle(recovery == nil ? "Send" : "Review Photo")
             .navigationBarTitleDisplayMode(.inline)
             .tesseraeScreenBackground()
             .toolbar {
@@ -102,7 +111,21 @@ struct CloudSendSheet: View {
         .interactiveDismissDisabled(isPreparing)
         .mediaLibraryPicker(isPresented: $pickerPresented, selection: $selection, livePhotosOnly: livePhotosOnly)
         .task(id: selection?.id) { await loadSelection() }
-        .task { await loadPreferences() }
+        .task {
+            if let recovery { await loadRecovery(recovery) }
+            else { await loadPreferences() }
+        }
+        .sheet(isPresented: Binding(get: { recoveryOutcome != nil }, set: { if !$0 { recoveryOutcome = nil } })) {
+            if let recoveryOutcome {
+                NavigationStack {
+                    CloudEntryOutcomeView(completion: recoveryOutcome)
+                        .toolbar { ToolbarItem(placement: .confirmationAction) {
+                            Button("Done", systemImage: "checkmark") { presentation.sheet = nil }
+                                .labelStyle(.iconOnly)
+                        } }
+                }
+            }
+        }
         .onAppear { presentation.isSendComposerPresented = true }
         .onDisappear { media.cancelWork(); framing.discardAnalysis(); presentation.isSendComposerPresented = false }
         .onChange(of: media.outputRevision) { _, _ in
@@ -160,8 +183,31 @@ struct CloudSendSheet: View {
         previewID = devices.first { selectedIDs.contains($0.id) }?.id ?? devices.first?.id
         didLoadPreferences = true
     }
+    private func loadRecovery(_ review: CloudPendingReview) async {
+        guard !didLoadPreferences else { return }
+        isLoadingMedia = true
+        defer { isLoadingMedia = false }
+        do {
+            let bytes = review.data
+            let image = try await Task.detached {
+                try UploadImagePreparer.prepare(data: bytes, fallbackContentType: "image/jpeg", maximumPixelSize: 8192)
+            }.value
+            try Task.checkCancellation()
+            guard host.cloudPresentationContext == context else { return }
+            media.adopt(MediaFrameSource(kind: .photo, primaryImage: image, maximumPixelSize: 8192,
+                loadMovie: { throw MediaFrameError.unavailable }))
+            previewImage = UIImage(data: image.data)
+            appliedMediaSourceID = media.source?.id
+            framing.replaceImage()
+            for (aspect, value) in review.input.recipe?.framings ?? [:] { framing.setFraming(value, for: aspect) }
+            fit = review.input.recipe?.fit ?? .fill
+            selectedIDs = Set(review.input.targets.deviceIDs)
+            previewID = devices.first { selectedIDs.contains($0.id) }?.id
+            didLoadPreferences = true
+        } catch { self.error = error.localizedDescription }
+    }
     private func savePreferences() {
-        guard didLoadPreferences else { return }
+        guard didLoadPreferences, recovery == nil else { return }
         let selected = selectedIDs, fit = fit
         Task { try? await host.saveCloudSendPreferences(targetIDs: selected, fit: fit, context: context) }
     }
@@ -189,6 +235,12 @@ struct CloudSendSheet: View {
         Task {
             defer { isPreparing = false }
             do {
+                if let recovery {
+                    let result = try await host.replaceCloudPending(recovery, media: still, selectedIDs: selected,
+                        fit: fit, framings: framings, decision: decision, context: context)
+                    host.withCurrentCloudPresentation(context) { recoveryOutcome = result }
+                    return
+                }
                 let id = try await host.submitCloudPhoto(media: still, selectedIDs: selected, fit: fit,
                     framings: framings, decision: decision, context: context)
                 host.withCurrentCloudPresentation(context) {
