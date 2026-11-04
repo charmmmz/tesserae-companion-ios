@@ -18,6 +18,12 @@ capabilities.
 
 ### Added
 
+- Cloud sign-in and read-only display and dashboard browsing, with saved
+  connections, tenant selection, existing previews and explicit recovery for
+  expired sessions or unavailable access. Switching back to a paired local
+  server preserves its credentials. Cloud requests keep private previews out
+  of the shared HTTP cache. This requires the Cloud native authorization API;
+  Cloud sending and system sharing are separate follow-up work.
 - Native Dashboard configuration now supports conditional visibility, sliders
   with exact numeric entry, place search and manual coordinates, and color
   pickers with six-digit hex input and preserved legacy CSS/theme values.

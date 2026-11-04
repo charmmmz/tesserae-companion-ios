@@ -5,6 +5,7 @@ struct SettingsView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
+    @Environment(ConnectionHost.self) private var connectionHost
     @Environment(RemindersBridgeModel.self) private var remindersBridgeModel
     @Environment(HealthBridgeModel.self) private var healthBridgeModel
     @State private var clearActivityConfirmationPresented = false
@@ -14,7 +15,9 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                if let instance = model.activeInstance {
+                if let cloud = connectionHost.cloud {
+                    CloudConnectionSettings(model: cloud) { serversPresented = true }
+                } else if let instance = model.activeInstance {
                     Section("Tesserae Server") {
                         NavigationLink {
                             ServerDetailsView()
@@ -43,10 +46,16 @@ struct SettingsView: View {
                                 serversPresented = true
                             }
                         }
+                        if model.connectionMode == .demo {
+                            Button("Choose Connection", systemImage: "arrow.triangle.swap") {
+                                serversPresented = true
+                            }
+                            .accessibilityIdentifier("choose-connection")
+                        }
                     }
                 }
 
-                if model.connectionMode != .demo {
+                if connectionHost.cloud == nil && model.connectionMode != .demo {
                     Section("Displays") {
                         NavigationLink {
                             NearbyDisplaysView()
@@ -65,6 +74,7 @@ struct SettingsView: View {
                     }
                 }
 
+                if connectionHost.cloud == nil {
                 Section {
                     NavigationLink {
                         RemindersBridgeView()
@@ -115,6 +125,8 @@ struct SettingsView: View {
                     Text(
                         "Clearing Activity affects only this Tesserae instance on this device. Server History remains available in Tesserae."
                     )
+                }
+
                 }
 
                 Section("About") {
@@ -218,6 +230,7 @@ struct SettingsView: View {
 private struct ServerDetailsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
+    @Environment(ConnectionHost.self) private var connectionHost
 
     var body: some View {
         Form {
@@ -242,7 +255,7 @@ private struct ServerDetailsView: View {
                 Section {
                     Button(role: .destructive) {
                         Task {
-                            await model.disconnect()
+                            await connectionHost.signOut()
                             dismiss()
                         }
                     } label: {

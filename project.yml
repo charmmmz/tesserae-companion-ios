@@ -31,6 +31,11 @@ targets:
         CFBundleDisplayName: Tesserae
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        TesseraeCloudIssuer: https://cloud.tesserae.ink
+        CFBundleURLTypes:
+          - CFBundleURLName: com.charmmmz.tesseraecompanion.oauth
+            CFBundleURLSchemes:
+              - com.charmmmz.tesseraecompanion
         UIAppFonts:
           - Phosphor.ttf
         NSBonjourServices:

@@ -5,6 +5,7 @@ import TesseraeKit
 @MainActor
 struct TesseraeCompanionApp: App {
     @State private var model: AppModel
+    @State private var connectionHost: ConnectionHost
     @State private var remindersBridgeModel: RemindersBridgeModel
     @State private var healthBridgeModel: HealthBridgeModel
     @State private var galleryUploads: GalleryUploadCoordinator
@@ -74,10 +75,10 @@ struct TesseraeCompanionApp: App {
                 accessGroup: AppConfiguration.keychainAccessGroup
             )
             stateStore = UserDefaultsCompanionStateStore(
-                suiteName: AppConfiguration.appGroupIdentifier
+                suiteName: AppConfiguration.stateSuiteName
             )
             sendPreferences = UserDefaultsCompanionSendPreferencesStore(
-                suiteName: AppConfiguration.appGroupIdentifier, directoryURL: AppConfiguration.sharedContainerURL
+                suiteName: AppConfiguration.stateSuiteName, directoryURL: AppConfiguration.sharedContainerURL
             )
             shareQueue = FileShareQueueStore(
                 directoryURL: AppConfiguration.sharedContainerURL
@@ -96,10 +97,10 @@ struct TesseraeCompanionApp: App {
             accessGroup: AppConfiguration.keychainAccessGroup
         )
         stateStore = UserDefaultsCompanionStateStore(
-            suiteName: AppConfiguration.appGroupIdentifier
+            suiteName: AppConfiguration.stateSuiteName
         )
         sendPreferences = UserDefaultsCompanionSendPreferencesStore(
-            suiteName: AppConfiguration.appGroupIdentifier, directoryURL: AppConfiguration.sharedContainerURL
+            suiteName: AppConfiguration.stateSuiteName, directoryURL: AppConfiguration.sharedContainerURL
         )
         shareQueue = FileShareQueueStore(
             directoryURL: AppConfiguration.sharedContainerURL
@@ -117,17 +118,17 @@ struct TesseraeCompanionApp: App {
         demoImageSendErrors = []
 #endif
         let runtime = (credentials is InMemoryCredentialStore) ? nil : AppConfiguration.sharedContainerURL.map {
-            ConnectionRuntime(directory: $0, suiteName: AppConfiguration.appGroupIdentifier,
+            ConnectionRuntime(directory: $0, suiteName: AppConfiguration.stateSuiteName,
                 keychainService: AppConfiguration.keychainService, accessGroup: AppConfiguration.keychainAccessGroup,
                 identity: TesseraeClientIdentity(appVersion: AppConfiguration.appVersion,
-                                                 installationID: AppConfiguration.installationID), isPrimary: true)
+                                                 installationID: AppConfiguration.installationID), isPrimary: true,
+                transport: AppConfiguration.cloudReadTestTransport)
         }
         if let runtime { stateStore = runtime.stateStore }
         let liveClient = runtime?.bootstrapClient() ?? ConnectionRuntime.localClient(credentials: credentials,
             identity: TesseraeClientIdentity(appVersion: AppConfiguration.appVersion,
                                              installationID: AppConfiguration.installationID))
-        _model = State(
-            initialValue: AppModel(
+        let appModel = AppModel(
                 liveClient: liveClient,
                 connectionRuntime: runtime,
                 demoClient: MockTesseraeClient(
@@ -144,11 +145,15 @@ struct TesseraeCompanionApp: App {
                 activityThumbnails: activityThumbnails,
                 discovery: discovery,
                 displayOrderPreferences: DisplayOrderPreferences(
-                    defaults: AppConfiguration.appGroupIdentifier
+                    defaults: AppConfiguration.stateSuiteName
                         .flatMap(UserDefaults.init(suiteName:)) ?? .standard
                 )
-            )
         )
+        _model = State(initialValue: appModel)
+        _connectionHost = State(initialValue: ConnectionHost(local: appModel, runtime: runtime,
+            vault: CloudLoginVault(directory: AppConfiguration.sharedContainerURL
+                ?? URL.applicationSupportDirectory.appending(path: "CloudLogin"),
+                service: AppConfiguration.keychainService + ".oauth", accessGroup: AppConfiguration.keychainAccessGroup)))
         _remindersBridgeModel = State(initialValue: RemindersBridgeModel())
         _healthBridgeModel = State(initialValue: HealthBridgeModel())
         _galleryUploads = State(initialValue: GalleryUploadCoordinator())
@@ -179,6 +184,8 @@ struct TesseraeCompanionApp: App {
 #endif
             }
                 .environment(model)
+                .environment(connectionHost)
+                .onOpenURL { url in Task { await connectionHost.receiveCloudCallback(url) } }
                 .environment(remindersBridgeModel)
                 .environment(healthBridgeModel)
                 .environment(galleryUploads)
@@ -214,6 +221,9 @@ struct TesseraeCompanionApp: App {
 struct TesseraePreviewHost<Content: View>: View {
     @State private var nearbyDevices = NearbyDeviceManager(displayRecords: BluetoothDisplayStore(fileURL: nil))
     @State private var model: AppModel
+    @State private var connectionHost: ConnectionHost
+    @State private var remindersBridgeModel = RemindersBridgeModel()
+    @State private var presentation = CompanionPresentation()
     @State private var galleryUploads = GalleryUploadCoordinator()
     @State private var messageCenter = TesseraeMessageCenter()
     @State private var healthBridgeModel = HealthBridgeModel()
@@ -221,8 +231,7 @@ struct TesseraePreviewHost<Content: View>: View {
 
     init(@ViewBuilder content: () -> Content) {
         let client = MockTesseraeClient(latency: .milliseconds(0))
-        _model = State(
-            initialValue: AppModel(
+        let previewModel = AppModel(
                 liveClient: client,
                 demoClient: client,
                 credentials: InMemoryCredentialStore(),
@@ -232,8 +241,10 @@ struct TesseraePreviewHost<Content: View>: View {
                 linkShareQueue: InMemoryLinkShareQueueStore(),
                 activityThumbnails: InMemoryActivityThumbnailStore(),
                 discovery: StaticDiscoveryService(results: [])
-            )
         )
+        _model = State(initialValue: previewModel)
+        _connectionHost = State(initialValue: ConnectionHost(local: previewModel, runtime: nil,
+            vault: CloudLoginVault(directory: .temporaryDirectory, service: "preview.cloud.oauth")))
         self.content = content()
     }
 
@@ -241,13 +252,16 @@ struct TesseraePreviewHost<Content: View>: View {
         content
             .environment(nearbyDevices)
             .environment(model)
+            .environment(connectionHost)
+            .environment(remindersBridgeModel)
+            .environment(presentation)
             .environment(healthBridgeModel)
             .environment(galleryUploads)
             .environment(messageCenter)
             .tint(TesseraeTheme.accent)
             .task {
                 guard model.connectionMode != .demo else { return }
-                await model.connectDemo()
+                await connectionHost.connectDemo()
             }
     }
 }

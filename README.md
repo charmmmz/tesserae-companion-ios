@@ -164,9 +164,32 @@ requires compatible opt-in firmware and hardware acceptance. See the
 4. Grant optional editing or personal-data permissions only for the features
    you want to use.
 
-Requires **iOS / iPadOS 18 or later** and a Tesserae server exposing the scoped
-`/api/app/v1` Companion API. The app connects directly to your server; there is
-no separate Companion cloud account. English and Simplified Chinese are included.
+Requires **iOS / iPadOS 18 or later**. Self-hosted connections use a Tesserae
+server exposing the scoped `/api/app/v1` Companion API and do not require a
+Cloud account. English and Simplified Chinese are included.
+
+### Tesserae Cloud (in development)
+
+Development builds also offer **Sign In to Cloud**. The system browser handles
+email sign-in and account selection. Saved Cloud and local connections remain
+separate, and switching back to a paired local server does not require pairing
+again.
+
+Cloud browsing shows displays, dashboards and their existing previews. Missing
+previews remain placeholders; browsing does not request renders. Device setup
+opens the Cloud website. Cloud photo sending, system sharing, shortcuts and
+editing are not enabled by this development stage.
+
+This integration requires Cloud's native authorization endpoints. Local
+integration is tested separately from deployment, real email delivery and
+signed-device acceptance. The current TestFlight release may not include it.
+
+Cloud UI tests require an explicitly prepared local C1 fixture, browser bridge
+and fault server. Enable them with the test-runner environment variable
+`TESSERAE_RUN_CLOUD_UI=1`; external-browser tests also read the private handoff
+file named by `TESSERAE_CLOUD_BROWSER_TRACE`. Connection performance tests use
+`TESSERAE_RUN_CONNECTION_PERF=1` and require the baseline simulator bundle.
+These suites skip by default without contacting a service.
 
 ### Server and firmware support
 

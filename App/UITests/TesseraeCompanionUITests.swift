@@ -103,7 +103,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         add(shot)
         app.buttons["Done"].tap()
         app.buttons["choose-server"].tap()
-        XCTAssertTrue(app.navigationBars["Tesserae Servers"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.navigationBars["Tesserae Connections"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["No server found. Manual connection still works when discovery is unavailable."].waitForExistence(timeout: 3))
         app.buttons["Enter Server Address"].tap()
         XCTAssertTrue(app.textFields["http://host:port"].waitForExistence(timeout: 3))
@@ -113,7 +113,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Connect Manually"].exists)
         XCTAssertTrue(app.buttons["Connect"].isEnabled)
         app.navigationBars["Connect Manually"].buttons["Cancel"].tap()
-        app.navigationBars["Tesserae Servers"].buttons["Cancel"].tap()
+        app.navigationBars["Tesserae Connections"].buttons["Cancel"].tap()
         XCTAssertTrue(app.buttons["choose-server"].waitForExistence(timeout: 3))
     }
 
@@ -2987,7 +2987,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         let otherServers = app.buttons["Other Servers"]
         XCTAssertTrue(otherServers.waitForExistence(timeout: 3))
         otherServers.tap()
-        XCTAssertTrue(app.navigationBars["Tesserae Servers"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.navigationBars["Tesserae Connections"].waitForExistence(timeout: 3))
 
         // The same fixture returns the same instance ID. Only a fresh session
         // identity can reset the old Library path and the Settings presentation.

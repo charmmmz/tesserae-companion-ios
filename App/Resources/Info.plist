@@ -18,6 +18,17 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.charmmmz.tesseraecompanion.oauth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.charmmmz.tesseraecompanion</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>NSAppTransportSecurity</key>
@@ -47,6 +58,8 @@
 	<true/>
 	<key>TesseraeAppGroupIdentifier</key>
 	<string>group.com.charmmmz.tesseraecompanion</string>
+	<key>TesseraeCloudIssuer</key>
+	<string>https://cloud.tesserae.ink</string>
 	<key>TesseraeKeychainAccessGroup</key>
 	<string>$(AppIdentifierPrefix)com.charmmmz.tesseraecompanion.shared</string>
 	<key>UIAppFonts</key>

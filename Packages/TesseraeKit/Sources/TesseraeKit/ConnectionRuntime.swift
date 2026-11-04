@@ -51,13 +51,15 @@ public struct ConnectionRuntime: Sendable {
     private let credentials: any CredentialStoring
     private let identity: TesseraeClientIdentity
     private let transport: any TesseraeHTTPTransporting
+    private let cloudHTTPTransport: any TesseraeHTTPTransporting
 
     public init(directory: URL, suiteName: String?, keychainService: String, accessGroup: String?,
                 identity: TesseraeClientIdentity, isPrimary: Bool,
-                transport: any TesseraeHTTPTransporting = URLSessionTesseraeTransport()) {
+                transport: (any TesseraeHTTPTransporting)? = nil) {
         let credentials = KeychainCredentialStore(service: keychainService, accessGroup: accessGroup)
         let sessions = SharedSessionStore(directory: directory,
-            vault: KeychainSessionVault(service: keychainService, accessGroup: accessGroup), transport: transport)
+            vault: KeychainSessionVault(service: keychainService, accessGroup: accessGroup),
+            transport: transport ?? URLSessionTesseraeTransport.cloud())
         self.init(directory: directory, identity: identity, credentials: credentials, sessions: sessions,
             legacy: UserDefaultsCompanionStateStore(suiteName: suiteName), isPrimary: isPrimary,
             transport: transport, suiteName: suiteName)
@@ -65,14 +67,15 @@ public struct ConnectionRuntime: Sendable {
 
     public init(directory: URL, identity: TesseraeClientIdentity, credentials: any CredentialStoring,
                 sessions: SharedSessionStore, legacy: any CompanionStateStoring, isPrimary: Bool,
-                transport: any TesseraeHTTPTransporting = URLSessionTesseraeTransport(), suiteName: String? = nil) {
+                transport: (any TesseraeHTTPTransporting)? = nil, suiteName: String? = nil) {
         registry = ConnectionRegistry(directory: directory)
         self.sessions = sessions
         stateStore = ConnectionStateStore(registry: registry, sessions: sessions, legacy: legacy,
                                           legacyCredentials: credentials, isPrimary: isPrimary, suiteName: suiteName)
         self.credentials = credentials
         self.identity = identity
-        self.transport = transport
+        self.transport = transport ?? URLSessionTesseraeTransport()
+        cloudHTTPTransport = transport ?? URLSessionTesseraeTransport.cloud()
     }
 
     public func bootstrapClient() -> LiveTesseraeClient {
@@ -106,16 +109,15 @@ public struct ConnectionRuntime: Sendable {
         let issuer = try ConnectionIdentity.canonicalService(issuer)
         let fence = try await sessions.installCloud(issuer: issuer, response: response)
         try registry.save(SavedConnection(identity: .cloud(issuer: issuer, userID: response.user.id, tenantID: response.tenant.id),
-                                          name: response.tenant.name))
+                                          name: "\(response.tenant.name) · \(response.user.email)"))
         return fence
     }
 
-    // A2 injects its concrete Cloud client using this authorized transport. No Companion DTOs or jobs are fabricated.
     public func cloudTransport(for id: ConnectionID) async throws -> CloudAuthorizedTransport {
         guard let connection = try registry.connection(id), case let .cloud(issuer, _, _) = connection.identity,
               let fence = try await sessions.fence(for: id) else { throw ConnectionError.invalidIdentity }
         try await sessions.validate(fence)
-        return CloudAuthorizedTransport(issuer: issuer, fence: fence, sessions: sessions, transport: transport)
+        return CloudAuthorizedTransport(issuer: issuer, fence: fence, sessions: sessions, transport: cloudHTTPTransport)
     }
 
     public func activate(_ id: ConnectionID) async throws {

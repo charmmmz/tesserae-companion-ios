@@ -21,6 +21,7 @@ private struct BluetoothModeSyncContext: Hashable {
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    @Environment(ConnectionHost.self) private var connectionHost
     @Environment(RemindersBridgeModel.self) private var remindersBridgeModel
     @Environment(HealthBridgeModel.self) private var healthBridgeModel
     @Environment(GalleryUploadCoordinator.self) private var galleryUploads
@@ -41,7 +42,7 @@ struct RootView: View {
             connection: connectionContext,
             displays: model.displays,
             macs: nearbyDevices.displayRecords.knownHardwareMACs,
-            isActive: scenePhase == .active
+            isActive: scenePhase == .active && connectionHost.cloud == nil
         )
     }
 
@@ -56,7 +57,9 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if model.isRestoringConnection && model.activeInstance == nil {
+            if let cloud = connectionHost.cloud {
+                CloudRootView(model: cloud).id(cloud.fence)
+            } else if (connectionHost.isRestoring || model.isRestoringConnection) && model.activeInstance == nil {
                 VStack(spacing: 12) {
                     ProgressView()
                     Text("Restoring Tesserae connection…")
@@ -110,7 +113,7 @@ struct RootView: View {
             }
         }
         .task {
-            await model.restoreConnectionIfNeeded()
+            await connectionHost.restore()
             model.openWebIfRequested()
             synchronizeConnectionMessage()
         }
@@ -197,6 +200,16 @@ struct RootView: View {
         }
         .onChange(of: connectionMessageRevision) { _, _ in
             synchronizeConnectionMessage()
+        }
+        .onChange(of: connectionHost.loginError) { _, error in
+            guard let error, model.activeInstance != nil || connectionHost.cloud != nil else {
+                messageCenter.dismiss(id: "cloud.authorization")
+                return
+            }
+            messageCenter.post(TesseraeMessage(id: "cloud.authorization", text: error, kind: .error,
+                lifetime: .persistent, priority: .high, systemImage: "person.crop.circle.badge.exclamationmark",
+                accessibilityIdentifier: "cloud-authorization-message",
+                action: TesseraeMessageAction(title: String(localized: "Choose Connection")) { serversPresented = true }))
         }
         .alert(
             "Something Went Wrong",

@@ -6,6 +6,7 @@ struct OnboardingView: View {
     var isChoosingServer = false
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
+    @Environment(ConnectionHost.self) private var connectionHost
     @State private var manualSetupPresented = false
     @State private var manualServerAddress: String?
     @State private var manualPairingCode: String?
@@ -51,6 +52,35 @@ struct OnboardingView: View {
                         }
                         .tesseraeCard()
 
+                    }
+
+                    CloudSignInCard()
+
+                    if !connectionHost.savedConnections.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Saved Connections").font(.headline)
+                            ForEach(connectionHost.savedConnections) { connection in
+                                Button {
+                                    Task { await connectionHost.select(connection.id) }
+                                } label: {
+                                    Label {
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text(connection.name).font(.headline)
+                                            switch connection.identity {
+                                            case let .cloud(issuer, _, _): Text(issuer.host ?? issuer.absoluteString).font(.caption)
+                                            case let .selfHosted(service, _): Text(service.absoluteString).font(.caption)
+                                            }
+                                        }
+                                    } icon: {
+                                        Image(systemName: connection.localInstance == nil ? "cloud" : "server.rack")
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .frame(minHeight: 44)
+                                .disabled(connectionHost.isSwitching || connectionHost.loginPhase == .committing)
+                                .accessibilityIdentifier("saved-connection-\(connection.id.rawValue)")
+                            }
+                        }.tesseraeCard()
                     }
 
                     Group {
@@ -142,7 +172,7 @@ struct OnboardingView: View {
                             .accessibilityIdentifier("onboarding-nearby-devices")
 
                             Button {
-                                Task { await model.connectDemo() }
+                                Task { await connectionHost.connectDemo() }
                             } label: {
                                 if model.activeOperationIDs.contains("pair") {
                                     ProgressView()
@@ -159,7 +189,7 @@ struct OnboardingView: View {
                     }
 
                     Text(
-                        "Bonjour finds servers but never authenticates. Every connection still requires a one-time code from Tesserae."
+                        "Bonjour finds self-hosted servers but never authenticates. Pair with a one-time code from your server, or sign in to Tesserae Cloud."
                     )
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -190,7 +220,7 @@ struct OnboardingView: View {
                     onConnected: { if isChoosingServer { dismiss() } }
                 )
             }
-            .navigationTitle(isChoosingServer ? "Tesserae Servers" : "")
+            .navigationTitle(String(localized: isChoosingServer ? "Tesserae Connections" : ""))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if isChoosingServer {
@@ -201,9 +231,13 @@ struct OnboardingView: View {
                 }
             }
             .task {
+                connectionHost.reloadSavedConnections()
                 if model.discoveredInstances.isEmpty {
                     await model.discoverNearby()
                 }
+            }
+            .onChange(of: model.connectionRevision) { _, _ in
+                if isChoosingServer { dismiss() }
             }
         }
         .presentationDetents(isChoosingServer
@@ -238,6 +272,7 @@ struct OnboardingView: View {
 private struct ManualConnectionView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
+    @Environment(ConnectionHost.self) private var connectionHost
     @State private var serverAddress: String
     @State private var pairingCode: String
     @State private var connectionTask: Task<Void, Never>?
@@ -309,7 +344,7 @@ private struct ManualConnectionView: View {
                             return
                         }
                         connectionTask = Task {
-                            let connected = await model.connectLive(
+                            let connected = await connectionHost.connectLocal(
                                 baseURL: url,
                                 code: pairingCode,
                                 clientName: UIDevice.current.name,

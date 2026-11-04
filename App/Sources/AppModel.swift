@@ -3396,6 +3396,30 @@ final class AppModel {
             )
         }
         guard connectionRevision == revision else { return }
+        clearPresentedConnection()
+        if let disconnectError {
+            lastError = disconnectError.localizedDescription
+        }
+    }
+
+    func suspendForConnectionSwitch() {
+        connectionRevision = UUID()
+        isDisconnecting = false
+        activityRefreshTask?.cancel()
+        activityRefreshTask = nil
+        clearPresentedConnection()
+        isRestoringConnection = false
+        isRefreshing = false
+        isRefreshingDashboards = false
+        isRefreshingLineups = false
+    }
+
+    func restoreSelectedLocalConnection() async {
+        didAttemptRestore = false
+        await restoreConnectionIfNeeded()
+    }
+
+    private func clearPresentedConnection() {
         activeOperationIDs = []
         isRefreshingGallery = false
         loadingGalleryFolderIDs = []
@@ -3442,9 +3466,6 @@ final class AppModel {
         dashboardOrderIDs = []
         collapsedDashboardSectionIDs = []
         activeClient = liveClient
-        if let disconnectError {
-            lastError = disconnectError.localizedDescription
-        }
     }
 
     private func handleConnectionError(
