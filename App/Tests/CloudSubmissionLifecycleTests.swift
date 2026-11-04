@@ -558,3 +558,42 @@ extension CloudSubmissionLifecycleTests {
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path.path)
     }
 }
+
+extension CloudSubmissionLifecycleTests {
+    @Test(arguments: ["cloud", "local", "unpaired"])
+    func openWebRefusesCloudBeforeFlagAndPreservesLocalOrUnpairedBehavior(backend: String) async throws {
+        let suite = "A4-openweb-\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let environment: TesseraeIntentRuntime
+        if backend == "cloud" {
+            let fixture = try await fixture()
+            environment = .init(runtime: fixture.runtime, directory: fixture.root, suiteName: suite)
+        } else {
+            let root = URL.temporaryDirectory.appending(path: UUID().uuidString)
+            let http = LocalDashboardIntentHTTP()
+            let runtime = ConnectionRuntime(directory: root, identity: .init(appVersion: "test", installationID: "test"),
+                credentials: InMemoryCredentialStore(), sessions: .init(directory: root, vault: SubmissionGatedVault(), transport: http),
+                legacy: InMemoryCompanionStateStore(), isPrimary: true, transport: http)
+            if backend == "local" {
+                let instance = TesseraeInstance(id: "local", name: "Local", baseURL: URL(string: "http://local.invalid")!,
+                    serverVersion: "test", timezone: "UTC", webURL: "http://local.invalid")
+                let fence = try await runtime.installLocal(.init(instance: instance, token: "local", tokenID: "id", scopes: [], createdAt: Date()))
+                try await runtime.stateStore.save(.init(activeInstance: instance, capabilities: nil, displays: [], dashboards: [], jobs: [], connectionFence: fence))
+            }
+            environment = .init(runtime: runtime, directory: root, suiteName: suite)
+        }
+        let intent = OpenTesseraeWebIntent()
+        switch backend {
+        case "cloud":
+            await #expect(throws: TesseraeIntentError.cloudWebUnsupported) { _ = try await intent.perform(using: environment) }
+            #expect(!defaults.bool(forKey: "TesseraeOpenWebRequested"))
+        case "local":
+            _ = try await intent.perform(using: environment)
+            #expect(defaults.bool(forKey: "TesseraeOpenWebRequested"))
+        default:
+            await #expect(throws: TesseraeIntentError.notPaired) { _ = try await intent.perform(using: environment) }
+            #expect(!defaults.bool(forKey: "TesseraeOpenWebRequested"))
+        }
+    }
+}

@@ -297,6 +297,10 @@ struct OpenTesseraeWebIntent: AppIntent {
     }
 
     func perform(using environment: TesseraeIntentRuntime) async throws -> some IntentResult & ProvidesDialog {
+        if let id = try environment.runtime.registry.selectedID(),
+           let saved = try environment.runtime.registry.connection(id), case .cloud = saved.identity {
+            throw TesseraeIntentError.cloudWebUnsupported
+        }
         let snapshot = try await environment.snapshot()
         guard URL(string: snapshot.activeInstance.webURL) != nil else {
             throw TesseraeIntentError.invalidWebURL
@@ -539,8 +543,8 @@ struct TesseraeIntentRuntime: Sendable {
 
 }
 
-enum TesseraeIntentError: Error, LocalizedError {
-    case cloudDashboardUnsupported, cloudQuietHoursUnsupported, cloudCurrentPageOnly
+enum TesseraeIntentError: Error, LocalizedError, Equatable {
+    case cloudDashboardUnsupported, cloudQuietHoursUnsupported, cloudCurrentPageOnly, cloudWebUnsupported
     case cloudOutcome(String)
     case deletedEntity(String)
     case imageTooLarge
@@ -553,6 +557,8 @@ enum TesseraeIntentError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
+        case .cloudWebUnsupported:
+            String(localized: "This action does not support Cloud. Open Cloud management in Tesserae Companion.")
         case .cloudDashboardUnsupported:
             String(localized: "Cloud does not support pushing an arbitrary dashboard. Use Refresh Current Cloud Page instead.")
         case .cloudQuietHoursUnsupported:

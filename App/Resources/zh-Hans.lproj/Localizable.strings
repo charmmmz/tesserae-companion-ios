@@ -1237,3 +1237,5 @@
 "This display is no longer available. Deselect it to continue." = "此屏幕已不可用，请取消选择后继续。";
 
 "Available Until" = "可用期限";
+
+"This action does not support Cloud. Open Cloud management in Tesserae Companion." = "此操作不支持云端，请在 Tesserae Companion 中打开云端管理。";
