@@ -193,15 +193,11 @@ final class CloudBrowseModel {
     }
     static func message(_ error: Error) -> String {
         switch error {
-        case CloudReadError.unauthorized, ConnectionError.authorizationRequired, ConnectionError.signedOut:
+        case let error as CloudReadError: error.localizedDescription
+        case ConnectionError.authorizationRequired, ConnectionError.signedOut:
             String(localized: "Sign in again to read this Cloud connection.")
-        case CloudReadError.forbidden, ConnectionError.accessRestricted:
+        case ConnectionError.accessRestricted:
             String(localized: "Access to this Cloud tenant is unavailable. Choose another connection or sign in again.")
-        case CloudReadError.limitReached: String(localized: "This Cloud plan limit has been reached.")
-        case CloudReadError.retryLater: String(localized: "Cloud is busy. Wait before trying again.")
-        case CloudReadError.unavailable: String(localized: "Cloud is temporarily unavailable. Try again later.")
-        case CloudReadError.notFound: String(localized: "This item is no longer available.")
-        case CloudReadError.invalidResponse: String(localized: "Cloud returned an unexpected response.")
         default: error.localizedDescription
         }
     }

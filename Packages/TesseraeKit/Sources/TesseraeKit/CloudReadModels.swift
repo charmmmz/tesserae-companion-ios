@@ -134,7 +134,7 @@ public struct CloudPage: Decodable, Sendable, Identifiable {
     }
 }
 
-public enum CloudReadError: Error, Equatable, Sendable {
+public enum CloudReadError: Error, LocalizedError, Equatable, Sendable {
     case unauthorized
     case forbidden(reason: String?)
     case limitReached
@@ -143,4 +143,16 @@ public enum CloudReadError: Error, Equatable, Sendable {
     case notFound
     case invalidResponse
     case unexpectedStatus(Int)
+
+    public var errorDescription: String? {
+        switch self {
+        case .unauthorized: String(localized: "Sign in again to read this Cloud connection.")
+        case .forbidden: String(localized: "Access to this Cloud tenant is unavailable. Choose another connection or sign in again.")
+        case .limitReached: String(localized: "This Cloud plan limit has been reached.")
+        case .retryLater: String(localized: "Cloud is busy. Wait before trying again.")
+        case .unavailable: String(localized: "Cloud is temporarily unavailable. Try again later.")
+        case .notFound: String(localized: "This item is no longer available.")
+        case .invalidResponse, .unexpectedStatus: String(localized: "Cloud returned an unexpected response.")
+        }
+    }
 }

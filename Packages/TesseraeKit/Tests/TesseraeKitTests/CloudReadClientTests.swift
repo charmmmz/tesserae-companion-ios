@@ -122,4 +122,16 @@ private actor CloudReadFixture: TesseraeHTTPTransporting {
         #expect(requests.allSatisfy { $0.httpMethod == "GET" || $0.url?.path == "/oauth/token" })
         #expect(requests.filter { $0.url?.path == "/oauth/token" }.count == (status == 401 ? 1 : 0))
     }
+    @Test func revokedMembershipReadHasActionableSystemError() async throws {
+        let (client, http) = try await fixture(.init(data: Data("{\"reason\":\"membership_removed\"}".utf8), statusCode: 403))
+        do {
+            _ = try await client.bootstrap()
+            Issue.record("Removed membership must refuse the read")
+        } catch let error as CloudReadError {
+            #expect(error == .forbidden(reason: "membership_removed"))
+            #expect((error as NSError).localizedDescription == "Access to this Cloud tenant is unavailable. Choose another connection or sign in again.")
+        }
+        #expect(await http.requests.count == 1)
+    }
+
 }

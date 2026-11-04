@@ -145,3 +145,11 @@
 "Some saved displays are unavailable. Review the selected displays before sending." = "部分之前保存的屏幕现已不可用。发送前请检查所选屏幕。";
 
 "Available Until" = "可用期限";
+
+"This item is no longer available." = "此项目已不可用。";
+"Sign in again to read this Cloud connection." = "请重新登录以访问此云端连接。";
+"Access to this Cloud tenant is unavailable. Choose another connection or sign in again." = "无法访问此云端租户，请选择其他连接或重新登录。";
+"This Cloud plan limit has been reached." = "已达到此云端套餐的限额。";
+"Cloud is busy. Wait before trying again." = "云端正忙，请稍后重试。";
+"Cloud is temporarily unavailable. Try again later." = "云端暂时不可用，请稍后重试。";
+"Cloud returned an unexpected response." = "云端返回了无法识别的响应。";
