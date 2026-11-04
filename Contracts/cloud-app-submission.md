@@ -35,9 +35,11 @@ selected resend creates a new linked batch; generated targets are excluded by
 default, and unknown or deliberately included generated targets require duplicate
 confirmation. It preserves the source photo's absolute expiry.
 
-Photos expire seven days after initial batch creation. Only an initial batch with
-all clean generated results shortens that deadline to at most 24 hours after
-completion. Warnings retain seven days. Results expire 30 days after their own
+Photos expire seven days after initial batch creation. A batch with all clean
+generated results shortens its media deadline to the earlier of its current
+deadline or 24 hours after completion. This also applies to an explicit resend
+batch, which inherits the source photo's deadline and cannot extend it. Warnings
+do not shorten the current deadline. Results expire 30 days after their own
 creation. Viewing changes neither deadline. Delete/expiry logically hides media
 before physical cleanup; a stale handle cannot restore access. Deleting a result
 leaves a minimal closed decision receipt to prevent duplicate publication.
