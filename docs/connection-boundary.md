@@ -71,3 +71,10 @@ raster budget or preparation refusals leave it pending rather than changing
 crop, geometry or quality silently. Unsupported links, Intent options and invalid
 targets rejected before admission do not create pending work. Explicit App review
 uses the existing main-App preparation profile.
+
+A shared token renewal can outlive the host process that started it. If iOS
+suspends that owner beyond the persisted pending deadline, another authorized
+consumer closes the ambiguous rotation; foregrounding the original host does not
+replay it. A client timeout cannot promise extension execution time. System-host
+verification must distinguish actual authorization joins from URL dispatch,
+background accessibility queries and later sequential requests.

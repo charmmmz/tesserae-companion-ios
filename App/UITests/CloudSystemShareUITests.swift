@@ -35,7 +35,7 @@ import XCTest
         let signIn = app.buttons["cloud-signin"]
         XCTAssertTrue(signIn.waitForExistence(timeout: 15)); reveal(signIn, in: app); signIn.tap()
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        let consent = springboard.buttons["Continue"]
+        let consent = springboard.buttons.matching(NSPredicate(format: "label IN %@", ["Continue", "继续"])).firstMatch
         if consent.waitForExistence(timeout: 3) { consent.tap() }
         let allow = app.buttons["Allow"]
         XCTAssertTrue(allow.waitForExistence(timeout: 20))
@@ -405,6 +405,115 @@ import XCTest
         }
         print("A4_SHORTCUTS_AX_BEGIN", shortcuts.debugDescription, "A4_SHORTCUTS_AX_END")
         capture(shortcuts, "Actual Shortcuts Host")
+    }
+
+    func testMainAppOwnedConcurrentSystemSchedule() async throws {
+        let path = try XCTUnwrap(ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_CONTROL_DIR"])
+        let control = URL(fileURLWithPath: path)
+        func publish(_ name: String) throws {
+            try Data(String(Date().timeIntervalSince1970).utf8).write(to: control.appending(path: name), options: .atomic)
+        }
+        func waitFor(_ name: String, seconds: Double) async throws -> Bool {
+            let deadline = ContinuousClock.now + .seconds(seconds)
+            while ContinuousClock.now < deadline {
+                if FileManager.default.fileExists(atPath: control.appending(path: name).path) { return true }
+                if FileManager.default.fileExists(atPath: control.appending(path: "abort").path) { return false }
+                try await Task.sleep(for: .milliseconds(50))
+            }
+            return false
+        }
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        func dismissCurrentPageSuccess() {
+            let message = springboard.staticTexts["Frame generated. The physical display update is not confirmed."]
+            if message.exists && springboard.buttons["Done"].exists {
+                capture(springboard, "Actual Current Page Success Before Continuing Photos")
+                springboard.buttons["Done"].tap()
+            }
+        }
+        dismissCurrentPageSuccess()
+        let shortcuts = XCUIApplication(bundleIdentifier: "com.apple.shortcuts")
+        shortcuts.activate()
+        let previousError = shortcuts.buttons["OK"]
+        if previousError.waitForExistence(timeout: 1) { previousError.tap() }
+        XCTAssertTrue(shortcuts.buttons["Play, A4 Cloud Current Page"].waitForExistence(timeout: 10))
+        let app = launch()
+        XCTAssertTrue(app.buttons["cloud-device-a4_land"].waitForExistence(timeout: 15))
+        let refresh = app.buttons["cloud-refresh-list"]
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: refresh)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 10), .completed)
+        let photos = XCUIApplication(bundleIdentifier: "com.apple.mobileslideshow")
+        photos.activate()
+        let share = photos.buttons["PUOneUpBarButtonItemIdentifierShare"]
+        let activity = photos.cells["Tesserae"]
+        if !activity.waitForExistence(timeout: 1) {
+            let prefix = try XCTUnwrap(ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_MEDIA_PREFIX"])
+            let source = photos.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", prefix)).firstMatch
+            XCTAssertTrue(source.waitForExistence(timeout: 8))
+            if !share.exists { source.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+            XCTAssertTrue(share.waitForExistence(timeout: 8)); share.tap()
+        }
+        XCTAssertTrue(activity.waitForExistence(timeout: 8))
+        capture(photos, "Concurrent Schedule Prepared Activity Sheet After App Launch")
+        app.activate()
+        XCTAssertTrue(refresh.waitForExistence(timeout: 5))
+        try await Task.sleep(for: .seconds(2))
+        try publish("app-ready")
+        let shouldStart = try await waitFor("start-refresh", seconds: 35)
+        XCTAssertTrue(shouldStart)
+        guard shouldStart else { return }
+        refresh.tap()
+        try publish("refresh-tapped")
+        let shouldOpenShare = try await waitFor("show-photos", seconds: 10)
+        XCTAssertTrue(shouldOpenShare, "The external schedule aborted or did not dispatch Share")
+        guard shouldOpenShare else { return }
+        photos.activate()
+        XCTAssertTrue(activity.waitForExistence(timeout: 2))
+        let mayOpen = !FileManager.default.fileExists(atPath: control.appending(path: "abort").path)
+        XCTAssertTrue(mayOpen, "The authorization overlap window ended before Share could open")
+        guard mayOpen else { return }
+        activity.tap()
+        try publish("share-opened")
+        let land = photos.buttons["share-display-cloud:a4_land"]
+        let listDeadline = ContinuousClock.now + .seconds(15)
+        while !land.exists && ContinuousClock.now < listDeadline {
+            dismissCurrentPageSuccess()
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        XCTAssertTrue(land.exists)
+        dismissCurrentPageSuccess()
+        for row in photos.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'share-display-cloud:'")).allElementsBoundByIndex
+            where row.identifier != land.identifier && row.isSelected {
+            reveal(row, in: photos); row.tap()
+        }
+        reveal(land, in: photos)
+        if !land.isSelected { land.tap() }
+        let send = photos.buttons["share-send"]
+        let enabled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: send)
+        XCTAssertEqual(XCTWaiter.wait(for: [enabled], timeout: 10), .completed)
+        capture(photos, "Concurrent Refresh Complete Before Explicit Photo Send")
+        let joined = FileManager.default.fileExists(atPath: control.appending(path: "joined").path)
+        XCTAssertTrue(joined, "Three actual authorization consumers did not join within the fixed cap")
+        guard joined else { return }
+        send.tap()
+        try publish("photo-tapped")
+        let result = photos.descendants(matching: .any)["share-cloud-result-a4_land"].firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 35))
+        XCTAssertTrue(result.label.contains("Frame Generated"))
+        capture(photos, "Concurrent Refresh Subsequent Photo Generated")
+        try await Task.sleep(for: .seconds(45))
+        try publish("passive-complete")
+    }
+
+    func testConcurrencyShareDispatchAndPassiveBudgetWait() {
+        let photos = XCUIApplication(bundleIdentifier: "com.apple.mobileslideshow")
+        let send = photos.buttons["share-send"]
+        XCTAssertTrue(send.waitForExistence(timeout: 8)); XCTAssertTrue(send.isEnabled)
+        send.tap()
+        print("A4_CONCURRENCY_SEND_DISPATCHED", Date().timeIntervalSince1970, ProcessInfo.processInfo.systemUptime)
+        let elapsed = expectation(description: "Observe the original call beyond its budget without background AX queries")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 45) { elapsed.fulfill() }
+        wait(for: [elapsed], timeout: 50)
+        print("A4_CONCURRENCY_PASSIVE_WAIT_COMPLETED", Date().timeIntervalSince1970)
     }
 
     func testShortcutsDriver() throws {
