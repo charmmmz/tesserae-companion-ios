@@ -5,9 +5,8 @@ or approved.
 
 ## Current candidate: 0.8.2 (source build 16)
 
-- Delivery: push the reviewed commits to `origin/main`; the existing Xcode
-  Cloud `Default` workflow builds and signs the candidate. Local Apple
-  account setup and local TestFlight upload are not part of this delivery.
+- Push reviewed release commits to `origin/main`. The Xcode Cloud `main`
+  workflow builds and signs the release candidate.
 - [x] Set app and Share Extension to 0.8.2 / 16 in `project.yml` and regenerate
   the checked-in project with XcodeGen.
 - [x] Separate message animation, list performance, and release metadata into
@@ -24,6 +23,16 @@ See [the previous candidate acceptance record](docs/releases/0.8.1-beta.md) for
 historical checks, retained audit findings, and evidence locations. The general
 checklist below includes historical results; checked items are not a new
 physical-device acceptance of 0.8.2.
+
+## Cloud integration beta
+
+- Push candidate changes to `origin/codex/cloud-beta-candidate` to trigger the
+  Xcode Cloud `Cloud Beta` workflow.
+- In App Store Connect, match the iOS archive to the candidate commit and check
+  that its internal-only TestFlight build finishes processing.
+- Assign the build to the intended internal group before testing. Once the
+  Cloud App OAuth endpoints are live, verify sign-in, photo sending, and
+  refresh on a signed iPhone and a physical display.
 
 ## Server compatibility
 
