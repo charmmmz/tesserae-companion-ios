@@ -190,7 +190,12 @@ public actor CloudSubmissionService {
                 let transport = try await runtime.cloudTransport(for: fence.connectionID, timeout: remaining(limit: 10))
                 guard transport.fence == fence else { throw ConnectionError.sessionChanged }
                 let client = try CloudSubmissionClient(transport: transport, writeTimeout: remaining(limit: writeTimeout))
-                let bytes = try task.raster.map { try store.media(batch, raster: $0, now: clock()) }
+                let bytes: Data?
+                if let raster = task.raster {
+                    bytes = try store.media(batch, raster: raster, now: clock())
+                } else {
+                    bytes = nil
+                }
                 let request = try client.request(batch: batch, task: task, data: bytes)
                 _ = try await runtime.sessions.authorization(for: fence, timeout: remaining(limit: 10))
                 let store = self.store
