@@ -32,7 +32,7 @@ jobs:
 
   swift-package:
     name: TesseraeKit
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v7
       - name: Run fixture-backed live transport tests
@@ -51,7 +51,7 @@ jobs:
 
   ios-build:
     name: iOS Simulator (${{ matrix.device }})
-    runs-on: macos-15
+    runs-on: macos-26
     strategy:
       fail-fast: false
       matrix:
