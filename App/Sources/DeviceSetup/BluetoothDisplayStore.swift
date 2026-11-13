@@ -104,7 +104,9 @@ final class BluetoothDisplayStore {
         guard !isReadOnly, legacyID != connectionID else { return }
         if snapshot.links[connectionID] == nil { snapshot.links[connectionID] = snapshot.links[legacyID] }
         if snapshot.servers[connectionID] == nil { snapshot.servers[connectionID] = snapshot.servers[legacyID] }
-        if snapshot.reportedModes?[connectionID] == nil { snapshot.reportedModes?[connectionID] = snapshot.reportedModes?[legacyID] }
+        if snapshot.reportedModes?[connectionID] == nil, let legacyReports = snapshot.reportedModes?[legacyID] {
+            snapshot.reportedModes?[connectionID] = legacyReports
+        }
         snapshot.links.removeValue(forKey: legacyID)
         snapshot.servers.removeValue(forKey: legacyID)
         snapshot.reportedModes?.removeValue(forKey: legacyID)
