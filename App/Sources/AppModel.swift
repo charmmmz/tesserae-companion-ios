@@ -845,6 +845,7 @@ final class AppModel {
         guard
             let currentInstance = activeInstance,
             !isRefreshing,
+            !activeOperationIDs.contains("pair"),
             connectionHealth != .restoring
         else {
             return
@@ -1000,6 +1001,7 @@ final class AppModel {
         guard
             let currentInstance = activeInstance,
             !isRefreshing,
+            !activeOperationIDs.contains("pair"),
             connectionHealth != .restoring
         else {
             return

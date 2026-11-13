@@ -7,6 +7,19 @@ import Testing
 
 @MainActor
 final class ConnectionRecoveryTests: XCTestCase {
+    func testInitialConnectionLoadsDisplaysAndDashboardsWhenDisplaysPageRefreshes() async throws {
+        let fixture = try await makeFixture(delay: .zero)
+        let prepared = try await fixture.model.prepareDemoConnection()
+        let revision = try await fixture.model.commitConnection(prepared)
+
+        await fixture.model.refreshDisplays()
+        XCTAssertTrue(fixture.model.displays.isEmpty)
+
+        await fixture.model.finishConnection(revision: revision, attemptID: prepared.attemptID)
+        XCTAssertFalse(fixture.model.displays.isEmpty)
+        XCTAssertFalse(fixture.model.dashboards.isEmpty)
+    }
+
     func testOldEpochTaskStaysPausedUntilExplicitLocalRetry() async throws {
         let old = try await makeFixture(delay: .zero)
         let directory = URL.temporaryDirectory.appending(path: UUID().uuidString)
