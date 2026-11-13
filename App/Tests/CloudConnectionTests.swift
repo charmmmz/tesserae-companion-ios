@@ -142,7 +142,7 @@ final class CloudConnectionTests: XCTestCase {
         let (model, http) = try await fixture()
         await http.block("/api/t/bootstrap")
         let first = Task { await model.refresh() }; let second = Task { await model.refresh() }
-        await wait(http, path: "/api/t/bootstrap")
+        try await waitForRequest(http, path: "/api/t/bootstrap")
         await http.release("/api/t/bootstrap")
         await first.value; await second.value
         XCTAssertEqual(model.devices.count, 2)
@@ -176,7 +176,7 @@ final class CloudConnectionTests: XCTestCase {
         let path = "/api/t/devices/\(id)/frame.png"
         await http.block(path)
         let preview = Task { await model.openDetail(id: id, isDevice: true) }
-        await wait(http, path: path)
+        try await waitForRequest(http, path: path)
         await http.configure(status: 403)
         await model.refresh()
         XCTAssertNil(model.snapshot); XCTAssertTrue(model.isRestricted); XCTAssertFalse(model.isLoading)
@@ -243,11 +243,12 @@ final class CloudConnectionTests: XCTestCase {
         model.closeDetail(id: "cache-19", isDevice: false)
         XCTAssertEqual(model.previews.count, 1)
     }
-    private func wait(_ http: CloudAppHTTP, path: String) async {
-        for _ in 0..<200 {
-            if await http.count(path) > 0 { return }
-            await Task.yield()
+    private func waitForRequest(_ http: CloudAppHTTP, path: String) async throws {
+        let deadline = ContinuousClock.now + .seconds(5)
+        while await http.count(path) == 0, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
         }
-        XCTFail("Expected request was not dispatched: \(path)")
+        let count = await http.count(path)
+        XCTAssertGreaterThan(count, 0, "Expected request was not dispatched: \(path)")
     }
 }
