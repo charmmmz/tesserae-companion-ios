@@ -152,6 +152,51 @@ final class CloudBrowsingUITests: XCTestCase {
         capture(app, "cloud-regenerate-result")
     }
 
+    func testComposerRequiresSelectionWhenAllSavedDisplaysDisappear() async throws {
+        try await selectBrowserAccount("owner_a")
+        try await fault("pass")
+        let app = launch(readProxy: true)
+        authorize(app)
+        let original = app.buttons["send-display-a2_shared"]
+        let replacement = app.buttons["send-display-a2_no_preview"]
+        let send = app.buttons["root-send-action"].firstMatch
+        XCTAssertTrue(send.waitForExistence(timeout: 15))
+        send.tap()
+        XCTAssertTrue(original.waitForExistence(timeout: 5))
+        let originalReady = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in original.isEnabled }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [originalReady], timeout: 5), .completed)
+        if original.isSelected { original.tap() }
+        original.tap()
+        XCTAssertTrue(original.isSelected)
+        XCTAssertFalse(replacement.isSelected)
+        app.buttons["root-send-close"].tap()
+
+        try await fault("delete-device")
+        app.buttons["cloud-refresh-list"].firstMatch.tap()
+        let originalRow = app.buttons["cloud-device-a2_shared"]
+        let removed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !originalRow.exists }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [removed], timeout: 8), .completed)
+        send.tap()
+        XCTAssertTrue(app.staticTexts["cloud-send-saved-displays-unavailable"].waitForExistence(timeout: 5))
+        XCTAssertFalse(original.exists)
+        XCTAssertFalse(replacement.isSelected)
+        capture(app, "cloud-send-no-replacement-selected")
+        app.descendants(matching: .any)["selected-image-preview"].firstMatch.tap()
+        let photo = app.images.matching(NSPredicate(format: "label BEGINSWITH 'Photo,'")).firstMatch
+        XCTAssertTrue(photo.waitForExistence(timeout: 8), "Seed the test simulator photo library with a fixture image.")
+        photo.tap()
+        XCTAssertTrue(app.buttons["send-change-photo"].waitForExistence(timeout: 8))
+        let submit = app.buttons["send-submit"]
+        XCTAssertFalse(submit.isEnabled)
+        reveal(replacement, app: app)
+        replacement.tap()
+        XCTAssertTrue(replacement.isSelected)
+        let canSend = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in submit.isEnabled }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [canSend], timeout: 8), .completed)
+        XCTAssertFalse(app.staticTexts["cloud-send-saved-displays-unavailable"].exists)
+        try await fault("pass")
+    }
+
     func testInjectedDetailVersionsDeletionAndForbiddenDiscardStaleImages() async throws {
         try await selectBrowserAccount("owner_a"); try await fault("pass")
         let app = launch(readProxy: true); authorize(app)

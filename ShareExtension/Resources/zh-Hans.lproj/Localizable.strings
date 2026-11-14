@@ -144,6 +144,8 @@
 
 "This display's panel configuration is not supported." = "暂不支持此屏幕的面板配置。";
 "Some saved displays are unavailable. Review the selected displays before sending." = "部分之前保存的屏幕现已不可用。发送前请检查所选屏幕。";
+"Your saved displays are unavailable. Choose a display to send to." = "之前保存的屏幕已不可用。请选择要发送到的屏幕。";
+"Could not load your saved displays. Choose a display to send to." = "无法读取之前保存的屏幕。请选择要发送到的屏幕。";
 
 "Available Until" = "可用期限";
 

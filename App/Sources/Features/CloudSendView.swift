@@ -30,6 +30,7 @@ struct CloudSendSheet: View {
     @State private var decision = UUID()
     @State private var isPreparing = false
     @State private var isLoadingMedia = false
+    @State private var savedDisplayWarning: String?
     @State private var error: String?
     @State private var recoveryOutcome: CloudEntryCompletion?
     @State private var recoveryExpired = false
@@ -75,8 +76,15 @@ struct CloudSendSheet: View {
                 } controls: {
                     VStack(alignment: .leading, spacing: TesseraeComposerLayout.selectionCardSpacing) {
                         Text("Displays").font(.headline)
+                        if let savedDisplayWarning {
+                            Text(savedDisplayWarning)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .accessibilityIdentifier("cloud-send-saved-displays-unavailable")
+                        }
                         ForEach(devices) { device in
                             Button {
+                                savedDisplayWarning = nil
                                 if selectedIDs.contains(device.id) { selectedIDs.remove(device.id) }
                                 else { selectedIDs.insert(device.id); previewID = device.id }
                             } label: {
@@ -85,6 +93,7 @@ struct CloudSendSheet: View {
                                     isSelected: selectedIDs.contains(device.id), transport: nil, isAvailable: true)
                             }
                             .buttonStyle(.plain)
+                            .disabled(!didLoadPreferences)
                             .accessibilityIdentifier("send-display-\(device.id)")
                         }
                         ForEach(unavailableIDs, id: \.self) { id in
@@ -191,7 +200,15 @@ struct CloudSendSheet: View {
             ContentUnavailableView("No Cloud Displays", systemImage: "display")
         }
     }
-    private var previewPicker: some View {
+    @ViewBuilder private var previewPicker: some View {
+        if selected.isEmpty {
+            Text("None selected").font(.footnote).foregroundStyle(.secondary)
+        } else {
+            selectedPreviewPicker
+        }
+    }
+
+    private var selectedPreviewPicker: some View {
         Menu {
             ForEach(selected) { device in
                 Button { previewID = device.id } label: {
@@ -208,13 +225,18 @@ struct CloudSendSheet: View {
     }
     private func loadPreferences() async {
         guard !didLoadPreferences else { return }
-        let preferences = try? await host.cloudSendPreferences(context: context)
-        guard !Task.isCancelled else { return }
-        let available = Set(devices.map(\.id))
-        let preferred = Set(preferences?.deviceIDs ?? []).intersection(available)
-        selectedIDs = preferred.isEmpty ? Set(devices.prefix(1).map(\.id)) : preferred
-        if let savedFit = preferences?.imageFitMode, [.fit, .fill].contains(savedFit) { fit = savedFit }
-        previewID = devices.first { selectedIDs.contains($0.id) }?.id ?? devices.first?.id
+        do {
+            let preferences = try await host.cloudSendPreferences(context: context)
+            guard !Task.isCancelled else { return }
+            let selection = CloudShareSelection(devices: devices, preferredIDs: preferences?.deviceIDs ?? [])
+            selectedIDs = selection.initialIDs
+            savedDisplayWarning = selection.selectionWarning
+            if let savedFit = preferences?.imageFitMode, [.fit, .fill].contains(savedFit) { fit = savedFit }
+            previewID = selected.first?.id
+        } catch {
+            guard !Task.isCancelled else { return }
+            savedDisplayWarning = String(localized: "Could not load your saved displays. Choose a display to send to.")
+        }
         didLoadPreferences = true
     }
     private func loadRecovery(_ review: CloudPendingReview) async {
@@ -241,7 +263,7 @@ struct CloudSendSheet: View {
         } catch { self.error = error.localizedDescription }
     }
     private func savePreferences() {
-        guard didLoadPreferences, recovery == nil else { return }
+        guard didLoadPreferences, recovery == nil, savedDisplayWarning == nil, !selectedIDs.isEmpty else { return }
         let selected = selectedIDs, fit = fit
         Task { try? await host.saveCloudSendPreferences(targetIDs: selected, fit: fit, context: context) }
     }

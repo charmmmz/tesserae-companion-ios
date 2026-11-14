@@ -19,10 +19,17 @@ struct CloudShareSelection {
     init(devices: [CloudDevice], preferredIDs: [String]) {
         let available = devices.filter { $0.panel.compositionGeometry != nil }
         availableIDs = Set(available.map(\.id))
-        let preferred = Set(preferredIDs).intersection(availableIDs)
-        initialIDs = preferred.isEmpty ? Set(available.prefix(1).map(\.id)) : preferred
-        omittedPreferences = !Set(preferredIDs).isSubset(of: availableIDs)
+        let preferred = Set(preferredIDs)
+        initialIDs = preferred.isEmpty ? Set(available.prefix(1).map(\.id)) : preferred.intersection(availableIDs)
+        omittedPreferences = !preferred.isSubset(of: availableIDs)
     }
+    var selectionWarning: String? {
+        guard omittedPreferences else { return nil }
+        return initialIDs.isEmpty
+            ? String(localized: "Your saved displays are unavailable. Choose a display to send to.")
+            : String(localized: "Some saved displays are unavailable. Review the selected displays before sending.")
+    }
+
     func canSend(_ ids: Set<String>) -> Bool { !ids.isEmpty && ids.isSubset(of: availableIDs) }
 }
 
@@ -461,14 +468,18 @@ private final class ShareComposerModel: ObservableObject {
                 bluetoothSession?.start()
             }
             if let cloud = cloudSnapshot, let id = selectedCloudID {
-                let preferences = try? await sendPreferences.preferences(for: id.rawValue)
-                let selection = CloudShareSelection(devices: cloud.devices, preferredIDs: preferences?.deviceIDs ?? [])
-                selectedDeviceIDs = selection.initialIDs
-                if selection.omittedPreferences {
-                    errorMessage = String(localized: "Some saved displays are unavailable. Review the selected displays before sending.")
+                do {
+                    let preferences = try await sendPreferences.preferences(for: id.rawValue)
+                    let selection = CloudShareSelection(devices: cloud.devices, preferredIDs: preferences?.deviceIDs ?? [])
+                    selectedDeviceIDs = selection.initialIDs
+                    errorMessage = selection.selectionWarning
+                    previewDeviceID = cloud.devices.first { selectedDeviceIDs.contains($0.id) }?.id
+                    if let preferredFit = preferences?.imageFitMode, [.fill, .fit].contains(preferredFit) { fit = preferredFit }
+                } catch {
+                    selectedDeviceIDs = []
+                    previewDeviceID = nil
+                    errorMessage = String(localized: "Could not load your saved displays. Choose a display to send to.")
                 }
-                previewDeviceID = cloud.devices.first { selectedDeviceIDs.contains($0.id) }?.id
-                if let preferredFit = preferences?.imageFitMode, [.fill, .fit].contains(preferredFit) { fit = preferredFit }
                 phase = .ready
                 return
             }
