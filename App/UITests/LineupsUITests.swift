@@ -15,7 +15,7 @@ final class LineupsUITests: XCTestCase {
         XCTAssertTrue(
             app.segmentedControls["connection-type"].waitForExistence(timeout: 3)
         )
-        app.buttons["Demo Mode"].tap()
+        app.onboardingShortcut("onboarding-demo").tap()
 
         XCTAssertFalse(app.tabBars.firstMatch.buttons["Lineups"].exists)
 
@@ -178,7 +178,7 @@ final class LineupsUITests: XCTestCase {
         XCTAssertTrue(
             app.segmentedControls["connection-type"].waitForExistence(timeout: 3)
         )
-        app.buttons["Demo Mode"].tap()
+        app.onboardingShortcut("onboarding-demo").tap()
         XCTAssertTrue(app.buttons["manage-lineups"].waitForExistence(timeout: 3))
         app.buttons["manage-lineups"].tap()
 
@@ -247,7 +247,7 @@ final class LineupsUITests: XCTestCase {
         XCTAssertTrue(
             app.segmentedControls["connection-type"].waitForExistence(timeout: 3)
         )
-        app.buttons["Demo Mode"].tap()
+        app.onboardingShortcut("onboarding-demo").tap()
         XCTAssertTrue(app.buttons["manage-lineups"].waitForExistence(timeout: 3))
         app.buttons["manage-lineups"].tap()
         XCTAssertTrue(app.buttons["lineup-create"].waitForExistence(timeout: 3))
@@ -280,8 +280,8 @@ final class LineupsUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
         app.launch()
-        XCTAssertTrue(app.buttons["Demo Mode"].waitForExistence(timeout: 3))
-        app.buttons["Demo Mode"].tap()
+        XCTAssertTrue(app.onboardingShortcut("onboarding-demo").waitForExistence(timeout: 3))
+        app.onboardingShortcut("onboarding-demo").tap()
         XCTAssertTrue(app.buttons["manage-lineups"].waitForExistence(timeout: 3))
         app.buttons["manage-lineups"].tap()
         app.buttons["lineup-create"].tap()
@@ -334,8 +334,8 @@ final class LineupsUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
         app.launchEnvironment["TESSERAE_UI_TEST_COLOR_SCHEME"] = "dark"
         app.launch()
-        XCTAssertTrue(app.buttons["Demo Mode"].waitForExistence(timeout: 3))
-        app.buttons["Demo Mode"].tap()
+        XCTAssertTrue(app.onboardingShortcut("onboarding-demo").waitForExistence(timeout: 3))
+        app.onboardingShortcut("onboarding-demo").tap()
         XCTAssertTrue(app.buttons["manage-lineups"].waitForExistence(timeout: 3))
         app.buttons["manage-lineups"].tap()
         app.buttons["lineup-create"].tap()
@@ -513,8 +513,8 @@ final class LineupsUITests: XCTestCase {
             app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityM"]
         }
         app.launch()
-        XCTAssertTrue(app.buttons["Demo Mode"].waitForExistence(timeout: 3))
-        app.buttons["Demo Mode"].tap()
+        XCTAssertTrue(app.onboardingShortcut("onboarding-demo").waitForExistence(timeout: 3))
+        app.onboardingShortcut("onboarding-demo").tap()
         XCTAssertTrue(app.buttons["manage-lineups"].waitForExistence(timeout: 3))
         app.buttons["manage-lineups"].tap()
         XCTAssertTrue(app.buttons["lineup-create"].waitForExistence(timeout: 3))
@@ -556,8 +556,8 @@ final class LineupsUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
         app.launch()
-        XCTAssertTrue(app.buttons["Demo Mode"].waitForExistence(timeout: 3))
-        app.buttons["Demo Mode"].tap()
+        XCTAssertTrue(app.onboardingShortcut("onboarding-demo").waitForExistence(timeout: 3))
+        app.onboardingShortcut("onboarding-demo").tap()
         XCTAssertTrue(app.buttons["manage-lineups"].waitForExistence(timeout: 3))
         app.buttons["manage-lineups"].tap()
         let search = app.searchFields.firstMatch
@@ -613,8 +613,8 @@ final class LineupsUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_UI_TEST_COLOR_SCHEME"] = "dark"
         app.launchArguments += ["-AppleLocale", "en_GB", "-AppleLanguages", "(en)"]
         app.launch()
-        XCTAssertTrue(app.buttons["Demo Mode"].waitForExistence(timeout: 3))
-        app.buttons["Demo Mode"].tap()
+        XCTAssertTrue(app.onboardingShortcut("onboarding-demo").waitForExistence(timeout: 3))
+        app.onboardingShortcut("onboarding-demo").tap()
         app.buttons["manage-lineups"].tap()
         let lineup = app.buttons["lineup-card-kitchen-deck"]
         XCTAssertTrue(lineup.waitForExistence(timeout: 3))
@@ -660,7 +660,7 @@ final class LineupsUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_UI_TEST_COLOR_SCHEME"] = dark ? "dark" : "light"
         app.launchArguments += ["-AppleLocale", language == "en" ? "en_GB" : "zh_CN", "-AppleLanguages", "(\(language))"]
         app.launch()
-        let demo = app.buttons[language == "en" ? "Demo Mode" : "演示模式"]
+        let demo = app.onboardingShortcut("onboarding-demo")
         XCTAssertTrue(demo.waitForExistence(timeout: 3))
         demo.tap()
         XCTAssertTrue(app.buttons["manage-lineups"].waitForExistence(timeout: 3))
@@ -736,7 +736,7 @@ final class LineupsUITests: XCTestCase {
             file: file,
             line: line
         )
-        app.buttons["Demo Mode"].tap()
+        app.onboardingShortcut("onboarding-demo").tap()
         XCTAssertTrue(
             app.buttons["manage-lineups"].waitForExistence(timeout: 3),
             file: file,

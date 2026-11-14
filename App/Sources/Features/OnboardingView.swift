@@ -15,6 +15,9 @@ struct OnboardingView: View {
     @Environment(ConnectionHost.self) private var connectionHost
     @ScaledMetric(relativeTo: .subheadline) private var nearbyServerRowHeight: CGFloat = 44
     @State private var connectionType = ConnectionType.cloud
+    @State private var showsMoreOptions = false
+    @GestureState private var disclosureDrag: CGFloat = 0
+    @State private var nearbyPresented = false
     @State private var manualSetupPresented = false
     @State private var manualServerAddress: String?
 
@@ -22,7 +25,7 @@ struct OnboardingView: View {
         NavigationStack {
             GeometryReader { viewport in
                 ScrollView {
-                    connectionContent(availableHeight: viewport.size.height)
+                    connectionContent(viewport)
                 }
                 .scrollBounceBehavior(.basedOnSize)
                 .scrollDismissesKeyboard(.interactively)
@@ -35,8 +38,24 @@ struct OnboardingView: View {
                     onConnected: { if isChoosingServer { dismiss() } }
                 )
             }
+            .sheet(isPresented: $nearbyPresented) {
+                NavigationStack {
+                    NearbyDisplaysView(fromOnboarding: true)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Done", systemImage: "checkmark") { nearbyPresented = false }
+                                    .labelStyle(.iconOnly)
+                                    .accessibilityIdentifier("onboarding-nearby-done")
+                            }
+                        }
+                }
+                .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(TesseraeTheme.background)
+            }
             .navigationTitle(String(localized: isChoosingServer ? "Tesserae Connections" : ""))
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarVisibility(isChoosingServer ? .visible : .hidden, for: .navigationBar)
             .toolbar {
                 if isChoosingServer {
                     ToolbarItem(placement: .cancellationAction) {
@@ -49,8 +68,8 @@ struct OnboardingView: View {
             .task {
                 connectionHost.reloadSavedConnections()
             }
-            .onChange(of: connectionType) { _, type in
-                guard type == .selfHosted, model.discoveredInstances.isEmpty else { return }
+            .onChange(of: shouldShowServerDiscovery) { _, visible in
+                guard visible, model.discoveredInstances.isEmpty else { return }
                 Task { await model.discoverNearby() }
             }
             .onChange(of: connectionHost.loginError) { _, error in
@@ -65,66 +84,126 @@ struct OnboardingView: View {
         .interactiveDismissDisabled(isChoosingServer && connectionHost.isSigningIn)
     }
 
-    private func connectionContent(availableHeight: CGFloat) -> some View {
-        let isSigningIn = connectionHost.isSigningIn
-        let canSpreadOut = !isChoosingServer && !isSigningIn && !dynamicTypeSize.isAccessibilitySize
-            && connectionHost.savedConnections.isEmpty && availableHeight > 500
-        let topPadding = 20 + (canSpreadOut ? min(56, max(0, (availableHeight - 500) / 5)) : 0)
-        let minimumHeight = isChoosingServer ? 0 : max(0, availableHeight - topPadding - 20)
+    private var shouldShowServerDiscovery: Bool {
+        connectionType == .selfHosted && !connectionHost.isSigningIn && (isChoosingServer || showsMoreOptions)
+    }
 
-        return VStack(spacing: 16) {
+    private func connectionContent(_ viewport: GeometryProxy) -> some View {
+        let isSigningIn = connectionHost.isSigningIn
+        let insets = viewport.safeAreaInsets
+        let screenHeight = viewport.size.height + insets.top + insets.bottom
+        let spacious = !dynamicTypeSize.isAccessibilitySize && viewport.size.height >= 550
+            && connectionHost.savedConnections.isEmpty
+        let collapsedHeight = spacious ? max(132, screenHeight * 0.43 - insets.top) : 104
+        let expandedHeight = spacious ? max(76, screenHeight * 0.20 - insets.top) : 72
+        let travel = collapsedHeight - expandedHeight
+        let progress = min(1, max(0, (showsMoreOptions ? 1 : 0) - disclosureDrag / travel))
+        let fullMark: CGFloat = spacious && viewport.size.width > 370 ? 118 : (spacious ? 104 : 72)
+
+        return VStack(spacing: 0) {
             if !isChoosingServer {
-                TesseraeBrandMark(size: isSigningIn ? 52 : (canSpreadOut ? 104 : 72))
-                    .padding(.bottom, canSpreadOut ? 24 : 4)
-                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isSigningIn)
+                TesseraeBrandMark(size: isSigningIn ? 52 : fullMark + (58 - fullMark) * progress)
+                    .offset(y: isSigningIn ? 0 : 8 * (1 - progress))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: isSigningIn ? 84 : collapsedHeight - travel * progress)
+                    .contentShape(Rectangle())
+                    .simultaneousGesture(disclosureGesture, isEnabled: !isSigningIn)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("Tesserae Companion")
                     .accessibilityAddTraits(.isImage)
+                    .accessibilityIdentifier("onboarding-brand")
             }
 
-            if !isSigningIn {
-                if !connectionHost.savedConnections.isEmpty {
-                    savedConnections
+            VStack(spacing: 16) {
+                if !isSigningIn {
+                    if !connectionHost.savedConnections.isEmpty {
+                        savedConnections
+                    }
+
+                    if isChoosingServer {
+                        Text("Add a Connection")
+                            .font(.body.weight(.semibold))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityAddTraits(.isHeader)
+                    }
+
+                    Picker("Connection Type", selection: $connectionType) {
+                        Text("Cloud").tag(ConnectionType.cloud)
+                        Text("Self-Hosted").tag(ConnectionType.selfHosted)
+                    }
+                    .pickerStyle(.segmented)
+                    .controlSize(.large)
+                    .frame(minHeight: 44)
+                    .disabled(connectionHost.isSwitching)
+                    .accessibilityIdentifier("connection-type")
                 }
 
-                if isChoosingServer {
-                    Text("Add a Connection")
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .accessibilityAddTraits(.isHeader)
+                if isSigningIn || connectionType == .cloud {
+                    CloudSignInView()
+                } else {
+                    selfHostedConnection
                 }
 
-                Picker("Connection Type", selection: $connectionType) {
-                    Text("Cloud").tag(ConnectionType.cloud)
-                    Text("Self-Hosted").tag(ConnectionType.selfHosted)
+                if !isSigningIn, let error = connectionHost.loginError {
+                    ConnectionLoginErrorMessage(message: error)
                 }
-                .pickerStyle(.segmented)
-                .controlSize(.large)
-                .frame(minHeight: 44)
-                .disabled(connectionHost.isSwitching)
-                .accessibilityIdentifier("connection-type")
-            }
 
-            if isSigningIn || connectionType == .cloud {
-                CloudSignInView()
-            } else {
-                selfHostedConnection
-            }
+                if !isChoosingServer && !isSigningIn {
+                    moreOptionsButton
+                }
 
-            if !isSigningIn, let error = connectionHost.loginError {
-                ConnectionLoginErrorMessage(message: error)
-            }
+                if shouldShowServerDiscovery {
+                    nearbyServerDiscovery
+                }
 
-            if !isChoosingServer && !isSigningIn {
-                Spacer(minLength: 0)
-                onboardingAlternatives
+                if !isChoosingServer && !isSigningIn && showsMoreOptions {
+                    onboardingAlternatives
+                }
             }
+            .padding(.horizontal, viewport.size.width > 370 ? 24 : 16)
+            .padding(.vertical, isChoosingServer ? 20 : 0)
         }
-        .frame(maxWidth: 680, minHeight: minimumHeight, alignment: .top)
-        .padding(.horizontal, 20)
-        .padding(.top, topPadding)
         .padding(.bottom, 20)
+        .frame(maxWidth: 680)
         .frame(maxWidth: .infinity)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.26), value: isSigningIn)
+    }
+
+    private var disclosureGesture: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .updating($disclosureDrag) { value, drag, _ in
+                if !reduceMotion && abs(value.translation.height) > abs(value.translation.width) {
+                    drag = value.translation.height
+                }
+            }
+            .onEnded { value in
+                let delta = value.translation.height
+                guard abs(delta) > 37, abs(delta) > abs(value.translation.width) else { return }
+                setMoreOptions(delta < 0)
+            }
+    }
+
+    private func setMoreOptions(_ expanded: Bool) {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.26)) {
+            showsMoreOptions = expanded
+        }
+    }
+
+    private var moreOptionsButton: some View {
+        Button {
+            setMoreOptions(!showsMoreOptions)
+        } label: {
+            Label(showsMoreOptions ? "Show Fewer Options" : "Expand More",
+                  systemImage: showsMoreOptions ? "chevron.down" : "chevron.up")
+                .font(.subheadline)
+                .frame(minHeight: 44)
+                .padding(.horizontal, 12)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+        .accessibilityIdentifier("onboarding-more")
+        .simultaneousGesture(disclosureGesture)
     }
 
     private var currentConnectionID: ConnectionID? {
@@ -213,47 +292,50 @@ struct OnboardingView: View {
             }
             .buttonStyle(ConnectionOptionButtonStyle())
             .accessibilityIdentifier("self-hosted-manual-address")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 
-            VStack(alignment: .leading, spacing: 4) {
-                nearbyServersHeader
-                if model.discoveredInstances.isEmpty {
-                    if model.isDiscovering {
-                        nearbyServerPlaceholder
-                    } else if model.discoveryError != nil {
-                        Text("Couldn’t search nearby. Check Local Network access in iOS Settings.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .frame(minHeight: minimumNearbyServerRowHeight, alignment: .leading)
-                    } else {
-                        Text("No nearby servers found.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .frame(minHeight: minimumNearbyServerRowHeight, alignment: .leading)
-                            .accessibilityIdentifier("self-hosted-discovery-empty")
-                    }
+    private var nearbyServerDiscovery: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            nearbyServersHeader
+            if model.discoveredInstances.isEmpty {
+                if model.isDiscovering {
+                    nearbyServerPlaceholder
+                } else if model.discoveryError != nil {
+                    Text("Couldn’t search nearby. Check Local Network access in iOS Settings.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(minHeight: minimumNearbyServerRowHeight, alignment: .leading)
                 } else {
-                    ForEach(model.discoveredInstances) { instance in
-                        Button {
-                            openManualSetup(address: instance.baseURL.absoluteString)
-                        } label: {
-                            HStack(spacing: 12) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(instance.name).font(.subheadline.weight(.semibold))
-                                    Text(instance.baseURL.absoluteString)
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer(minLength: 8)
-                                Image(systemName: "chevron.right")
+                    Text("No nearby servers found.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(minHeight: minimumNearbyServerRowHeight, alignment: .leading)
+                        .accessibilityIdentifier("self-hosted-discovery-empty")
+                }
+            } else {
+                ForEach(model.discoveredInstances) { instance in
+                    Button {
+                        openManualSetup(address: instance.baseURL.absoluteString)
+                    } label: {
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(instance.name).font(.subheadline.weight(.semibold))
+                                Text(instance.baseURL.absoluteString)
                                     .font(.subheadline)
-                                    .foregroundStyle(.tertiary)
-                                    .accessibilityHidden(true)
+                                    .foregroundStyle(.secondary)
                             }
-                            .frame(minHeight: minimumNearbyServerRowHeight)
-                            .contentShape(Rectangle())
+                            Spacer(minLength: 8)
+                            Image(systemName: "chevron.right")
+                                .font(.subheadline)
+                                .foregroundStyle(.tertiary)
+                                .accessibilityHidden(true)
                         }
-                        .buttonStyle(.plain)
+                        .frame(minHeight: minimumNearbyServerRowHeight)
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -301,8 +383,8 @@ struct OnboardingView: View {
 
     private var onboardingAlternatives: some View {
         HStack(alignment: .top, spacing: 8) {
-            NavigationLink {
-                NearbyDisplaysView()
+            Button {
+                nearbyPresented = true
             } label: {
                 Text("Nearby Devices")
                     .fixedSize(horizontal: false, vertical: true)
@@ -326,6 +408,7 @@ struct OnboardingView: View {
                 .contentShape(Rectangle())
             }
             .disabled(model.activeOperationIDs.contains("pair"))
+            .accessibilityIdentifier("onboarding-demo")
         }
         .buttonStyle(.plain)
         .foregroundStyle(TesseraeTheme.accent)

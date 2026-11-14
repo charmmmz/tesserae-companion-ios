@@ -249,7 +249,7 @@ final class BluetoothShareUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_CONNECTION_DELAY_MS"] = "10000"
         app.launchEnvironment["TESSERAE_UI_TEST_SKIP_PHOTO_RECEIPT"] = "1"
         app.launch()
-        app.buttons["Demo Mode"].tap()
+        app.onboardingShortcut("onboarding-demo").tap()
         app.buttons["root-send-action"].tap()
         let sample = app.buttons["Use Sample"]
         XCTAssertTrue(sample.waitForExistence(timeout: 5))
@@ -284,7 +284,7 @@ final class BluetoothShareUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_UI_TEST_BLUETOOTH_DISCOVERY_DELAY_MS"] = "6000"
         app.launchEnvironment["TESSERAE_UI_TEST_MEDIA"] = "video"
         app.launch()
-        app.buttons["Demo Mode"].tap()
+        app.onboardingShortcut("onboarding-demo").tap()
         app.buttons["root-send-action"].tap()
         let target = app.buttons["send-display-picpak-kitchen"]
         XCTAssertTrue(target.waitForExistence(timeout: 6))

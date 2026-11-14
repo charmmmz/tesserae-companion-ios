@@ -22,7 +22,7 @@ final class DashboardSettingsUITests: XCTestCase {
       ]
     }
     app.launch()
-    let demo = app.buttons[chineseLargeText ? "演示模式" : "Demo Mode"]
+    let demo = app.onboardingShortcut("onboarding-demo")
     XCTAssertTrue(demo.waitForExistence(timeout: 8))
     for _ in 0..<5 where !demo.isHittable { app.swipeUp() }
     demo.tap()

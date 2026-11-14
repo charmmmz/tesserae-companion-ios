@@ -285,7 +285,7 @@ final class CloudBrowsingUITests: XCTestCase {
     }
     func testChooseConnectionManualLocalWithDelayedFirstRead() {
         let app = launch(localPort: 18766)
-        let demo = app.buttons["Demo Mode"]
+        let demo = app.onboardingShortcut("onboarding-demo")
         XCTAssertTrue(demo.waitForExistence(timeout: 10)); reveal(demo, app: app); demo.tap()
         XCTAssertTrue(app.buttons["root-send-action"].waitForExistence(timeout: 30))
         chooseConnection(app)
@@ -296,11 +296,19 @@ final class CloudBrowsingUITests: XCTestCase {
     func testBonjourConnectsActualLoopbackFixture() {
         let app = launch()
         showSelfHosted(app)
+        app.buttons["onboarding-more"].tap()
         let manual = app.buttons["Enter Server Address"]
         let loading = app.descendants(matching: .any)["self-hosted-discovery-loading"]
         XCTAssertTrue(loading.exists)
         capture(app, "self-hosted-searching")
         XCTAssertTrue(manual.isHittable)
+        var previousFrame = CGRect.null
+        let settled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            let currentFrame = manual.frame
+            defer { previousFrame = currentFrame }
+            return abs(currentFrame.minY - previousFrame.minY) < 0.5
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 3), .completed)
         let manualDuringSearch = manual.frame
         let server = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Tesserae A2 Fixture'")).firstMatch
         XCTAssertTrue(server.waitForExistence(timeout: 20))
@@ -361,7 +369,7 @@ final class CloudBrowsingUITests: XCTestCase {
     }
     func testUnknownPendingCallbackShowsRecoveryWithoutLosingDemo() {
         let app = launch()
-        let demo = app.buttons["Demo Mode"]
+        let demo = app.onboardingShortcut("onboarding-demo")
         XCTAssertTrue(demo.waitForExistence(timeout: 10)); reveal(demo, app: app); demo.tap()
         XCTAssertTrue(app.buttons["root-send-action"].waitForExistence(timeout: 30))
         XCUIDevice.shared.system.open(URL(string: "com.charmmmz.tesseraecompanion:/oauth/callback?state=another-device&code=synthetic-invalid")!)
@@ -454,7 +462,7 @@ final class CloudBrowsingUITests: XCTestCase {
     }
     func testCancelSystemBrowserPreservesDemoConnection() {
         let app = launch()
-        let demo = app.buttons["Demo Mode"]
+        let demo = app.onboardingShortcut("onboarding-demo")
         XCTAssertTrue(demo.waitForExistence(timeout: 10)); reveal(demo, app: app); demo.tap()
         XCTAssertTrue(app.buttons["root-send-action"].waitForExistence(timeout: 30))
         app.buttons["root-settings"].firstMatch.tap()

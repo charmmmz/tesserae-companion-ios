@@ -978,6 +978,7 @@ struct TesseraeEInkDisplayArtwork: View {
 }
 
 struct NearbyDisplaysView: View {
+    var fromOnboarding = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(NearbyDeviceManager.self) private var nearby
     @Environment(AppModel.self) private var model
@@ -985,8 +986,41 @@ struct NearbyDisplaysView: View {
     @Environment(TesseraeMessageCenter.self) private var messageCenter
     @State private var selectedDevice: NearbyTesseraeDevice?
     @State private var photoConfirmation: TesseraeMessage?
+    @State private var showsMaintenanceGuide = false
 
     var body: some View {
+        Group {
+            if fromOnboarding {
+                deviceList.listStyle(.plain)
+            } else {
+                deviceList
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .tesseraeScreenBackground()
+        .navigationTitle(fromOnboarding ? Text("Nearby Devices") : Text("Nearby Displays"))
+        .navigationBarTitleDisplayMode(.inline)
+        .tesseraeMessageCenter()
+        .onAppear {
+            nearby.startScanning()
+            if let instanceID = model.activeStorageID {
+                setupNetworks.load(instanceID: instanceID)
+            }
+        }
+        .sheet(item: Binding(
+            get: { selectedDevice },
+            set: { newDevice in
+                if newDevice == nil, let selectedDevice {
+                    nearby.endSession(for: selectedDevice)
+                }
+                selectedDevice = newDevice
+            }
+        ), onDismiss: showPhotoConfirmation) { device in
+            NearbyDeviceSheet(device: device) { photoConfirmation = $0 }
+        }
+    }
+
+    private var deviceList: some View {
         List {
             if model.activeInstance != nil, !setupNetworks.networks.isEmpty {
                 Section {
@@ -1032,6 +1066,13 @@ struct NearbyDisplaysView: View {
                 }
             }
             Section {
+                if fromOnboarding {
+                    Text("Find nearby displays over Bluetooth to set them up or service them.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                }
                 if nearby.nearbyDevices.isEmpty {
                     HStack(alignment: .top, spacing: 12) {
                         Image(systemName: "dot.radiowaves.left.and.right")
@@ -1061,6 +1102,7 @@ struct NearbyDisplaysView: View {
                     }
                     .padding(.vertical, 3)
                     .fixedSize(horizontal: false, vertical: true)
+                    .listRowBackground(fromOnboarding ? Color.clear : nil)
                 } else {
                     ForEach(nearby.nearbyDevices) { device in
                         Button {
@@ -1121,65 +1163,66 @@ struct NearbyDisplaysView: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .listRowBackground(fromOnboarding ? Color.clear : nil)
                     }
                 }
             } header: {
-                Text("Displays Nearby")
+                if !fromOnboarding { Text("Displays Nearby") }
             }
 
-            Section {
-                NearbyMaintenanceEntryRow(
-                    title: "Refresh Button",
-                    instruction: "Hold Refresh, then release.",
-                    duration: "3 s"
-                )
-                NearbyMaintenanceEntryRow(
-                    title: "PicPak Button",
-                    instruction: "Hold the button, then release.",
-                    duration: "10 s"
-                )
-                Label {
-                    Text("Release before 20 seconds to avoid reset or setup.")
-                } icon: {
-                    Image(systemName: "exclamationmark.triangle")
-                        .accessibilityHidden(true)
+            if fromOnboarding {
+                DisclosureGroup("Enter Maintenance Mode", isExpanded: $showsMaintenanceGuide) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        maintenanceInstructions
+                        maintenanceNotes.font(.footnote).foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 8)
                 }
-                .font(.footnote)
-                .foregroundStyle(TesseraeTheme.warning)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityElement(children: .combine)
-            } header: {
-                Text("Enter Maintenance Mode")
-            } footer: {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Select the display above, then scan the code on its screen.")
-                    Text("Closes after 5 minutes. To exit sooner, short-press the same button.")
+                .accessibilityIdentifier("nearby-maintenance-guide")
+                .listRowBackground(Color.clear)
+            } else {
+                Section {
+                    maintenanceInstructions
+                } header: {
+                    Text("Enter Maintenance Mode")
+                } footer: {
+                    maintenanceNotes
                 }
-                .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .scrollContentBackground(.hidden)
-        .tesseraeScreenBackground()
-        .navigationTitle("Nearby Displays")
-        .navigationBarTitleDisplayMode(.inline)
-        .tesseraeMessageCenter()
-        .onAppear {
-            nearby.startScanning()
-            if let instanceID = model.activeStorageID {
-                setupNetworks.load(instanceID: instanceID)
+    }
+
+    private var maintenanceInstructions: some View {
+        Group {
+            NearbyMaintenanceEntryRow(
+                title: "Refresh Button",
+                instruction: "Hold Refresh, then release.",
+                duration: "3 s"
+            )
+            NearbyMaintenanceEntryRow(
+                title: "PicPak Button",
+                instruction: "Hold the button, then release.",
+                duration: "10 s"
+            )
+            Label {
+                Text("Release before 20 seconds to avoid reset or setup.")
+            } icon: {
+                Image(systemName: "exclamationmark.triangle")
+                    .accessibilityHidden(true)
             }
+            .font(.footnote)
+            .foregroundStyle(TesseraeTheme.warning)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityElement(children: .combine)
         }
-        .sheet(item: Binding(
-            get: { selectedDevice },
-            set: { newDevice in
-                if newDevice == nil, let selectedDevice {
-                    nearby.endSession(for: selectedDevice)
-                }
-                selectedDevice = newDevice
-            }
-        ), onDismiss: showPhotoConfirmation) { device in
-            NearbyDeviceSheet(device: device) { photoConfirmation = $0 }
+    }
+
+    private var maintenanceNotes: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Select the display above, then scan the code on its screen.")
+            Text("Closes after 5 minutes. To exit sooner, short-press the same button.")
         }
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func showPhotoConfirmation() {

@@ -144,8 +144,8 @@ final class AlbumsAndActivityUITests: XCTestCase {
             app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityM"]
         }
         app.launch()
-        XCTAssertTrue(app.buttons["Demo Mode"].waitForExistence(timeout: 4))
-        app.buttons["Demo Mode"].tap()
+        XCTAssertTrue(app.onboardingShortcut("onboarding-demo").waitForExistence(timeout: 4))
+        app.onboardingShortcut("onboarding-demo").tap()
         XCTAssertTrue(app.tabBars.firstMatch.buttons["Library"].waitForExistence(timeout: 3))
         return app
     }
