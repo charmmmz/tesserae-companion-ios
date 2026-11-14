@@ -16,6 +16,11 @@ final class ConnectionPerformanceUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_PAIRING_CODE"] = "482193"
         app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
+        if variant == "head" {
+            let selfHosted = app.segmentedControls["connection-type"].buttons["Self-Hosted"]
+            XCTAssertTrue(selfHosted.waitForExistence(timeout: 10))
+            selfHosted.tap()
+        }
         let manual = app.buttons["Enter Server Address"]
         XCTAssertTrue(manual.waitForExistence(timeout: 10))
         for _ in 0..<8 {

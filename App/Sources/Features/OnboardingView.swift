@@ -3,220 +3,35 @@ import TesseraeKit
 import UIKit
 
 struct OnboardingView: View {
+    private enum ConnectionType {
+        case cloud, selfHosted
+    }
+
     var isChoosingServer = false
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(AppModel.self) private var model
     @Environment(ConnectionHost.self) private var connectionHost
+    @ScaledMetric(relativeTo: .subheadline) private var nearbyServerRowHeight: CGFloat = 44
+    @State private var connectionType = ConnectionType.cloud
     @State private var manualSetupPresented = false
     @State private var manualServerAddress: String?
-    @State private var manualPairingCode: String?
-    @State private var selectionContentHeight: CGFloat = 260
-    @State private var selectionChromeHeight: CGFloat = 64
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 28) {
-                    if !isChoosingServer {
-                        Spacer(minLength: 32)
-
-                        TesseraeBrandMark(size: 88)
-
-                        VStack(spacing: 10) {
-                            Text("Tesserae Companion")
-                                .font(.largeTitle.bold())
-                            Text(
-                                "The official Tesserae app for quick, everyday display tasks on iPhone and iPad."
-                            )
-                            .font(.title3)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                        }
-
-                        VStack(spacing: 12) {
-                            onboardingRow(
-                                icon: "wifi",
-                                title: "Find your server",
-                                detail: "Discover on your local network or enter an address."
-                            )
-                            onboardingRow(
-                                icon: "rectangle.stack",
-                                title: "Send what matters",
-                                detail: "Push a dashboard or photo without opening the full editor."
-                            )
-                            onboardingRow(
-                                icon: "lock.shield",
-                                title: "Local and revocable",
-                                detail: "Pair once with a credential you can remove from Tesserae."
-                            )
-                        }
-                        .tesseraeCard()
-
-                    }
-
-                    CloudSignInCard()
-
-                    if !connectionHost.savedConnections.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Saved Connections").font(.headline)
-                            ForEach(connectionHost.savedConnections) { connection in
-                                Button {
-                                    Task { await connectionHost.select(connection.id) }
-                                } label: {
-                                    Label {
-                                        VStack(alignment: .leading, spacing: 3) {
-                                            Text(connection.name).font(.headline)
-                                            switch connection.identity {
-                                            case let .cloud(issuer, _, _): Text(issuer.host ?? issuer.absoluteString).font(.caption)
-                                            case let .selfHosted(service, _): Text(service.absoluteString).font(.caption)
-                                            }
-                                        }
-                                    } icon: {
-                                        Image(systemName: connection.localInstance == nil ? "cloud" : "server.rack")
-                                    }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                                .frame(minHeight: 44)
-                                .disabled(connectionHost.isSwitching || connectionHost.loginPhase == .committing)
-                                .accessibilityIdentifier("saved-connection-\(connection.id.rawValue)")
-                            }
-                        }.tesseraeCard()
-                    }
-
-                    Group {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Text("Nearby Tesserae")
-                                    .font(.headline)
-                                Spacer()
-                                if model.isDiscovering {
-                                    ProgressView()
-                                } else {
-                                    Button {
-                                        Task { await model.discoverNearby() }
-                                    } label: {
-                                        Image(systemName: "arrow.clockwise")
-                                            .frame(minWidth: 44, minHeight: 44)
-                                            .contentShape(Rectangle())
-                                    }
-                                    .accessibilityLabel("Refresh nearby Tesserae servers")
-                                }
-                            }
-
-                            ForEach(model.discoveredInstances) { instance in
-                                Button {
-                                    manualServerAddress = instance.baseURL.absoluteString
-                                    manualPairingCode = nil
-                                    manualSetupPresented = true
-                                } label: {
-                                    HStack {
-                                        Image(systemName: "server.rack")
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(instance.name)
-                                                .font(.body.weight(.semibold))
-                                            Text(instance.baseURL.absoluteString)
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        Spacer()
-                                        Image(systemName: "chevron.right")
-                                            .foregroundStyle(.tertiary)
-                                    }
-                                    .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
-                            }
-
-                            if let discoveryError = model.discoveryError {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Label(
-                                        discoveryError,
-                                        systemImage: "wifi.exclamationmark"
-                                    )
-                                    Text(
-                                        "If Local Network access is off, enable it in iOS Settings. You can still enter the server address manually."
-                                    )
-                                }
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                            } else if !model.isDiscovering
-                                && model.discoveredInstances.isEmpty
-                            {
-                                Text(
-                                    "No server found. Manual connection still works when discovery is unavailable."
-                                )
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                            }
-                        }
-                        .tesseraeCard()
-                    }
-
-                    VStack(spacing: 12) {
-                        Button("Enter Server Address") {
-                            manualServerAddress = nil
-                            manualPairingCode = nil
-                            manualSetupPresented = true
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.large)
-
-                        if !isChoosingServer {
-                            NavigationLink {
-                                NearbyDisplaysView()
-                            } label: {
-                                Label(
-                                    "Nearby Setup & Maintenance",
-                                    systemImage: "dot.radiowaves.left.and.right")
-                            }
-                            .accessibilityIdentifier("onboarding-nearby-devices")
-
-                            Button {
-                                Task { await connectionHost.connectDemo() }
-                            } label: {
-                                if model.activeOperationIDs.contains("pair") {
-                                    ProgressView()
-                                        .frame(maxWidth: .infinity)
-                                } else {
-                                    Text("Explore with Demo Data")
-                                        .frame(maxWidth: .infinity)
-                                }
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(TesseraeTheme.accent)
-                            .disabled(model.activeOperationIDs.contains("pair"))
-                        }
-                    }
-
-                    Text(
-                        "Bonjour finds self-hosted servers but never authenticates. Pair with a one-time code from your server, or sign in to Tesserae Cloud."
-                    )
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
+            GeometryReader { viewport in
+                ScrollView {
+                    connectionContent(availableHeight: viewport.size.height)
                 }
-                .frame(maxWidth: 680)
-                .padding(20)
-                .frame(maxWidth: .infinity)
-                .onGeometryChange(for: CGFloat.self) { geometry in
-                    ceil(geometry.size.height)
-                } action: { height in
-                    if isChoosingServer { selectionContentHeight = height }
-                }
+                .scrollBounceBehavior(.basedOnSize)
+                .scrollDismissesKeyboard(.interactively)
             }
-            .scrollBounceBehavior(.basedOnSize)
             .tesseraeMessageCenter()
-            .onGeometryChange(for: CGFloat.self) { geometry in
-                // Keep the chrome allowance independent of the sheet's position.
-                max(64, ceil(geometry.safeAreaInsets.top))
-            } action: { height in
-                if isChoosingServer { selectionChromeHeight = height }
-            }
             .tesseraeScreenBackground()
             .sheet(isPresented: $manualSetupPresented) {
                 ManualConnectionView(
                     initialServerAddress: manualServerAddress,
-                    initialPairingCode: manualPairingCode,
                     onConnected: { if isChoosingServer { dismiss() } }
                 )
             }
@@ -225,47 +40,314 @@ struct OnboardingView: View {
             .toolbar {
                 if isChoosingServer {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel", systemImage: "xmark") { dismiss() }
+                        Button("Cancel", systemImage: "xmark", action: closeChooser)
                             .labelStyle(.iconOnly)
+                            .disabled(connectionHost.loginPhase == .committing)
                     }
                 }
             }
             .task {
                 connectionHost.reloadSavedConnections()
-                if model.discoveredInstances.isEmpty {
-                    await model.discoverNearby()
-                }
+            }
+            .onChange(of: connectionType) { _, type in
+                guard type == .selfHosted, model.discoveredInstances.isEmpty else { return }
+                Task { await model.discoverNearby() }
+            }
+            .onChange(of: connectionHost.loginError) { _, error in
+                if let error { AccessibilityNotification.Announcement(error).post() }
             }
             .onChange(of: model.connectionRevision) { _, _ in
                 if isChoosingServer { dismiss() }
             }
         }
-        .presentationDetents(isChoosingServer
-            ? [.height(max(200, selectionContentHeight + selectionChromeHeight))]
-            : [.large])
+        .presentationDetents(isChoosingServer && !dynamicTypeSize.isAccessibilitySize ? [.medium, .large] : [.large])
         .presentationDragIndicator(isChoosingServer ? .visible : .automatic)
+        .interactiveDismissDisabled(isChoosingServer && connectionHost.isSigningIn)
     }
 
-    private func onboardingRow(
-        icon: String,
-        title: LocalizedStringKey,
-        detail: LocalizedStringKey
-    ) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundStyle(TesseraeTheme.accent)
-                .frame(width: 28)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.headline)
-                Text(detail)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+    private func connectionContent(availableHeight: CGFloat) -> some View {
+        let isSigningIn = connectionHost.isSigningIn
+        let canSpreadOut = !isChoosingServer && !isSigningIn && !dynamicTypeSize.isAccessibilitySize
+            && connectionHost.savedConnections.isEmpty && availableHeight > 500
+        let topPadding = 20 + (canSpreadOut ? min(56, max(0, (availableHeight - 500) / 5)) : 0)
+        let minimumHeight = isChoosingServer ? 0 : max(0, availableHeight - topPadding - 20)
+
+        return VStack(spacing: 16) {
+            if !isChoosingServer {
+                TesseraeBrandMark(size: isSigningIn ? 52 : (canSpreadOut ? 104 : 72))
+                    .padding(.bottom, canSpreadOut ? 24 : 4)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isSigningIn)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Tesserae Companion")
+                    .accessibilityAddTraits(.isImage)
             }
-            Spacer()
+
+            if !isSigningIn {
+                if !connectionHost.savedConnections.isEmpty {
+                    savedConnections
+                }
+
+                if isChoosingServer {
+                    Text("Add a Connection")
+                        .font(.body.weight(.semibold))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityAddTraits(.isHeader)
+                }
+
+                Picker("Connection Type", selection: $connectionType) {
+                    Text("Cloud").tag(ConnectionType.cloud)
+                    Text("Self-Hosted").tag(ConnectionType.selfHosted)
+                }
+                .pickerStyle(.segmented)
+                .controlSize(.large)
+                .frame(minHeight: 44)
+                .disabled(connectionHost.isSwitching)
+                .accessibilityIdentifier("connection-type")
+            }
+
+            if isSigningIn || connectionType == .cloud {
+                CloudSignInView()
+            } else {
+                selfHostedConnection
+            }
+
+            if !isSigningIn, let error = connectionHost.loginError {
+                ConnectionLoginErrorMessage(message: error)
+            }
+
+            if !isChoosingServer && !isSigningIn {
+                Spacer(minLength: 0)
+                onboardingAlternatives
+            }
         }
+        .frame(maxWidth: 680, minHeight: minimumHeight, alignment: .top)
+        .padding(.horizontal, 20)
+        .padding(.top, topPadding)
+        .padding(.bottom, 20)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var currentConnectionID: ConnectionID? {
+        connectionHost.cloud?.fence.connectionID ?? model.activeConnectionFence?.connectionID
+    }
+
+    private var needsCloudConnection: Bool {
+        connectionHost.cloud.map { $0.needsSignIn || $0.isRestricted } ?? false
+    }
+
+    private var savedConnections: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Saved Connections").font(.headline).accessibilityAddTraits(.isHeader)
+            ForEach(connectionHost.savedConnections) { connection in
+                let isCurrent = connection.id == currentConnectionID
+                let isUnavailable = isCurrent && needsCloudConnection
+                Button {
+                    if isCurrent && isChoosingServer {
+                        closeChooser()
+                    } else {
+                        Task { await connectionHost.select(connection.id) }
+                    }
+                } label: {
+                    let layout = dynamicTypeSize.isAccessibilitySize
+                        ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6))
+                        : AnyLayout(HStackLayout(spacing: 12))
+                    layout {
+                        if !dynamicTypeSize.isAccessibilitySize {
+                            Image(systemName: connection.localInstance == nil ? "cloud" : "server.rack")
+                                .foregroundStyle(TesseraeTheme.accent)
+                                .accessibilityHidden(true)
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(connection.name)
+                                .font(.body.weight(.semibold))
+                            Text(connectionAddress(connection.identity))
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            if isUnavailable {
+                                Label("Cloud Connection Unavailable", systemImage: "exclamationmark.circle")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            } else if isCurrent && dynamicTypeSize.isAccessibilitySize {
+                                Label("Current Connection", systemImage: "checkmark")
+                                    .font(.footnote)
+                                    .foregroundStyle(TesseraeTheme.accent)
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                        if !dynamicTypeSize.isAccessibilitySize {
+                            Spacer(minLength: 8)
+                            if isCurrent && !isUnavailable {
+                                Image(systemName: "checkmark")
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(TesseraeTheme.accent)
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(isUnavailable || connectionHost.isSwitching || connectionHost.loginPhase == .committing)
+                .accessibilityValue(isCurrent && !isUnavailable ? Text("Current Connection") : Text(""))
+                .accessibilityAddTraits(isCurrent && !isUnavailable ? .isSelected : [])
+                .accessibilityIdentifier("saved-connection-\(connection.id.rawValue)")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .tesseraeCard()
+    }
+
+    private var minimumNearbyServerRowHeight: CGFloat { max(44, nearbyServerRowHeight) }
+
+    private var selfHostedConnection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Pair with the one-time code shown by your server.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+
+            Button("Enter Server Address") {
+                openManualSetup()
+            }
+            .buttonStyle(ConnectionOptionButtonStyle())
+            .accessibilityIdentifier("self-hosted-manual-address")
+
+            VStack(alignment: .leading, spacing: 4) {
+                nearbyServersHeader
+                if model.discoveredInstances.isEmpty {
+                    if model.isDiscovering {
+                        nearbyServerPlaceholder
+                    } else if model.discoveryError != nil {
+                        Text("Couldn’t search nearby. Check Local Network access in iOS Settings.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .frame(minHeight: minimumNearbyServerRowHeight, alignment: .leading)
+                    } else {
+                        Text("No nearby servers found.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .frame(minHeight: minimumNearbyServerRowHeight, alignment: .leading)
+                            .accessibilityIdentifier("self-hosted-discovery-empty")
+                    }
+                } else {
+                    ForEach(model.discoveredInstances) { instance in
+                        Button {
+                            openManualSetup(address: instance.baseURL.absoluteString)
+                        } label: {
+                            HStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(instance.name).font(.subheadline.weight(.semibold))
+                                    Text(instance.baseURL.absoluteString)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer(minLength: 8)
+                                Image(systemName: "chevron.right")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.tertiary)
+                                    .accessibilityHidden(true)
+                            }
+                            .frame(minHeight: minimumNearbyServerRowHeight)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var nearbyServersHeader: some View {
+        HStack {
+            Text("Nearby Tesserae")
+                .font(.subheadline.weight(.semibold))
+                .accessibilityAddTraits(.isHeader)
+            Spacer()
+            Group {
+                if model.isDiscovering {
+                    ProgressView()
+                        .accessibilityLabel("Searching for nearby servers…")
+                        .accessibilityHidden(model.discoveredInstances.isEmpty)
+                } else {
+                    Button {
+                        Task { await model.discoverNearby() }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.body)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("Refresh nearby Tesserae servers")
+                }
+            }
+            .frame(width: 44, height: 44)
+        }
+    }
+
+    private var nearbyServerPlaceholder: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Capsule().frame(width: 110, height: 9)
+            Capsule().frame(width: 155, height: 7)
+        }
+        .foregroundStyle(.secondary.opacity(0.2))
+        .frame(maxWidth: .infinity, minHeight: minimumNearbyServerRowHeight, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Searching for nearby servers…")
+        .accessibilityIdentifier("self-hosted-discovery-loading")
+    }
+
+    private var onboardingAlternatives: some View {
+        HStack(alignment: .top, spacing: 8) {
+            NavigationLink {
+                NearbyDisplaysView()
+            } label: {
+                Text("Nearby Devices")
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityIdentifier("onboarding-nearby-devices")
+
+            Button {
+                Task { await connectionHost.connectDemo() }
+            } label: {
+                Group {
+                    if model.activeOperationIDs.contains("pair") {
+                        ProgressView().accessibilityLabel("Demo Mode")
+                    } else {
+                        Text("Demo Mode")
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .disabled(model.activeOperationIDs.contains("pair"))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(TesseraeTheme.accent)
+        .font(.subheadline.weight(.medium))
+        .multilineTextAlignment(.center)
+    }
+
+    private func connectionAddress(_ identity: ConnectionIdentity) -> String {
+        switch identity {
+        case let .cloud(issuer, _, _): issuer.host ?? issuer.absoluteString
+        case let .selfHosted(service, _): service.absoluteString
+        }
+    }
+
+    private func openManualSetup(address: String? = nil) {
+        manualServerAddress = address
+        manualSetupPresented = true
+    }
+
+    private func closeChooser() {
+        if connectionHost.canCancelLogin, !connectionHost.cancelCloudSignIn() { return }
+        dismiss()
     }
 }
 
@@ -281,7 +363,6 @@ private struct ManualConnectionView: View {
 
     init(
         initialServerAddress: String? = nil,
-        initialPairingCode: String? = nil,
         onConnected: @escaping () -> Void = {}
     ) {
         self.onConnected = onConnected
@@ -291,9 +372,7 @@ private struct ManualConnectionView: View {
                 ?? "http://tesserae.local:8765"
         )
         _pairingCode = State(
-            initialValue: initialPairingCode
-                ?? ProcessInfo.processInfo.environment["TESSERAE_PAIRING_CODE"]
-                ?? ""
+            initialValue: ProcessInfo.processInfo.environment["TESSERAE_PAIRING_CODE"] ?? ""
         )
     }
 
@@ -310,9 +389,7 @@ private struct ManualConnectionView: View {
                 }
 
                 Section {
-                    Text(
-                        "The app probes `/api/app/v1`, exchanges the one-time code, and stores the returned Companion token in Keychain."
-                    )
+                    Text("Pair with the one-time code shown by your server.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 }

@@ -225,6 +225,24 @@ final class CloudLoginLifecycleTests: XCTestCase {
         XCTAssertEqual(revoked, ["refresh-old"])
         XCTAssertTrue(try fixture.vault.revocations().isEmpty)
     }
+
+    func testSignOutConfirmationCannotCloseAReplacementCloudSession() async throws {
+        let fixture = fixture()
+        await fixture.host.receiveCloudCallback(try pending(fixture, code: "original"))
+        let original = try XCTUnwrap(fixture.host.cloudPresentationContext)
+
+        await fixture.host.receiveCloudCallback(try pending(fixture, code: "replacement"))
+        let replacement = try XCTUnwrap(fixture.host.cloudPresentationContext)
+        await fixture.host.signOut(expectedCloud: original)
+
+        XCTAssertEqual(fixture.host.cloudPresentationContext, replacement)
+        let authorization = try await fixture.runtime.sessions.authorization(for: replacement.fence)
+        XCTAssertEqual(authorization.token, "access-replacement")
+
+        await fixture.host.signOut(expectedCloud: replacement)
+        XCTAssertNil(fixture.host.cloud)
+        XCTAssertNil(try fixture.runtime.registry.selectedID())
+    }
     func testDeniedReturnsIdleAndWrongStateKeepsCurrentAttempt() async throws {
         let fixture = fixture()
         let pending = try PendingCloudLogin(issuer: issuer)

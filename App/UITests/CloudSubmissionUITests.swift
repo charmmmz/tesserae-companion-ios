@@ -306,7 +306,11 @@ import XCTest
         let app = launch()
         XCTAssertTrue(app.buttons["cloud-device-a3_land"].waitForExistence(timeout: 15))
         app.buttons["root-settings"].firstMatch.tap()
-        let signOut = app.buttons["Sign Out"]; reveal(signOut, in: app); signOut.tap()
+        app.buttons["cloud-account-settings"].tap()
+        let signOut = app.buttons["cloud-sign-out"]; reveal(signOut, in: app); signOut.tap()
+        let confirm = app.alerts["Sign Out of Cloud?"].buttons["Sign Out"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        confirm.tap()
         try await authorize(app)
         openSavedResult(app)
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'cloud-result-target-'")).firstMatch.waitForExistence(timeout: 8))

@@ -25,7 +25,7 @@ final class AdaptiveLayoutUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "500"
         app.launchEnvironment["TESSERAE_UI_TEST_AUTO_FRAMING"] = "1"
         app.launch()
-        let demo = app.buttons["Explore with Demo Data"]
+        let demo = app.buttons["Demo Mode"]
         XCTAssertTrue(demo.waitForExistence(timeout: 8))
         reveal(demo, app: app)
         demo.tap()

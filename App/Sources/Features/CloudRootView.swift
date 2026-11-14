@@ -253,54 +253,162 @@ private struct CloudResourceDetail: View {
     }
 }
 
-struct CloudConnectionSettings: View {
+struct CloudAccountSettings: View {
     let model: CloudBrowseModel
     let onChooseConnection: () -> Void
     @Environment(ConnectionHost.self) private var host
+    @State private var confirmsSignOut = false
+    @State private var signOutContext: CloudPresentationContext?
+    @State private var signingOut = false
+
     var body: some View {
-        Section("Tesserae Cloud") {
-            if let account = model.snapshot?.account {
-                LabeledContent("Account", value: account.user.email)
-                LabeledContent("Tenant", value: account.tenant.name)
-                LabeledContent("Role", value: String(localized: account.role == "owner" ? "Owner" : "Member"))
+        Form {
+            if let problem = model.problem {
+                Section {
+                    Label(problem, systemImage: "exclamationmark.triangle")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    if model.needsSignIn || model.isRestricted {
+                        Button("Choose Connection", systemImage: "arrow.triangle.swap", action: onChooseConnection)
+                    } else if let retryAfter = model.retryAfter {
+                        TimelineView(.periodic(from: .now, by: 1)) { clock in
+                            retryButton.disabled(clock.date < retryAfter)
+                        }
+                    } else {
+                        retryButton
+                    }
+                }
             }
-            CloudSignInControls(inSettings: true)
-            LabeledContent("Service", value: model.client.issuer.absoluteString)
-            Button("Choose Connection", systemImage: "arrow.triangle.swap", action: onChooseConnection)
-            Link("Set Up in Cloud", destination: AppConfiguration.cloudSetupURL(issuer: model.client.issuer))
+
             if let account = model.snapshot?.account {
-                NavigationLink("Cloud Usage & Features") {
-                    Form {
-                        Section("Usage") {
-                            LabeledContent("Displays", value: String(account.usage.devices))
-                            LabeledContent("Dashboards", value: String(account.usage.pages))
-                            LabeledContent("Renders Today", value: String(account.usage.rendersToday))
-                            LabeledContent("Charged Renders Today", value: String(account.usage.rendersChargedToday))
-                            LabeledContent("MCP Calls Today", value: String(account.usage.mcpCallsToday))
-                            LabeledContent("Browser Time Today", value: Duration.milliseconds(account.usage.browserMillisecondsToday).formatted(.units(allowed: [.hours, .minutes, .seconds])))
-                            LabeledContent("Storage", value: ByteCountFormatter.string(fromByteCount: Int64(account.usage.storageBytes), countStyle: .file))
-                        }
-                        Section("Limits") {
-                            ForEach(account.limits.keys.sorted(), id: \.self) { key in
+                Section("Account") {
+                    LabeledContent("Email", value: account.user.email)
+                        .accessibilityIdentifier("cloud-account-email")
+                    LabeledContent("Workspace", value: account.tenant.name)
+                        .accessibilityIdentifier("cloud-account-workspace")
+                    LabeledContent("Role", value: String(localized: account.role == "owner" ? "Owner" : "Member"))
+                }
+
+                Section {
+                    NavigationLink {
+                        CloudUsageSettings(model: model)
+                    } label: {
+                        Label("Cloud Usage & Features", systemImage: "chart.bar")
+                    }
+                    Link(destination: accountWebURL) {
+                        Label("Cloud Settings in Browser", systemImage: "safari")
+                    }
+                    Link(destination: AppConfiguration.cloudSetupURL(issuer: model.client.issuer)) {
+                        Label("Set Up in Cloud", systemImage: "display")
+                    }
+                }
+            } else if model.problem == nil {
+                Section {
+                    ProgressView("Loading Cloud…")
+                }
+            }
+
+            Section {
+                Button("Sign Out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
+                    guard host.cloud === model, let context = host.cloudPresentationContext else { return }
+                    signOutContext = context
+                    confirmsSignOut = true
+                }
+                .accessibilityIdentifier("cloud-sign-out")
+                .disabled(signingOut || host.isSwitching || host.isSigningIn)
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .frame(maxWidth: 820)
+        .frame(maxWidth: .infinity)
+        .tesseraeScreenBackground()
+        .navigationTitle("Cloud Account")
+        .navigationBarTitleDisplayMode(.inline)
+        .alert("Sign Out of Cloud?", isPresented: $confirmsSignOut, presenting: signOutContext) { context in
+            Button("Sign Out", role: .destructive) { signOut(context) }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("You’ll need to sign in again to use this Cloud connection on this device.")
+        }
+    }
+
+    private var retryButton: some View {
+        Button("Retry", systemImage: "arrow.clockwise") { Task { await model.refresh() } }
+            .disabled(model.isLoading)
+    }
+
+    private var accountWebURL: URL {
+        var url = URLComponents(url: model.client.issuer.appending(path: "app/"), resolvingAgainstBaseURL: false)
+        url?.fragment = "/settings/account"
+        return url?.url ?? model.client.issuer
+    }
+
+    private func signOut(_ context: CloudPresentationContext) {
+        signingOut = true
+        Task {
+            await host.signOut(expectedCloud: context)
+            signingOut = false
+        }
+    }
+}
+
+private struct CloudUsageSettings: View {
+    let model: CloudBrowseModel
+
+    var body: some View {
+        Form {
+            if let account = model.snapshot?.account {
+                Section("Usage") {
+                    LabeledContent("Displays", value: account.usage.devices.formatted())
+                    LabeledContent("Dashboards", value: account.usage.pages.formatted())
+                    LabeledContent("Storage", value: ByteCountFormatter.string(
+                        fromByteCount: Int64(account.usage.storageBytes), countStyle: .file))
+                }
+                Section("Today") {
+                    LabeledContent("Renders", value: account.usage.rendersToday.formatted())
+                    LabeledContent("Charged Renders", value: account.usage.rendersChargedToday.formatted())
+                    LabeledContent("MCP Calls", value: account.usage.mcpCallsToday.formatted())
+                    LabeledContent("Browser Time", value: Duration.milliseconds(account.usage.browserMillisecondsToday)
+                        .formatted(.units(allowed: [.hours, .minutes, .seconds])))
+                }
+
+                let limits = account.limits.keys.sorted().filter { CloudSettingsLabels.limit($0) != nil }
+                let features = account.features.keys.sorted().filter { CloudSettingsLabels.feature($0) != nil }
+                if !limits.isEmpty {
+                    Section {
+                        DisclosureGroup("Limits") {
+                            ForEach(limits, id: \.self) { key in
                                 if let title = CloudSettingsLabels.limit(key) {
-                                    LabeledContent(title, value: account.limits[key].flatMap { $0 }.map { $0.formatted() } ?? String(localized: "Unlimited"))
-                                }
-                            }
-                        }
-                        Section("Features") {
-                            ForEach(account.features.keys.sorted(), id: \.self) { key in
-                                if let title = CloudSettingsLabels.feature(key) {
-                                    LabeledContent(title, value: account.features[key] == true ? String(localized: "Available") : String(localized: "Unavailable"))
+                                    LabeledContent(title, value: account.limits[key].flatMap { $0 }?.formatted()
+                                        ?? String(localized: "Unlimited"))
+                                        .accessibilityIdentifier("cloud-limit-\(key)")
                                 }
                             }
                         }
                     }
-                    .scrollContentBackground(.hidden).tesseraeScreenBackground()
-                    .navigationTitle("Cloud Usage & Features")
                 }
+                if !features.isEmpty {
+                    Section {
+                        DisclosureGroup("Features") {
+                            ForEach(features, id: \.self) { key in
+                                if let title = CloudSettingsLabels.feature(key) {
+                                    LabeledContent(title, value: account.features[key] == true
+                                        ? String(localized: "Available") : String(localized: "Unavailable"))
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if let problem = model.problem {
+                Label(problem, systemImage: "exclamationmark.triangle")
             }
-            Button("Sign Out", role: .destructive) { Task { await host.signOut() } }
         }
+        .scrollContentBackground(.hidden)
+        .frame(maxWidth: 820)
+        .frame(maxWidth: .infinity)
+        .tesseraeScreenBackground()
+        .navigationTitle("Cloud Usage & Features")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

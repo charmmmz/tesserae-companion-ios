@@ -422,12 +422,19 @@ final class ConnectionHost {
         await finish.value
         return true
     }
-    func signOut() async {
+    func signOut(expectedCloud: CloudPresentationContext? = nil) async {
+        if let expectedCloud {
+            guard cloudPresentationContext == expectedCloud, !isSwitching, !isSigningIn else { return }
+        }
         if loginPhase != .committing, !cancelCloudSignIn() { return }
         let intent = UUID(); selectionIntent = intent
         var remoteFence: ConnectionFence?
         var legacySession: CompanionConnectionSession?
         await serialized {
+            if let expectedCloud {
+                guard self.selectionIntent == intent, self.cloud?.fence == expectedCloud.fence,
+                      self.cloudContextRevision == expectedCloud.revision else { return }
+            }
             try await self.stopCloudExecution()
             if let runtime = self.runtime, let fence = self.cloud?.fence ?? self.local.activeFenceForSignOut {
                 try await runtime.closeConnection(fence)

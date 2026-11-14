@@ -222,21 +222,44 @@ final class CloudBrowsingUITests: XCTestCase {
     func testChineseLargestAccessibilityLayout() async throws {
         try await selectBrowserAccount("owner_a")
         let app = launch(chinese: true, accessibility: true)
+        let selfHosted = app.segmentedControls["connection-type"].buttons["自建"]
+        XCTAssertTrue(selfHosted.waitForExistence(timeout: 5))
+        selfHosted.tap()
+        let manual = app.buttons["输入服务器地址"]
+        reveal(manual, app: app)
+        XCTAssertGreaterThanOrEqual(manual.frame.height, 44)
+        capture(app, "self-hosted-chinese-ax5")
+        let cloud = app.segmentedControls["connection-type"].buttons["云端"]
+        if !cloud.isHittable { app.swipeDown() }
+        cloud.tap()
         authorize(app)
         XCTAssertTrue(app.buttons["cloud-device-a2_shared"].waitForExistence(timeout: 15))
-        XCTAssertFalse(app.buttons["root-send-action"].exists)
         capture(app, "cloud-chinese-ax5-list")
         app.buttons["cloud-device-a2_shared"].tap()
         XCTAssertTrue(app.images["cloud-preview-image"].waitForExistence(timeout: 10))
         capture(app, "cloud-chinese-ax5-detail")
         XCTAssertEqual(app.buttons.matching(identifier: "root-settings").count, 1)
         app.buttons["root-settings"].firstMatch.tap()
-        reveal(app.buttons["选择连接"], app: app)
-        app.buttons["选择连接"].tap()
+        let cloudAccount = app.buttons["cloud-account-settings"]
+        reveal(cloudAccount, app: app)
+        cloudAccount.tap()
+        XCTAssertTrue(app.navigationBars["云端账号"].waitForExistence(timeout: 5))
+        capture(app, "cloud-chinese-account")
+        app.navigationBars.buttons["设置"].firstMatch.tap()
+        let choose = app.buttons["choose-connection"]
+        reveal(choose, app: app)
+        choose.tap()
         XCTAssertTrue(app.navigationBars["Tesserae 连接"].waitForExistence(timeout: 5))
         capture(app, "cloud-chinese-connections")
     }
+    private func showSelfHosted(_ app: XCUIApplication) {
+        let selfHosted = app.segmentedControls["connection-type"].buttons["Self-Hosted"]
+        XCTAssertTrue(selfHosted.waitForExistence(timeout: 10))
+        reveal(selfHosted, app: app)
+        selfHosted.tap()
+    }
     private func connectManual(_ app: XCUIApplication) {
+        showSelfHosted(app)
         let manual = app.buttons["Enter Server Address"]
         XCTAssertTrue(manual.waitForExistence(timeout: 10)); reveal(manual, app: app); manual.tap()
         XCTAssertTrue(app.textFields["Pairing code"].waitForExistence(timeout: 5))
@@ -262,7 +285,7 @@ final class CloudBrowsingUITests: XCTestCase {
     }
     func testChooseConnectionManualLocalWithDelayedFirstRead() {
         let app = launch(localPort: 18766)
-        let demo = app.buttons["Explore with Demo Data"]
+        let demo = app.buttons["Demo Mode"]
         XCTAssertTrue(demo.waitForExistence(timeout: 10)); reveal(demo, app: app); demo.tap()
         XCTAssertTrue(app.buttons["root-send-action"].waitForExistence(timeout: 30))
         chooseConnection(app)
@@ -272,8 +295,18 @@ final class CloudBrowsingUITests: XCTestCase {
     }
     func testBonjourConnectsActualLoopbackFixture() {
         let app = launch()
+        showSelfHosted(app)
+        let manual = app.buttons["Enter Server Address"]
+        let loading = app.descendants(matching: .any)["self-hosted-discovery-loading"]
+        XCTAssertTrue(loading.exists)
+        capture(app, "self-hosted-searching")
+        XCTAssertTrue(manual.isHittable)
+        let manualDuringSearch = manual.frame
         let server = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Tesserae A2 Fixture'")).firstMatch
         XCTAssertTrue(server.waitForExistence(timeout: 20))
+        capture(app, "self-hosted-server-found")
+        XCTAssertFalse(loading.exists)
+        XCTAssertEqual(manual.frame.minY, manualDuringSearch.minY, accuracy: 1)
         reveal(server, app: app); server.tap()
         XCTAssertTrue(app.textFields["Pairing code"].waitForExistence(timeout: 5))
         app.buttons["Connect"].tap()
@@ -328,7 +361,7 @@ final class CloudBrowsingUITests: XCTestCase {
     }
     func testUnknownPendingCallbackShowsRecoveryWithoutLosingDemo() {
         let app = launch()
-        let demo = app.buttons["Explore with Demo Data"]
+        let demo = app.buttons["Demo Mode"]
         XCTAssertTrue(demo.waitForExistence(timeout: 10)); reveal(demo, app: app); demo.tap()
         XCTAssertTrue(app.buttons["root-send-action"].waitForExistence(timeout: 30))
         XCUIDevice.shared.system.open(URL(string: "com.charmmmz.tesseraecompanion:/oauth/callback?state=another-device&code=synthetic-invalid")!)
@@ -377,17 +410,51 @@ final class CloudBrowsingUITests: XCTestCase {
         XCTAssertTrue(app.images["cloud-preview-image"].waitForExistence(timeout: 10))
         capture(app, "review-native-cloud-dashboard")
         app.buttons["root-settings"].firstMatch.tap()
+        let account = app.buttons["cloud-account-settings"]
+        XCTAssertTrue(account.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["choose-connection"].exists)
+        XCTAssertFalse(app.buttons["cloud-signin"].exists)
+        capture(app, "review-cloud-settings")
+        account.tap()
+        XCTAssertTrue(app.navigationBars["Cloud Account"].waitForExistence(timeout: 5))
+        capture(app, "review-cloud-account")
+        let workspace = app.descendants(matching: .any)["cloud-account-workspace"].firstMatch
+        let email = app.descendants(matching: .any)["cloud-account-email"].firstMatch
+        XCTAssertTrue(workspace.exists)
+        XCTAssertTrue(email.exists)
+        let signOut = app.buttons["cloud-sign-out"]
+        reveal(signOut, app: app)
+        signOut.tap()
+        let cancelSignOut = app.alerts["Sign Out of Cloud?"].buttons["Cancel"]
+        XCTAssertTrue(cancelSignOut.waitForExistence(timeout: 5))
+        cancelSignOut.tap()
+        XCTAssertTrue(app.navigationBars["Cloud Account"].exists)
         app.buttons["Cloud Usage & Features"].tap()
         XCTAssertTrue(app.navigationBars["Cloud Usage & Features"].waitForExistence(timeout: 5))
-        app.swipeUp(); app.swipeDown()
+        let limits = app.buttons["Limits"]
+        reveal(limits, app: app)
+        limits.tap()
+        let dailyRenders = app.descendants(matching: .any)["cloud-limit-renders_per_day"].firstMatch
+        reveal(dailyRenders, app: app)
+        XCTAssertTrue(dailyRenders.exists)
         capture(app, "review-native-cloud-usage")
+        app.navigationBars.buttons["Cloud Account"].firstMatch.tap()
         app.navigationBars.buttons["Settings"].firstMatch.tap()
-        app.buttons["Done"].firstMatch.tap()
-        XCTAssertFalse(app.buttons["root-send-action"].exists)
+        app.buttons["choose-connection"].tap()
+        XCTAssertTrue(app.navigationBars["Tesserae Connections"].waitForExistence(timeout: 5))
+        capture(app, "review-cloud-connections")
+        app.navigationBars.buttons["Cancel"].tap()
+        account.tap()
+        reveal(signOut, app: app)
+        signOut.tap()
+        let confirm = app.alerts["Sign Out of Cloud?"].buttons["Sign Out"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        confirm.tap()
+        XCTAssertTrue(app.buttons["cloud-signin"].waitForExistence(timeout: 8))
     }
     func testCancelSystemBrowserPreservesDemoConnection() {
         let app = launch()
-        let demo = app.buttons["Explore with Demo Data"]
+        let demo = app.buttons["Demo Mode"]
         XCTAssertTrue(demo.waitForExistence(timeout: 10)); reveal(demo, app: app); demo.tap()
         XCTAssertTrue(app.buttons["root-send-action"].waitForExistence(timeout: 30))
         app.buttons["root-settings"].firstMatch.tap()
