@@ -592,6 +592,18 @@ final class CloudBrowsingUITests: XCTestCase {
         XCTAssertTrue(confirm.waitForExistence(timeout: 5))
         confirm.tap()
         XCTAssertTrue(app.buttons["cloud-signin"].waitForExistence(timeout: 8))
+        let saved = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'saved-connection-'"))
+        XCTAssertFalse(saved.firstMatch.exists)
+        XCTAssertFalse(app.staticTexts["Saved Connections"].exists)
+        capture(app, "welcome-after-cloud-sign-out")
+        let choose = app.onboardingShortcut("onboarding-choose-connection")
+        XCTAssertTrue(choose.isHittable)
+        choose.tap()
+        XCTAssertTrue(app.navigationBars["Tesserae Connections"].waitForExistence(timeout: 5))
+        XCTAssertTrue(saved.firstMatch.exists)
+        app.navigationBars.buttons["Cancel"].tap()
+        XCTAssertFalse(saved.firstMatch.exists)
+        XCTAssertTrue(app.buttons["cloud-signin"].isHittable)
     }
     func testCancelSystemBrowserPreservesDemoConnection() {
         let app = launch()

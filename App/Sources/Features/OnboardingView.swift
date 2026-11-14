@@ -15,6 +15,7 @@ struct OnboardingView: View {
     @Environment(ConnectionHost.self) private var connectionHost
     @ScaledMetric(relativeTo: .subheadline) private var nearbyServerRowHeight: CGFloat = 44
     @State private var connectionType = ConnectionType.cloud
+    @State private var connectionChooserPresented = false
     @State private var manualSetupPresented = false
     @State private var manualServerAddress: String?
 
@@ -28,7 +29,10 @@ struct OnboardingView: View {
                 .scrollDismissesKeyboard(.interactively)
             }
             .tesseraeMessageCenter()
-            .tesseraeScreenBackground()
+            .tesseraeScreenBackground(grid: !isChoosingServer)
+            .sheet(isPresented: $connectionChooserPresented) {
+                OnboardingView(isChoosingServer: true)
+            }
             .sheet(isPresented: $manualSetupPresented) {
                 ManualConnectionView(
                     initialServerAddress: manualServerAddress,
@@ -75,8 +79,7 @@ struct OnboardingView: View {
         let insets = viewport.safeAreaInsets
         let screenHeight = viewport.size.height + insets.top + insets.bottom
         let spacious = !dynamicTypeSize.isAccessibilitySize && viewport.size.height >= 550
-            && connectionHost.savedConnections.isEmpty
-        let brandHeight = spacious ? max(132, screenHeight * 0.39 - insets.top) : 104
+        let brandHeight = spacious ? max(132, screenHeight * 0.43 - insets.top) : 104
         let brandSize: CGFloat = spacious ? (viewport.size.width > 360 ? 104 : 88) : 72
 
         return VStack(spacing: 0) {
@@ -92,7 +95,7 @@ struct OnboardingView: View {
 
             VStack(spacing: 16) {
                 if !isSigningIn {
-                    if !connectionHost.savedConnections.isEmpty {
+                    if isChoosingServer && !connectionHost.savedConnections.isEmpty {
                         savedConnections
                     }
 
@@ -130,7 +133,22 @@ struct OnboardingView: View {
 
                 if !isChoosingServer && !isSigningIn {
                     Spacer(minLength: 0)
-                    onboardingAlternatives
+                    VStack(spacing: 4) {
+                        if !connectionHost.savedConnections.isEmpty {
+                            Button {
+                                connectionChooserPresented = true
+                            } label: {
+                                Text("Choose Connection")
+                                    .frame(maxWidth: .infinity, minHeight: 44)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("onboarding-choose-connection")
+                        }
+                        onboardingAlternatives
+                    }
                 }
             }
             .padding(.horizontal, viewport.size.width > 370 ? 24 : 16)
