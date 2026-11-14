@@ -8,6 +8,26 @@ import TesseraeKit
 struct BluetoothDisplayStoreTests {
     private let start = Date(timeIntervalSince1970: 1_700_000_000)
 
+    @Test func legacyConnectionKeepsAcknowledgedBluetoothModeAfterMigration() throws {
+        let directory = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appending(path: "records.plist")
+        let store = BluetoothDisplayStore(fileURL: file)
+        store.activeServerID = "legacy"
+        store.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: nil, at: start)
+        let report = try #require(store.pendingModeReports(displayIDs: ["panel"], serverID: "legacy").first)
+        store.markModeReported(report, serverID: "legacy")
+
+        let upgradingStore = BluetoothDisplayStore(fileURL: file)
+        upgradingStore.migrateServer(from: "legacy", to: "connection")
+        upgradingStore.migrateServer(from: "legacy", to: "connection")
+
+        let restored = BluetoothDisplayStore(fileURL: file)
+        #expect(restored.record(for: "panel", serverID: "connection")?.mode == .bluetooth)
+        #expect(restored.pendingModeReports(displayIDs: ["panel"], serverID: "connection").isEmpty)
+        #expect(restored.record(for: "panel", serverID: "legacy") == nil)
+    }
+
     @Test func statusReadingsSurviveRestartAndUpgradeAnAcknowledgedMode() throws {
         let directory = URL.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

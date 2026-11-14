@@ -23,6 +23,16 @@ public final class URLSessionTesseraeTransport: TesseraeHTTPTransporting, @unche
         self.session = session
     }
 
+    public static func cloud(resourceTimeout: TimeInterval? = nil) -> URLSessionTesseraeTransport {
+        let configuration = URLSessionConfiguration.ephemeral
+        if let resourceTimeout { configuration.timeoutIntervalForResource = resourceTimeout }
+        configuration.urlCache = nil
+        configuration.httpCookieStorage = nil
+        configuration.httpShouldSetCookies = false
+        return URLSessionTesseraeTransport(session: URLSession(configuration: configuration,
+            delegate: CloudHTTPRedirectPolicy(), delegateQueue: nil))
+    }
+
     public func send(_ request: URLRequest) async throws -> TesseraeHTTPResponse {
         let (data, response) = try await session.data(for: request)
         guard let response = response as? HTTPURLResponse else {
@@ -46,4 +56,10 @@ public final class URLSessionTesseraeTransport: TesseraeHTTPTransporting, @unche
             headers: headers
         )
     }
+}
+
+private final class CloudHTTPRedirectPolicy: NSObject, URLSessionTaskDelegate, Sendable {
+    func urlSession(_ session: URLSession, task: URLSessionTask,
+                    willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest) async -> URLRequest? { nil }
 }

@@ -25,7 +25,7 @@ final class AdaptiveLayoutUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "500"
         app.launchEnvironment["TESSERAE_UI_TEST_AUTO_FRAMING"] = "1"
         app.launch()
-        let demo = app.buttons["Explore with Demo Data"]
+        let demo = app.onboardingShortcut("onboarding-demo")
         XCTAssertTrue(demo.waitForExistence(timeout: 8))
         reveal(demo, app: app)
         demo.tap()
@@ -253,7 +253,8 @@ final class AdaptiveLayoutUITests: XCTestCase {
         capture("Display detail portrait", app: app)
         XCUIDevice.shared.orientation = .landscapeLeft
         XCTAssertTrue(app.navigationBars["Kitchen"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Server preview"].exists)
+        let preview = app.descendants(matching: .any)["display-detail-preview-picpak-kitchen"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 5))
         XCTAssertEqual(app.buttons.matching(identifier: "root-send-action").count, 1)
         XCTAssertTrue(send.isHittable)
         XCTAssertGreaterThan(send.frame.minX, app.frame.midX)

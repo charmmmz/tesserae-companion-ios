@@ -158,15 +158,50 @@ requires compatible opt-in firmware and hardware acceptance. See the
 
 1. Install [TestFlight](https://apps.apple.com/app/testflight/id899247664) and
    [join the beta](https://testflight.apple.com/join/gjQar3TK).
-2. Explore **Demo Mode**, or discover your Tesserae server on the local network.
-   You can also enter its address manually.
+2. Choose **Self-Hosted** to find a server on the local network or enter its
+   address. **Nearby Devices** and **Demo Mode** are at the bottom of the
+   welcome screen.
 3. Pair using the Companion pairing code shown by Tesserae.
 4. Grant optional editing or personal-data permissions only for the features
    you want to use.
 
-Requires **iOS / iPadOS 18 or later** and a Tesserae server exposing the scoped
-`/api/app/v1` Companion API. The app connects directly to your server; there is
-no separate Companion cloud account. English and Simplified Chinese are included.
+Requires **iOS / iPadOS 18 or later**. Self-hosted connections use a Tesserae
+server exposing the scoped `/api/app/v1` Companion API and do not require a
+Cloud account. English and Simplified Chinese are included.
+
+### Tesserae Cloud (in development)
+
+Development builds offer **Sign In with Email Link** on the **Cloud** tab. The
+internal Apple sign-in beta also offers **Sign in with Apple** for existing Cloud
+accounts. If Apple hides the address or it doesn't match, verify your Cloud email
+with a code. The system browser handles workspace approval. Switch between
+saved Cloud and self-hosted connections from **Settings → Choose Connection**.
+
+Cloud browsing shows displays, dashboards and their existing previews. Missing
+previews remain placeholders; browsing does not request renders. Device setup
+opens the Cloud website. Native photo sending reuses the screen preview and
+Fit/Fill framing controls, keeps a result for each display, and supports explicit
+selected resend. **Reload Preview** reads the saved preview. **Regenerate Display
+Frame** uses the device's existing dashboard binding to generate a new frame.
+Generated frames are available for the next display wake; the App does not claim
+that the physical screen has updated. Photos sharing and Send Image in Shortcuts
+can use fixed Cloud displays without opening the App first. A separate shortcut
+refreshes the current page. Retained items appear in Send Results for explicit
+review and Continue; they never resume automatically. Cloud editing remains on
+the website.
+
+This integration requires Cloud's native authorization endpoints. Local
+integration is tested separately from deployment, real email delivery and
+signed-device acceptance. The current TestFlight release may not include it.
+
+Cloud UI tests require an explicitly prepared local C1 fixture, browser bridge
+and fault server. Enable them with the test-runner environment variable
+`TESSERAE_RUN_CLOUD_UI=1`; external-browser tests also read the private handoff
+file named by `TESSERAE_CLOUD_BROWSER_TRACE`. Connection performance tests use
+`TESSERAE_RUN_CONNECTION_PERF=1` and require the baseline simulator bundle.
+Cloud submission UI tests use `TESSERAE_RUN_CLOUD_SUBMISSION_UI=1`, the same owned
+local fixture, and a marker image seeded into the simulator Photos library.
+These suites skip by default without contacting a service.
 
 ### Server and firmware support
 

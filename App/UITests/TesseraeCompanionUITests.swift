@@ -1,5 +1,15 @@
 import XCTest
 
+extension XCUIApplication {
+    @MainActor
+    func onboardingShortcut(_ identifier: String) -> XCUIElement {
+        let shortcut = buttons[identifier]
+        guard shortcut.waitForExistence(timeout: 5) else { return shortcut }
+        for _ in 0..<6 where !shortcut.isHittable { swipeUp() }
+        return shortcut
+    }
+}
+
 @MainActor
 final class TesseraeCompanionUITests: XCTestCase {
     private var restoreVoiceOverEnabled: Bool?
@@ -25,8 +35,8 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
         app.launchArguments += ["-dashboardLayoutMode", "cards"]
         app.launch()
-        XCTAssertTrue(app.buttons["Explore with Demo Data"].waitForExistence(timeout: 3))
-        app.buttons["Explore with Demo Data"].tap()
+        XCTAssertTrue(app.onboardingShortcut("onboarding-demo").waitForExistence(timeout: 3))
+        app.onboardingShortcut("onboarding-demo").tap()
         let dashboardsTab = app.buttons["Dashboards"].firstMatch
         XCTAssertTrue(dashboardsTab.waitForExistence(timeout: 3))
         dashboardsTab.tap()
@@ -64,19 +74,67 @@ final class TesseraeCompanionUITests: XCTestCase {
 
     func testOnboardingOffersDiscoveryAndManualConnectionWithoutQR() {
         let app = XCUIApplication()
-        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        let verifiesAppleEntry = ProcessInfo.processInfo.environment["TESSERAE_VERIFY_APPLE_BETA_ENTRY"] == "1"
+        if verifiesAppleEntry {
+            app.launchEnvironment["TESSERAE_CLOUD_TEST_NAMESPACE"] = UUID().uuidString
+        } else {
+            app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        }
         app.launch()
 
-        XCTAssertTrue(
-            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
-        )
-        XCTAssertTrue(
-            app.staticTexts[
-                "The official Tesserae app for quick, everyday display tasks on iPhone and iPad."
-            ].exists
-        )
-        XCTAssertTrue(app.buttons["Enter Server Address"].exists)
+        let connectionType = app.segmentedControls["connection-type"]
+        XCTAssertTrue(connectionType.waitForExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["Tesserae Companion"].exists)
+        XCTAssertTrue(connectionType.buttons["Cloud"].isSelected)
+        let email = app.buttons["cloud-signin"]
+        XCTAssertTrue(email.isHittable)
+        if verifiesAppleEntry {
+            let apple = app.buttons["cloud-signin-apple"]
+            XCTAssertTrue(apple.isHittable)
+            XCTAssertEqual(apple.frame.width, email.frame.width, accuracy: 1)
+            XCTAssertEqual(apple.frame.height, email.frame.height, accuracy: 1)
+        }
+        XCTAssertFalse(app.buttons["Enter Server Address"].exists)
+        let nearby = app.buttons["onboarding-nearby-devices"]
+        let demo = app.buttons["onboarding-demo"]
+        XCTAssertFalse(app.buttons["onboarding-more"].exists)
+        XCTAssertTrue(nearby.isHittable)
+        XCTAssertTrue(demo.isHittable)
+        XCTAssertEqual(nearby.frame.midY, demo.frame.midY, accuracy: 1)
+        XCTAssertGreaterThan(nearby.frame.midY, app.frame.height * 0.85)
+        let footerY = nearby.frame.midY
+        readabilityAttachment(app, "Cloud onboarding")
+
+        connectionType.buttons["Self-Hosted"].tap()
+        XCTAssertTrue(connectionType.buttons["Self-Hosted"].isSelected)
+        XCTAssertTrue(app.buttons["Enter Server Address"].isHittable)
+        XCTAssertTrue(app.staticTexts["Nearby Tesserae"].exists)
+        XCTAssertTrue(nearby.isHittable)
+        XCTAssertTrue(demo.isHittable)
+        XCTAssertEqual(nearby.frame.midY, footerY, accuracy: 2)
+        XCTAssertFalse(app.buttons["cloud-signin"].exists)
         XCTAssertFalse(app.buttons["Scan Pairing QR"].exists)
+
+        let brand = app.images["onboarding-brand"]
+        let welcomeLogo = brand.frame
+        app.buttons["self-hosted-manual-address"].tap()
+        let manual = app.navigationBars["Connect Manually"]
+        XCTAssertTrue(manual.waitForExistence(timeout: 4))
+        XCTAssertTrue(app.textFields["Pairing code"].isHittable)
+        XCTAssertLessThan(brand.frame.width, welcomeLogo.width)
+        XCTAssertLessThan(brand.frame.midY, welcomeLogo.midY)
+        readabilityAttachment(app, "Manual connection with compact logo")
+        manual.buttons["Cancel"].tap()
+        let restoredLogo = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            let frame = brand.frame
+            return abs(frame.width - welcomeLogo.width) <= 1 && abs(frame.midY - welcomeLogo.midY) <= 1
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [restoredLogo], timeout: 3), .completed)
+        XCTAssertTrue(connectionType.buttons["Self-Hosted"].isSelected)
+
+        connectionType.buttons["Cloud"].tap()
+        XCTAssertTrue(app.buttons["cloud-signin"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["Enter Server Address"].exists)
     }
 
     func testOfflineRestoreOffersBluetoothAndOtherServers() {
@@ -103,8 +161,9 @@ final class TesseraeCompanionUITests: XCTestCase {
         add(shot)
         app.buttons["Done"].tap()
         app.buttons["choose-server"].tap()
-        XCTAssertTrue(app.navigationBars["Tesserae Servers"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["No server found. Manual connection still works when discovery is unavailable."].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.navigationBars["Tesserae Connections"].waitForExistence(timeout: 3))
+        app.segmentedControls["connection-type"].buttons["Self-Hosted"].tap()
+        XCTAssertTrue(app.staticTexts["self-hosted-discovery-empty"].waitForExistence(timeout: 3))
         app.buttons["Enter Server Address"].tap()
         XCTAssertTrue(app.textFields["http://host:port"].waitForExistence(timeout: 3))
         app.buttons["Connect"].tap()
@@ -113,7 +172,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Connect Manually"].exists)
         XCTAssertTrue(app.buttons["Connect"].isEnabled)
         app.navigationBars["Connect Manually"].buttons["Cancel"].tap()
-        app.navigationBars["Tesserae Servers"].buttons["Cancel"].tap()
+        app.navigationBars["Tesserae Connections"].buttons["Cancel"].tap()
         XCTAssertTrue(app.buttons["choose-server"].waitForExistence(timeout: 3))
     }
 
@@ -121,11 +180,32 @@ final class TesseraeCompanionUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launch()
-        let nearby = app.buttons["onboarding-nearby-devices"]
+        let nearby = app.onboardingShortcut("onboarding-nearby-devices")
         XCTAssertTrue(nearby.waitForExistence(timeout: 4))
+        XCTAssertEqual(nearby.label, "Nearby Devices")
+        let demo = app.onboardingShortcut("onboarding-demo")
+        XCTAssertTrue(demo.exists)
+        XCTAssertEqual(nearby.frame.width, demo.frame.width, accuracy: 1)
+        XCTAssertGreaterThanOrEqual(nearby.frame.height.rounded(), 44)
+        XCTAssertGreaterThanOrEqual(demo.frame.height.rounded(), 44)
         for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
+        let brand = app.images["onboarding-brand"]
+        let welcomeLogo = brand.frame
         nearby.tap()
-        XCTAssertTrue(app.navigationBars["Nearby Displays"].waitForExistence(timeout: 3))
+        let page = app.navigationBars["Nearby Devices"]
+        XCTAssertTrue(page.waitForExistence(timeout: 4))
+        XCTAssertLessThan(brand.frame.width, welcomeLogo.width)
+        XCTAssertLessThan(brand.frame.midY, welcomeLogo.midY)
+        XCTAssertTrue(app.staticTexts["Find nearby displays over Bluetooth to set them up or service them."].exists)
+        XCTAssertFalse(app.staticTexts["Refresh Button"].exists)
+        readabilityAttachment(app, "Nearby devices page")
+        page.buttons.firstMatch.tap()
+        XCTAssertTrue(nearby.isHittable)
+        let restoredLogo = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            let frame = brand.frame
+            return abs(frame.width - welcomeLogo.width) <= 1 && abs(frame.midY - welcomeLogo.midY) <= 1
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [restoredLogo], timeout: 3), .completed)
     }
 
     func testPicPakMaintenanceShowsRefreshSpeedsAndConfirmsSelection() {
@@ -133,7 +213,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_BLE"] = "1"
         app.launch()
-        let nearby = app.buttons["onboarding-nearby-devices"]
+        let nearby = app.onboardingShortcut("onboarding-nearby-devices")
         XCTAssertTrue(nearby.waitForExistence(timeout: 4))
         for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
         nearby.tap()
@@ -180,7 +260,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_UI_TEST_E1003_BLE"] = "1"
         app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
-        let nearby = app.buttons["onboarding-nearby-devices"]
+        let nearby = app.onboardingShortcut("onboarding-nearby-devices")
         XCTAssertTrue(nearby.waitForExistence(timeout: 5))
         for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
         nearby.tap()
@@ -234,7 +314,7 @@ final class TesseraeCompanionUITests: XCTestCase {
             "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryXXXL",
         ]
         app.launch()
-        let nearby = app.buttons["onboarding-nearby-devices"]
+        let nearby = app.onboardingShortcut("onboarding-nearby-devices")
         XCTAssertTrue(nearby.waitForExistence(timeout: 5))
         for _ in 0..<4 where !nearby.isHittable { app.swipeUp() }
         nearby.tap()
@@ -279,7 +359,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_BLE"] = "1"
         app.launch()
-        let nearby = app.buttons["onboarding-nearby-devices"]
+        let nearby = app.onboardingShortcut("onboarding-nearby-devices")
         XCTAssertTrue(nearby.waitForExistence(timeout: 5))
         for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
         nearby.tap()
@@ -308,7 +388,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_BLE"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_CODE_20"] = "1"
         app.launch()
-        let nearby = app.buttons["onboarding-nearby-devices"]
+        let nearby = app.onboardingShortcut("onboarding-nearby-devices")
         XCTAssertTrue(nearby.waitForExistence(timeout: 5))
         for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
         nearby.tap()
@@ -330,7 +410,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_BLE"] = "1"
         app.launch()
-        let nearby = app.buttons["onboarding-nearby-devices"]
+        let nearby = app.onboardingShortcut("onboarding-nearby-devices")
         XCTAssertTrue(nearby.waitForExistence(timeout: 5))
         for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
         nearby.tap()
@@ -347,8 +427,8 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.buttons["Manual (Bluetooth)"].tap()
         XCTAssertEqual(mode.value as? String, "Manual (Bluetooth)")
         app.buttons["Close"].tap()
-        XCTAssertTrue(app.navigationBars["Nearby Displays"].waitForExistence(timeout: 4))
-        app.navigationBars["Nearby Displays"].buttons.firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Nearby Devices"].waitForExistence(timeout: 4))
+        app.navigationBars["Nearby Devices"].buttons.firstMatch.tap()
         // Reopening a known device uses its remembered model before reconnecting.
         nearby.tap()
         app.buttons.containing(.staticText, identifier: "Tesserae-A1B2C3").firstMatch.tap()
@@ -356,8 +436,8 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(knownBadge.waitForExistence(timeout: 3))
         XCTAssertTrue(knownBadge.label.contains("PicPak 4.2"))
         app.buttons["Close"].tap()
-        app.navigationBars["Nearby Displays"].buttons.firstMatch.tap()
-        let demo = app.buttons["Explore with Demo Data"]
+        app.navigationBars["Nearby Devices"].buttons.firstMatch.tap()
+        let demo = app.onboardingShortcut("onboarding-demo")
         XCTAssertTrue(demo.waitForExistence(timeout: 4))
         for _ in 0..<3 where !demo.isHittable { app.swipeUp() }
         demo.tap()
@@ -397,7 +477,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_BLE"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_SAVED_BLUETOOTH_PHOTO"] = "1"
         app.launch()
-        let nearby = app.buttons["onboarding-nearby-devices"]
+        let nearby = app.onboardingShortcut("onboarding-nearby-devices")
         XCTAssertTrue(nearby.waitForExistence(timeout: 5))
         for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
         nearby.tap()
@@ -411,8 +491,8 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.buttons["Automatic (Wi-Fi)"].tap()
         XCTAssertEqual(mode.value as? String, "Automatic (Wi-Fi)")
         app.buttons["Close"].tap()
-        app.navigationBars["Nearby Displays"].buttons.firstMatch.tap()
-        let demo = app.buttons["Explore with Demo Data"]
+        app.navigationBars["Nearby Devices"].buttons.firstMatch.tap()
+        let demo = app.onboardingShortcut("onboarding-demo")
         XCTAssertTrue(demo.waitForExistence(timeout: 4))
         for _ in 0..<3 where !demo.isHittable { app.swipeUp() }
         demo.tap()
@@ -441,11 +521,11 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_PHOTO"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_CONNECTION_DELAY_MS"] = "6000"
         app.launch()
-        let nearby = app.buttons["onboarding-nearby-devices"]
+        let nearby = app.onboardingShortcut("onboarding-nearby-devices")
         XCTAssertTrue(nearby.waitForExistence(timeout: 5))
         for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
         nearby.tap()
-        let originalNearbyTitleFrame = app.navigationBars["Nearby Displays"].frame
+        let originalNearbyTitleFrame = app.navigationBars["Nearby Devices"].frame
         app.buttons.containing(.staticText, identifier: "Tesserae-A1B2C3").firstMatch.tap()
         let invitation = app.staticTexts["Ready to Receive"]
         XCTAssertTrue(invitation.waitForExistence(timeout: 4))
@@ -485,7 +565,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         let confirmation = app.descendants(matching: .any)["ble-photo-sent"].firstMatch
         XCTAssertTrue(confirmation.waitForExistence(timeout: 12))
         let confirmationFrame = confirmation.frame
-        let navigationFrame = app.navigationBars["Nearby Displays"].frame
+        let navigationFrame = app.navigationBars["Nearby Devices"].frame
         XCTAssertEqual(navigationFrame.minY, originalNearbyTitleFrame.minY, accuracy: 1)
         XCTAssertEqual(navigationFrame.height, originalNearbyTitleFrame.height, accuracy: 1)
         XCTAssertEqual(confirmationFrame.minY, navigationFrame.minY + 8, accuracy: 2)
@@ -497,9 +577,9 @@ final class TesseraeCompanionUITests: XCTestCase {
         let completionShot = XCTAttachment(screenshot: app.screenshot())
         completionShot.name = "PicPak Sent Confirmation"; completionShot.lifetime = .keepAlways; add(completionShot)
         XCTAssertFalse(app.staticTexts["Sending photo…"].exists)
-        XCTAssertTrue(app.navigationBars["Nearby Displays"].waitForExistence(timeout: 4))
-        app.navigationBars["Nearby Displays"].buttons.firstMatch.tap()
-        let demo = app.buttons["Explore with Demo Data"]
+        XCTAssertTrue(app.navigationBars["Nearby Devices"].waitForExistence(timeout: 4))
+        app.navigationBars["Nearby Devices"].buttons.firstMatch.tap()
+        let demo = app.onboardingShortcut("onboarding-demo")
         XCTAssertTrue(demo.waitForExistence(timeout: 4))
         for _ in 0..<3 where !demo.isHittable { app.swipeUp() }
         demo.tap()
@@ -508,12 +588,15 @@ final class TesseraeCompanionUITests: XCTestCase {
         display.tap()
         // The full MAC associates the BLE record without opening the advanced picker.
         XCTAssertFalse(app.buttons["bluetooth-record-link-picpak-kitchen"].exists)
-        XCTAssertTrue(app.staticTexts["Last Bluetooth Send"].waitForExistence(timeout: 3))
+        let savedPreview = app.descendants(matching: .any)["display-detail-preview-picpak-kitchen"].firstMatch
+        let savedPhotoShown = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "exists == true AND label == %@", "Last Bluetooth Send"),
+            object: savedPreview
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [savedPhotoShown], timeout: 4), .completed)
         XCTAssertFalse(app.staticTexts["Mode Confirmed"].exists)
         XCTAssertFalse(app.staticTexts["Last Bluetooth Battery"].exists)
         XCTAssertFalse(app.staticTexts["Bluetooth Record"].exists)
-        let savedPreview = app.descendants(matching: .any)["display-detail-preview-picpak-kitchen"].firstMatch
-        XCTAssertEqual(savedPreview.label, "Last Bluetooth Send")
         let savedShot = XCTAttachment(screenshot: app.screenshot())
         savedShot.name = "Linked Bluetooth Display Record"; savedShot.lifetime = .keepAlways; add(savedShot)
         app.navigationBars["Kitchen"].buttons.firstMatch.tap()
@@ -561,7 +644,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_UI_TEST_UNIFIED_BLE"] = "1"
         if e1003 { app.launchEnvironment["TESSERAE_UI_TEST_E1003_BLE"] = "1" }
         app.launch()
-        let nearby = app.buttons["onboarding-nearby-devices"]
+        let nearby = app.onboardingShortcut("onboarding-nearby-devices")
         XCTAssertTrue(nearby.waitForExistence(timeout: 5))
         for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
         nearby.tap()
@@ -588,7 +671,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_UI_TEST_UNIFIED_BLE"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_CORRUPT_PHOTO_MODE"] = "1"
         app.launch()
-        let nearby = app.buttons["onboarding-nearby-devices"]
+        let nearby = app.onboardingShortcut("onboarding-nearby-devices")
         XCTAssertTrue(nearby.waitForExistence(timeout: 5))
         for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
         nearby.tap()
@@ -625,7 +708,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         if e1003 { app.launchEnvironment["TESSERAE_UI_TEST_E1003_BLE"] = "1" }
         if dropACKs { app.launchEnvironment["TESSERAE_UI_TEST_DROP_PHOTO_ACKS"] = "1" }
         app.launch()
-        let nearby = app.buttons["onboarding-nearby-devices"]
+        let nearby = app.onboardingShortcut("onboarding-nearby-devices")
         XCTAssertTrue(nearby.waitForExistence(timeout: 5))
         for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
         nearby.tap()
@@ -670,7 +753,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertFalse(app.buttons["ble-photo-start"].exists)
 
         // Dismissing an invitation still allows a deliberate selection from Nearby Displays.
-        let nearby = app.buttons["onboarding-nearby-devices"]
+        let nearby = app.onboardingShortcut("onboarding-nearby-devices")
         for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
         nearby.tap()
         app.buttons.containing(.staticText, identifier: "Tesserae-A1B2C3").firstMatch.tap()
@@ -712,9 +795,9 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(
-            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
+            app.segmentedControls["connection-type"].waitForExistence(timeout: 3)
         )
-        app.buttons["Explore with Demo Data"].tap()
+        app.onboardingShortcut("onboarding-demo").tap()
 
         let galleryTab = app.tabBars.firstMatch.buttons["Library"]
         XCTAssertTrue(galleryTab.waitForExistence(timeout: 3))
@@ -902,9 +985,9 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(
-            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
+            app.segmentedControls["connection-type"].waitForExistence(timeout: 3)
         )
-        app.buttons["Explore with Demo Data"].tap()
+        app.onboardingShortcut("onboarding-demo").tap()
 
         let galleryTab = app.tabBars.firstMatch.buttons
             .matching(identifier: "Library").firstMatch
@@ -926,7 +1009,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
         app.launch()
-        app.buttons["Explore with Demo Data"].tap()
+        app.onboardingShortcut("onboarding-demo").tap()
         XCTAssertTrue(app.navigationBars["Displays"].waitForExistence(timeout: 5))
         let originalNavigationFrame = app.navigationBars["Displays"].frame
         let originalSendFrame = app.buttons["root-send-action"].frame
@@ -937,9 +1020,9 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(
-            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
+            app.segmentedControls["connection-type"].waitForExistence(timeout: 3)
         )
-        app.buttons["Explore with Demo Data"].tap()
+        app.onboardingShortcut("onboarding-demo").tap()
 
         let capsule = app.buttons["gallery-upload-capsule"]
         XCTAssertTrue(capsule.waitForExistence(timeout: 3))
@@ -1014,11 +1097,11 @@ final class TesseraeCompanionUITests: XCTestCase {
         line: UInt = #line
     ) {
         XCTAssertTrue(
-            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3),
+            app.segmentedControls["connection-type"].waitForExistence(timeout: 3),
             file: file,
             line: line
         )
-        app.buttons["Explore with Demo Data"].tap()
+        app.onboardingShortcut("onboarding-demo").tap()
 
         XCTAssertTrue(
             app.staticTexts["Kitchen"].waitForExistence(timeout: 3),
@@ -1055,9 +1138,9 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(
-            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
+            app.segmentedControls["connection-type"].waitForExistence(timeout: 3)
         )
-        app.buttons["Explore with Demo Data"].tap()
+        app.onboardingShortcut("onboarding-demo").tap()
         app.tabBars.firstMatch.buttons["Activity"].tap()
 
         let historyStatus = app.descendants(matching: .any)[
@@ -1119,9 +1202,9 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(
-            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
+            app.segmentedControls["connection-type"].waitForExistence(timeout: 3)
         )
-        app.buttons["Explore with Demo Data"].tap()
+        app.onboardingShortcut("onboarding-demo").tap()
 
         let settings = app.buttons["root-settings"]
 
@@ -1284,9 +1367,9 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(
-            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
+            app.segmentedControls["connection-type"].waitForExistence(timeout: 3)
         )
-        app.buttons["Explore with Demo Data"].tap()
+        app.onboardingShortcut("onboarding-demo").tap()
         app.buttons["Dashboards"].firstMatch.tap()
 
         let layoutToggle = app.buttons["dashboard-layout-toggle"]
@@ -1377,8 +1460,8 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launch()
 
-        XCTAssertTrue(app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3))
-        app.buttons["Explore with Demo Data"].tap()
+        XCTAssertTrue(app.segmentedControls["connection-type"].waitForExistence(timeout: 3))
+        app.onboardingShortcut("onboarding-demo").tap()
 
         XCTAssertTrue(app.buttons["Displays"].firstMatch.waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["Kitchen"].exists)
@@ -1784,7 +1867,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
         app.launchArguments += ["-AppleLocale", english ? "en_GB" : "zh_CN", "-AppleLanguages", "(\(language))"]
         app.launch()
-        let demo = app.buttons[english ? "Explore with Demo Data" : "使用演示数据体验"]
+        let demo = app.onboardingShortcut("onboarding-demo")
         XCTAssertTrue(demo.waitForExistence(timeout: 5))
         demo.tap()
         let kitchen = app.buttons["display-card-picpak-kitchen"]
@@ -1836,9 +1919,9 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(
-            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
+            app.segmentedControls["connection-type"].waitForExistence(timeout: 3)
         )
-        app.buttons["Explore with Demo Data"].tap()
+        app.onboardingShortcut("onboarding-demo").tap()
 
         let kitchenCard = app.buttons["display-card-picpak-kitchen"]
         XCTAssertTrue(kitchenCard.waitForExistence(timeout: 3))
@@ -1909,9 +1992,9 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(
-            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
+            app.segmentedControls["connection-type"].waitForExistence(timeout: 3)
         )
-        app.buttons["Explore with Demo Data"].tap()
+        app.onboardingShortcut("onboarding-demo").tap()
 
         let kitchen = app.buttons["display-card-picpak-kitchen"]
         let desk = app.buttons["display-card-e1004-desk"]
@@ -1972,7 +2055,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
         app.launch()
-        let demo = app.buttons["Explore with Demo Data"]
+        let demo = app.onboardingShortcut("onboarding-demo")
         XCTAssertTrue(demo.waitForExistence(timeout: 3))
         demo.tap()
 
@@ -2005,9 +2088,9 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(
-            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
+            app.segmentedControls["connection-type"].waitForExistence(timeout: 3)
         )
-        app.buttons["Explore with Demo Data"].tap()
+        app.onboardingShortcut("onboarding-demo").tap()
         app.buttons["root-send-action"].tap()
 
         XCTAssertTrue(app.buttons["Link"].waitForExistence(timeout: 2))
@@ -2065,10 +2148,9 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(
-            app.staticTexts["Tesserae Companion"]
-                .waitForExistence(timeout: 3)
+            app.segmentedControls["connection-type"].waitForExistence(timeout: 3)
         )
-        app.buttons["Explore with Demo Data"].tap()
+        app.onboardingShortcut("onboarding-demo").tap()
 
         let activityTab = app.tabBars.firstMatch.buttons["Activity"]
         XCTAssertTrue(activityTab.waitForExistence(timeout: 15))
@@ -2098,8 +2180,8 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launchArguments += ["-dashboardLayoutMode", "cards"]
         app.launch()
-        XCTAssertTrue(app.buttons["Explore with Demo Data"].waitForExistence(timeout: 3))
-        app.buttons["Explore with Demo Data"].tap()
+        XCTAssertTrue(app.onboardingShortcut("onboarding-demo").waitForExistence(timeout: 3))
+        app.onboardingShortcut("onboarding-demo").tap()
         app.buttons["Dashboards"].firstMatch.tap()
 
         let photoFrame = app.staticTexts["dashboard-title-photo-frame-display-picpak-kitchen"]
@@ -2168,9 +2250,9 @@ final class TesseraeCompanionUITests: XCTestCase {
             // glyphs. Cover those separately with AX5 screenshots and VoiceOver.
             try app.performAccessibilityAudit(for: [.hitRegion, .sufficientElementDescription, .trait])
         }
-        XCTAssertTrue(app.buttons["使用演示数据体验"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.onboardingShortcut("onboarding-demo").waitForExistence(timeout: 5))
         try audit("onboarding")
-        app.buttons["使用演示数据体验"].tap()
+        app.onboardingShortcut("onboarding-demo").tap()
         XCTAssertTrue(app.buttons["root-settings"].waitForExistence(timeout: 5))
         try audit("displays")
         app.buttons["root-settings"].tap()
@@ -2202,8 +2284,8 @@ final class TesseraeCompanionUITests: XCTestCase {
         try voiceOver.disable()
         let app = readabilityApp(largeText: false)
         app.launch()
-        XCTAssertTrue(app.buttons["使用演示数据体验"].waitForExistence(timeout: 5))
-        app.buttons["使用演示数据体验"].tap()
+        XCTAssertTrue(app.onboardingShortcut("onboarding-demo").waitForExistence(timeout: 5))
+        app.onboardingShortcut("onboarding-demo").tap()
         XCTAssertTrue(app.buttons["root-settings"].waitForExistence(timeout: 5))
         try voiceOver.enable()
         var speech = [try voiceOver.currentSpeech().utterance]
@@ -2247,8 +2329,8 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_UI_TEST_GALLERY_GRID_MODE"] = "square"
         app.launchEnvironment["TESSERAE_UI_TEST_GALLERY_GRID_COLUMNS"] = "3"
         app.launch()
-        XCTAssertTrue(app.buttons["使用演示数据体验"].waitForExistence(timeout: 5))
-        app.buttons["使用演示数据体验"].tap()
+        XCTAssertTrue(app.onboardingShortcut("onboarding-demo").waitForExistence(timeout: 5))
+        app.onboardingShortcut("onboarding-demo").tap()
         XCTAssertTrue(app.buttons["root-settings"].waitForExistence(timeout: 5))
         // The native tab bar briefly exposes its outgoing label and final button
         // during the onboarding transition. Wait for an unambiguous target.
@@ -2295,7 +2377,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         let app = readabilityApp(largeText: largeText)
         app.launchEnvironment["TESSERAE_UI_TEST_LONG_DISPLAY_NAMES"] = "1"
         app.launch()
-        let demo = app.buttons["使用演示数据体验"]
+        let demo = app.onboardingShortcut("onboarding-demo")
         XCTAssertTrue(demo.waitForExistence(timeout: 5))
         for _ in 0..<10 where !demo.isHittable { app.swipeUp() }
         demo.tap()
@@ -2366,7 +2448,7 @@ final class TesseraeCompanionUITests: XCTestCase {
 
     private func exerciseReadabilityScreens(app: XCUIApplication, largeText: Bool, prefix: String) {
         app.launch()
-        let demo = app.buttons["使用演示数据体验"]
+        let demo = app.onboardingShortcut("onboarding-demo")
         XCTAssertTrue(demo.waitForExistence(timeout: 5))
         for _ in 0..<10 where !demo.isHittable { app.swipeUp() }
         readabilityAttachment(app, "\(prefix) onboarding actions")
@@ -2419,11 +2501,11 @@ final class TesseraeCompanionUITests: XCTestCase {
         let app = readabilityApp()
         app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_BLE"] = "1"
         app.launch()
-        let nearby = app.buttons["onboarding-nearby-devices"]
+        let nearby = app.onboardingShortcut("onboarding-nearby-devices")
         XCTAssertTrue(nearby.waitForExistence(timeout: 4))
         for _ in 0..<10 where !nearby.isHittable { app.swipeUp() }
         nearby.tap()
-        XCTAssertTrue(app.navigationBars["附近的显示屏"].waitForExistence(timeout: 4))
+        XCTAssertTrue(app.navigationBars["附近设备"].waitForExistence(timeout: 4))
         readabilityAttachment(app, "Chinese AX5 dark nearby displays")
         app.buttons.containing(.staticText, identifier: "Tesserae-A1B2C3").firstMatch.tap()
         let proceed = app.buttons["继续"]
@@ -2475,15 +2557,36 @@ final class TesseraeCompanionUITests: XCTestCase {
             "-AppleLanguages", "(zh-Hans)",
             "-AppleLocale", "zh_CN",
         ]
-        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        if ProcessInfo.processInfo.environment["TESSERAE_VERIFY_APPLE_BETA_ENTRY"] == "1" {
+            app.launchEnvironment["TESSERAE_CLOUD_TEST_NAMESPACE"] = UUID().uuidString
+        } else {
+            app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        }
+        app.launchEnvironment["TESSERAE_UI_TEST_COLOR_SCHEME"] = "dark"
         app.launch()
 
-        XCTAssertTrue(app.staticTexts["Tesserae 伴侣"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["使用演示数据体验"].exists)
+        let connectionType = app.segmentedControls["connection-type"]
+        XCTAssertTrue(connectionType.waitForExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["Tesserae 伴侣"].exists)
+        let nearby = app.buttons["onboarding-nearby-devices"]
+        let demo = app.buttons["onboarding-demo"]
+        XCTAssertTrue(nearby.isHittable)
+        XCTAssertEqual(nearby.label, "附近设备")
+        XCTAssertTrue(demo.isHittable)
+        XCTAssertEqual(demo.label, "演示模式")
+        XCTAssertFalse(app.buttons["展开更多"].exists)
+        XCTAssertFalse(app.buttons["更多选项"].exists)
+        XCTAssertTrue(connectionType.buttons["云端"].isSelected)
+        XCTAssertFalse(app.buttons["输入服务器地址"].exists)
+        readabilityAttachment(app, "Cloud onboarding in Simplified Chinese dark mode")
+        connectionType.buttons["自建"].tap()
+        XCTAssertTrue(connectionType.buttons["自建"].isSelected)
         XCTAssertTrue(app.buttons["输入服务器地址"].exists)
+        XCTAssertFalse(app.buttons["cloud-signin"].exists)
         XCTAssertFalse(app.buttons["扫描配对二维码"].exists)
+        readabilityAttachment(app, "Self-hosted onboarding in Simplified Chinese")
 
-        app.buttons["使用演示数据体验"].tap()
+        app.onboardingShortcut("onboarding-demo").tap()
         let tabBar = app.tabBars.firstMatch
         XCTAssertTrue(tabBar.buttons["显示屏"].waitForExistence(timeout: 3))
         XCTAssertTrue(tabBar.buttons["仪表盘"].exists)
@@ -2501,8 +2604,8 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launch()
 
-        XCTAssertTrue(app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3))
-        app.buttons["Explore with Demo Data"].tap()
+        XCTAssertTrue(app.segmentedControls["connection-type"].waitForExistence(timeout: 3))
+        app.onboardingShortcut("onboarding-demo").tap()
 
         XCTAssertTrue(
             app.buttons["root-send-action"].waitForExistence(timeout: 3)
@@ -2738,8 +2841,8 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_AUTO_FRAMING"] = "1"
         app.launch()
-        XCTAssertTrue(app.buttons["Explore with Demo Data"].waitForExistence(timeout: 5))
-        app.buttons["Explore with Demo Data"].tap()
+        XCTAssertTrue(app.onboardingShortcut("onboarding-demo").waitForExistence(timeout: 5))
+        app.onboardingShortcut("onboarding-demo").tap()
         XCTAssertTrue(app.buttons["root-send-action"].waitForExistence(timeout: 5))
         app.buttons["root-send-action"].tap()
         let picker = app.descendants(matching: .any)["send-preview-display-picker"]
@@ -2815,8 +2918,8 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
         app.launch()
-        XCTAssertTrue(app.buttons["Explore with Demo Data"].waitForExistence(timeout: 5))
-        app.buttons["Explore with Demo Data"].tap()
+        XCTAssertTrue(app.onboardingShortcut("onboarding-demo").waitForExistence(timeout: 5))
+        app.onboardingShortcut("onboarding-demo").tap()
         let library = app.buttons["Library"].firstMatch
         XCTAssertTrue(library.waitForExistence(timeout: 5))
         library.tap()
@@ -2844,8 +2947,8 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
         app.launchEnvironment["TESSERAE_UI_TEST_IMAGE_SEND_FAILURE_ONCE"] = "1"
         app.launch()
-        XCTAssertTrue(app.buttons["Explore with Demo Data"].waitForExistence(timeout: 5))
-        app.buttons["Explore with Demo Data"].tap()
+        XCTAssertTrue(app.onboardingShortcut("onboarding-demo").waitForExistence(timeout: 5))
+        app.onboardingShortcut("onboarding-demo").tap()
         XCTAssertTrue(app.buttons["root-send-action"].waitForExistence(timeout: 5))
         app.buttons["root-send-action"].tap()
 
@@ -2900,8 +3003,8 @@ final class TesseraeCompanionUITests: XCTestCase {
             "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
         ]
         app.launch()
-        XCTAssertTrue(app.buttons["使用演示数据体验"].waitForExistence(timeout: 5))
-        app.buttons["使用演示数据体验"].tap()
+        XCTAssertTrue(app.onboardingShortcut("onboarding-demo").waitForExistence(timeout: 5))
+        app.onboardingShortcut("onboarding-demo").tap()
         XCTAssertTrue(app.buttons["root-send-action"].waitForExistence(timeout: 5))
         app.buttons["root-send-action"].tap()
         let sample = app.buttons["使用示例"]
@@ -2984,10 +3087,10 @@ final class TesseraeCompanionUITests: XCTestCase {
         let settings = app.buttons["root-settings"]
         XCTAssertTrue(settings.waitForExistence(timeout: 3))
         settings.tap()
-        let otherServers = app.buttons["Other Servers"]
+        let otherServers = app.buttons["choose-connection"]
         XCTAssertTrue(otherServers.waitForExistence(timeout: 3))
         otherServers.tap()
-        XCTAssertTrue(app.navigationBars["Tesserae Servers"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.navigationBars["Tesserae Connections"].waitForExistence(timeout: 3))
 
         // The same fixture returns the same instance ID. Only a fresh session
         // identity can reset the old Library path and the Settings presentation.
@@ -3042,6 +3145,9 @@ final class TesseraeCompanionUITests: XCTestCase {
     }
 
     private func connectUsingPrefilledFixtureAddress(in app: XCUIApplication) {
+        let selfHosted = app.segmentedControls["connection-type"].buttons["Self-Hosted"]
+        XCTAssertTrue(selfHosted.waitForExistence(timeout: 3))
+        selfHosted.tap()
         let enterAddress = app.buttons["Enter Server Address"]
         XCTAssertTrue(enterAddress.waitForExistence(timeout: 3))
         enterAddress.tap()
@@ -3106,6 +3212,9 @@ final class TesseraeCompanionUITests: XCTestCase {
 
         let app = XCUIApplication()
         app.launch()
+        let selfHosted = app.segmentedControls["connection-type"].buttons["Self-Hosted"]
+        XCTAssertTrue(selfHosted.waitForExistence(timeout: 3))
+        selfHosted.tap()
         app.tap()
 
         XCTAssertTrue(

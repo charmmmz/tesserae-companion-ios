@@ -13,9 +13,9 @@ final class LineupsUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(
-            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
+            app.segmentedControls["connection-type"].waitForExistence(timeout: 3)
         )
-        app.buttons["Explore with Demo Data"].tap()
+        app.onboardingShortcut("onboarding-demo").tap()
 
         XCTAssertFalse(app.tabBars.firstMatch.buttons["Lineups"].exists)
 
@@ -176,9 +176,9 @@ final class LineupsUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(
-            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
+            app.segmentedControls["connection-type"].waitForExistence(timeout: 3)
         )
-        app.buttons["Explore with Demo Data"].tap()
+        app.onboardingShortcut("onboarding-demo").tap()
         XCTAssertTrue(app.buttons["manage-lineups"].waitForExistence(timeout: 3))
         app.buttons["manage-lineups"].tap()
 
@@ -245,9 +245,9 @@ final class LineupsUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(
-            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3)
+            app.segmentedControls["connection-type"].waitForExistence(timeout: 3)
         )
-        app.buttons["Explore with Demo Data"].tap()
+        app.onboardingShortcut("onboarding-demo").tap()
         XCTAssertTrue(app.buttons["manage-lineups"].waitForExistence(timeout: 3))
         app.buttons["manage-lineups"].tap()
         XCTAssertTrue(app.buttons["lineup-create"].waitForExistence(timeout: 3))
@@ -280,8 +280,8 @@ final class LineupsUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
         app.launch()
-        XCTAssertTrue(app.buttons["Explore with Demo Data"].waitForExistence(timeout: 3))
-        app.buttons["Explore with Demo Data"].tap()
+        XCTAssertTrue(app.onboardingShortcut("onboarding-demo").waitForExistence(timeout: 3))
+        app.onboardingShortcut("onboarding-demo").tap()
         XCTAssertTrue(app.buttons["manage-lineups"].waitForExistence(timeout: 3))
         app.buttons["manage-lineups"].tap()
         app.buttons["lineup-create"].tap()
@@ -334,8 +334,8 @@ final class LineupsUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
         app.launchEnvironment["TESSERAE_UI_TEST_COLOR_SCHEME"] = "dark"
         app.launch()
-        XCTAssertTrue(app.buttons["Explore with Demo Data"].waitForExistence(timeout: 3))
-        app.buttons["Explore with Demo Data"].tap()
+        XCTAssertTrue(app.onboardingShortcut("onboarding-demo").waitForExistence(timeout: 3))
+        app.onboardingShortcut("onboarding-demo").tap()
         XCTAssertTrue(app.buttons["manage-lineups"].waitForExistence(timeout: 3))
         app.buttons["manage-lineups"].tap()
         app.buttons["lineup-create"].tap()
@@ -513,8 +513,8 @@ final class LineupsUITests: XCTestCase {
             app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityM"]
         }
         app.launch()
-        XCTAssertTrue(app.buttons["Explore with Demo Data"].waitForExistence(timeout: 3))
-        app.buttons["Explore with Demo Data"].tap()
+        XCTAssertTrue(app.onboardingShortcut("onboarding-demo").waitForExistence(timeout: 3))
+        app.onboardingShortcut("onboarding-demo").tap()
         XCTAssertTrue(app.buttons["manage-lineups"].waitForExistence(timeout: 3))
         app.buttons["manage-lineups"].tap()
         XCTAssertTrue(app.buttons["lineup-create"].waitForExistence(timeout: 3))
@@ -556,8 +556,8 @@ final class LineupsUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "0"
         app.launch()
-        XCTAssertTrue(app.buttons["Explore with Demo Data"].waitForExistence(timeout: 3))
-        app.buttons["Explore with Demo Data"].tap()
+        XCTAssertTrue(app.onboardingShortcut("onboarding-demo").waitForExistence(timeout: 3))
+        app.onboardingShortcut("onboarding-demo").tap()
         XCTAssertTrue(app.buttons["manage-lineups"].waitForExistence(timeout: 3))
         app.buttons["manage-lineups"].tap()
         let search = app.searchFields.firstMatch
@@ -613,8 +613,8 @@ final class LineupsUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_UI_TEST_COLOR_SCHEME"] = "dark"
         app.launchArguments += ["-AppleLocale", "en_GB", "-AppleLanguages", "(en)"]
         app.launch()
-        XCTAssertTrue(app.buttons["Explore with Demo Data"].waitForExistence(timeout: 3))
-        app.buttons["Explore with Demo Data"].tap()
+        XCTAssertTrue(app.onboardingShortcut("onboarding-demo").waitForExistence(timeout: 3))
+        app.onboardingShortcut("onboarding-demo").tap()
         app.buttons["manage-lineups"].tap()
         let lineup = app.buttons["lineup-card-kitchen-deck"]
         XCTAssertTrue(lineup.waitForExistence(timeout: 3))
@@ -660,7 +660,7 @@ final class LineupsUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_UI_TEST_COLOR_SCHEME"] = dark ? "dark" : "light"
         app.launchArguments += ["-AppleLocale", language == "en" ? "en_GB" : "zh_CN", "-AppleLanguages", "(\(language))"]
         app.launch()
-        let demo = app.buttons[language == "en" ? "Explore with Demo Data" : "使用演示数据体验"]
+        let demo = app.onboardingShortcut("onboarding-demo")
         XCTAssertTrue(demo.waitForExistence(timeout: 3))
         demo.tap()
         XCTAssertTrue(app.buttons["manage-lineups"].waitForExistence(timeout: 3))
@@ -732,11 +732,11 @@ final class LineupsUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(
-            app.staticTexts["Tesserae Companion"].waitForExistence(timeout: 3),
+            app.segmentedControls["connection-type"].waitForExistence(timeout: 3),
             file: file,
             line: line
         )
-        app.buttons["Explore with Demo Data"].tap()
+        app.onboardingShortcut("onboarding-demo").tap()
         XCTAssertTrue(
             app.buttons["manage-lineups"].waitForExistence(timeout: 3),
             file: file,

@@ -31,6 +31,11 @@ targets:
         CFBundleDisplayName: Tesserae
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        TesseraeCloudIssuer: $(TESSERAE_CLOUD_ISSUER)
+        CFBundleURLTypes:
+          - CFBundleURLName: com.charmmmz.tesseraecompanion.oauth
+            CFBundleURLSchemes:
+              - com.charmmmz.tesseraecompanion
         UIAppFonts:
           - Phosphor.ttf
         NSBonjourServices:
@@ -65,8 +70,10 @@ targets:
         MARKETING_VERSION: 0.8.2
         CURRENT_PROJECT_VERSION: 16
         DEVELOPMENT_TEAM: 3MSS7DJGVR
+        TESSERAE_CLOUD_ISSUER: https://tesserae-companion-apple-beta.tesserae-cloud.workers.dev
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: App/Resources/TesseraeCompanion.entitlements
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) TESSERAE_APPLE_LOGIN_BETA"
         SWIFT_VERSION: 6.0
         SWIFT_STRICT_CONCURRENCY: complete
         SWIFT_OBJC_BRIDGING_HEADER: SharedUI/TesseraeShared-Bridging-Header.h
@@ -133,6 +140,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: ShareExtension/Resources/TesseraeShare.entitlements
         APPLICATION_EXTENSION_API_ONLY: YES
         SKIP_INSTALL: YES
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) TESSERAE_APPLE_LOGIN_BETA"
         SWIFT_VERSION: 6.0
         SWIFT_STRICT_CONCURRENCY: complete
         SWIFT_OBJC_BRIDGING_HEADER: SharedUI/TesseraeShared-Bridging-Header.h

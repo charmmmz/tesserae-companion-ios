@@ -8,10 +8,12 @@
 "Pair once with a credential you can remove from Tesserae." = "配对一次，并可随时在 Tesserae 中撤销凭据。";
 "Nearby Tesserae" = "附近的 Tesserae";
 "Refresh nearby Tesserae servers" = "刷新附近的 Tesserae 服务器";
-"If Local Network access is off, enable it in iOS Settings. You can still enter the server address manually." = "如果“本地网络”权限已关闭，请在 iOS 设置中启用。你仍可手动输入服务器地址。";
-"No server found. Manual connection still works when discovery is unavailable." = "未发现服务器。自动发现不可用时，仍可手动连接。";
+"Couldn’t search nearby. Check Local Network access in iOS Settings." = "无法搜索附近的服务器。请在 iOS 设置中检查本地网络权限。";
+"No nearby servers found." = "未找到附近的服务器。";
+"Searching for nearby servers…" = "正在查找附近的服务器…";
 "Enter Server Address" = "输入服务器地址";
-"Explore with Demo Data" = "使用演示数据体验";
+"Nearby Devices" = "附近设备";
+"Find nearby displays over Bluetooth to set them up or service them." = "用蓝牙查找附近的显示屏，进行设置或维护。";
 "Bonjour finds servers but never authenticates. Every connection still requires a one-time code from Tesserae." = "Bonjour 只负责发现服务器，不负责认证。每次新连接仍需要 Tesserae 提供的一次性配对码。";
 "Server" = "服务器";
 "Pairing code" = "配对码";
@@ -1029,3 +1031,291 @@
 "A preview of planned content. It may change before the update runs and does not indicate a rendered or queued frame." = "计划内容预览，实际运行时可能变化，不代表画面已生成或进入队列。";
 "This queued frame is no longer available." = "此待领取画面已不可用。";
 "Times use %@" = "时间以%@为准";
+
+// Cloud sign-in and read-only browsing.
+"Tesserae Cloud" = "Tesserae 云端";
+"Pages" = "页面";
+"Page" = "页面";
+"Saved Connections" = "已保存的连接";
+"Choose Connection" = "选择连接";
+"Sign In to Cloud" = "登录云端";
+"Sign In Again" = "重新登录";
+"Cancel Sign-In" = "取消登录";
+"Waiting for Sign-In…" = "正在等待登录…";
+"Finishing Sign-In…" = "正在完成登录…";
+"Sign in with your email and choose a tenant in the secure browser." = "使用邮箱登录，并在安全浏览器中选择租户。";
+"If the email link opened on another device, return to this device or start sign-in again here." = "如果邮件链接在其他设备上打开，请返回此设备，或在此重新发起登录。";
+"Cloud sign-in is unavailable. Try again." = "暂时无法登录云端，请重试。";
+"This sign-in link does not match the current request." = "此登录链接与当前请求不匹配。";
+"This sign-in expired or was already used. Start sign-in again." = "此登录请求已过期或已使用，请重新登录。";
+"Cloud access was not authorized. Your current connection was kept." = "云端访问未获授权，已保留当前连接。";
+"Sign-in could not be confirmed. Start sign-in again." = "无法确认登录结果，请重新登录。";
+"This item is no longer available." = "此项目已不可用。";
+"Sign in again to read this Cloud connection." = "请重新登录以访问此云端连接。";
+"Access to this Cloud tenant is unavailable. Choose another connection or sign in again." = "无法访问此云端租户，请选择其他连接或重新登录。";
+"This Cloud plan limit has been reached." = "已达到此云端套餐的限额。";
+"Cloud is busy. Wait before trying again." = "云端正忙，请稍后重试。";
+"Cloud is temporarily unavailable. Try again later." = "云端暂时不可用，请稍后重试。";
+"Cloud returned an unexpected response." = "云端返回了无法识别的响应。";
+"Loading Cloud…" = "正在加载云端…";
+"No Cloud Displays" = "暂无云端显示屏";
+"No Cloud Pages" = "暂无云端页面";
+"Set up a display in Tesserae Cloud, then refresh this list." = "请在 Tesserae 云端设置显示屏，然后刷新此列表。";
+"Create a page in Tesserae Cloud to see it here." = "在 Tesserae 云端创建页面后，即可在此查看。";
+"Set Up in Cloud" = "在云端设置";
+"Open Tesserae Cloud" = "打开 Tesserae 云端";
+"Refresh List" = "刷新列表";
+"Select an Item" = "选择项目";
+"Frame Generated" = "画面生成时间";
+"Updated" = "更新时间";
+"Existing preview only. Browsing does not refresh the physical display." = "仅查看已有预览，浏览不会刷新实体显示屏。";
+"Loading Preview…" = "正在加载预览…";
+"Item Unavailable" = "项目不可用";
+"Reload Preview" = "重新加载预览";
+"Preview Temporarily Unavailable" = "暂时无法加载预览";
+"Try again at %@." = "%@ 后可重试。";
+"Existing Cloud Preview" = "云端已有预览";
+"No Preview Yet" = "暂无预览";
+"This item has no saved preview. No render was requested." = "此项目没有已保存的预览，未请求渲染。";
+"Account" = "账号";
+"Tenant" = "租户";
+"Role" = "角色";
+"Owner" = "所有者";
+"Member" = "成员";
+"Service" = "服务";
+"Cloud Usage & Features" = "云端用量与功能";
+"Cloud Account" = "云端账号";
+"Email" = "邮箱";
+"Workspace" = "工作区";
+"Today" = "今日";
+"Renders" = "渲染次数";
+"Charged Renders" = "计费用渲染次数";
+"MCP Calls" = "MCP 调用次数";
+"Browser Time" = "浏览器用时";
+"Cloud Settings in Browser" = "在浏览器打开云端设置";
+"Sign Out of Cloud?" = "退出云端登录？";
+"You’ll need to sign in again to use this Cloud connection on this device." = "若要在此设备上再次使用此云端连接，需要重新登录。";
+"Connection Type" = "连接方式";
+"Cloud" = "云端";
+"Self-Hosted" = "自建";
+"Self-Hosted Server" = "自建服务器";
+"Pair with the one-time code shown by your server." = "使用服务器显示的一次性配对码连接。";
+"Add a Connection" = "添加连接";
+"Current Connection" = "当前连接";
+"Cloud Connection Unavailable" = "云端连接不可用";
+"Sign in to connect to a Tesserae Cloud workspace." = "登录以连接 Tesserae 云端工作区。";
+"Use the email address you already sign in to Tesserae Cloud with." = "请输入你平时登录 Tesserae 云端使用的邮箱。";
+"Open the sign-in link on this device." = "请在这台设备上打开邮件里的登录链接。";
+"Connecting to Cloud…" = "正在连接云端…";
+"Waiting for Apple…" = "正在等待 Apple 登录…";
+"Checking Apple Sign-In…" = "正在验证 Apple 登录…";
+"Waiting for Workspace Approval…" = "正在等待工作区授权…";
+"Usage" = "用量";
+"Workspace Usage" = "工作区用量";
+"Plan Minimum Wake Interval (seconds)" = "套餐最短唤醒间隔（秒）";
+"No Additional Minimum" = "套餐无额外下限";
+"Daily Usage" = "每日用量";
+"Daily Usage · %@ UTC" = "每日用量 · %@ UTC";
+"Renders Toward Limit" = "计入额度的渲染";
+"Total Renders" = "总渲染次数";
+"Web Render Time" = "网页仪表盘渲染时长";
+"Daily limits reset at midnight UTC. Total renders also include automatic display renders." = "每日额度在 UTC 00:00 重置。总渲染次数也包含显示屏自动触发的渲染。";
+"Updating Usage…" = "正在更新用量…";
+"Refresh Usage" = "刷新用量";
+"Less than %@" = "小于 %@";
+"%@ MiB" = "%@ MiB";
+"%@ s" = "%@ 秒";
+"%@ used out of %@" = "已用 %@，上限 %@";
+"%@ · Unlimited" = "%@ · 不限";
+"%@ used, no limit" = "已用 %@，不限";
+"%@ used" = "已用 %@";
+"Loading Send Results…" = "正在加载发送结果…";
+"%@ generated" = "%@ 台已生成";
+"%@ generated with warnings" = "%@ 台已生成，有提示";
+"%@ failed" = "%@ 台失败";
+"%@ not sent" = "%@ 台未发送";
+"%@ unconfirmed" = "%@ 台未确认";
+"%@ awaiting result" = "%@ 台等待结果";
+"Renders Today" = "今日渲染次数";
+"Charged Renders Today" = "今日计费渲染次数";
+"MCP Calls Today" = "今日 MCP 调用次数";
+"Browser Time Today" = "今日浏览器运行时长";
+"Storage" = "存储空间";
+"Limits" = "限额";
+"Unlimited" = "不限";
+"Features" = "功能";
+"Available" = "可用";
+"Sign Out" = "退出登录";
+"Web Pages" = "网页";
+"Daily Renders" = "每日渲染次数";
+"Daily MCP Calls" = "每日 MCP 调用次数";
+"Daily Fonts" = "每日字体数";
+"Daily Agent Messages" = "每日智能助手消息数";
+"Monthly Agent Credits" = "每月智能助手额度";
+"Minimum Wake Interval (seconds)" = "最短唤醒间隔（秒）";
+"Daily Render Time (seconds)" = "每日渲染时长（秒）";
+"Storage (MB)" = "存储空间（MB）";
+"History (days)" = "历史记录保留天数";
+"Battery History (days)" = "电量历史保留天数";
+"Daily Unfiled Renders" = "每日未归档渲染次数";
+"Connectors" = "连接器";
+"Cloud State" = "云端状态";
+"MCP Tools" = "MCP 工具";
+"Agent" = "智能助手";
+"Platform Agent" = "平台智能助手";
+"Hardware Reuse" = "复用硬件";
+"Custom Names" = "自定义名称";
+"Bonjour finds self-hosted servers but never authenticates. Pair with a one-time code from your server, or sign in to Tesserae Cloud." = "Bonjour 仅发现自建服务，不进行身份验证。请使用服务端的一次性代码配对，或登录 Tesserae 云端。";
+"Last updated: %@" = "上次更新：%@";
+
+"No Cloud Dashboards" = "暂无云端仪表盘";
+"Create a dashboard in Tesserae Cloud to see it here." = "在 Tesserae 云端创建仪表盘后，即可在此查看。";
+"Tesserae Connections" = "Tesserae 连接";
+
+"This saved preview could not be opened." = "无法打开此已保存的预览。";
+"This preview changed. Refresh to load the latest image." = "预览已变化，请刷新以加载最新图像。";
+"A preview will appear when a saved image is available in Cloud." = "云端有已保存的图像后，预览会显示在此。";
+
+"Preparing Send…" = "正在准备发送…";
+"Send Results" = "发送结果";
+"Send Result" = "发送结果";
+"Photo Send" = "发送照片";
+"Current Page Refresh" = "刷新当前页面";
+"No Cloud Send Results" = "暂无云端发送结果";
+"Your Cloud sends and page refreshes appear here. Opening results never sends again." = "云端发送和页面刷新结果会显示在这里。查看结果不会再次发送。";
+"Generated frames appear on the next display wake. A generated frame does not confirm that the physical screen has updated." = "生成的画面将在屏幕下次唤醒时显示。画面已生成并不代表实体屏幕已经更新。";
+"A generated frame appears on each display's next wake. Its dashboard binding stays unchanged." = "生成的画面将在每台屏幕下次唤醒时显示，仪表盘绑定保持不变。";
+"Submitted Photo" = "已提交照片";
+"Send Selected Again" = "重新发送所选屏幕";
+"Refresh Selected Again" = "重新刷新所选屏幕";
+"The photo was deleted or expired. Choose a photo to create a new send." = "照片已删除或过期。请重新选图以创建新的发送。";
+"Photo Available Until" = "照片保留至";
+"Results are kept for 30 days. Viewing them does not extend photo or result retention." = "结果保留 30 天，查看不会延长照片或结果的保留时间。";
+"Delete Photo" = "删除照片";
+"Delete Result" = "删除结果";
+"Result Unavailable" = "结果不可用";
+"Some Displays May Already Have Received This" = "部分屏幕可能已经收到";
+"Check the selected displays first. This creates a new request and may generate the same frame again." = "请先核对所选屏幕。这会创建新的请求，可能再次生成相同画面。";
+"Delete Photo?" = "删除照片？";
+"This removes the saved photo and stops unstarted work. A request already in progress may still take effect." = "这会删除保存的照片并停止尚未开始的任务。已开始的请求仍可能生效。";
+"Delete Result?" = "删除结果？";
+"This removes the photo and result from this device. It cannot undo a request already received by Cloud." = "这会从此设备删除照片和结果，无法撤销云端已经收到的请求。";
+"Frame Generated with Warnings" = "画面已生成，但有警告";
+"Outcome Unknown" = "结果未知";
+"Not Sent" = "未发送";
+"Waiting for Result" = "等待结果";
+"Sign In Required" = "需要登录";
+"Sending Not Allowed" = "没有发送权限";
+"Access Unavailable" = "无法访问";
+"Cloud Plan Limit Reached" = "已达到云端套餐限额";
+"Try Later" = "请稍后再试";
+"Cloud Temporarily Unavailable" = "云端暂时不可用";
+"No Current Dashboard" = "未绑定当前仪表盘";
+"Request Refused" = "请求被拒绝";
+"Regenerate Display Frame" = "重新生成显示屏画面";
+"Preparing Refresh…" = "正在准备生成画面…";
+"The display can pick up the new frame the next time it wakes." = "显示屏下次唤醒时可以领取新画面。";
+"The send could not be confirmed. Check the display before sending again." = "无法确认发送结果。请先核对屏幕，再决定是否重新发送。";
+"This send could not be confirmed. Check the display before sending again." = "无法确认此次发送结果。请先核对屏幕，再决定是否重新发送。";
+"The service did not confirm this display's result." = "服务未确认此屏幕的结果。";
+"No new frame was confirmed." = "未确认生成新的画面。";
+"This photo could not be prepared for the selected displays." = "无法为所选屏幕准备这张照片。";
+"This send decision already contains different content. Choose the photo again." = "此次发送已绑定其他内容，请重新选择照片。";
+"This send has been deleted or expired. Create a new send." = "此次发送已删除或过期，请创建新的发送。";
+"This send result is no longer available." = "此发送结果已不可用。";
+"This result changed. Review the latest results before sending again." = "结果已变化，请查看最新结果后再发送。";
+"This send is still in progress. Wait for its result." = "此次发送仍在进行，请等待结果。";
+"This photo was deleted or expired. Choose a photo to create a new send." = "照片已删除或过期，请重新选图以创建新的发送。";
+"The display changed. Review its preview before sending." = "屏幕信息已变化，请重新检查预览后再发送。";
+"Some displays may already have received this photo. Confirm before sending again." = "部分屏幕可能已经收到这张照片，请确认后再重新发送。";
+"This send was interrupted. Check its results before sending again." = "此次发送已中断，请核对结果后再决定是否重新发送。";
+"The send result could not be saved. Check the displays before sending again." = "无法保存发送结果，请先核对屏幕，再决定是否重新发送。";
+"%lld displays" = "%lld 台屏幕";
+"Wait at least %@ seconds before trying again." = "请至少等待 %@ 秒后再试。";
+
+"cloud.result.frameGenerated" = "画面已生成";
+
+"Result Available Until" = "结果保留至";
+
+"Not Attempted" = "未尝试";
+"Generated with Warnings" = "已生成，但有警告";
+"Results Available Until" = "结果保留至";
+"A generated frame does not confirm that the physical display has updated." = "画面已生成并不代表实体屏幕已更新。";
+"Check uncertain displays before explicitly sending again in Tesserae Companion." = "请先检查结果不确定的屏幕，再到 Tesserae Companion 中明确选择重新发送。";
+"This item has been kept. Open Tesserae Companion to review it and choose Continue." = "此项目已保留。请打开 Tesserae Companion 检查并选择“继续”。";
+"Send in Progress" = "正在发送";
+"Another system action is preparing or sending this item. View its result in Tesserae Companion. It will not be sent again automatically." = "另一个系统操作正在准备或发送此项目。请在 Tesserae Companion 中查看结果，不会自动再次发送。";
+"Result Not Confirmed" = "结果尚未确认";
+"Open Tesserae Companion to check this decision. It will not be sent again automatically." = "请打开 Tesserae Companion 检查此项操作，不会自动再次发送。";
+"Cloud sharing supports one photo or a selected video frame. Links cannot be sent to Cloud." = "Cloud 分享支持一张照片或选定的视频画面，不支持发送链接。";
+"Share one photo or video at a time. No items were sent." = "每次请选择一张照片或一个视频。未发送任何项目。";
+"This photo needs more memory than a system action can use. It has been kept for review in Tesserae Companion." = "这张照片需要的内存超过了系统操作的预算，已保留供你在 Tesserae Companion 中检查。";
+"Cannot Share This Item" = "无法分享此项目";
+
+"This display's panel configuration is not supported." = "暂不支持此屏幕的面板配置。";
+"Some saved displays are unavailable. Review the selected displays before sending." = "部分之前保存的屏幕现已不可用。发送前请检查所选屏幕。";
+"Your saved displays are unavailable. Choose a display to send to." = "之前保存的屏幕已不可用。请选择要发送到的屏幕。";
+"Could not load your saved displays. Choose a display to send to." = "无法读取之前保存的屏幕。请选择要发送到的屏幕。";
+
+"Review Photo" = "复核照片";
+
+"Open to review and explicitly continue." = "打开后复核，并手动继续。";
+
+"This item will not be sent automatically. Review its fixed displays before continuing." = "此内容不会自动发送。继续前请复核固定的目标屏幕。";
+
+"Discard this unsent item?" = "丢弃此未发送内容？";
+
+"Its photo and pending send will be removed. Nothing will be sent." = "将移除照片及待发送内容，不会发送任何内容。";
+
+"Frame generated. The physical display update is not confirmed." = "画面已生成，尚未确认实体屏幕已更新。";
+
+"Refresh Current Cloud Page" = "刷新当前云端页面";
+
+"Refresh Cloud Page" = "刷新云端页面";
+
+"Generate a new frame from the page currently assigned to a fixed Cloud display." = "为固定云端屏幕当前绑定的页面生成新画面。";
+
+"Cloud does not support pushing an arbitrary dashboard. Use Refresh Current Cloud Page instead." = "云端不支持推送任意仪表盘，请使用“刷新当前云端页面”。";
+
+"Quiet Hours override is not supported by Cloud. Turn it off before sending." = "云端不支持覆盖勿扰时段，请关闭该选项后再发送。";
+
+"Choose a Cloud display for this action." = "请为此操作选择云端屏幕。";
+
+"Check this send's results in Tesserae Companion. It will not be sent again automatically." = "请在 Tesserae Companion 中查看此次发送结果，不会自动重新发送。";
+
+"Open Tesserae Companion to review this item. It will not be sent again automatically." = "请打开 Tesserae Companion 复核此内容，不会自动重新发送。";
+
+"This send is still in progress. View its result in Tesserae Companion." = "此次发送仍在进行，请在 Tesserae Companion 中查看结果。";
+
+"Item Expired" = "内容已过期";
+
+"This unsent photo is no longer available." = "此未发送照片已不可用。";
+
+"This display's panel configuration is not supported. Deselect it to continue." = "不支持此屏幕的面板配置，请取消选择后继续。";
+
+"This display is no longer available. Deselect it to continue." = "此屏幕已不可用，请取消选择后继续。";
+
+"Available Until" = "可用期限";
+
+"This action does not support Cloud. Open Cloud management in Tesserae Companion." = "此操作不支持云端，请在 Tesserae Companion 中打开云端管理。";
+
+"Sign in to your existing Cloud account and choose a workspace in the secure browser." = "登录现有云端账号，并在安全浏览器中选择工作区。";
+"Sign In with Email Link" = "使用邮箱链接登录";
+"Verify Your Existing Email" = "验证现有账号邮箱";
+"Enter the email you already use for Tesserae Cloud. We’ll send a six-digit code." = "输入你用于 Tesserae 云端的邮箱。我们会发送六位验证码。";
+"Cloud Account Email" = "云端账号邮箱";
+"Requesting Code…" = "正在请求验证码…";
+"Send Code" = "发送验证码";
+"Enter the Verification Code" = "输入验证码";
+"If the address matches a Cloud account, a six-digit code will arrive by email." = "如果该邮箱对应现有云端账号，你将收到六位验证码。";
+"Six-Digit Code" = "六位验证码";
+"Verifying Code…" = "正在验证…";
+"Verify and Continue" = "验证并继续";
+"Change Email" = "更换邮箱";
+"Resend Code" = "重发验证码";
+"Code requested. Check your inbox." = "已请求验证码，请查收邮件。";
+"Change Email or Request Another Code" = "更改邮箱或重新发送验证码";
+"Apple sign-in is unavailable. Try again or sign in with email." = "暂时无法使用 Apple 登录。请重试，或使用邮箱登录。";
+"Could not request a code. Check the email address or start sign-in again." = "无法请求验证码。请检查邮箱地址或重新登录。";
+"Could not verify the code. Check it or start sign-in again." = "无法验证验证码。请检查验证码或重新登录。";
+"Please wait a moment before trying again." = "请稍后再试。";

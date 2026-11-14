@@ -185,7 +185,7 @@ struct DashboardsView: View {
                 .navigationTitle("Dashboards")
                 .navigationDestination(item: $settingsDashboardID) { id in
                     DashboardSettingsView(dashboardID: id)
-                        .id("\(model.activeInstance?.id ?? "")|\(id)")
+                        .id("\(model.activeStorageID ?? "")|\(id)")
                 }
         }
         .sheet(item: $dashboardToPush) { _ in

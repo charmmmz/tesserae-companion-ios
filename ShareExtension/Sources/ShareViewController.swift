@@ -3,10 +3,43 @@ import TesseraeKit
 import UIKit
 import UniformTypeIdentifiers
 
+func validateSingleShareMedia(_ providers: [NSItemProvider]) throws {
+    let count = providers.filter {
+        $0.hasItemConformingToTypeIdentifier(UTType.image.identifier)
+            || $0.hasItemConformingToTypeIdentifier(UTType.movie.identifier)
+    }.count
+    guard count <= 1 else { throw ShareCloudError.multipleItems }
+}
+
+struct CloudShareSelection {
+    let availableIDs: Set<String>
+    let initialIDs: Set<String>
+    let omittedPreferences: Bool
+
+    init(devices: [CloudDevice], preferredIDs: [String]) {
+        let available = devices.filter { $0.panel.compositionGeometry != nil }
+        availableIDs = Set(available.map(\.id))
+        let preferred = Set(preferredIDs)
+        initialIDs = preferred.isEmpty ? Set(available.prefix(1).map(\.id)) : preferred.intersection(availableIDs)
+        omittedPreferences = !preferred.isSubset(of: availableIDs)
+    }
+    var selectionWarning: String? {
+        guard omittedPreferences else { return nil }
+        return initialIDs.isEmpty
+            ? String(localized: "Your saved displays are unavailable. Choose a display to send to.")
+            : String(localized: "Some saved displays are unavailable. Review the selected displays before sending.")
+    }
+
+    func canSend(_ ids: Set<String>) -> Bool { !ids.isEmpty && ids.isSubset(of: availableIDs) }
+}
+
 @MainActor
 final class ShareViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
+#if DEBUG
+        AppConfiguration.recordSystemDiagnostic("share.loaded")
+#endif
         // A preferred size only; the host still constrains this for compact and
         // folded presentations, which use the same scrollable composer.
         preferredContentSize = CGSize(width: 960, height: 760)
@@ -49,6 +82,12 @@ private final class ShareComposerModel: ObservableObject {
 
     @Published var phase: Phase = .loading
     @Published var snapshot: CompanionSnapshot?
+    @Published private(set) var cloudSnapshot: CloudBootstrap?
+    @Published private(set) var cloudResult: CloudEntryCompletion?
+    private var cloudFence: ConnectionFence?
+    private var cloudDecision: UUID?
+    private var cloudAccountName: String?
+    private var selectedCloudID: ConnectionID?
     @Published var selectedDeviceIDs: Set<String> = []
     @Published var previewDeviceID: String?
     @Published var fit: ImageFitMode = .fill
@@ -57,6 +96,7 @@ private final class ShareComposerModel: ObservableObject {
     @Published var sharedURL: URL?
     @Published var linkKind: LinkPushKind = .webpage
     @Published var errorMessage: String?
+    @Published private(set) var invalidInput = false
     @Published private(set) var bluetoothSession: BluetoothShareSession?
     @Published private(set) var bluetoothTargetID: String?
     @Published private(set) var bluetoothIsBusy = false
@@ -83,7 +123,9 @@ private final class ShareComposerModel: ObservableObject {
     private let linkQueueStore: any LinkShareQueueStoring
     private let activityThumbnails: any ActivityThumbnailStoring
     private let credentials: any CredentialStoring
-    private let client: any TesseraeServing
+    private var client: any TesseraeServing
+    private let connectionRuntime: ConnectionRuntime?
+    private let connectionDirectory: URL?
     private let bluetoothRecords = BluetoothDisplayStore(fileURL: BluetoothDisplayStore.sharedInventoryURL,
         receiptDirectoryURL: BluetoothDisplayStore.sharedReceiptDirectoryURL, isReadOnly: true)
     private let protectDismissal: (Bool) -> Void
@@ -95,33 +137,22 @@ private final class ShareComposerModel: ObservableObject {
         self.mediaFrames = mediaFrames ?? MediaFrameSession()
         self.protectDismissal = protectDismissal
 
-        let appGroup = Bundle.main.object(
-            forInfoDictionaryKey: "TesseraeAppGroupIdentifier"
-        ) as? String
-        let containerURL = appGroup.flatMap {
-            FileManager.default.containerURL(
-                forSecurityApplicationGroupIdentifier: $0
-            )
-        }
-        let accessGroup: String? = {
-#if targetEnvironment(simulator)
-            return nil
-#else
-            guard
-                let value = Bundle.main.object(
-                    forInfoDictionaryKey: "TesseraeKeychainAccessGroup"
-                ) as? String,
-                !value.contains("$(")
-            else {
-                return nil
-            }
-            return value
-#endif
-        }()
+        let appGroup = AppConfiguration.stateSuiteName
+        let containerURL = AppConfiguration.sharedContainerURL
+        let accessGroup = AppConfiguration.keychainAccessGroup
+        connectionDirectory = containerURL
 
-        stateStore = UserDefaultsCompanionStateStore(suiteName: appGroup)
+        let runtime = containerURL.map {
+            ConnectionRuntime(directory: $0, suiteName: appGroup,
+                keychainService: AppConfiguration.keychainService, accessGroup: accessGroup,
+                identity: TesseraeClientIdentity(appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0",
+                                                 installationID: "share-extension"), isPrimary: false,
+                transport: AppConfiguration.cloudReadTestTransport)
+        }
+        connectionRuntime = runtime
+        stateStore = runtime?.stateStore ?? UserDefaultsCompanionStateStore(suiteName: appGroup)
         sendPreferences = UserDefaultsCompanionSendPreferencesStore(
-            suiteName: appGroup
+            suiteName: appGroup, directoryURL: containerURL
         )
         self.displayOrderPreferences = displayOrderPreferences ?? DisplayOrderPreferences(
             defaults: appGroup.flatMap(UserDefaults.init(suiteName:)) ?? .standard
@@ -132,11 +163,11 @@ private final class ShareComposerModel: ObservableObject {
             directoryURL: containerURL
         )
         let keychain = KeychainCredentialStore(
-            service: "com.charmmmz.tesseraecompanion.credentials",
+            service: AppConfiguration.keychainService,
             accessGroup: accessGroup
         )
         credentials = keychain
-        client = LiveTesseraeClient(
+        client = runtime?.bootstrapClient() ?? ConnectionRuntime.localClient(
             credentials: keychain,
             identity: TesseraeClientIdentity(
                 appVersion: Bundle.main.object(
@@ -150,7 +181,7 @@ private final class ShareComposerModel: ObservableObject {
     var displays: [DisplaySummary] {
         guard let snapshot else { return [] }
         return displayOrderPreferences.orderedDisplays(
-            snapshot.displays, for: snapshot.activeInstance.id
+            snapshot.displays, for: snapshot.activeInstance.storageID
         )
     }
 
@@ -165,13 +196,23 @@ private final class ShareComposerModel: ObservableObject {
             )
             && (bluetoothTargetID != nil
                 ? bluetoothTarget?.isAvailable == true && bluetoothSession?.canSend == true
-                : !selectedDeviceIDs.isEmpty && snapshot != nil)
+                : !selectedDeviceIDs.isEmpty && (snapshot != nil || cloudSnapshot.map {
+                    CloudShareSelection(devices: $0.devices, preferredIDs: []).canSend(selectedDeviceIDs)
+                } == true))
     }
 
     var sendTargets: [ShareDisplayTarget] {
-        ShareDisplayTarget.catalog(displays: displays, serverID: snapshot?.activeInstance.id,
+        let local = ShareDisplayTarget.catalog(displays: displays, serverID: snapshot?.activeInstance.storageID,
             records: bluetoothSession?.nearby.displayRecords ?? bluetoothRecords,
             nearby: bluetoothSession?.devices ?? [])
+        let cloud = (cloudSnapshot?.devices ?? []).map { device in
+            ShareDisplayTarget(id: "cloud:\(device.id)", name: device.name, display: nil, record: nil, nearby: nil,
+                cloudDeviceID: device.id,
+                cloudPanel: PanelProfile(width: device.panel.width, height: device.panel.height,
+                    gamut: device.panel.gamut ?? "", orientation: device.panel.width >= device.panel.height ? "landscape" : "portrait"),
+                cloudGeometryIsSupported: device.panel.compositionGeometry != nil)
+        }
+        return cloud + local
     }
 
     var bluetoothTarget: ShareDisplayTarget? { sendTargets.first { $0.id == bluetoothTargetID } }
@@ -179,9 +220,25 @@ private final class ShareComposerModel: ObservableObject {
         if let bluetoothTarget {
             return bluetoothSession?.panel(for: bluetoothTarget) ?? bluetoothTarget.panel
         }
-        return previewDisplay?.panel
+        return previewTarget?.panel
     }
-    var previewName: String? { bluetoothTarget?.name ?? previewDisplay?.name }
+    var previewName: String? { bluetoothTarget?.name ?? previewTarget?.name }
+    var previewTargets: [ShareDisplayTarget] {
+        sendTargets.filter { !$0.isBluetooth && selectedDeviceIDs.contains($0.resourceID) }
+    }
+    var previewTarget: ShareDisplayTarget? {
+        previewTargets.first { $0.resourceID == previewDeviceID } ?? previewTargets.first
+    }
+    var previewContentInset: Int {
+        cloudSnapshot?.devices.first { $0.id == previewTarget?.cloudDeviceID }?.panel.underscan ?? 0
+    }
+    var previewAspect: PanelAspectRatio? {
+        if let cloud = cloudSnapshot?.devices.first(where: { $0.id == previewTarget?.cloudDeviceID }),
+           let geometry = cloud.panel.compositionGeometry { return PanelAspectRatio(width: geometry.width, height: geometry.height) }
+        return previewPanel.map(PanelAspectRatio.init(panel:))
+    }
+    var cloudLabel: String? { cloudAccountName }
+    var hasCloudOutcome: Bool { cloudResult != nil }
 
     func canSelect(_ target: ShareDisplayTarget) -> Bool {
         target.isAvailable && (!target.isBluetooth ||
@@ -204,8 +261,8 @@ private final class ShareComposerModel: ObservableObject {
         } else {
             if bluetoothTargetID != nil { bluetoothSession?.changeDisplay() }
             bluetoothTargetID = nil
-            if selectedDeviceIDs.contains(target.id) { selectedDeviceIDs.remove(target.id) }
-            else { selectedDeviceIDs.insert(target.id); previewDeviceID = target.id }
+            if selectedDeviceIDs.contains(target.resourceID) { selectedDeviceIDs.remove(target.resourceID) }
+            else { selectedDeviceIDs.insert(target.resourceID); previewDeviceID = target.resourceID }
         }
         if !fitModes.contains(fit) {
             fit = fitModes.contains(.fill) ? .fill : fitModes.first ?? .fill
@@ -294,8 +351,8 @@ private final class ShareComposerModel: ObservableObject {
 
     var automaticFramingContext: PhotoFramingSession.AutomaticContext {
         .init(
-            imageID: framingSession.imageID, instanceID: snapshot?.activeInstance.id,
-            aspect: previewPanel.map(PanelAspectRatio.init(panel:)),
+            imageID: framingSession.imageID, instanceID: selectedCloudID?.rawValue ?? snapshot?.activeInstance.storageID,
+            aspect: previewAspect,
             targetIDs: bluetoothTargetID.map { [$0] } ?? selectedDeviceIDs, maximumZoom: maximumFramingZoom,
             isReady: phase == .ready && framingEditorIsActive
         )
@@ -320,11 +377,11 @@ private final class ShareComposerModel: ObservableObject {
     }
 
     var supportsImageFraming: Bool {
-        bluetoothTargetID != nil || snapshot?.capabilities?.supportsImageFraming == true
+        bluetoothTargetID != nil || cloudSnapshot != nil || snapshot?.capabilities?.supportsImageFraming == true
     }
 
     var maximumFramingZoom: Double {
-        bluetoothTargetID != nil ? 4 : max(snapshot?.capabilities?.limits.imageFramingMaxZoom ?? 1, 1)
+        bluetoothTargetID != nil || cloudSnapshot != nil ? 4 : max(snapshot?.capabilities?.limits.imageFramingMaxZoom ?? 1, 1)
     }
 
     var framingEditorIsActive: Bool {
@@ -335,7 +392,7 @@ private final class ShareComposerModel: ObservableObject {
     }
 
     var fitModes: [ImageFitMode] {
-        if bluetoothTargetID != nil { return [.fill, .fit] }
+        if bluetoothTargetID != nil || cloudSnapshot != nil { return [.fill, .fit] }
         let advertised = snapshot?.capabilities?.limits.imageFitModes
             ?? ImageFitMode.legacyModes
         let modes = ImageFitMode.allCases.filter(advertised.contains)
@@ -356,15 +413,34 @@ private final class ShareComposerModel: ObservableObject {
                 expiredBefore: Date().addingTimeInterval(-24 * 60 * 60)
             )
             // Bluetooth photo sharing is independent of server pairing and reachability.
-            if let saved = try? await stateStore.load(),
-               (try? await credentials.token(for: saved.activeInstance.id)) != nil {
-                snapshot = saved
+            if let saved = try await stateStore.load() {
+                if let connectionRuntime {
+                    guard let fence = saved.connectionFence else { throw ConnectionError.invalidIdentity }
+                    try await connectionRuntime.sessions.validate(fence)
+                    client = try connectionRuntime.client(for: saved)
+                    snapshot = saved
+                } else if try await credentials.token(for: saved.activeInstance.id) != nil {
+                    snapshot = saved
+                }
+            }
+            if self.snapshot == nil, let runtime = connectionRuntime,
+               let id = try runtime.registry.selectedID(), let saved = try runtime.registry.connection(id),
+               case .cloud = saved.identity {
+                selectedCloudID = id
+                cloudAccountName = saved.name
+                do {
+                    let transport = try await runtime.cloudTransport(for: id)
+                    let loaded = try await CloudReadClient(transport: transport).bootstrap()
+                    cloudSnapshot = loaded; cloudFence = transport.fence
+                } catch { errorMessage = error.localizedDescription }
             }
             let snapshot = self.snapshot
             let availableLinkKinds = LinkPushKind.allCases.filter {
                 snapshot?.capabilities?.supports($0) == true
             }
+            try validateSingleSharedMedia()
             if let url = try await loadSharedURLIfPresent() {
+                guard selectedCloudID == nil else { throw ShareCloudError.unsupportedLink }
                 guard snapshot != nil else { throw ShareComposerError.notPaired }
                 guard !availableLinkKinds.isEmpty else {
                     throw ShareComposerError.linkUnsupported
@@ -391,12 +467,28 @@ private final class ShareComposerModel: ObservableObject {
                 bluetoothSession = BluetoothShareSession()
                 bluetoothSession?.start()
             }
+            if let cloud = cloudSnapshot, let id = selectedCloudID {
+                do {
+                    let preferences = try await sendPreferences.preferences(for: id.rawValue)
+                    let selection = CloudShareSelection(devices: cloud.devices, preferredIDs: preferences?.deviceIDs ?? [])
+                    selectedDeviceIDs = selection.initialIDs
+                    errorMessage = selection.selectionWarning
+                    previewDeviceID = cloud.devices.first { selectedDeviceIDs.contains($0.id) }?.id
+                    if let preferredFit = preferences?.imageFitMode, [.fill, .fit].contains(preferredFit) { fit = preferredFit }
+                } catch {
+                    selectedDeviceIDs = []
+                    previewDeviceID = nil
+                    errorMessage = String(localized: "Could not load your saved displays. Choose a display to send to.")
+                }
+                phase = .ready
+                return
+            }
             guard let snapshot else {
                 phase = .ready
                 return
             }
             let savedPreferences = try? await sendPreferences.preferences(
-                for: snapshot.activeInstance.id
+                for: snapshot.activeInstance.storageID
             )
             let availableDeviceIDs = Set(displays.map(\.id))
             let preferredDeviceIDs = Set(savedPreferences?.deviceIDs ?? [])
@@ -427,12 +519,14 @@ private final class ShareComposerModel: ObservableObject {
             }
             phase = .ready
         } catch {
+            invalidInput = error is ShareCloudError
             errorMessage = error.localizedDescription
             phase = .failed
         }
     }
 
     func send(imageTargetGroups: [ImageSendTargetGroup] = []) async {
+        if cloudSnapshot != nil, bluetoothTargetID == nil { await sendCloud(); return }
         guard
             let snapshot,
             phase == .ready || phase == .failed,
@@ -494,7 +588,8 @@ private final class ShareComposerModel: ObservableObject {
                     displays: snapshot.displays,
                     dashboards: snapshot.dashboards,
                     jobs: jobs,
-                    activityClearedBefore: snapshot.activityClearedBefore
+                    activityClearedBefore: snapshot.activityClearedBefore,
+                    connectionFence: snapshot.connectionFence
                 )
             )
             if let submissionError {
@@ -533,7 +628,8 @@ private final class ShareComposerModel: ObservableObject {
             }
             queuedImageRequests = targetGroups.map { group in
                 SharedImageRequest(
-                    instanceID: snapshot.activeInstance.id,
+                    instanceID: snapshot.activeInstance.storageID,
+                    connectionEpoch: snapshot.connectionFence?.epoch,
                     fileName: fileName,
                     contentType: contentType,
                     fit: fit,
@@ -575,7 +671,7 @@ private final class ShareComposerModel: ObservableObject {
                 _ = try? await activityThumbnails.save(
                     imageData: imageData,
                     jobID: job.id,
-                    instanceID: snapshot.activeInstance.id,
+                    instanceID: snapshot.activeInstance.storageID,
                     createdAt: job.createdAt
                 )
                 try await queueStore.remove(submitting)
@@ -605,7 +701,8 @@ private final class ShareComposerModel: ObservableObject {
             throw ShareComposerError.linkUnsupported
         }
         let request = queuedLinkRequest ?? SharedLinkRequest(
-            instanceID: snapshot.activeInstance.id,
+            instanceID: snapshot.activeInstance.storageID,
+                    connectionEpoch: snapshot.connectionFence?.epoch,
             url: url,
             kind: linkKind,
             fit: fit,
@@ -715,14 +812,53 @@ private final class ShareComposerModel: ObservableObject {
     }
 
     func savePreferences() async {
-        guard bluetoothTargetID == nil, let snapshot, !selectedDeviceIDs.isEmpty else { return }
+        guard bluetoothTargetID == nil, !selectedDeviceIDs.isEmpty,
+              let storageID = selectedCloudID?.rawValue ?? snapshot?.activeInstance.storageID else { return }
         try? await sendPreferences.save(
             CompanionSendPreferences(
-                instanceID: snapshot.activeInstance.id,
+                instanceID: storageID,
                 deviceIDs: Array(selectedDeviceIDs),
                 imageFitMode: fit
             )
         )
+    }
+
+    private func validateSingleSharedMedia() throws {
+        guard let items = extensionContext?.inputItems as? [NSExtensionItem] else { return }
+        try validateSingleShareMedia(items.flatMap { $0.attachments ?? [] })
+    }
+
+    private func sendCloud() async {
+        guard canSend, !isBusy, let runtime = connectionRuntime, let fence = cloudFence,
+              let snapshot = cloudSnapshot, let bytes = imageData,
+              let directory = connectionDirectory else { return }
+        phase = .submitting; errorMessage = nil; framingSession.freeze(); protectDismissal(true)
+        defer { protectDismissal(false) }
+        if cloudDecision == nil { cloudDecision = UUID() }
+        do {
+            let geometry = Dictionary(uniqueKeysWithValues: try snapshot.devices.filter { selectedDeviceIDs.contains($0.id) }.map {
+                guard let geometry = $0.panel.compositionGeometry else { throw CloudSubmissionError.changedGeometry }
+                return ($0.id, geometry)
+            })
+            let targets = try CloudEntryTargets(connectionID: fence.connectionID, deviceIDs: selectedDeviceIDs.sorted(),
+                reviewedFence: fence, reviewedGeometry: geometry)
+#if DEBUG
+            AppConfiguration.recordSystemInput(decision: cloudDecision!, data: bytes, contentType: contentType,
+                recipe: .init(fit: fit, framings: framingSession.framings), deviceIDs: selectedDeviceIDs.sorted(),
+                sourceKind: String(describing: mediaFrames.source?.kind),
+                requestedSeconds: mediaFrames.usesPrimaryImage ? nil : mediaFrames.position * mediaFrames.duration,
+                outputRevision: appliedMediaRevision)
+#endif
+            let request = CloudEntryRequest.photo(targets: targets, data: bytes, contentType: contentType,
+                recipe: .init(fit: fit, framings: framingSession.framings))
+            cloudResult = try await CloudPhotoPreparer.systemEntry(runtime: runtime, directory: directory)
+                .submit(request, decision: cloudDecision!)
+#if DEBUG
+            AppConfiguration.recordSystemDiagnostic("share.completed")
+#endif
+            await savePreferences()
+            phase = .ready
+        } catch { errorMessage = error.localizedDescription; phase = .ready; framingSession.resumeEditing() }
     }
 
     func complete() {
@@ -927,7 +1063,7 @@ extension ShareComposerModel {
            let device = nearby.nearbyDevices.first {
             let instance = TesseraeInstance(id: "share-test", name: "Test Server",
                 baseURL: URL(string: "http://127.0.0.1")!, serverVersion: "test", timezone: "UTC", webURL: "/")
-            records.activeServerID = instance.id
+            records.activeServerID = instance.storageID
             records.observe(deviceID: "picpak-f85b1ba1b2c3", name: "Kitchen", mode: .bluetooth,
                 batteryMillivolts: nil, peripheralID: device.id)
             let panel = PanelProfile(width: 400, height: 300, gamut: "bwry_4", orientation: "landscape")
@@ -948,7 +1084,7 @@ extension ShareComposerModel {
                 displays: snapshot.displays + [portrait, landscape], dashboards: [], jobs: [])
         }
         if let snapshot = model.snapshot, let orderPreferences {
-            orderPreferences.save(snapshot.displays.reversed().map(\.id), for: snapshot.activeInstance.id)
+            orderPreferences.save(snapshot.displays.reversed().map(\.id), for: snapshot.activeInstance.storageID)
         }
         model.bluetoothSession = BluetoothShareSession(nearby: nearby)
         model.bluetoothSession?.start()
@@ -995,7 +1131,7 @@ private struct ShareComposerView: View {
                     ProgressView("Loading shared item…")
                 case .failed where model.contentKind == nil:
                     ContentUnavailableView(
-                        "Open Tesserae Companion",
+                        model.invalidInput ? "Cannot Share This Item" : "Open Tesserae Companion",
                         systemImage: "iphone.and.arrow.forward",
                         description: Text(
                             model.errorMessage
@@ -1003,7 +1139,7 @@ private struct ShareComposerView: View {
                         )
                     )
                 default:
-                    composer
+                    if model.hasCloudOutcome { cloudOutcome } else { composer }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1020,6 +1156,11 @@ private struct ShareComposerView: View {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Done", systemImage: "checkmark") { model.complete() }
                             .labelStyle(.iconOnly)
+                    }
+                } else if model.hasCloudOutcome {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done", systemImage: "checkmark") { model.complete() }.labelStyle(.iconOnly)
+                            .accessibilityIdentifier("share-cloud-done")
                     }
                 } else if model.phase == .succeeded {
                     ToolbarItem(placement: .confirmationAction) {
@@ -1113,6 +1254,10 @@ private struct ShareComposerView: View {
             guard model.phase == .ready else { return }
             Task { await model.savePreferences() }
         }
+    }
+
+    @ViewBuilder private var cloudOutcome: some View {
+        if let result = model.cloudResult { CloudEntryOutcomeView(completion: result) }
     }
 
     private var composer: some View {
@@ -1217,6 +1362,7 @@ private struct ShareComposerView: View {
                     TesseraePanelImagePreview(
                         image: model.mediaFrames.scrubbingPreview ?? model.previewImage,
                         panel: panel,
+                        contentInset: model.previewContentInset,
                         fit: model.fit,
                         maximumCanvasHeight: max(1, previewHeight - 2 * TesseraePanelImagePreview.canvasPadding),
                         emptyTitle: String(localized: "Loading shared image…"),
@@ -1315,6 +1461,7 @@ private struct ShareComposerView: View {
         ) {
             Text("Displays")
                 .font(.headline)
+            if let account = model.cloudLabel { Text(account).font(.footnote).foregroundStyle(.secondary) }
             VStack(spacing: 0) {
                 ForEach(model.sendTargets) { target in
                     let panel = model.bluetoothSession?.panel(for: target) ?? target.panel
@@ -1322,14 +1469,19 @@ private struct ShareComposerView: View {
                         model.select(target)
                         hapticEvent.trigger(.selection)
                     } label: {
-                        TesseraeDisplaySelectionRow(
-                            name: target.name,
-                            resolution: panel.map { "\($0.width)×\($0.height)" } ?? "—",
-                            isSelected: target.isBluetooth ? model.bluetoothTargetID == target.id
-                                : model.selectedDeviceIDs.contains(target.id),
-                            transport: target.isBluetooth ? String(localized: "Bluetooth") : nil,
-                            isAvailable: model.canSelect(target)
-                        )
+                        VStack(alignment: .leading, spacing: 4) {
+                            TesseraeDisplaySelectionRow(
+                                name: target.name,
+                                resolution: panel.map { "\($0.width)×\($0.height)" } ?? "—",
+                                isSelected: target.isBluetooth ? model.bluetoothTargetID == target.id
+                                    : model.selectedDeviceIDs.contains(target.resourceID),
+                                transport: target.isBluetooth ? String(localized: "Bluetooth") : nil,
+                                isAvailable: model.canSelect(target)
+                            )
+                            if let reason = target.unavailableReason {
+                                Text(reason).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 10)
+                            }
+                        }
                     }
                     .buttonStyle(.plain)
                     .disabled(!model.canSelect(target))
@@ -1351,19 +1503,20 @@ private struct ShareComposerView: View {
 
     @ViewBuilder
     private var previewTargetPicker: some View {
-        if model.selectedDisplays.count > 1 {
+        if model.previewTargets.count > 1 {
             Menu {
-                ForEach(model.selectedDisplays) { display in
+                ForEach(model.previewTargets) { display in
                     Button {
-                        model.previewDeviceID = display.id
+                        model.previewDeviceID = display.resourceID
                     } label: {
                         Label(
-                            "\(display.name) · \(PanelAspectRatio(panel: display.panel).displayName)",
-                            systemImage: model.previewDisplay?.id == display.id
+                            "\(display.name) · \(display.panel.map { PanelAspectRatio(panel: $0).displayName } ?? "—")",
+                            systemImage: model.previewTarget?.id == display.id
                                 ? "checkmark.circle.fill"
                                 : "circle"
                         )
                     }
+                    .accessibilityIdentifier("share-preview-display-\(display.resourceID)")
                 }
             } label: {
                 previewTargetLabel(showsChevron: true)
@@ -1429,7 +1582,7 @@ private struct ShareComposerView: View {
     }
 
     private var previewAspectRatio: PanelAspectRatio? {
-        model.previewPanel.map(PanelAspectRatio.init(panel:))
+        model.previewAspect
     }
 
     private var previewImageFraming: ImageFraming {
@@ -1546,6 +1699,16 @@ private enum ShareComposerError: Error, LocalizedError {
             String(
                 localized: "The Tesserae server does not accept \(type) images."
             )
+        }
+    }
+}
+
+private enum ShareCloudError: LocalizedError {
+    case unsupportedLink, multipleItems
+    var errorDescription: String? {
+        switch self {
+        case .unsupportedLink: String(localized: "Cloud sharing supports one photo or a selected video frame. Links cannot be sent to Cloud.")
+        case .multipleItems: String(localized: "Share one photo or video at a time. No items were sent.")
         }
     }
 }

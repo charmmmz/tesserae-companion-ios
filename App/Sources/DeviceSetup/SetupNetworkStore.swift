@@ -51,6 +51,20 @@ final class SetupNetworkStore {
         ))
     }
 
+    func migratePasswords(from legacyID: String, to connectionID: String) async throws {
+        guard legacyID != connectionID else { return }
+        load(instanceID: connectionID)
+        for network in networks where network.hasSavedPassword {
+            let oldKey = credentialKey(instanceID: legacyID, ssid: network.ssid)
+            let newKey = credentialKey(instanceID: connectionID, ssid: network.ssid)
+            if try await credentials.token(for: newKey) == nil,
+               let password = try await credentials.token(for: oldKey) {
+                try await credentials.save(token: password, for: newKey)
+            }
+            try await credentials.removeToken(for: oldKey)
+        }
+    }
+
     func record(
         instanceID: String,
         ssid: String,
