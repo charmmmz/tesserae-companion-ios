@@ -4,6 +4,18 @@ import CryptoKit
 import TesseraeKit
 
 enum AppConfiguration {
+    static let defaultCloudIssuer = URL(string: "https://cloud.tesserae.ink")!
+    static let bundledCloudIssuer = (Bundle.main.object(forInfoDictionaryKey: "TesseraeCloudIssuer") as? String)
+        .flatMap { URL(string: $0) }
+
+    static let isAppleLoginBeta: Bool = {
+#if TESSERAE_APPLE_LOGIN_BETA
+        true
+#else
+        false
+#endif
+    }()
+
     static var cloudIssuer: URL {
 #if DEBUG
         if let fixture = systemFixture { return URL(string: fixture.issuer)! }
@@ -11,8 +23,7 @@ enum AppConfiguration {
         if let raw = ProcessInfo.processInfo.environment["TESSERAE_CLOUD_ISSUER"],
            let url = URL(string: raw), let service = try? TesseraeKit.ConnectionIdentity.canonicalService(url) { return service }
 #endif
-        return URL(string: Bundle.main.object(forInfoDictionaryKey: "TesseraeCloudIssuer") as? String
-            ?? "https://cloud.tesserae.ink")!
+        return bundledCloudIssuer ?? defaultCloudIssuer
     }
 
     static func cloudBrowserURL(_ url: URL) -> URL {

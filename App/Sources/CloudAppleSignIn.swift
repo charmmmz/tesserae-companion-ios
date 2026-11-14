@@ -76,10 +76,11 @@ final class CloudAppleAuthorization: NSObject, CloudAppleAuthorizing,
 }
 
 enum CloudAppleSignInError: Error, LocalizedError {
-    case codeRequest, codeVerification, tryLater
+    case startUnavailable, codeRequest, codeVerification, tryLater
 
     var errorDescription: String? {
         switch self {
+        case .startUnavailable: String(localized: "Apple sign-in is unavailable. Try again or sign in with email.")
         case .codeRequest: String(localized: "Could not request a code. Check the email address or start sign-in again.")
         case .codeVerification: String(localized: "Could not verify the code. Check it or start sign-in again.")
         case .tryLater: String(localized: "Please wait a moment before trying again.")
@@ -105,8 +106,10 @@ enum CloudAppleSignInOutcome: Sendable {
 }
 
 extension CloudOAuthClient {
+    static func supportsAppleSignIn(issuer: URL) -> Bool { appleIssuer(issuer) != nil }
+
     func appleSignInAvailable(issuer: URL) async throws -> Bool {
-        guard Self.appleIssuer(issuer) != nil else { return false }
+        guard Self.supportsAppleSignIn(issuer: issuer) else { return false }
         struct Providers: Decodable { let apple_native: Bool? }
         let response = try await appleRequest(issuer: issuer, path: "auth/providers")
         return response.statusCode == 200 && (try? JSONDecoder().decode(Providers.self, from: response.data).apple_native) == true
@@ -147,7 +150,7 @@ extension CloudOAuthClient {
     }
 
     private func appleRequest(issuer: URL, path: String, body: [String: String]? = nil) async throws -> TesseraeHTTPResponse {
-        guard Self.appleIssuer(issuer) != nil else { throw CloudLoginError.unavailable }
+        guard Self.supportsAppleSignIn(issuer: issuer) else { throw CloudLoginError.unavailable }
         try Task.checkCancellation()
         var request = URLRequest(url: issuer.appending(path: path), cachePolicy: .reloadIgnoringLocalCacheData,
                                  timeoutInterval: Self.requestTimeout)

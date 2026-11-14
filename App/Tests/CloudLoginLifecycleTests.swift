@@ -50,6 +50,7 @@ private actor LoginHTTP: TesseraeHTTPTransporting {
             let body = try request.httpBody.map { try JSONDecoder().decode([String: String].self, from: $0) } ?? [:]
             appleRequests.append(AppleRequest(path: path, method: request.httpMethod ?? "", body: body))
             if blocked.contains(path) { await withCheckedContinuation { continuations[path] = $0 } }
+            if refusals.contains(path) { return TesseraeHTTPResponse(data: Data(), statusCode: 503) }
             switch path {
             case "/auth/providers":
                 return Self.json(advertisesApple ? #"{"apple_native":true}"# : #"{"providers":[]}"#)
@@ -384,6 +385,47 @@ final class CloudLoginLifecycleTests: XCTestCase {
         XCTAssertFalse(http.host.appleSignInAvailable)
         let insecureRequests = await http.http.appleRequests
         XCTAssertTrue(insecureRequests.isEmpty)
+    }
+
+    func testAppleBetaButtonIsReadyBeforeDiscoveryAndServerRefusalKeepsEmailSignIn() async throws {
+        try XCTSkipUnless(AppConfiguration.isAppleLoginBeta)
+        let issuer = try XCTUnwrap(AppConfiguration.bundledCloudIssuer)
+        try XCTSkipIf(issuer.host == AppConfiguration.defaultCloudIssuer.host)
+        try XCTSkipUnless(CloudOAuthClient.supportsAppleSignIn(issuer: issuer))
+        let fixture = fixture(issuer: issuer)
+        let startPath = "/auth/apple/start"
+        await fixture.http.configureApple(advertised: false)
+
+        XCTAssertTrue(fixture.host.appleSignInAvailable)
+        await fixture.host.checkAppleSignInAvailability()
+        let discoveryRequests = await fixture.http.appleRequests
+        XCTAssertTrue(discoveryRequests.isEmpty)
+        XCTAssertTrue(fixture.host.appleSignInAvailable)
+
+        await fixture.http.block(startPath, refused: true)
+        let login = Task { await fixture.host.beginAppleSignIn() }
+        let deadline = ContinuousClock.now + .seconds(3)
+        while !(await fixture.http.hasRequest(startPath)), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let reachedStart = await fixture.http.hasRequest(startPath)
+        XCTAssertTrue(reachedStart)
+        XCTAssertEqual(fixture.host.loginPhase, .applePreparing)
+        XCTAssertNil(fixture.apple.nonce)
+        await fixture.http.release(startPath)
+        await login.value
+
+        XCTAssertEqual(fixture.host.loginPhase, .idle)
+        XCTAssertNil(try fixture.vault.pending())
+        XCTAssertNil(fixture.apple.nonce)
+        XCTAssertEqual(fixture.host.loginError, CloudAppleSignInError.startUnavailable.localizedDescription)
+        XCTAssertTrue(fixture.host.appleSignInAvailable)
+        let requests = await fixture.http.appleRequests
+        XCTAssertEqual(requests.map(\.path), [startPath])
+
+        await fixture.host.beginCloudSignIn()
+        XCTAssertEqual(fixture.host.loginPhase, .browser)
+        XCTAssertEqual(fixture.browser.opened.last?.path, "/oauth/authorize")
     }
 
     func testAppleBrowserConsentRejectsChangedOriginPathAndQuery() {

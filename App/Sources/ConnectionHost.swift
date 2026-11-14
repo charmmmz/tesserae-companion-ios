@@ -29,7 +29,9 @@ final class ConnectionHost {
     private let sendPreferences: any CompanionSendPreferencesStoring
     private(set) var savedConnections: [SavedConnection] = []
     private(set) var loginPhase: LoginPhase = .idle
-    private(set) var appleSignInAvailable = false
+    private let showsAppleSignInImmediately: Bool
+    private var discoveredAppleSignIn = false
+    var appleSignInAvailable: Bool { showsAppleSignInImmediately || discoveredAppleSignIn }
     private var checksAppleAvailability = false
     private(set) var isSwitching = false
     private(set) var isRestoring = true
@@ -56,6 +58,10 @@ final class ConnectionHost {
          sendPreferences: any CompanionSendPreferencesStoring = InMemoryCompanionSendPreferencesStore()) {
         self.local = local; self.runtime = runtime; self.vault = vault; self.oauth = oauth
         self.issuer = issuer; self.browser = browser; self.appleAuthorization = appleAuthorization
+        showsAppleSignInImmediately = AppConfiguration.isAppleLoginBeta && runtime != nil
+            && issuer == AppConfiguration.bundledCloudIssuer
+            && issuer.host?.lowercased() != AppConfiguration.defaultCloudIssuer.host
+            && CloudOAuthClient.supportsAppleSignIn(issuer: issuer)
         self.sendPreferences = sendPreferences
         self.submissionDirectory = submissionDirectory ?? URL.applicationSupportDirectory.appending(path: "CloudSubmissions")
     }
@@ -114,14 +120,14 @@ final class ConnectionHost {
     }
 
     func checkAppleSignInAvailability() async {
-        guard cloudAvailable, !checksAppleAvailability else { return }
+        guard cloudAvailable, !showsAppleSignInImmediately, !checksAppleAvailability else { return }
         checksAppleAvailability = true
         defer { checksAppleAvailability = false }
         do {
             let available = try await oauth.appleSignInAvailable(issuer: issuer)
-            if !Task.isCancelled { appleSignInAvailable = available }
+            if !Task.isCancelled { discoveredAppleSignIn = available }
         } catch {
-            if !Task.isCancelled { appleSignInAvailable = false }
+            if !Task.isCancelled { discoveredAppleSignIn = false }
         }
     }
 
@@ -157,8 +163,12 @@ final class ConnectionHost {
                 }
             } catch {
                 guard isCurrentAppleAttempt(attempt.id) else { return }
+                let startFailed = loginPhase == .applePreparing
                 _ = cancelCloudSignIn()
-                if !(error is CancellationError) { loginError = CloudLoginError.exchangeFailed.localizedDescription }
+                if !(error is CancellationError) {
+                    loginError = startFailed ? CloudAppleSignInError.startUnavailable.localizedDescription
+                        : CloudLoginError.exchangeFailed.localizedDescription
+                }
             }
         }
         appleTask = task

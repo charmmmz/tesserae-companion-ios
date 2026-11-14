@@ -1253,6 +1253,7 @@
 "Verifying Code…" = "正在验证…";
 "Verify and Continue" = "验证并继续";
 "Change Email or Request Another Code" = "更改邮箱或重新发送验证码";
+"Apple sign-in is unavailable. Try again or sign in with email." = "暂时无法使用 Apple 登录。请重试，或使用邮箱登录。";
 "Could not request a code. Check the email address or start sign-in again." = "无法请求验证码。请检查邮箱地址或重新登录。";
 "Could not verify the code. Check it or start sign-in again." = "无法验证验证码。请检查验证码或重新登录。";
 "Please wait a moment before trying again." = "请稍后再试。";
