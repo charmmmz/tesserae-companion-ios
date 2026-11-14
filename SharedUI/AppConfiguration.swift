@@ -51,6 +51,10 @@ enum AppConfiguration {
 #endif
         return nil
     }
+#if TESSERAE_APPLE_LOGIN_BETA
+    private static let cloudBetaNamespace = "apple-login-beta"
+#endif
+
     static let bundleIdentifier = Bundle.main.bundleIdentifier
         ?? "com.charmmmz.tesseraecompanion"
 
@@ -59,7 +63,11 @@ enum AppConfiguration {
 #if DEBUG
         if let namespace = cloudTestNamespace { return base + ".tests." + namespace }
 #endif
+#if TESSERAE_APPLE_LOGIN_BETA
+        return base + "." + cloudBetaNamespace
+#else
         return base
+#endif
     }
 
 #if DEBUG
@@ -162,7 +170,11 @@ enum AppConfiguration {
 #if DEBUG
         if let namespace = cloudTestNamespace { return appGroupIdentifier.map { $0 + ".tests." + namespace } }
 #endif
+#if TESSERAE_APPLE_LOGIN_BETA
+        return appGroupIdentifier.map { $0 + "." + cloudBetaNamespace }
+#else
         return appGroupIdentifier
+#endif
     }
 
     static var sharedContainerURL: URL? {
@@ -173,7 +185,11 @@ enum AppConfiguration {
 #if DEBUG
         if let namespace = cloudTestNamespace { return container?.appending(path: "CloudTests/\(namespace)") }
 #endif
+#if TESSERAE_APPLE_LOGIN_BETA
+        return container?.appending(path: cloudBetaNamespace, directoryHint: .isDirectory)
+#else
         return container
+#endif
     }
 
     static let appVersion = Bundle.main.object(
