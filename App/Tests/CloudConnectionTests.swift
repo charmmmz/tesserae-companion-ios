@@ -194,6 +194,34 @@ final class CloudConnectionTests: XCTestCase {
         XCTAssertEqual(count, 2)
         XCTAssertFalse(model.needsSignIn)
     }
+    func testDetailOpenedDuringRateLimitHasAStateAndCanReloadWhenAllowed() async throws {
+        let clock = CloudTestClock()
+        let (model, http) = try await fixture(clock: clock)
+        await model.refresh()
+        let id = try XCTUnwrap(model.devices.first?.id)
+        let key = CloudBrowseModel.key(id, true)
+        let path = "/api/t/devices/\(id)/frame.png"
+
+        await http.configure(status: 429)
+        await model.refresh()
+        await model.openDetail(id: id, isDevice: true)
+        let deadline = try XCTUnwrap(model.retryAfter)
+        XCTAssertEqual(model.previews[key], .rateLimited(until: deadline))
+        let earlyRequests = await http.count("/api/t/devices")
+        XCTAssertEqual(earlyRequests, 0)
+
+        clock.advance(18)
+        await http.configure(status: 200)
+        await model.openDetail(id: id, isDevice: true)
+        guard case .image = model.previews[key] else {
+            return XCTFail("Reload after Retry-After must fetch and display the image")
+        }
+        let previewRequests = await http.count(path)
+        XCTAssertEqual(previewRequests, 1)
+        XCTAssertNil(model.problem)
+        XCTAssertNil(model.retryAfter)
+    }
+
     func testDetailUsesLatestListMetadataAndEmptySuccessIsDistinctFromFailure() async throws {
         let (model, http) = try await fixture()
         await model.refresh()

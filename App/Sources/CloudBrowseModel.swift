@@ -6,6 +6,7 @@ import TesseraeKit
 final class CloudBrowseModel {
     enum Preview: Equatable {
         case loading, image(Data), missing, unavailable(String)
+        case rateLimited(until: Date?)
     }
     let client: CloudReadClient
     var fence: ConnectionFence { client.fence }
@@ -25,6 +26,7 @@ final class CloudBrowseModel {
     private var refreshTask: Task<Void, Never>?
     private var previewTasks: [String: Task<Void, Never>] = [:]
     private(set) var retryAfter: Date?
+    private var hasRateLimitProblem = false
     private let now: @Sendable () -> Date
 
     init(client: CloudReadClient, now: @escaping @Sendable () -> Date = { Date() }) {
@@ -65,9 +67,12 @@ final class CloudBrowseModel {
                 let value = try await client.bootstrap()
                 guard self.generation == generation, !Task.isCancelled else { return }
                 snapshot = value; fetchedAt = now(); problem = nil
-                previews = previews.filter { key, _ in
+                hasRateLimitProblem = false
+                previews = previews.filter { key, preview in
                     value.devices.contains { key == "device:\($0.id)" } || value.pages.contains {
-                        key == "page:\($0.id)" && pageVersions[key] == $0.updatedAt
+                        guard key == "page:\($0.id)" else { return false }
+                        if case .rateLimited = preview, visibleDetails.contains(key) { return true }
+                        return pageVersions[key] == $0.updatedAt
                     }
                 }
                 let cachedKeys = Set(previews.keys)
@@ -86,11 +91,14 @@ final class CloudBrowseModel {
     }
     func openDetail(id: String, isDevice: Bool, reuseCached: Bool = true) async {
         guard isActive else { return }
-        guard retryAfter.map({ $0 <= now() }) != false else { return }
         let key = Self.key(id, isDevice)
+        if let task = previewTasks[key] { await task.value; return }
         visibleDetails.insert(key)
         trimPageCache()
-        if let task = previewTasks[key] { await task.value; return }
+        if let retryAfter, retryAfter > now() {
+            previews[key] = .rateLimited(until: retryAfter)
+            return
+        }
         let generation = generation
         let cached = previews[key]
         verifiedDetails.remove(key)
@@ -137,10 +145,17 @@ final class CloudBrowseModel {
                     if let pageVersion { pageVersions[key] = pageVersion }
                     trimPageCache()
                 }
+                if hasRateLimitProblem, retryAfter.map({ $0 <= now() }) ?? true {
+                    problem = nil
+                    retryAfter = nil
+                    hasRateLimitProblem = false
+                }
             } catch {
                 guard self.generation == generation, !Task.isCancelled else { return }
                 handle(error)
-                if !needsSignIn && !isRestricted {
+                if case CloudReadError.retryLater(let seconds) = error {
+                    previews[key] = .rateLimited(until: seconds == nil ? nil : retryAfter)
+                } else if !needsSignIn && !isRestricted {
                     previews[key] = .unavailable(Self.message(error))
                 }
             }
@@ -171,6 +186,7 @@ final class CloudBrowseModel {
 
     private func handle(_ error: Error) {
         problem = Self.message(error)
+        hasRateLimitProblem = false
         switch error {
         case CloudReadError.unauthorized, ConnectionError.authorizationRequired,
              ConnectionError.rotationOutcomeUnknown, ConnectionError.signedOut, ConnectionError.sessionChanged:
@@ -178,6 +194,7 @@ final class CloudBrowseModel {
         case CloudReadError.forbidden, ConnectionError.accessRestricted:
             clearPrivateState(); isRestricted = true
         case CloudReadError.retryLater(let seconds):
+            hasRateLimitProblem = true
             if let seconds { retryAfter = now().addingTimeInterval(seconds) }
         default: break
         }

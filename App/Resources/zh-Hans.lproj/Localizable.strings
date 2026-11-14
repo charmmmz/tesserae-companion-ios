@@ -1073,7 +1073,9 @@
 "Existing preview only. Browsing does not refresh the physical display." = "仅查看已有预览，浏览不会刷新实体显示屏。";
 "Loading Preview…" = "正在加载预览…";
 "Item Unavailable" = "项目不可用";
-"Refresh Preview" = "刷新预览";
+"Reload Preview" = "重新加载预览";
+"Preview Temporarily Unavailable" = "暂时无法加载预览";
+"Try again at %@." = "%@ 后可重试。";
 "Existing Cloud Preview" = "云端已有预览";
 "No Preview Yet" = "暂无预览";
 "This item has no saved preview. No render was requested." = "此项目没有已保存的预览，未请求渲染。";
@@ -1187,7 +1189,9 @@
 "Cloud Temporarily Unavailable" = "云端暂时不可用";
 "No Current Dashboard" = "未绑定当前仪表盘";
 "Request Refused" = "请求被拒绝";
-"Refresh Current Page" = "刷新当前页面";
+"Regenerate Display Frame" = "重新生成显示屏画面";
+"Preparing Refresh…" = "正在准备生成画面…";
+"The display can pick up the new frame the next time it wakes." = "显示屏下次唤醒时可以领取新画面。";
 "The send could not be confirmed. Check the display before sending again." = "无法确认发送结果。请先核对屏幕，再决定是否重新发送。";
 "This send could not be confirmed. Check the display before sending again." = "无法确认此次发送结果。请先核对屏幕，再决定是否重新发送。";
 "The service did not confirm this display's result." = "服务未确认此屏幕的结果。";
