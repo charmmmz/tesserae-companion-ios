@@ -4,12 +4,7 @@ extension XCUIApplication {
     @MainActor
     func onboardingShortcut(_ identifier: String) -> XCUIElement {
         let shortcut = buttons[identifier]
-        if !shortcut.exists {
-            let more = buttons["onboarding-more"]
-            XCTAssertTrue(more.waitForExistence(timeout: 5))
-            for _ in 0..<6 where !more.isHittable { swipeUp() }
-            more.tap()
-        }
+        guard shortcut.waitForExistence(timeout: 5) else { return shortcut }
         for _ in 0..<6 where !shortcut.isHittable { swipeUp() }
         return shortcut
     }
@@ -102,31 +97,21 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertFalse(app.buttons["Enter Server Address"].exists)
         let nearby = app.buttons["onboarding-nearby-devices"]
         let demo = app.buttons["onboarding-demo"]
-        let more = app.buttons["onboarding-more"]
-        XCTAssertTrue(more.isHittable)
-        XCTAssertFalse(nearby.exists)
-        XCTAssertFalse(demo.exists)
-        let collapsedTabY = connectionType.frame.minY
-        readabilityAttachment(app, "Cloud onboarding")
-
-        let brand = app.descendants(matching: .any)["onboarding-brand"].firstMatch
-        let start = brand.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.62))
-        start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: -88)))
-        XCTAssertTrue(nearby.waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["onboarding-more"].exists)
+        XCTAssertTrue(nearby.isHittable)
         XCTAssertTrue(demo.isHittable)
-        XCTAssertLessThan(connectionType.frame.minY, collapsedTabY - 24)
-        readabilityAttachment(app, "Cloud onboarding expanded")
-        more.tap()
-        XCTAssertFalse(demo.exists)
-        let returnedToStart = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            abs(connectionType.frame.minY - collapsedTabY) <= 2
-        }, object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [returnedToStart], timeout: 2), .completed)
+        XCTAssertEqual(nearby.frame.midY, demo.frame.midY, accuracy: 1)
+        XCTAssertGreaterThan(nearby.frame.midY, app.frame.height * 0.85)
+        let footerY = nearby.frame.midY
+        readabilityAttachment(app, "Cloud onboarding")
 
         connectionType.buttons["Self-Hosted"].tap()
         XCTAssertTrue(connectionType.buttons["Self-Hosted"].isSelected)
         XCTAssertTrue(app.buttons["Enter Server Address"].isHittable)
-        XCTAssertFalse(app.staticTexts["Nearby Tesserae"].exists)
+        XCTAssertTrue(app.staticTexts["Nearby Tesserae"].exists)
+        XCTAssertTrue(nearby.isHittable)
+        XCTAssertTrue(demo.isHittable)
+        XCTAssertEqual(nearby.frame.midY, footerY, accuracy: 2)
         XCTAssertFalse(app.buttons["cloud-signin"].exists)
         XCTAssertFalse(app.buttons["Scan Pairing QR"].exists)
 
@@ -188,13 +173,12 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertGreaterThanOrEqual(demo.frame.height.rounded(), 44)
         for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
         nearby.tap()
-        let done = app.buttons["onboarding-nearby-done"]
-        XCTAssertTrue(done.waitForExistence(timeout: 4))
-        XCTAssertTrue(app.navigationBars["Nearby Devices"].exists)
+        let page = app.navigationBars["Nearby Devices"]
+        XCTAssertTrue(page.waitForExistence(timeout: 4))
         XCTAssertTrue(app.staticTexts["Find nearby displays over Bluetooth to set them up or service them."].exists)
         XCTAssertFalse(app.staticTexts["Refresh Button"].exists)
-        readabilityAttachment(app, "Nearby devices sheet")
-        done.tap()
+        readabilityAttachment(app, "Nearby devices page")
+        page.buttons.firstMatch.tap()
         XCTAssertTrue(nearby.isHittable)
     }
 
@@ -418,7 +402,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertEqual(mode.value as? String, "Manual (Bluetooth)")
         app.buttons["Close"].tap()
         XCTAssertTrue(app.navigationBars["Nearby Devices"].waitForExistence(timeout: 4))
-        app.buttons["onboarding-nearby-done"].tap()
+        app.navigationBars["Nearby Devices"].buttons.firstMatch.tap()
         // Reopening a known device uses its remembered model before reconnecting.
         nearby.tap()
         app.buttons.containing(.staticText, identifier: "Tesserae-A1B2C3").firstMatch.tap()
@@ -426,7 +410,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(knownBadge.waitForExistence(timeout: 3))
         XCTAssertTrue(knownBadge.label.contains("PicPak 4.2"))
         app.buttons["Close"].tap()
-        app.buttons["onboarding-nearby-done"].tap()
+        app.navigationBars["Nearby Devices"].buttons.firstMatch.tap()
         let demo = app.onboardingShortcut("onboarding-demo")
         XCTAssertTrue(demo.waitForExistence(timeout: 4))
         for _ in 0..<3 where !demo.isHittable { app.swipeUp() }
@@ -481,7 +465,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.buttons["Automatic (Wi-Fi)"].tap()
         XCTAssertEqual(mode.value as? String, "Automatic (Wi-Fi)")
         app.buttons["Close"].tap()
-        app.buttons["onboarding-nearby-done"].tap()
+        app.navigationBars["Nearby Devices"].buttons.firstMatch.tap()
         let demo = app.onboardingShortcut("onboarding-demo")
         XCTAssertTrue(demo.waitForExistence(timeout: 4))
         for _ in 0..<3 where !demo.isHittable { app.swipeUp() }
@@ -514,7 +498,6 @@ final class TesseraeCompanionUITests: XCTestCase {
         let nearby = app.onboardingShortcut("onboarding-nearby-devices")
         XCTAssertTrue(nearby.waitForExistence(timeout: 5))
         for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
-        let safeAreaTop = app.images["onboarding-brand"].frame.minY
         nearby.tap()
         let originalNearbyTitleFrame = app.navigationBars["Nearby Devices"].frame
         app.buttons.containing(.staticText, identifier: "Tesserae-A1B2C3").firstMatch.tap()
@@ -559,8 +542,8 @@ final class TesseraeCompanionUITests: XCTestCase {
         let navigationFrame = app.navigationBars["Nearby Devices"].frame
         XCTAssertEqual(navigationFrame.minY, originalNearbyTitleFrame.minY, accuracy: 1)
         XCTAssertEqual(navigationFrame.height, originalNearbyTitleFrame.height, accuracy: 1)
-        XCTAssertEqual(confirmationFrame.minY, safeAreaTop + 8, accuracy: 2)
-        XCTAssertLessThan(confirmationFrame.maxY, navigationFrame.minY)
+        XCTAssertEqual(confirmationFrame.minY, navigationFrame.minY + 8, accuracy: 2)
+        XCTAssertLessThan(confirmationFrame.midY, app.frame.midY)
         let geometry = XCTAttachment(string: "capsule=\(confirmationFrame)\nnavigationBefore=\(originalNearbyTitleFrame)\nnavigationDuring=\(navigationFrame)")
         geometry.name = "Bluetooth Receipt Capsule Geometry"; geometry.lifetime = .keepAlways; add(geometry)
         XCTAssertFalse(app.buttons["ble-send-photo"].exists)
@@ -569,7 +552,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         completionShot.name = "PicPak Sent Confirmation"; completionShot.lifetime = .keepAlways; add(completionShot)
         XCTAssertFalse(app.staticTexts["Sending photo…"].exists)
         XCTAssertTrue(app.navigationBars["Nearby Devices"].waitForExistence(timeout: 4))
-        app.buttons["onboarding-nearby-done"].tap()
+        app.navigationBars["Nearby Devices"].buttons.firstMatch.tap()
         let demo = app.onboardingShortcut("onboarding-demo")
         XCTAssertTrue(demo.waitForExistence(timeout: 4))
         for _ in 0..<3 where !demo.isHittable { app.swipeUp() }
@@ -2548,16 +2531,28 @@ final class TesseraeCompanionUITests: XCTestCase {
             "-AppleLanguages", "(zh-Hans)",
             "-AppleLocale", "zh_CN",
         ]
-        app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        if ProcessInfo.processInfo.environment["TESSERAE_VERIFY_APPLE_BETA_ENTRY"] == "1" {
+            app.launchEnvironment["TESSERAE_CLOUD_TEST_NAMESPACE"] = UUID().uuidString
+        } else {
+            app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
+        }
+        app.launchEnvironment["TESSERAE_UI_TEST_COLOR_SCHEME"] = "dark"
         app.launch()
 
         let connectionType = app.segmentedControls["connection-type"]
         XCTAssertTrue(connectionType.waitForExistence(timeout: 3))
         XCTAssertFalse(app.staticTexts["Tesserae 伴侣"].exists)
-        XCTAssertEqual(app.onboardingShortcut("onboarding-nearby-devices").label, "附近设备")
-        XCTAssertTrue(app.onboardingShortcut("onboarding-demo").exists)
+        let nearby = app.buttons["onboarding-nearby-devices"]
+        let demo = app.buttons["onboarding-demo"]
+        XCTAssertTrue(nearby.isHittable)
+        XCTAssertEqual(nearby.label, "附近设备")
+        XCTAssertTrue(demo.isHittable)
+        XCTAssertEqual(demo.label, "演示模式")
+        XCTAssertFalse(app.buttons["展开更多"].exists)
+        XCTAssertFalse(app.buttons["更多选项"].exists)
         XCTAssertTrue(connectionType.buttons["云端"].isSelected)
         XCTAssertFalse(app.buttons["输入服务器地址"].exists)
+        readabilityAttachment(app, "Cloud onboarding in Simplified Chinese dark mode")
         connectionType.buttons["自建"].tap()
         XCTAssertTrue(connectionType.buttons["自建"].isSelected)
         XCTAssertTrue(app.buttons["输入服务器地址"].exists)

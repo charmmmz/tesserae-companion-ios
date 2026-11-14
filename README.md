@@ -158,9 +158,9 @@ requires compatible opt-in firmware and hardware acceptance. See the
 
 1. Install [TestFlight](https://apps.apple.com/app/testflight/id899247664) and
    [join the beta](https://testflight.apple.com/join/gjQar3TK).
-2. Choose **Self-Hosted** to enter your server address, or tap **Expand More**
-   to find it on the local network. **Nearby Devices** and **Demo Mode** are
-   also under **Expand More**.
+2. Choose **Self-Hosted** to find a server on the local network or enter its
+   address. **Nearby Devices** and **Demo Mode** are at the bottom of the
+   welcome screen.
 3. Pair using the Companion pairing code shown by Tesserae.
 4. Grant optional editing or personal-data permissions only for the features
    you want to use.

@@ -13,8 +13,6 @@
 "Searching for nearby servers…" = "正在查找附近的服务器…";
 "Enter Server Address" = "输入服务器地址";
 "Nearby Devices" = "附近设备";
-"Expand More" = "展开更多";
-"Show Fewer Options" = "收起选项";
 "Find nearby displays over Bluetooth to set them up or service them." = "用蓝牙查找附近的显示屏，进行设置或维护。";
 "Bonjour finds servers but never authenticates. Every connection still requires a one-time code from Tesserae." = "Bonjour 只负责发现服务器，不负责认证。每次新连接仍需要 Tesserae 提供的一次性配对码。";
 "Server" = "服务器";

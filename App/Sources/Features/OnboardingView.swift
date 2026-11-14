@@ -15,9 +15,6 @@ struct OnboardingView: View {
     @Environment(ConnectionHost.self) private var connectionHost
     @ScaledMetric(relativeTo: .subheadline) private var nearbyServerRowHeight: CGFloat = 44
     @State private var connectionType = ConnectionType.cloud
-    @State private var showsMoreOptions = false
-    @GestureState private var disclosureDrag: CGFloat = 0
-    @State private var nearbyPresented = false
     @State private var manualSetupPresented = false
     @State private var manualServerAddress: String?
 
@@ -37,21 +34,6 @@ struct OnboardingView: View {
                     initialServerAddress: manualServerAddress,
                     onConnected: { if isChoosingServer { dismiss() } }
                 )
-            }
-            .sheet(isPresented: $nearbyPresented) {
-                NavigationStack {
-                    NearbyDisplaysView(fromOnboarding: true)
-                        .toolbar {
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button("Done", systemImage: "checkmark") { nearbyPresented = false }
-                                    .labelStyle(.iconOnly)
-                                    .accessibilityIdentifier("onboarding-nearby-done")
-                            }
-                        }
-                }
-                .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(TesseraeTheme.background)
             }
             .navigationTitle(String(localized: isChoosingServer ? "Tesserae Connections" : ""))
             .navigationBarTitleDisplayMode(.inline)
@@ -85,7 +67,7 @@ struct OnboardingView: View {
     }
 
     private var shouldShowServerDiscovery: Bool {
-        connectionType == .selfHosted && !connectionHost.isSigningIn && (isChoosingServer || showsMoreOptions)
+        connectionType == .selfHosted && !connectionHost.isSigningIn
     }
 
     private func connectionContent(_ viewport: GeometryProxy) -> some View {
@@ -94,20 +76,14 @@ struct OnboardingView: View {
         let screenHeight = viewport.size.height + insets.top + insets.bottom
         let spacious = !dynamicTypeSize.isAccessibilitySize && viewport.size.height >= 550
             && connectionHost.savedConnections.isEmpty
-        let collapsedHeight = spacious ? max(132, screenHeight * 0.43 - insets.top) : 104
-        let expandedHeight = spacious ? max(76, screenHeight * 0.20 - insets.top) : 72
-        let travel = collapsedHeight - expandedHeight
-        let progress = min(1, max(0, (showsMoreOptions ? 1 : 0) - disclosureDrag / travel))
-        let fullMark: CGFloat = spacious && viewport.size.width > 370 ? 118 : (spacious ? 104 : 72)
+        let brandHeight = spacious ? max(132, screenHeight * 0.39 - insets.top) : 104
+        let brandSize: CGFloat = spacious ? (viewport.size.width > 360 ? 104 : 88) : 72
 
         return VStack(spacing: 0) {
             if !isChoosingServer {
-                TesseraeBrandMark(size: isSigningIn ? 52 : fullMark + (58 - fullMark) * progress)
-                    .offset(y: isSigningIn ? 0 : 8 * (1 - progress))
+                TesseraeBrandMark(size: isSigningIn ? 52 : brandSize)
                     .frame(maxWidth: .infinity)
-                    .frame(height: isSigningIn ? 84 : collapsedHeight - travel * progress)
-                    .contentShape(Rectangle())
-                    .simultaneousGesture(disclosureGesture, isEnabled: !isSigningIn)
+                    .frame(height: isSigningIn ? 84 : brandHeight)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("Tesserae Companion")
                     .accessibilityAddTraits(.isImage)
@@ -148,15 +124,12 @@ struct OnboardingView: View {
                     ConnectionLoginErrorMessage(message: error)
                 }
 
-                if !isChoosingServer && !isSigningIn {
-                    moreOptionsButton
-                }
-
                 if shouldShowServerDiscovery {
                     nearbyServerDiscovery
                 }
 
-                if !isChoosingServer && !isSigningIn && showsMoreOptions {
+                if !isChoosingServer && !isSigningIn {
+                    Spacer(minLength: 0)
                     onboardingAlternatives
                 }
             }
@@ -164,46 +137,9 @@ struct OnboardingView: View {
             .padding(.vertical, isChoosingServer ? 20 : 0)
         }
         .padding(.bottom, 20)
-        .frame(maxWidth: 680)
+        .frame(maxWidth: 680, minHeight: !isChoosingServer && !isSigningIn ? viewport.size.height : 0, alignment: .top)
         .frame(maxWidth: .infinity)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.26), value: isSigningIn)
-    }
-
-    private var disclosureGesture: some Gesture {
-        DragGesture(minimumDistance: 12)
-            .updating($disclosureDrag) { value, drag, _ in
-                if !reduceMotion && abs(value.translation.height) > abs(value.translation.width) {
-                    drag = value.translation.height
-                }
-            }
-            .onEnded { value in
-                let delta = value.translation.height
-                guard abs(delta) > 37, abs(delta) > abs(value.translation.width) else { return }
-                setMoreOptions(delta < 0)
-            }
-    }
-
-    private func setMoreOptions(_ expanded: Bool) {
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.26)) {
-            showsMoreOptions = expanded
-        }
-    }
-
-    private var moreOptionsButton: some View {
-        Button {
-            setMoreOptions(!showsMoreOptions)
-        } label: {
-            Label(showsMoreOptions ? "Show Fewer Options" : "Expand More",
-                  systemImage: showsMoreOptions ? "chevron.down" : "chevron.up")
-                .font(.subheadline)
-                .frame(minHeight: 44)
-                .padding(.horizontal, 12)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
-        .accessibilityIdentifier("onboarding-more")
-        .simultaneousGesture(disclosureGesture)
     }
 
     private var currentConnectionID: ConnectionID? {
@@ -383,8 +319,8 @@ struct OnboardingView: View {
 
     private var onboardingAlternatives: some View {
         HStack(alignment: .top, spacing: 8) {
-            Button {
-                nearbyPresented = true
+            NavigationLink {
+                NearbyDisplaysView(fromOnboarding: true)
             } label: {
                 Text("Nearby Devices")
                     .fixedSize(horizontal: false, vertical: true)

@@ -380,7 +380,6 @@ final class CloudBrowsingUITests: XCTestCase {
     func testBonjourConnectsActualLoopbackFixture() {
         let app = launch()
         showSelfHosted(app)
-        app.buttons["onboarding-more"].tap()
         let manual = app.buttons["Enter Server Address"]
         let loading = app.descendants(matching: .any)["self-hosted-discovery-loading"]
         XCTAssertTrue(loading.exists)
