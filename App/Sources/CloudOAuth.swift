@@ -20,19 +20,32 @@ enum CloudLoginError: Error, LocalizedError {
 }
 
 struct PendingCloudLogin: Codable, Sendable {
+    enum AppleStage: Codable, Sendable, Equatable {
+        case provingIdentity
+        case consent(userID: String)
+    }
+
     let id: UUID
     let issuer: URL
     let state: String
     let verifier: String
     let createdAt: Date
     var consumed = false
+    var appleStage: AppleStage?
     static let callback = "com.charmmmz.tesseraecompanion:/oauth/callback"
     static let clientID = "tesserae-companion"
     static let scopes = "app:read app:send app:refresh"
 
-    init(issuer: URL, now: Date = Date()) throws {
+    init(issuer: URL, now: Date = Date(), appleStage: AppleStage? = nil) throws {
         id = UUID(); self.issuer = issuer; createdAt = now
         state = try Self.random(); verifier = try Self.random()
+        self.appleStage = appleStage
+    }
+
+    var acceptsCallback: Bool { appleStage != .provingIdentity }
+    var expectedUserID: String? {
+        if case let .consent(userID) = appleStage { return userID }
+        return nil
     }
     var authorizationURL: URL {
         var components = URLComponents(url: issuer.appending(path: "oauth/authorize"), resolvingAgainstBaseURL: false)!
@@ -81,6 +94,15 @@ struct CloudLoginVault: Sendable {
     func pending() throws -> PendingCloudLogin? { try transaction { $0.pending } }
     func replace(_ pending: PendingCloudLogin?) throws { try transaction { $0.pending = pending } }
     func invalidate() throws { try replace(nil) }
+
+    func armAppleConsent(attemptID: UUID, userID: String) throws {
+        try transaction { envelope in
+            guard var attempt = envelope.pending, attempt.id == attemptID, !attempt.consumed,
+                  attempt.appleStage == .provingIdentity else { throw CloudLoginError.expired }
+            attempt.appleStage = .consent(userID: userID)
+            envelope.pending = attempt
+        }
+    }
     func claim(_ url: URL, issuer: URL, now: Date = Date()) throws -> (PendingCloudLogin, String)? {
         guard let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
               parts.scheme == "com.charmmmz.tesseraecompanion", parts.host == nil,
@@ -92,17 +114,18 @@ struct CloudLoginVault: Sendable {
         let fields = Dictionary(uniqueKeysWithValues: items.map { ($0.name, $0.value ?? "") })
         let result: (PendingCloudLogin, String)? = try transaction { envelope in
             guard var attempt = envelope.pending else { throw CloudLoginError.expired }
+            guard attempt.acceptsCallback else { return nil }
             guard attempt.issuer == issuer, fields["state"] == attempt.state else { throw CloudLoginError.invalidCallback }
             guard now.timeIntervalSince(attempt.createdAt) >= 0,
                   now.timeIntervalSince(attempt.createdAt) < 900 else { throw CloudLoginError.expired }
-            if attempt.consumed { return nil }
+            guard !attempt.consumed else { return nil }
             guard fields["error"] != nil || fields["code"]?.isEmpty == false else { throw CloudLoginError.invalidCallback }
             guard fields["error"] == nil || fields["code"] == nil else { throw CloudLoginError.invalidCallback }
             attempt.consumed = true
             envelope.pending = attempt
             return (attempt, fields["code"] ?? "")
         }
-        if fields["error"] != nil { throw CloudLoginError.denied }
+        if result != nil, fields["error"] != nil { throw CloudLoginError.denied }
         return result
     }
     func retainRevocation(issuer: URL, token: String) throws -> Revocation {
@@ -147,9 +170,10 @@ struct CloudLoginVault: Sendable {
 }
 
 struct CloudOAuthClient: Sendable {
+    static let requestTimeout: TimeInterval = 15
     let transport: any TesseraeHTTPTransporting
     init(transport: (any TesseraeHTTPTransporting)? = nil) {
-        self.transport = transport ?? URLSessionTesseraeTransport.cloud()
+        self.transport = transport ?? URLSessionTesseraeTransport.cloud(resourceTimeout: Self.requestTimeout)
     }
     func exchange(_ attempt: PendingCloudLogin, code: String) async throws -> CloudTokenResponse {
         let response = try await post(issuer: attempt.issuer, path: "oauth/token", fields: [
@@ -165,7 +189,7 @@ struct CloudOAuthClient: Sendable {
         guard response.statusCode == 200 else { throw CloudLoginError.unavailable }
     }
     private func post(issuer: URL, path: String, fields: [String: String]) async throws -> TesseraeHTTPResponse {
-        var request = URLRequest(url: issuer.appending(path: path), cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
+        var request = URLRequest(url: issuer.appending(path: path), cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: Self.requestTimeout)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         var form = URLComponents()
@@ -176,7 +200,13 @@ struct CloudOAuthClient: Sendable {
 }
 
 @MainActor
-final class CloudSignInBrowser: NSObject, ASWebAuthenticationPresentationContextProviding {
+protocol CloudSignInBrowsing {
+    func open(_ url: URL, completion: @escaping @MainActor (URL?, Error?) -> Void) throws
+    func cancel()
+}
+
+@MainActor
+final class CloudSignInBrowser: NSObject, ASWebAuthenticationPresentationContextProviding, CloudSignInBrowsing {
     private var session: ASWebAuthenticationSession?
     func open(_ url: URL, completion: @escaping @MainActor (URL?, Error?) -> Void) throws {
         let session = ASWebAuthenticationSession(url: url,
@@ -189,7 +219,12 @@ final class CloudSignInBrowser: NSObject, ASWebAuthenticationPresentationContext
     }
     func cancel() { session?.cancel(); session = nil }
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows).first(where: \.isKeyWindow) ?? ASPresentationAnchor()
+        cloudSignInPresentationAnchor()
     }
+}
+
+@MainActor
+func cloudSignInPresentationAnchor() -> ASPresentationAnchor {
+    UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        .flatMap(\.windows).first(where: \.isKeyWindow) ?? ASPresentationAnchor()
 }

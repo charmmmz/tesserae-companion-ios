@@ -14,7 +14,11 @@ struct CloudPresentationContext: Hashable, Sendable {
 
 @MainActor @Observable
 final class ConnectionHost {
-    enum LoginPhase { case idle, browser, exchanging, committing }
+    enum LoginPhase {
+        case idle, browser, exchanging, committing
+        case applePreparing, appleAuthorizing, appleCompleting
+        case appleEmail, appleSendingCode, appleCode, appleVerifyingCode, appleConsent
+    }
     private(set) var cloud: CloudBrowseModel?
     private(set) var cloudContextRevision = UUID()
     private var submissions: CloudSubmissionService?
@@ -25,6 +29,8 @@ final class ConnectionHost {
     private let sendPreferences: any CompanionSendPreferencesStoring
     private(set) var savedConnections: [SavedConnection] = []
     private(set) var loginPhase: LoginPhase = .idle
+    private(set) var appleSignInAvailable = false
+    private var checksAppleAvailability = false
     private(set) var isSwitching = false
     private(set) var isRestoring = true
     var loginError: String?
@@ -33,7 +39,10 @@ final class ConnectionHost {
     private let vault: CloudLoginVault
     private let oauth: CloudOAuthClient
     private let issuer: URL
-    private let browser = CloudSignInBrowser()
+    private let browser: any CloudSignInBrowsing
+    private let appleAuthorization: any CloudAppleAuthorizing
+    private var appleTask: Task<Void, Never>?
+    private var appleAttemptID: String?
     private var attemptID: UUID?
     private var selectionIntent = UUID()
     private var tail: Task<Void, Never>?
@@ -41,16 +50,18 @@ final class ConnectionHost {
 
     init(local: AppModel, runtime: ConnectionRuntime?, vault: CloudLoginVault,
          oauth: CloudOAuthClient = CloudOAuthClient(), issuer: URL = AppConfiguration.cloudIssuer,
+         browser: any CloudSignInBrowsing = CloudSignInBrowser(),
+         appleAuthorization: any CloudAppleAuthorizing = CloudAppleAuthorization(),
          submissionDirectory: URL? = AppConfiguration.sharedContainerURL,
          sendPreferences: any CompanionSendPreferencesStoring = InMemoryCompanionSendPreferencesStore()) {
         self.local = local; self.runtime = runtime; self.vault = vault; self.oauth = oauth
-        self.issuer = issuer
+        self.issuer = issuer; self.browser = browser; self.appleAuthorization = appleAuthorization
         self.sendPreferences = sendPreferences
         self.submissionDirectory = submissionDirectory ?? URL.applicationSupportDirectory.appending(path: "CloudSubmissions")
     }
     var cloudAvailable: Bool { runtime != nil }
     var isSigningIn: Bool { loginPhase != .idle }
-    var canCancelLogin: Bool { loginPhase == .browser || loginPhase == .exchanging }
+    var canCancelLogin: Bool { isSigningIn && loginPhase != .committing }
 
     func reloadSavedConnections() {
         do { savedConnections = try runtime?.registry.savedConnections() ?? [] }
@@ -72,8 +83,8 @@ final class ConnectionHost {
             }
             self.reloadSavedConnections()
             if self.runtime != nil, self.attemptID == nil, let pending = try self.vault.pending() {
-                if !pending.consumed, Date().timeIntervalSince(pending.createdAt) < 900 {
-                    self.attemptID = pending.id; self.loginPhase = .browser
+                if pending.acceptsCallback, !pending.consumed, Date().timeIntervalSince(pending.createdAt) < 900 {
+                    self.attemptID = pending.id; self.loginPhase = pending.expectedUserID == nil ? .browser : .appleConsent
                 } else {
                     try self.vault.invalidate()
                     self.loginError = CloudLoginError.expired.localizedDescription
@@ -95,28 +106,165 @@ final class ConnectionHost {
             let attempt = try PendingCloudLogin(issuer: issuer)
             try vault.replace(attempt)
             attemptID = attempt.id; loginPhase = .browser; loginError = nil
-            try browser.open(AppConfiguration.cloudBrowserURL(attempt.authorizationURL)) { [weak self] url, error in
-                guard let self else { return }
-                if let url {
-                    Task { await self.receiveCloudCallback(url) }
-                } else if self.attemptID == attempt.id && self.loginPhase == .browser {
-                    self.cancelCloudSignIn()
-                    if (error as? ASWebAuthenticationSessionError)?.code != .canceledLogin {
-                        self.loginError = error?.localizedDescription ?? CloudLoginError.unavailable.localizedDescription
-                    }
+            try openCloudBrowser(AppConfiguration.cloudBrowserURL(attempt.authorizationURL), attemptID: attempt.id)
+        } catch {
+            _ = cancelCloudSignIn()
+            loginError = error.localizedDescription
+        }
+    }
+
+    func checkAppleSignInAvailability() async {
+        guard cloudAvailable, !checksAppleAvailability else { return }
+        checksAppleAvailability = true
+        defer { checksAppleAvailability = false }
+        do {
+            let available = try await oauth.appleSignInAvailable(issuer: issuer)
+            if !Task.isCancelled { appleSignInAvailable = available }
+        } catch {
+            if !Task.isCancelled { appleSignInAvailable = false }
+        }
+    }
+
+    func beginAppleSignIn() async {
+        guard appleSignInAvailable, !isSigningIn, !isSwitching, cancelCloudSignIn() else { return }
+        selectionIntent = UUID()
+        let attempt: PendingCloudLogin
+        do {
+            attempt = try PendingCloudLogin(issuer: issuer, appleStage: .provingIdentity)
+            try vault.replace(attempt)
+        } catch {
+            loginError = CloudLoginError.unavailable.localizedDescription
+            return
+        }
+        attemptID = attempt.id
+        loginPhase = .applePreparing
+        loginError = nil
+        let task = Task {
+            defer { if attemptID == attempt.id { appleTask = nil } }
+            do {
+                let start = try await oauth.startAppleSignIn(attempt)
+                guard isCurrentAppleAttempt(attempt.id) else { return }
+                appleAttemptID = start.attemptID
+                loginPhase = .appleAuthorizing
+                let credential = try await appleAuthorization.authorize(nonce: start.nonce, state: attempt.state)
+                guard isCurrentAppleAttempt(attempt.id) else { return }
+                loginPhase = .appleCompleting
+                let outcome = try await oauth.completeAppleSignIn(issuer: issuer, attemptID: start.attemptID, credential: credential)
+                guard isCurrentAppleAttempt(attempt.id) else { return }
+                switch outcome {
+                case let .ready(consent): try openAppleConsent(consent, attemptID: attempt.id)
+                case .verifyEmail: loginPhase = .appleEmail
+                }
+            } catch {
+                guard isCurrentAppleAttempt(attempt.id) else { return }
+                _ = cancelCloudSignIn()
+                if !(error is CancellationError) { loginError = CloudLoginError.exchangeFailed.localizedDescription }
+            }
+        }
+        appleTask = task
+        await task.value
+    }
+
+    func sendAppleEmailCode(_ email: String) async {
+        guard loginPhase == .appleEmail, let id = attemptID, let appleAttemptID else { return }
+        let address = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !address.isEmpty else { return }
+        loginPhase = .appleSendingCode
+        loginError = nil
+        let task = Task {
+            defer { if attemptID == id { appleTask = nil } }
+            do {
+                try await oauth.sendAppleEmailCode(issuer: issuer, attemptID: appleAttemptID, email: address)
+                guard isCurrentAppleAttempt(id) else { return }
+                loginPhase = .appleCode
+            } catch {
+                guard isCurrentAppleAttempt(id) else { return }
+                loginPhase = .appleEmail
+                loginError = ((error as? CloudAppleSignInError) ?? .codeRequest).localizedDescription
+            }
+        }
+        appleTask = task
+        await task.value
+    }
+
+    func changeAppleVerificationEmail() {
+        guard loginPhase == .appleCode else { return }
+        loginPhase = .appleEmail
+        loginError = nil
+    }
+
+    func verifyAppleEmailCode(_ code: String) async {
+        guard loginPhase == .appleCode, let id = attemptID, let appleAttemptID,
+              code.utf8.count == 6, code.utf8.allSatisfy({ (48...57).contains($0) }) else { return }
+        loginPhase = .appleVerifyingCode
+        loginError = nil
+        let task = Task {
+            defer { if attemptID == id { appleTask = nil } }
+            do {
+                let consent = try await oauth.verifyAppleEmailCode(issuer: issuer, attemptID: appleAttemptID, code: code)
+                guard isCurrentAppleAttempt(id) else { return }
+                try openAppleConsent(consent, attemptID: id)
+            } catch {
+                guard isCurrentAppleAttempt(id) else { return }
+                if loginPhase == .appleConsent {
+                    _ = cancelCloudSignIn()
+                    loginError = CloudLoginError.exchangeFailed.localizedDescription
+                } else {
+                    loginPhase = .appleCode
+                    loginError = ((error as? CloudAppleSignInError) ?? .codeVerification).localizedDescription
                 }
             }
-        } catch { loginPhase = .idle; loginError = error.localizedDescription }
+        }
+        appleTask = task
+        await task.value
     }
+
+    private func isCurrentAppleAttempt(_ id: UUID) -> Bool {
+        attemptID == id && !Task.isCancelled
+    }
+
+    private func openAppleConsent(_ consent: CloudAppleConsent, attemptID: UUID) throws {
+        try vault.armAppleConsent(attemptID: attemptID, userID: consent.userID)
+        appleAttemptID = nil
+        loginPhase = .appleConsent
+        try openCloudBrowser(consent.url, attemptID: attemptID)
+    }
+
+    private func openCloudBrowser(_ url: URL, attemptID: UUID) throws {
+        try browser.open(url) { [weak self] url, error in
+            guard let self, self.attemptID == attemptID,
+                  self.loginPhase == .browser || self.loginPhase == .appleConsent else { return }
+            if let url {
+                Task { await self.receiveCloudCallback(url, browserAttemptID: attemptID) }
+            } else {
+                self.cancelCloudSignIn()
+                if (error as? ASWebAuthenticationSessionError)?.code != .canceledLogin {
+                    self.loginError = CloudLoginError.unavailable.localizedDescription
+                }
+            }
+        }
+    }
+
     @discardableResult func cancelCloudSignIn() -> Bool {
         guard runtime != nil else { return true }
         guard loginPhase != .committing else { return false }
         do { try vault.invalidate() } catch { loginError = error.localizedDescription; return false }
         attemptID = nil; loginPhase = .idle
+        appleAttemptID = nil
+        appleTask?.cancel(); appleTask = nil
+        appleAuthorization.cancel()
         browser.cancel()
         return true
     }
-    func receiveCloudCallback(_ url: URL) async {
+
+    func receiveCloudCallback(_ url: URL, browserAttemptID: UUID? = nil) async {
+        if let browserAttemptID, browserAttemptID != attemptID { return }
+        switch loginPhase {
+        case .applePreparing, .appleAuthorizing, .appleCompleting, .appleEmail, .appleSendingCode, .appleCode, .appleVerifyingCode:
+            return
+        case .idle, .browser, .appleConsent, .exchanging, .committing:
+            break
+        }
         let claimed: (PendingCloudLogin, String)?
         do { claimed = try vault.claim(url, issuer: issuer) }
         catch {
@@ -134,6 +282,11 @@ final class ConnectionHost {
             await serialized {
                 guard self.attemptID == attempt.id, self.loginPhase == .exchanging else {
                     _ = try self.vault.retainRevocation(issuer: attempt.issuer, token: response.refreshToken)
+                    return
+                }
+                if let expectedUserID = attempt.expectedUserID, response.user.id != expectedUserID {
+                    _ = try self.vault.retainRevocation(issuer: attempt.issuer, token: response.refreshToken)
+                    self.loginError = CloudLoginError.exchangeFailed.localizedDescription
                     return
                 }
                 guard let runtime = self.runtime else { throw CloudLoginError.unavailable }
@@ -175,7 +328,10 @@ final class ConnectionHost {
                     throw installationError
                 }
             }
-            if attemptID == attempt.id { attemptID = nil; loginPhase = .idle }
+            if attemptID == attempt.id {
+                attemptID = nil; loginPhase = .idle
+                try? vault.invalidate()
+            }
             if let acceptedModel, cloud === acceptedModel { await acceptedModel.refresh() }
             await drainRevocations()
         } catch {

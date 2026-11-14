@@ -18,6 +18,10 @@ capabilities.
 
 ### Added
 
+- Existing Cloud accounts can sign in with Apple on iOS when the service offers it.
+  If Apple shares a different or private email address, verify the existing Cloud
+  email with a six-digit code before choosing a workspace.
+
 - Cloud photos can be sent from Photos sharing or a fixed-device Shortcuts action
   without opening the main App first. A separate shortcut refreshes the current
   page. Persisted unsent photos and work refused by the system raster budget

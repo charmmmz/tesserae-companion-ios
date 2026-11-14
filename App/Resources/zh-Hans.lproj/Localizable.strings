@@ -1239,3 +1239,20 @@
 "Available Until" = "可用期限";
 
 "This action does not support Cloud. Open Cloud management in Tesserae Companion." = "此操作不支持云端，请在 Tesserae Companion 中打开云端管理。";
+
+"Sign in to your existing Cloud account and choose a workspace in the secure browser." = "登录现有云端账号，并在安全浏览器中选择工作区。";
+"Sign In with Email" = "使用邮箱登录";
+"Verify Your Existing Email" = "验证现有账号邮箱";
+"Enter the email you already use for Tesserae Cloud. We’ll send a six-digit code." = "输入你用于 Tesserae 云端的邮箱。我们会发送六位验证码。";
+"Cloud Account Email" = "云端账号邮箱";
+"Requesting Code…" = "正在请求验证码…";
+"Send Code" = "发送验证码";
+"Enter the Verification Code" = "输入验证码";
+"If the address matches a Cloud account, a six-digit code will arrive by email." = "如果该邮箱对应现有云端账号，你将收到六位验证码。";
+"Six-Digit Code" = "六位验证码";
+"Verifying Code…" = "正在验证…";
+"Verify and Continue" = "验证并继续";
+"Change Email or Request Another Code" = "更改邮箱或重新发送验证码";
+"Could not request a code. Check the email address or start sign-in again." = "无法请求验证码。请检查邮箱地址或重新登录。";
+"Could not verify the code. Check it or start sign-in again." = "无法验证验证码。请检查验证码或重新登录。";
+"Please wait a moment before trying again." = "请稍后再试。";

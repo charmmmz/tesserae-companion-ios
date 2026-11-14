@@ -31,7 +31,7 @@ targets:
         CFBundleDisplayName: Tesserae
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        TesseraeCloudIssuer: https://cloud.tesserae.ink
+        TesseraeCloudIssuer: $(TESSERAE_CLOUD_ISSUER)
         CFBundleURLTypes:
           - CFBundleURLName: com.charmmmz.tesseraecompanion.oauth
             CFBundleURLSchemes:
@@ -70,6 +70,7 @@ targets:
         MARKETING_VERSION: 0.8.2
         CURRENT_PROJECT_VERSION: 16
         DEVELOPMENT_TEAM: 3MSS7DJGVR
+        TESSERAE_CLOUD_ISSUER: https://cloud.tesserae.ink
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: App/Resources/TesseraeCompanion.entitlements
         SWIFT_VERSION: 6.0

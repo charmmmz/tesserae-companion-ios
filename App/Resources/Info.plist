@@ -59,7 +59,7 @@
 	<key>TesseraeAppGroupIdentifier</key>
 	<string>group.com.charmmmz.tesseraecompanion</string>
 	<key>TesseraeCloudIssuer</key>
-	<string>https://cloud.tesserae.ink</string>
+	<string>$(TESSERAE_CLOUD_ISSUER)</string>
 	<key>TesseraeKeychainAccessGroup</key>
 	<string>$(AppIdentifierPrefix)com.charmmmz.tesseraecompanion.shared</string>
 	<key>UIAppFonts</key>

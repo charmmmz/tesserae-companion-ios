@@ -34,6 +34,14 @@ physical-device acceptance of 0.8.2.
   Cloud App OAuth endpoints are live, verify sign-in, photo sending, and
   refresh on a signed iPhone and a physical display.
 
+For a signed Apple sign-in test against an isolated Cloud service, pass
+`TESSERAE_CLOUD_ISSUER=https://<staging-host>` as an `xcodebuild` setting when
+archiving the `TesseraeCompanion` scheme in Release. Verify the app bundle's
+processed `Info.plist` has that value under `TesseraeCloudIssuer`. The default
+build uses `https://cloud.tesserae.ink`. On a signed iPhone, verify the matching
+email path, the six-digit code path, and cancellation. Apple sign-in requires
+the capability on the main App ID and an enabled service provider.
+
 ## Server compatibility
 
 - [x] Use a Tesserae build that exposes the complete Companion API v1

@@ -23,8 +23,9 @@ public final class URLSessionTesseraeTransport: TesseraeHTTPTransporting, @unche
         self.session = session
     }
 
-    public static func cloud() -> URLSessionTesseraeTransport {
+    public static func cloud(resourceTimeout: TimeInterval? = nil) -> URLSessionTesseraeTransport {
         let configuration = URLSessionConfiguration.ephemeral
+        if let resourceTimeout { configuration.timeoutIntervalForResource = resourceTimeout }
         configuration.urlCache = nil
         configuration.httpCookieStorage = nil
         configuration.httpShouldSetCookies = false

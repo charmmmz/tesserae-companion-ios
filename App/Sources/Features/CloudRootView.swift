@@ -264,17 +264,9 @@ struct CloudConnectionSettings: View {
                 LabeledContent("Tenant", value: account.tenant.name)
                 LabeledContent("Role", value: String(localized: account.role == "owner" ? "Owner" : "Member"))
             }
-            if host.isSigningIn {
-                ProgressView(String(localized: host.loginPhase == .committing ? "Finishing Sign-In…" : "Waiting for Sign-In…"))
-                if host.canCancelLogin {
-                    Button("Cancel Sign-In", role: .cancel) { host.cancelCloudSignIn() }
-                }
-            }
-            if let error = host.loginError { Text(error).foregroundStyle(TesseraeTheme.danger) }
+            CloudSignInControls(inSettings: true)
             LabeledContent("Service", value: model.client.issuer.absoluteString)
             Button("Choose Connection", systemImage: "arrow.triangle.swap", action: onChooseConnection)
-            Button("Sign In Again", systemImage: "person.crop.circle.badge.checkmark") { Task { await host.beginCloudSignIn() } }
-                .disabled(host.isSigningIn)
             Link("Set Up in Cloud", destination: AppConfiguration.cloudSetupURL(issuer: model.client.issuer))
             if let account = model.snapshot?.account {
                 NavigationLink("Cloud Usage & Features") {
