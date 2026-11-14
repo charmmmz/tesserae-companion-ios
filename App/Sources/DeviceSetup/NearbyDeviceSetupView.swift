@@ -997,7 +997,11 @@ struct NearbyDisplaysView: View {
             }
         }
         .scrollContentBackground(.hidden)
-        .tesseraeScreenBackground()
+        .background {
+            if !fromOnboarding {
+                Color.clear.tesseraeScreenBackground()
+            }
+        }
         .navigationTitle(fromOnboarding ? Text("Nearby Devices") : Text("Nearby Displays"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbarVisibility(.visible, for: .navigationBar)
@@ -1068,16 +1072,11 @@ struct NearbyDisplaysView: View {
             }
             Section {
                 if fromOnboarding {
-                    VStack(alignment: .leading, spacing: 16) {
-                        TesseraeBrandMark(size: 52)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                        Text("Find nearby displays over Bluetooth to set them up or service them.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
+                    Text("Find nearby displays over Bluetooth to set them up or service them.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                 }
                 if nearby.nearbyDevices.isEmpty {
                     HStack(alignment: .top, spacing: 12) {

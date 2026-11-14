@@ -7,6 +7,11 @@ struct OnboardingView: View {
         case cloud, selfHosted
     }
 
+    private enum WelcomeStep {
+        case nearby, demo
+        case manual(address: String?)
+    }
+
     var isChoosingServer = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -15,6 +20,7 @@ struct OnboardingView: View {
     @Environment(ConnectionHost.self) private var connectionHost
     @ScaledMetric(relativeTo: .subheadline) private var nearbyServerRowHeight: CGFloat = 44
     @State private var connectionType = ConnectionType.cloud
+    @State private var welcomeStep: WelcomeStep?
     @State private var connectionChooserPresented = false
     @State private var manualSetupPresented = false
     @State private var manualServerAddress: String?
@@ -22,11 +28,7 @@ struct OnboardingView: View {
     var body: some View {
         NavigationStack {
             GeometryReader { viewport in
-                ScrollView {
-                    connectionContent(viewport)
-                }
-                .scrollBounceBehavior(.basedOnSize)
-                .scrollDismissesKeyboard(.interactively)
+                connectionContent(viewport)
             }
             .tesseraeMessageCenter()
             .tesseraeScreenBackground(grid: !isChoosingServer)
@@ -36,12 +38,14 @@ struct OnboardingView: View {
             .sheet(isPresented: $manualSetupPresented) {
                 ManualConnectionView(
                     initialServerAddress: manualServerAddress,
-                    onConnected: { if isChoosingServer { dismiss() } }
+                    onClose: { manualSetupPresented = false },
+                    onConnected: { dismiss() }
                 )
             }
-            .navigationTitle(String(localized: isChoosingServer ? "Tesserae Connections" : ""))
+            .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarVisibility(isChoosingServer ? .visible : .hidden, for: .navigationBar)
+            .toolbarVisibility(.visible, for: .navigationBar)
+            .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
                 if isChoosingServer {
                     ToolbarItem(placement: .cancellationAction) {
@@ -49,8 +53,14 @@ struct OnboardingView: View {
                             .labelStyle(.iconOnly)
                             .disabled(connectionHost.loginPhase == .committing)
                     }
+                } else if case .nearby = welcomeStep {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Back", systemImage: "chevron.backward") { welcomeStep = nil }
+                            .labelStyle(.iconOnly)
+                    }
                 }
             }
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.26), value: welcomeStep != nil)
             .task {
                 connectionHost.reloadSavedConnections()
             }
@@ -71,29 +81,69 @@ struct OnboardingView: View {
     }
 
     private var shouldShowServerDiscovery: Bool {
-        connectionType == .selfHosted && !connectionHost.isSigningIn
+        connectionType == .selfHosted && welcomeStep == nil && !connectionHost.isSigningIn
+    }
+
+    private var navigationTitle: Text {
+        switch welcomeStep {
+        case .nearby: Text("Nearby Devices")
+        case .manual: Text("Connect Manually")
+        case .demo: Text("Demo Mode")
+        case nil: isChoosingServer ? Text("Tesserae Connections") : Text("")
+        }
     }
 
     private func connectionContent(_ viewport: GeometryProxy) -> some View {
         let isSigningIn = connectionHost.isSigningIn
+        let compactBrand = isSigningIn || welcomeStep != nil
         let insets = viewport.safeAreaInsets
         let screenHeight = viewport.size.height + insets.top + insets.bottom
         let spacious = !dynamicTypeSize.isAccessibilitySize && viewport.size.height >= 550
         let brandHeight = spacious ? max(132, screenHeight * 0.43 - insets.top) : 104
         let brandSize: CGFloat = spacious ? (viewport.size.width > 360 ? 104 : 88) : 72
+        let headerHeight: CGFloat = isChoosingServer ? 0 : (compactBrand ? 84 : brandHeight)
 
         return VStack(spacing: 0) {
             if !isChoosingServer {
-                TesseraeBrandMark(size: isSigningIn ? 52 : brandSize)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: isSigningIn ? 84 : brandHeight)
+                TesseraeBrandMark(size: brandSize)
+                    .scaleEffect(compactBrand ? 52 / brandSize : 1)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("Tesserae Companion")
                     .accessibilityAddTraits(.isImage)
                     .accessibilityIdentifier("onboarding-brand")
+                    .frame(maxWidth: .infinity)
+                    .frame(height: headerHeight)
             }
 
+            ZStack(alignment: .top) {
+                switch welcomeStep {
+                case .nearby:
+                    NearbyDisplaysView(fromOnboarding: true)
+                        .transition(.opacity)
+                case .manual(let address):
+                    ManualConnectionForm(initialServerAddress: address, onClose: { welcomeStep = nil })
+                        .transition(.opacity)
+                case .demo:
+                    ProgressView()
+                        .accessibilityLabel("Demo Mode")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .transition(.opacity)
+                case nil:
+                    connectionOptions(horizontalPadding: viewport.size.width > 370 ? 24 : 16)
+                        .transition(.opacity)
+                }
+            }
+            .geometryGroup()
+        }
+        .frame(maxWidth: 680)
+        .frame(maxWidth: .infinity)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.26), value: isSigningIn)
+    }
+
+    private func connectionOptions(horizontalPadding: CGFloat) -> some View {
+        ScrollView {
             VStack(spacing: 16) {
+                let isSigningIn = connectionHost.isSigningIn
                 if !isSigningIn {
                     if isChoosingServer && !connectionHost.savedConnections.isEmpty {
                         savedConnections
@@ -117,47 +167,57 @@ struct OnboardingView: View {
                     .accessibilityIdentifier("connection-type")
                 }
 
-                if isSigningIn || connectionType == .cloud {
-                    CloudSignInView()
-                } else {
-                    selfHostedConnection
+                VStack(spacing: 16) {
+                    if isSigningIn || connectionType == .cloud {
+                        CloudSignInView()
+                            .transition(.opacity)
+                    } else {
+                        selfHostedConnection
+                            .transition(.opacity)
+                    }
+                    if shouldShowServerDiscovery {
+                        nearbyServerDiscovery
+                            .transition(.opacity)
+                    }
                 }
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: connectionType)
 
                 if !isSigningIn, let error = connectionHost.loginError {
                     ConnectionLoginErrorMessage(message: error)
                 }
 
-                if shouldShowServerDiscovery {
-                    nearbyServerDiscovery
-                }
-
-                if !isChoosingServer && !isSigningIn {
-                    Spacer(minLength: 0)
-                    VStack(spacing: 4) {
-                        if !connectionHost.savedConnections.isEmpty {
-                            Button {
-                                connectionChooserPresented = true
-                            } label: {
-                                Text("Choose Connection")
-                                    .frame(maxWidth: .infinity, minHeight: 44)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.secondary)
-                            .accessibilityIdentifier("onboarding-choose-connection")
-                        }
-                        onboardingAlternatives
-                    }
-                }
             }
-            .padding(.horizontal, viewport.size.width > 370 ? 24 : 16)
+            .padding(.horizontal, horizontalPadding)
             .padding(.vertical, isChoosingServer ? 20 : 0)
         }
-        .padding(.bottom, 20)
-        .frame(maxWidth: 680, minHeight: !isChoosingServer && !isSigningIn ? viewport.size.height : 0, alignment: .top)
-        .frame(maxWidth: .infinity)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.26), value: isSigningIn)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if !isChoosingServer && !connectionHost.isSigningIn {
+                welcomeActions
+                    .padding(.horizontal, horizontalPadding)
+                    .padding(.bottom, 20)
+            }
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .scrollDismissesKeyboard(.interactively)
+    }
+
+    private var welcomeActions: some View {
+        VStack(spacing: 4) {
+            if !connectionHost.savedConnections.isEmpty {
+                Button {
+                    connectionChooserPresented = true
+                } label: {
+                    Text("Choose Connection")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("onboarding-choose-connection")
+            }
+            onboardingAlternatives
+        }
     }
 
     private var currentConnectionID: ConnectionID? {
@@ -337,8 +397,8 @@ struct OnboardingView: View {
 
     private var onboardingAlternatives: some View {
         HStack(alignment: .top, spacing: 8) {
-            NavigationLink {
-                NearbyDisplaysView(fromOnboarding: true)
+            Button {
+                welcomeStep = .nearby
             } label: {
                 Text("Nearby Devices")
                     .fixedSize(horizontal: false, vertical: true)
@@ -348,20 +408,17 @@ struct OnboardingView: View {
             .accessibilityIdentifier("onboarding-nearby-devices")
 
             Button {
-                Task { await connectionHost.connectDemo() }
-            } label: {
-                Group {
-                    if model.activeOperationIDs.contains("pair") {
-                        ProgressView().accessibilityLabel("Demo Mode")
-                    } else {
-                        Text("Demo Mode")
-                    }
+                welcomeStep = .demo
+                Task {
+                    await connectionHost.connectDemo()
+                    welcomeStep = nil
                 }
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, minHeight: 44)
-                .contentShape(Rectangle())
+            } label: {
+                Text("Demo Mode")
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .contentShape(Rectangle())
             }
-            .disabled(model.activeOperationIDs.contains("pair"))
             .accessibilityIdentifier("onboarding-demo")
         }
         .buttonStyle(.plain)
@@ -378,8 +435,12 @@ struct OnboardingView: View {
     }
 
     private func openManualSetup(address: String? = nil) {
-        manualServerAddress = address
-        manualSetupPresented = true
+        if isChoosingServer {
+            manualServerAddress = address
+            manualSetupPresented = true
+        } else {
+            welcomeStep = .manual(address: address)
+        }
     }
 
     private func closeChooser() {
@@ -389,19 +450,36 @@ struct OnboardingView: View {
 }
 
 private struct ManualConnectionView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(AppModel.self) private var model
+    let initialServerAddress: String?
+    let onClose: () -> Void
+    let onConnected: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            ManualConnectionForm(initialServerAddress: initialServerAddress, onClose: onClose,
+                                 onConnected: onConnected)
+                .tesseraeScreenBackground()
+                .navigationTitle("Connect Manually")
+                .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
+private struct ManualConnectionForm: View {
     @Environment(ConnectionHost.self) private var connectionHost
     @State private var serverAddress: String
     @State private var pairingCode: String
     @State private var connectionTask: Task<Void, Never>?
     @State private var connectionError: String?
+    private let onClose: () -> Void
     private let onConnected: () -> Void
 
     init(
         initialServerAddress: String? = nil,
+        onClose: @escaping () -> Void,
         onConnected: @escaping () -> Void = {}
     ) {
+        self.onClose = onClose
         self.onConnected = onConnected
         _serverAddress = State(
             initialValue: initialServerAddress
@@ -414,78 +492,73 @@ private struct ManualConnectionView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Server") {
-                    TextField("http://host:port", text: $serverAddress)
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.URL)
-                        .autocorrectionDisabled()
-                    TextField("Pairing code", text: $pairingCode)
-                        .keyboardType(.numberPad)
-                }
+        Form {
+            Section("Server") {
+                TextField("http://host:port", text: $serverAddress)
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.URL)
+                    .autocorrectionDisabled()
+                TextField("Pairing code", text: $pairingCode)
+                    .keyboardType(.numberPad)
+            }
 
-                Section {
-                    Text("Pair with the one-time code shown by your server.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                }
+            Section {
+                Text("Pair with the one-time code shown by your server.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
             }
-            .scrollContentBackground(.hidden)
-            .tesseraeScreenBackground()
-            .navigationTitle("Connect Manually")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", systemImage: "xmark") {
-                        connectionTask?.cancel()
-                        dismiss()
+        }
+        .scrollContentBackground(.hidden)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel", systemImage: "xmark") {
+                    connectionTask?.cancel()
+                    onClose()
+                }
+                .labelStyle(.iconOnly)
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Connect") {
+                    guard let url = URL(string: serverAddress) else {
+                        connectionError = String(
+                            localized: "The server URL is invalid."
+                        )
+                        return
                     }
-                    .labelStyle(.iconOnly)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Connect") {
-                        guard let url = URL(string: serverAddress) else {
-                            connectionError = String(
-                                localized: "The server URL is invalid."
-                            )
-                            return
-                        }
-                        guard !pairingCode.isEmpty else {
-                            connectionError = String(
-                                localized: "Enter the one-time pairing code shown by Tesserae."
-                            )
-                            return
-                        }
-                        connectionTask = Task {
-                            let connected = await connectionHost.connectLocal(
-                                baseURL: url,
-                                code: pairingCode,
-                                clientName: UIDevice.current.name,
-                                onFailure: { connectionError = $0 }
-                            )
-                            if connected {
-                                dismiss()
-                                onConnected()
-                            }
-                            connectionTask = nil
-                        }
+                    guard !pairingCode.isEmpty else {
+                        connectionError = String(
+                            localized: "Enter the one-time pairing code shown by Tesserae."
+                        )
+                        return
                     }
-                    .disabled(connectionTask != nil)
+                    connectionTask = Task {
+                        let connected = await connectionHost.connectLocal(
+                            baseURL: url,
+                            code: pairingCode,
+                            clientName: UIDevice.current.name,
+                            onFailure: { connectionError = $0 }
+                        )
+                        if connected {
+                            onClose()
+                            onConnected()
+                        }
+                        connectionTask = nil
+                    }
                 }
-                if connectionTask != nil {
-                    ToolbarItem(placement: .principal) { ProgressView() }
-                }
+                .disabled(connectionTask != nil)
             }
-            .onDisappear { connectionTask?.cancel() }
-            .alert("Unable to Connect", isPresented: Binding(
-                get: { connectionError != nil },
-                set: { if !$0 { connectionError = nil } }
-            )) {
-                Button("OK", role: .cancel) { connectionError = nil }
-            } message: {
-                Text(connectionError ?? "")
+            if connectionTask != nil {
+                ToolbarItem(placement: .principal) { ProgressView() }
             }
+        }
+        .onDisappear { connectionTask?.cancel() }
+        .alert("Unable to Connect", isPresented: Binding(
+            get: { connectionError != nil },
+            set: { if !$0 { connectionError = nil } }
+        )) {
+            Button("OK", role: .cancel) { connectionError = nil }
+        } message: {
+            Text(connectionError ?? "")
         }
     }
 }

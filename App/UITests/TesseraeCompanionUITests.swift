@@ -115,8 +115,25 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertFalse(app.buttons["cloud-signin"].exists)
         XCTAssertFalse(app.buttons["Scan Pairing QR"].exists)
 
+        let brand = app.images["onboarding-brand"]
+        let welcomeLogo = brand.frame
+        app.buttons["self-hosted-manual-address"].tap()
+        let manual = app.navigationBars["Connect Manually"]
+        XCTAssertTrue(manual.waitForExistence(timeout: 4))
+        XCTAssertTrue(app.textFields["Pairing code"].isHittable)
+        XCTAssertLessThan(brand.frame.width, welcomeLogo.width)
+        XCTAssertLessThan(brand.frame.midY, welcomeLogo.midY)
+        readabilityAttachment(app, "Manual connection with compact logo")
+        manual.buttons["Cancel"].tap()
+        let restoredLogo = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            let frame = brand.frame
+            return abs(frame.width - welcomeLogo.width) <= 1 && abs(frame.midY - welcomeLogo.midY) <= 1
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [restoredLogo], timeout: 3), .completed)
+        XCTAssertTrue(connectionType.buttons["Self-Hosted"].isSelected)
+
         connectionType.buttons["Cloud"].tap()
-        XCTAssertTrue(app.buttons["cloud-signin"].exists)
+        XCTAssertTrue(app.buttons["cloud-signin"].waitForExistence(timeout: 3))
         XCTAssertFalse(app.buttons["Enter Server Address"].exists)
     }
 
@@ -172,14 +189,23 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertGreaterThanOrEqual(nearby.frame.height.rounded(), 44)
         XCTAssertGreaterThanOrEqual(demo.frame.height.rounded(), 44)
         for _ in 0..<3 where !nearby.isHittable { app.swipeUp() }
+        let brand = app.images["onboarding-brand"]
+        let welcomeLogo = brand.frame
         nearby.tap()
         let page = app.navigationBars["Nearby Devices"]
         XCTAssertTrue(page.waitForExistence(timeout: 4))
+        XCTAssertLessThan(brand.frame.width, welcomeLogo.width)
+        XCTAssertLessThan(brand.frame.midY, welcomeLogo.midY)
         XCTAssertTrue(app.staticTexts["Find nearby displays over Bluetooth to set them up or service them."].exists)
         XCTAssertFalse(app.staticTexts["Refresh Button"].exists)
         readabilityAttachment(app, "Nearby devices page")
         page.buttons.firstMatch.tap()
         XCTAssertTrue(nearby.isHittable)
+        let restoredLogo = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            let frame = brand.frame
+            return abs(frame.width - welcomeLogo.width) <= 1 && abs(frame.midY - welcomeLogo.midY) <= 1
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [restoredLogo], timeout: 3), .completed)
     }
 
     func testPicPakMaintenanceShowsRefreshSpeedsAndConfirmsSelection() {
