@@ -26,6 +26,7 @@ private actor LoginHTTP: TesseraeHTTPTransporting {
     var requiresVerification = false
     var expectedAppleUser = "u1"
     var advertisesApple = true
+    private var refusesNextAppleEmail = false
 
     struct AppleRequest: Equatable {
         let path: String
@@ -43,6 +44,7 @@ private actor LoginHTTP: TesseraeHTTPTransporting {
         if refused { refusals.insert(code) }
     }
     func release(_ code: String) { blocked.remove(code); continuations.removeValue(forKey: code)?.resume() }
+    func refuseNextAppleEmailRequest() { refusesNextAppleEmail = true }
     func count(_ code: String) -> Int { codes.filter { $0 == code }.count }
     func hasRequest(_ path: String) -> Bool { appleRequests.contains { $0.path == path } }
     func send(_ request: URLRequest) async throws -> TesseraeHTTPResponse {
@@ -59,6 +61,10 @@ private actor LoginHTTP: TesseraeHTTPTransporting {
             case "/auth/apple/complete":
                 return requiresVerification ? Self.json(#"{"status":"verify_email"}"#) : consent(request)
             case "/auth/apple/email":
+                if refusesNextAppleEmail {
+                    refusesNextAppleEmail = false
+                    return TesseraeHTTPResponse(data: Data(), statusCode: 429)
+                }
                 return TesseraeHTTPResponse(data: Data(), statusCode: 204)
             case "/auth/apple/verify":
                 return body["code"] == "123456" ? consent(request) : TesseraeHTTPResponse(data: Data(), statusCode: 400)
@@ -310,6 +316,28 @@ final class CloudLoginLifecycleTests: XCTestCase {
             .init(path: "/auth/apple/verify", method: "POST", body: ["attempt_id": "apple-attempt", "code": "000000"]),
             .init(path: "/auth/apple/verify", method: "POST", body: ["attempt_id": "apple-attempt", "code": "123456"])
         ])
+    }
+
+    func testAppleEmailResendFailureKeepsCodeEntryAndCanRetry() async {
+        let fixture = fixture(issuer: appleIssuer)
+        await fixture.http.configureApple(verifyEmail: true)
+        await fixture.host.checkAppleSignInAvailability()
+        await fixture.host.beginAppleSignIn()
+
+        let address = "member@example.invalid"
+        await fixture.host.sendAppleEmailCode(address)
+        XCTAssertEqual(fixture.host.loginPhase, .appleCode)
+
+        await fixture.http.refuseNextAppleEmailRequest()
+        await fixture.host.sendAppleEmailCode(address)
+        XCTAssertEqual(fixture.host.loginPhase, .appleCode)
+        XCTAssertNotNil(fixture.host.loginError)
+
+        await fixture.host.sendAppleEmailCode(address)
+        XCTAssertEqual(fixture.host.loginPhase, .appleCode)
+        XCTAssertNil(fixture.host.loginError)
+        let requests = await fixture.http.appleRequests.filter { $0.path == "/auth/apple/email" }
+        XCTAssertEqual(requests.map { $0.body["email"] }, [address, address, address])
     }
 
     func testEarlyCallbackCannotConsumeTheAttemptAndCanceledReadyCannotOpenConsent() async throws {

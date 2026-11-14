@@ -176,7 +176,9 @@ final class ConnectionHost {
     }
 
     func sendAppleEmailCode(_ email: String) async {
-        guard loginPhase == .appleEmail, let id = attemptID, let appleAttemptID else { return }
+        let previousPhase = loginPhase
+        guard previousPhase == .appleEmail || previousPhase == .appleCode,
+              let id = attemptID, let appleAttemptID else { return }
         let address = email.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !address.isEmpty else { return }
         loginPhase = .appleSendingCode
@@ -189,7 +191,7 @@ final class ConnectionHost {
                 loginPhase = .appleCode
             } catch {
                 guard isCurrentAppleAttempt(id) else { return }
-                loginPhase = .appleEmail
+                loginPhase = previousPhase
                 loginError = ((error as? CloudAppleSignInError) ?? .codeRequest).localizedDescription
             }
         }
