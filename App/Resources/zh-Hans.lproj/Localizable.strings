@@ -1129,6 +1129,13 @@
 "%@ · Unlimited" = "%@ · 不限";
 "%@ used, no limit" = "已用 %@，不限";
 "%@ used" = "已用 %@";
+"Loading Send Results…" = "正在加载发送结果…";
+"%@ generated" = "%@ 台已生成";
+"%@ generated with warnings" = "%@ 台已生成，有提示";
+"%@ failed" = "%@ 台失败";
+"%@ not sent" = "%@ 台未发送";
+"%@ unconfirmed" = "%@ 台未确认";
+"%@ awaiting result" = "%@ 台等待结果";
 "Renders Today" = "今日渲染次数";
 "Charged Renders Today" = "今日计费渲染次数";
 "MCP Calls Today" = "今日 MCP 调用次数";

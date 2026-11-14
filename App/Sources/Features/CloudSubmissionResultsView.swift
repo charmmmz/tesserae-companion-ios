@@ -23,11 +23,13 @@ struct CloudSubmissionResultsSheet: View {
     @Environment(ConnectionHost.self) private var host
     @Environment(CompanionPresentation.self) private var presentation
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var reloadRevision = UUID()
     @State private var history: [CloudSubmissionBatch] = []
     @State private var pending: [CloudPendingInput] = []
     @State private var pendingPresentation = CloudPendingPresentationState()
     @State private var error: String?
+    @State private var didLoadResults = false
     @State private var path: [UUID]
 
     init(context: CloudPresentationContext, initialID: UUID?) {
@@ -57,14 +59,22 @@ struct CloudSubmissionResultsSheet: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(String(localized: batch.kind == .photo ? "Photo Send" : "Current Page Refresh")).font(.headline)
                             Text(batch.createdAt.formatted()).font(.caption).foregroundStyle(.secondary)
-                            Text("\(batch.targets.count) displays").font(.subheadline)
+                            let statuses = CloudBatchStatus.labels(for: batch)
+                            Text(statuses.joined(separator: dynamicTypeSize.isAccessibilitySize ? "\n" : " · "))
+                                .font(.subheadline)
+                                .accessibilityLabel(statuses.joined(separator: ", "))
+                                .accessibilityIdentifier("cloud-result-summary-\(batch.id.uuidString)")
                         }
                     }
                     .accessibilityIdentifier("cloud-result-\(batch.id.uuidString)")
                 }
                 if history.isEmpty, pending.isEmpty, error == nil {
-                    ContentUnavailableView("No Cloud Send Results", systemImage: "clock",
-                        description: Text("Your Cloud sends and page refreshes appear here. Opening results never sends again."))
+                    if didLoadResults {
+                        ContentUnavailableView("No Cloud Send Results", systemImage: "clock",
+                            description: Text("Your Cloud sends and page refreshes appear here. Opening results never sends again."))
+                    } else {
+                        ProgressView("Loading Send Results…")
+                    }
                 }
             }
             .scrollContentBackground(.hidden).tesseraeScreenBackground()
@@ -89,8 +99,19 @@ struct CloudSubmissionResultsSheet: View {
                     let values = try await host.cloudPendingInputs(context: context)
                     let results = try await host.cloudSubmissionHistory(context: context)
                     guard !Task.isCancelled else { return }
-                    host.withCurrentCloudPresentation(context) { pending = values; history = results; error = nil }
-                } catch { history = []; pending = []; self.error = error.localizedDescription; return }
+                    host.withCurrentCloudPresentation(context) {
+                        pending = values
+                        history = results
+                        didLoadResults = true
+                        error = nil
+                    }
+                } catch {
+                    guard !Task.isCancelled else { return }
+                    history = []
+                    pending = []
+                    self.error = error.localizedDescription
+                    return
+                }
                 let pendingDelay = pending.map { $0.expiresAt.timeIntervalSinceNow }.filter { $0 > 0 }.min()
                 guard let delay = [nextCloudResultUpdate(history), pendingDelay].compactMap({ $0 }).min() else { return }
                 do { try await Task.sleep(for: .seconds(delay)) } catch { return }
@@ -361,6 +382,40 @@ private struct CloudSubmissionResultView: View {
     private var previewKey: String {
         [context.revision.uuidString, id.uuidString, mediaHidden ? "hidden" : "visible", batch.flatMap(previewTask)?.id.uuidString ?? "none",
          batch?.mediaExpiresAt.map { String($0.timeIntervalSince1970) } ?? "none"].joined(separator: ":")
+    }
+}
+
+private enum CloudBatchStatus: CaseIterable {
+    case generated, generatedWithWarnings, refused, notSent, unconfirmed, waiting
+
+    static func labels(for batch: CloudSubmissionBatch) -> [String] {
+        let outcomes = Dictionary(batch.results.map { ($0.id, $0.outcome) }, uniquingKeysWith: { first, _ in first })
+        var counts: [CloudBatchStatus: Int] = [:]
+        for target in batch.targets {
+            let status: CloudBatchStatus
+            switch outcomes[target.id] {
+            case .generated(_, let warnings): status = warnings.isEmpty ? .generated : .generatedWithWarnings
+            case .refused: status = .refused
+            case .notAttempted: status = .notSent
+            case .unknown: status = .unconfirmed
+            case nil: status = batch.isActive ? .waiting : .unconfirmed
+            }
+            counts[status, default: 0] += 1
+        }
+        return allCases.compactMap { status in
+            counts[status].map { status.label(count: $0.formatted()) }
+        }
+    }
+
+    private func label(count: String) -> String {
+        switch self {
+        case .generated: String(localized: "\(count) generated")
+        case .generatedWithWarnings: String(localized: "\(count) generated with warnings")
+        case .refused: String(localized: "\(count) failed")
+        case .notSent: String(localized: "\(count) not sent")
+        case .unconfirmed: String(localized: "\(count) unconfirmed")
+        case .waiting: String(localized: "\(count) awaiting result")
+        }
     }
 }
 

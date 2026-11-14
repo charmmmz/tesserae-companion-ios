@@ -206,6 +206,25 @@ import XCTest
         XCTAssertTrue(app.buttons["cloud-result-target-a3_native"].isSelected)
         capture(app, "A3-real-partial-generated-unknown-unstarted")
     }
+
+    func testSavedPartialBatchShowsAllOutcomesInHistory() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_EXISTING_NAMESPACE"] != nil,
+            "Provide the namespace of the saved partial send from the local fixture.")
+        let app = launch()
+        XCTAssertTrue(app.buttons["cloud-device-a3_land"].waitForExistence(timeout: 15))
+        app.buttons["cloud-send-results"].firstMatch.tap()
+        let chinese = ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_LANGUAGE"] == "zh"
+        let expected = chinese ? "1 台已生成, 1 台未发送, 1 台未确认" : "1 generated, 1 not sent, 1 unconfirmed"
+        let summary = app.staticTexts.matching(NSPredicate(
+            format: "identifier BEGINSWITH 'cloud-result-summary-' AND label == %@", expected)).firstMatch
+        if !summary.waitForExistence(timeout: 8) {
+            capture(app, "A3-partial-batch-summary-missing")
+            XCTFail("Expected the saved partial batch to show all three outcomes in its list row.")
+            return
+        }
+        capture(app, "A3-partial-batch-summary")
+    }
+
     func testStructuredQuotaRefusal() throws {
         let app = launch()
         prepareMarker(app, targets: ["a3_land"])
