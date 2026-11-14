@@ -435,19 +435,44 @@ private struct CloudUsageSettings: View {
 
     var body: some View {
         Form {
-            if let account = model.snapshot?.account {
-                Section("Usage") {
-                    LabeledContent("Displays", value: account.usage.devices.formatted())
-                    LabeledContent("Dashboards", value: account.usage.pages.formatted())
-                    LabeledContent("Storage", value: ByteCountFormatter.string(
-                        fromByteCount: Int64(account.usage.storageBytes), countStyle: .file))
+            if model.isLoading || model.problem != nil || model.fetchedAt != nil {
+                Section {
+                    if model.isLoading {
+                        ProgressView("Updating Usage…")
+                    } else if let problem = model.problem {
+                        Label(problem, systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(.secondary)
+                    }
+                    if let updated = model.fetchedAt {
+                        Text("Last updated: \(updated.formatted(date: .abbreviated, time: .shortened))")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("cloud-usage-updated")
+                    }
                 }
-                Section("Today") {
-                    LabeledContent("Renders", value: account.usage.rendersToday.formatted())
-                    LabeledContent("Charged Renders", value: account.usage.rendersChargedToday.formatted())
-                    LabeledContent("MCP Calls", value: account.usage.mcpCallsToday.formatted())
-                    LabeledContent("Browser Time", value: Duration.milliseconds(account.usage.browserMillisecondsToday)
-                        .formatted(.units(allowed: [.hours, .minutes, .seconds])))
+            }
+            if let account = model.snapshot?.account {
+                Section("Workspace Usage") {
+                    quotaRow("Displays", used: Double(account.usage.devices), limit: "devices", in: account)
+                    quotaRow("Dashboards", used: Double(account.usage.pages), limit: "pages", in: account)
+                    quotaRow("Storage", used: account.usage.storageBytes / 1_048_576, limit: "storage_mb", in: account,
+                             unit: .mebibytes)
+                }
+                Section {
+                    quotaRow("Renders Toward Limit", used: Double(account.usage.rendersChargedToday),
+                             limit: "renders_per_day", in: account)
+                    quotaRow("MCP Calls", used: Double(account.usage.mcpCallsToday), limit: "mcp_calls_per_day", in: account)
+                    quotaRow("Web Render Time", used: account.usage.browserMillisecondsToday / 1_000,
+                             limit: "render_seconds_per_day", in: account, unit: .seconds)
+                    LabeledContent("Total Renders", value: account.usage.rendersToday.formatted())
+                } header: {
+                    if let updated = model.fetchedAt {
+                        Text("Daily Usage · \(updated.formatted(Self.utcDayFormat)) UTC")
+                    } else {
+                        Text("Daily Usage")
+                    }
+                } footer: {
+                    Text("Daily limits reset at midnight UTC. Total renders also include automatic display renders.")
                 }
 
                 let limits = account.limits.keys.sorted().filter { CloudSettingsLabels.limit($0) != nil }
@@ -458,7 +483,7 @@ private struct CloudUsageSettings: View {
                             ForEach(limits, id: \.self) { key in
                                 if let title = CloudSettingsLabels.limit(key) {
                                     LabeledContent(title, value: account.limits[key].flatMap { $0 }?.formatted()
-                                        ?? String(localized: "Unlimited"))
+                                        ?? String(localized: key == "min_wake_s" ? "No Additional Minimum" : "Unlimited"))
                                         .accessibilityIdentifier("cloud-limit-\(key)")
                                 }
                             }
@@ -477,8 +502,6 @@ private struct CloudUsageSettings: View {
                         }
                     }
                 }
-            } else if let problem = model.problem {
-                Label(problem, systemImage: "exclamationmark.triangle")
             }
         }
         .scrollContentBackground(.hidden)
@@ -487,23 +510,84 @@ private struct CloudUsageSettings: View {
         .tesseraeScreenBackground()
         .navigationTitle("Cloud Usage & Features")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            TesseraeToolbarActions {
+                if let retryAfter = model.retryAfter {
+                    TimelineView(.periodic(from: .now, by: 1)) { clock in
+                        refreshButton.disabled(clock.date < retryAfter)
+                    }
+                } else {
+                    refreshButton
+                }
+            }
+        }
+        .refreshable { await model.refresh() }
+        .task { await model.refresh() }
+    }
+
+    private var refreshButton: some View {
+        Button("Refresh Usage", systemImage: "arrow.clockwise") { Task { await model.refresh() } }
+            .disabled(model.isLoading)
+            .accessibilityIdentifier("cloud-usage-refresh")
+    }
+
+    private enum QuotaUnit {
+        case count, mebibytes, seconds
+
+        func format(_ amount: Double) -> String {
+            let number = amount.formatted(.number.precision(.fractionLength(0...2)))
+            let value = amount > 0 && amount < 0.01
+                ? String(localized: "Less than \(0.01.formatted())")
+                : number
+            switch self {
+            case .count: return value
+            case .mebibytes: return String(localized: "\(value) MiB")
+            case .seconds: return String(localized: "\(value) s")
+            }
+        }
+    }
+
+    private func quotaRow(_ title: LocalizedStringKey, used amount: Double, limit key: String,
+                          in account: CloudAccount, unit: QuotaUnit = .count) -> some View {
+        let used = unit.format(amount)
+        let value: String
+        let spokenValue: String
+        switch account.limits[key] {
+        case .some(.some(let amount)):
+            let limit = unit.format(amount)
+            value = "\(used) / \(limit)"
+            spokenValue = String(localized: "\(used) used out of \(limit)")
+        case .some(.none):
+            value = String(localized: "\(used) · Unlimited")
+            spokenValue = String(localized: "\(used) used, no limit")
+        case .none:
+            value = used
+            spokenValue = String(localized: "\(used) used")
+        }
+        return LabeledContent {
+            Text(value).monospacedDigit()
+                .accessibilityLabel(spokenValue)
+        } label: {
+            Text(title)
+        }
+        .accessibilityIdentifier("cloud-usage-\(key)")
+    }
+
+    private static var utcDayFormat: Date.FormatStyle {
+        var format = Date.FormatStyle().month(.abbreviated).day()
+        format.timeZone = .gmt
+        return format
     }
 }
 
 private enum CloudSettingsLabels {
     static func limit(_ key: String) -> String? {
         switch key {
-        case "devices": String(localized: "Displays")
-        case "pages": String(localized: "Dashboards")
         case "web_pages": String(localized: "Web Pages")
-        case "renders_per_day": String(localized: "Daily Renders")
-        case "mcp_calls_per_day": String(localized: "Daily MCP Calls")
         case "fonts_per_day": String(localized: "Daily Fonts")
         case "agent_messages_per_day": String(localized: "Daily Agent Messages")
         case "agent_credits_per_month": String(localized: "Monthly Agent Credits")
-        case "min_wake_s": String(localized: "Minimum Wake Interval (seconds)")
-        case "render_seconds_per_day": String(localized: "Daily Render Time (seconds)")
-        case "storage_mb": String(localized: "Storage (MB)")
+        case "min_wake_s": String(localized: "Plan Minimum Wake Interval (seconds)")
         case "history_days": String(localized: "History (days)")
         case "battery_days": String(localized: "Battery History (days)")
         case "unfiled_renders_per_day": String(localized: "Daily Unfiled Renders")

@@ -329,6 +329,17 @@ final class CloudBrowsingUITests: XCTestCase {
         cloudAccount.tap()
         XCTAssertTrue(app.navigationBars["云端账号"].waitForExistence(timeout: 5))
         capture(app, "cloud-chinese-account")
+        let usage = app.buttons["云端用量与功能"]
+        reveal(usage, app: app)
+        usage.tap()
+        XCTAssertTrue(app.navigationBars["云端用量与功能"].waitForExistence(timeout: 5))
+        let quota = app.descendants(matching: .any)["cloud-usage-devices"].firstMatch
+        reveal(quota, app: app)
+        XCTAssertTrue(quota.exists)
+        let used = NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", "已用 2，不限", "已用 2，不限")
+        XCTAssertTrue(used.evaluate(with: quota) || quota.descendants(matching: .any).matching(used).firstMatch.exists)
+        capture(app, "cloud-usage-chinese-ax5")
+        app.navigationBars.buttons["云端账号"].firstMatch.tap()
         app.navigationBars.buttons["设置"].firstMatch.tap()
         let choose = app.buttons["choose-connection"]
         reveal(choose, app: app)
@@ -482,6 +493,41 @@ final class CloudBrowsingUITests: XCTestCase {
         let attachment = XCTAttachment(data: try JSONSerialization.data(withJSONObject: samples, options: [.prettyPrinted, .sortedKeys]), uniformTypeIdentifier: "public.json")
         attachment.name = "cloud-list-raw-samples"; attachment.lifetime = .keepAlways; add(attachment)
     }
+    func testCloudUsageShowsQuotaAndRecoversFromRefreshFailure() async throws {
+        try await selectBrowserAccount("owner_a")
+        try await fault("pass")
+        let app = launch(readProxy: true)
+        authorize(app)
+        XCTAssertTrue(app.buttons["root-settings"].firstMatch.waitForExistence(timeout: 8))
+        app.buttons["root-settings"].firstMatch.tap()
+        app.buttons["cloud-account-settings"].tap()
+        app.buttons["Cloud Usage & Features"].tap()
+        let quota = app.descendants(matching: .any)["cloud-usage-devices"].firstMatch
+        XCTAssertTrue(quota.waitForExistence(timeout: 5))
+        let used = NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", "2 used out of 5", "2 used out of 5")
+        if ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_FINITE_DEVICE_QUOTA"] == "1" {
+            XCTAssertTrue(used.evaluate(with: quota) || quota.descendants(matching: .any).matching(used).firstMatch.exists)
+        }
+        let refresh = app.buttons["cloud-usage-refresh"]
+        XCTAssertTrue(refresh.waitForExistence(timeout: 5))
+        let updated = app.staticTexts["cloud-usage-updated"]
+        XCTAssertTrue(updated.exists)
+        capture(app, "cloud-usage-with-limits")
+
+        try await fault("status", status: 503)
+        refresh.tap()
+        let error = app.staticTexts["Cloud is temporarily unavailable. Try again later."]
+        XCTAssertTrue(error.waitForExistence(timeout: 6))
+        XCTAssertTrue(updated.exists)
+        XCTAssertTrue(quota.exists)
+        capture(app, "cloud-usage-refresh-failed")
+        try await fault("pass")
+        refresh.tap()
+        let recovered = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !error.exists && refresh.isEnabled }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [recovered], timeout: 10), .completed)
+        XCTAssertTrue(quota.exists)
+    }
+
     func testReviewWalkthrough() async throws {
         try await selectBrowserAccount("owner_a")
         let app = launch(); authorize(app)
@@ -522,13 +568,17 @@ final class CloudBrowsingUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Cloud Account"].exists)
         app.buttons["Cloud Usage & Features"].tap()
         XCTAssertTrue(app.navigationBars["Cloud Usage & Features"].waitForExistence(timeout: 5))
+        let renderUsage = app.descendants(matching: .any)["cloud-usage-renders_per_day"].firstMatch
+        reveal(renderUsage, app: app)
+        XCTAssertTrue(renderUsage.exists)
+        XCTAssertTrue(app.staticTexts["Renders Toward Limit"].exists)
+        capture(app, "review-native-cloud-usage")
         let limits = app.buttons["Limits"]
         reveal(limits, app: app)
         limits.tap()
-        let dailyRenders = app.descendants(matching: .any)["cloud-limit-renders_per_day"].firstMatch
-        reveal(dailyRenders, app: app)
-        XCTAssertTrue(dailyRenders.exists)
-        capture(app, "review-native-cloud-usage")
+        let historyLimit = app.descendants(matching: .any)["cloud-limit-history_days"].firstMatch
+        reveal(historyLimit, app: app)
+        XCTAssertTrue(historyLimit.exists)
         app.navigationBars.buttons["Cloud Account"].firstMatch.tap()
         app.navigationBars.buttons["Settings"].firstMatch.tap()
         app.buttons["choose-connection"].tap()
