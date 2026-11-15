@@ -21,7 +21,6 @@ struct OnboardingView: View {
     @ScaledMetric(relativeTo: .subheadline) private var nearbyServerRowHeight: CGFloat = 44
     @State private var connectionType = ConnectionType.cloud
     @State private var welcomeStep: WelcomeStep?
-    @State private var connectionChooserPresented = false
     @State private var manualSetupPresented = false
     @State private var manualServerAddress: String?
 
@@ -32,9 +31,6 @@ struct OnboardingView: View {
             }
             .tesseraeMessageCenter()
             .tesseraeScreenBackground(grid: !isChoosingServer)
-            .sheet(isPresented: $connectionChooserPresented) {
-                OnboardingView(isChoosingServer: true)
-            }
             .sheet(isPresented: $manualSetupPresented) {
                 ManualConnectionView(
                     initialServerAddress: manualServerAddress,
@@ -157,8 +153,8 @@ struct OnboardingView: View {
                     }
 
                     Picker("Connection Type", selection: $connectionType) {
-                        Text("Cloud").tag(ConnectionType.cloud)
                         Text("Self-Hosted").tag(ConnectionType.selfHosted)
+                        Text("Cloud").tag(ConnectionType.cloud)
                     }
                     .pickerStyle(.segmented)
                     .controlSize(.large)
@@ -192,32 +188,13 @@ struct OnboardingView: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if !isChoosingServer && !connectionHost.isSigningIn {
-                welcomeActions
+                onboardingAlternatives
                     .padding(.horizontal, horizontalPadding)
                     .padding(.bottom, 20)
             }
         }
         .scrollBounceBehavior(.basedOnSize)
         .scrollDismissesKeyboard(.interactively)
-    }
-
-    private var welcomeActions: some View {
-        VStack(spacing: 4) {
-            if !connectionHost.savedConnections.isEmpty {
-                Button {
-                    connectionChooserPresented = true
-                } label: {
-                    Text("Choose Connection")
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.secondary)
-                .accessibilityIdentifier("onboarding-choose-connection")
-            }
-            onboardingAlternatives
-        }
     }
 
     private var currentConnectionID: ConnectionID? {
@@ -294,20 +271,11 @@ struct OnboardingView: View {
     private var minimumNearbyServerRowHeight: CGFloat { max(44, nearbyServerRowHeight) }
 
     private var selfHostedConnection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Pair with the one-time code shown by your server.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-
-            Button("Enter Server Address") {
-                openManualSetup()
-            }
-            .buttonStyle(ConnectionOptionButtonStyle())
-            .accessibilityIdentifier("self-hosted-manual-address")
+        Button("Enter Server Address") {
+            openManualSetup()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .buttonStyle(ConnectionOptionButtonStyle())
+        .accessibilityIdentifier("self-hosted-manual-address")
     }
 
     private var nearbyServerDiscovery: some View {

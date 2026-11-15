@@ -171,7 +171,7 @@ Cloud account. English and Simplified Chinese are included.
 
 ### Tesserae Cloud (in development)
 
-Development builds offer **Sign In with Email Link** on the **Cloud** tab. The
+Development builds offer **Use Email Link** on the **Cloud** tab. The
 internal Apple sign-in beta also offers **Sign in with Apple** for existing Cloud
 accounts. If Apple hides the address or it doesn't match, verify your Cloud email
 with a code. The system browser handles workspace approval. Switch between

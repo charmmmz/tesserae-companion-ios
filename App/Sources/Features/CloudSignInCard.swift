@@ -13,11 +13,6 @@ struct CloudSignInView: View {
         VStack(alignment: .leading, spacing: 16) {
             switch host.loginPhase {
             case .idle:
-                Text("Sign in to connect to a Tesserae Cloud workspace.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
                 signInOptions
             case .appleEmail:
                 emailVerification
@@ -30,22 +25,17 @@ struct CloudSignInView: View {
             case .appleCode, .appleVerifyingCode:
                 codeVerification
             default:
-                ProgressView(progressTitle)
-                    .accessibilityIdentifier("cloud-signin-progress")
+                signInProgress
                 loginError
             }
 
             if host.canCancelLogin {
-                if host.loginPhase == .browser {
-                    Text("Open the sign-in link on this device.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Button("Cancel Sign-In", role: .cancel) { host.cancelCloudSignIn() }
+                Button("Cancel", role: .cancel) { host.cancelCloudSignIn() }
                     .font(.subheadline.weight(.medium))
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .buttonStyle(.plain)
                     .foregroundStyle(TesseraeTheme.accent)
+                    .accessibilityLabel("Cancel Sign-In")
                     .accessibilityIdentifier("cloud-signin-cancel")
             }
         }
@@ -74,7 +64,7 @@ struct CloudSignInView: View {
                 .disabled(host.isSwitching)
             }
 
-            Button("Sign In with Email Link") {
+            Button("Use Email Link") {
                 Task { await host.beginCloudSignIn() }
             }
             .buttonStyle(ConnectionOptionButtonStyle(minimumHeight: optionHeight))
@@ -83,12 +73,34 @@ struct CloudSignInView: View {
         }
     }
 
+    private var signInProgress: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                ProgressView()
+                    .accessibilityHidden(true)
+                Text(progressTitle)
+                    .font(.subheadline.weight(.medium))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("cloud-signin-progress")
+
+            if host.loginPhase == .browser && host.canCancelLogin {
+                Text("Open the link on this device.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+    }
+
     private var emailVerification: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Verify Your Existing Email")
                 .font(.body.weight(.semibold))
                 .accessibilityAddTraits(.isHeader)
-            Text("Use the email address you already sign in to Tesserae Cloud with.")
+            Text("Use your existing Cloud email address.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             Text("Cloud Account Email")
@@ -205,12 +217,11 @@ struct CloudSignInView: View {
 
     private var progressTitle: LocalizedStringKey {
         switch host.loginPhase {
-        case .applePreparing: "Connecting to Cloud…"
+        case .browser: "Check your email"
         case .appleAuthorizing: "Waiting for Apple…"
-        case .appleCompleting: "Checking Apple Sign-In…"
-        case .appleConsent: "Waiting for Workspace Approval…"
-        case .exchanging, .committing: "Finishing Sign-In…"
-        default: "Waiting for Sign-In…"
+        case .appleCompleting: "Checking with Apple…"
+        case .appleConsent: "Choose a workspace"
+        default: "Connecting to Cloud…"
         }
     }
 
