@@ -214,7 +214,7 @@ struct SendView: View {
         .onChange(of: automaticFramingContext, initial: true) { _, context in
             framingSession.updateAutomaticContext(context, data: imageData)
         }
-        .onChange(of: model.activeInstance?.id) { framingSession.discardAnalysis() }
+        .onChange(of: model.activeStorageID) { framingSession.discardAnalysis() }
         .mediaLibraryPicker(
             isPresented: $isPhotoPickerPresented,
             selection: $pickerItem
@@ -248,7 +248,7 @@ struct SendView: View {
     }
 
     private var sendTargets: [ShareDisplayTarget] {
-        ShareDisplayTarget.catalog(displays: model.sortedDisplays, serverID: model.activeInstance?.id,
+        ShareDisplayTarget.catalog(displays: model.sortedDisplays, serverID: model.activeStorageID,
             records: nearbyDevices.displayRecords, nearby: bluetoothSession?.devices ?? [])
     }
 
@@ -272,7 +272,7 @@ struct SendView: View {
         let nearby = NearbyDeviceManager(displayRecords: nearbyDevices.displayRecords, photoSharingOnly: true)
 #if DEBUG
         if ProcessInfo.processInfo.environment["TESSERAE_UI_TEST_SEND_BLUETOOTH"] == "1",
-           let device = nearby.nearbyDevices.first, let serverID = model.activeInstance?.id {
+           let device = nearby.nearbyDevices.first, let serverID = model.activeStorageID {
             let records = nearbyDevices.displayRecords
             records.activeServerID = serverID
             records.observe(deviceID: "picpak-f85b1ba1b2c3", name: "Kitchen", mode: .bluetooth,
@@ -820,7 +820,7 @@ struct SendView: View {
 
     private var automaticFramingContext: PhotoFramingSession.AutomaticContext {
         .init(
-            imageID: framingSession.imageID, instanceID: model.activeInstance?.id,
+            imageID: framingSession.imageID, instanceID: model.activeStorageID,
             aspect: previewAspectRatio, targetIDs: bluetoothTargetID.map { [$0] } ?? selectedDeviceIDs, maximumZoom: maximumFramingZoom,
             isReady: canAutoFrame && didLoadSendPreferences && !submission.isSubmitting
         )
@@ -884,7 +884,7 @@ struct SendView: View {
 
     private var sendPreferenceContextID: String {
         [
-            model.activeInstance?.id ?? "none",
+            model.activeStorageID ?? "none",
             model.displays.map(\.id).sorted().joined(separator: ","),
             (model.capabilities?.limits.imageFitModes ?? ImageFitMode.legacyModes)
                 .map(\.rawValue).joined(separator: ","),

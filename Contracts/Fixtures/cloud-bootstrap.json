@@ -1,0 +1,142 @@
+{
+  "me": {
+    "id": "t1",
+    "name": "Synthetic Home",
+    "role": "member",
+    "user": {
+      "id": "u1",
+      "email": "synthetic@example.invalid"
+    },
+    "tenant": {
+      "id": "t1",
+      "name": "Synthetic Home"
+    },
+    "issuer": "http://localhost:9000",
+    "auth": {
+      "resource": "http://localhost:9000/api/t",
+      "scopes": [
+        "app:read",
+        "app:send",
+        "app:refresh"
+      ],
+      "grant_id": "synthetic-grant",
+      "generation": 0
+    },
+    "features": {
+      "connectors": true,
+      "state": true,
+      "mcp": true,
+      "agent": true,
+      "platform_agent": false,
+      "hardware_reuse": false,
+      "custom_name": false
+    },
+    "limits": {
+      "devices": 2,
+      "pages": 8,
+      "web_pages": 2,
+      "renders_per_day": 200,
+      "mcp_calls_per_day": 500,
+      "fonts_per_day": 5,
+      "agent_messages_per_day": 50,
+      "agent_credits_per_month": 0,
+      "min_wake_s": 900,
+      "render_seconds_per_day": 1800,
+      "storage_mb": 100,
+      "history_days": 1,
+      "battery_days": 14,
+      "unfiled_renders_per_day": 25,
+      "future_unlimited_limit": null
+    },
+    "usage": {
+      "renders_today": 2,
+      "renders_charged_today": 1,
+      "mcp_calls_today": 0,
+      "browser_ms_today": 120,
+      "devices": 2,
+      "pages": 2,
+      "storage_bytes": 2048
+    }
+  },
+  "devices": [
+    {
+      "id": "same-device",
+      "name": "Kitchen",
+      "kind": "synthetic-panel",
+      "fw_version": null,
+      "panel": {
+        "w": 800,
+        "h": 480,
+        "native_w": 800,
+        "native_h": 480,
+        "flip": false,
+        "vflip": false,
+        "col_offset": 0,
+        "underscan": 0,
+        "gamut": "spectra6"
+      },
+      "format": "bin",
+      "dither": "ordered",
+      "sleep_interval_s": 900,
+      "page_id": "same-page",
+      "lineup_id": null,
+      "paused_at": null,
+      "last_seen_at": 1793770000,
+      "battery_pct": 81,
+      "rssi": -55,
+      "frame": {
+        "digest": "synthetic-digest",
+        "bytes": 192000,
+        "rendered_at": 1793769900,
+        "page_id": "same-page"
+      },
+      "stale_since": null,
+      "next_due_at": 1793770900
+    },
+    {
+      "id": "no-preview-device",
+      "name": "Desk",
+      "kind": "synthetic-panel",
+      "fw_version": null,
+      "panel": {
+        "w": 800,
+        "h": 480,
+        "native_w": 800,
+        "native_h": 480,
+        "flip": false,
+        "vflip": false,
+        "col_offset": 0,
+        "underscan": 0,
+        "gamut": "spectra6"
+      },
+      "format": "bin",
+      "dither": "ordered",
+      "sleep_interval_s": 900,
+      "page_id": null,
+      "lineup_id": null,
+      "paused_at": null,
+      "last_seen_at": null,
+      "battery_pct": null,
+      "rssi": null,
+      "frame": null,
+      "stale_since": null,
+      "next_due_at": null
+    }
+  ],
+  "pages": [
+    {
+      "id": "same-page",
+      "name": "Family calendar",
+      "kind": "ink",
+      "device_id": "same-device",
+      "updated_at": 1793769900
+    },
+    {
+      "id": "no-preview-page",
+      "name": "New page",
+      "kind": "code",
+      "device_id": null,
+      "updated_at": 1793769950
+    }
+  ]
+}

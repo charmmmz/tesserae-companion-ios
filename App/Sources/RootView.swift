@@ -21,6 +21,7 @@ private struct BluetoothModeSyncContext: Hashable {
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    @Environment(ConnectionHost.self) private var connectionHost
     @Environment(RemindersBridgeModel.self) private var remindersBridgeModel
     @Environment(HealthBridgeModel.self) private var healthBridgeModel
     @Environment(GalleryUploadCoordinator.self) private var galleryUploads
@@ -33,7 +34,7 @@ struct RootView: View {
     @State private var presentation = CompanionPresentation()
 
     private var connectionContext: RootConnectionContext {
-        RootConnectionContext(revision: model.connectionRevision, instanceID: model.activeInstance?.id)
+        RootConnectionContext(revision: model.connectionRevision, instanceID: model.activeStorageID)
     }
 
     private var bluetoothAssociationContext: BluetoothAssociationContext {
@@ -41,14 +42,14 @@ struct RootView: View {
             connection: connectionContext,
             displays: model.displays,
             macs: nearbyDevices.displayRecords.knownHardwareMACs,
-            isActive: scenePhase == .active
+            isActive: scenePhase == .active && connectionHost.cloud == nil
         )
     }
 
     private var bluetoothModeSyncContext: BluetoothModeSyncContext {
         BluetoothModeSyncContext(connection: connectionContext,
             reports: nearbyDevices.displayRecords.pendingModeReports(
-                displayIDs: model.displays.map(\.id), serverID: model.activeInstance?.id,
+                displayIDs: model.displays.map(\.id), serverID: model.activeStorageID,
                 includeStatus: model.capabilities?.features.contains("device_status_observations") == true),
             enabled: scenePhase == .active && model.connectionMode == .live
                 && model.capabilities?.features.contains("device_mode_observations") == true)
@@ -56,7 +57,9 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if model.isRestoringConnection && model.activeInstance == nil {
+            if let cloud = connectionHost.cloud {
+                CloudRootView(model: cloud).id(cloud.fence)
+            } else if (connectionHost.isRestoring || model.isRestoringConnection) && model.activeInstance == nil {
                 VStack(spacing: 12) {
                     ProgressView()
                     Text("Restoring Tesserae connection…")
@@ -79,9 +82,12 @@ struct RootView: View {
                 }
             }
         }
-        .animation(.snappy, value: model.activeInstance?.id)
+        .animation(.snappy, value: model.activeStorageID)
         .environment(presentation)
-        .onChange(of: model.activeInstance?.id, initial: true) { _, id in
+        .onChange(of: model.activeStorageID, initial: true) { _, id in
+            if let instance = model.activeInstance, let legacy = model.legacyBinding(for: instance), let id {
+                nearbyDevices.displayRecords.migrateServer(from: legacy, to: id)
+            }
             nearbyDevices.displayRecords.activeServerID = id
             rememberServerDisplays()
         }
@@ -107,7 +113,7 @@ struct RootView: View {
             }
         }
         .task {
-            await model.restoreConnectionIfNeeded()
+            await connectionHost.restore()
             model.openWebIfRequested()
             synchronizeConnectionMessage()
         }
@@ -192,8 +198,23 @@ struct RootView: View {
             galleryUploads.cancelAndClear()
             messageCenter.dismiss(id: "gallery.uploads")
         }
+        .onChange(of: connectionHost.cloudContextRevision) { _, _ in
+            presentation.sheet = nil
+            presentation.cloudResultID = nil
+            presentation.isSendComposerPresented = false
+        }
         .onChange(of: connectionMessageRevision) { _, _ in
             synchronizeConnectionMessage()
+        }
+        .onChange(of: connectionHost.loginError) { _, error in
+            guard let error, model.activeInstance != nil || connectionHost.cloud != nil else {
+                messageCenter.dismiss(id: "cloud.authorization")
+                return
+            }
+            messageCenter.post(TesseraeMessage(id: "cloud.authorization", text: error, kind: .error,
+                lifetime: .persistent, priority: .high, systemImage: "person.crop.circle.badge.exclamationmark",
+                accessibilityIdentifier: "cloud-authorization-message",
+                action: TesseraeMessageAction(title: String(localized: "Choose Connection")) { serversPresented = true }))
         }
         .alert(
             "Something Went Wrong",
@@ -218,7 +239,7 @@ struct RootView: View {
 
     private func rememberServerDisplays() {
         nearbyDevices.displayRecords.observeServer(displays: model.displays, previews: model.displayPreviews,
-                                                   serverID: model.activeInstance?.id)
+                                                   serverID: model.activeStorageID)
     }
 
     private var connectionMessageRevision: String {
@@ -229,7 +250,7 @@ struct RootView: View {
         case .offline: "offline"
         case .requiresPairing: "requires-pairing"
         }
-        return [model.connectionNotice ?? "", health, model.activeInstance?.id ?? ""]
+        return [model.connectionNotice ?? "", health, model.activeStorageID ?? ""]
             .joined(separator: "|")
     }
 

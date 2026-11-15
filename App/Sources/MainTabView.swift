@@ -4,11 +4,12 @@ import SwiftUI
 @Observable
 final class CompanionPresentation {
     enum Sheet: String, Identifiable {
-        case settings, send, uploads
+        case settings, send, uploads, cloudResults
         var id: String { rawValue }
     }
 
     var sheet: Sheet?
+    var cloudResultID: UUID?
     var isSendComposerPresented = false
     let sendSubmission = SendSubmissionSession()
 }
@@ -86,6 +87,8 @@ struct MainTabView: View {
                     SendComposerSheet { presentation.sheet = nil }
                 case .uploads:
                     GalleryUploadDetailView()
+                case .cloudResults:
+                    EmptyView()
                 }
             }
             .onChange(of: galleryUploads.hasUploads) { _, hasUploads in

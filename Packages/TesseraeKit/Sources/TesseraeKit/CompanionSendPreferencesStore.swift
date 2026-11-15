@@ -57,10 +57,12 @@ public actor UserDefaultsCompanionSendPreferencesStore:
 {
     private let defaults: UserDefaults?
     private let key: String
+    private let directoryURL: URL?
 
     public init(
         suiteName: String?,
-        key: String = "TesseraeCompanionSendPreferences"
+        key: String = "TesseraeCompanionSendPreferences",
+        directoryURL: URL? = nil
     ) {
         if let suiteName {
             defaults = UserDefaults(suiteName: suiteName)
@@ -68,24 +70,40 @@ public actor UserDefaultsCompanionSendPreferencesStore:
             defaults = .standard
         }
         self.key = key
+        self.directoryURL = directoryURL
     }
 
     public func preferences(
         for instanceID: String
     ) throws -> CompanionSendPreferences? {
-        try allPreferences()[instanceID]
+        guard let defaults else { throw CompanionSendPreferencesStoreError.unavailable }
+        if let data = defaults.data(forKey: key + "." + instanceID) {
+            return try TesseraeJSON.decoder().decode(CompanionSendPreferences.self, from: data)
+        }
+        return try allPreferences()[instanceID]
     }
 
     public func save(_ preferences: CompanionSendPreferences) throws {
-        var stored = try allPreferences()
-        stored[preferences.instanceID] = preferences
-        try write(stored)
+        try modifying(preferences.instanceID) {
+            guard let defaults else { throw CompanionSendPreferencesStoreError.unavailable }
+            defaults.set(try TesseraeJSON.encoder().encode(preferences), forKey: key + "." + preferences.instanceID)
+        }
     }
 
     public func removePreferences(for instanceID: String) throws {
-        var stored = try allPreferences()
-        stored.removeValue(forKey: instanceID)
-        try write(stored)
+        try modifying(instanceID) {
+            guard let defaults else { throw CompanionSendPreferencesStoreError.unavailable }
+            defaults.removeObject(forKey: key + "." + instanceID)
+            var stored = try allPreferences()
+            stored.removeValue(forKey: instanceID)
+            try write(stored)
+        }
+    }
+
+    private func modifying<T>(_ id: String, _ operation: () throws -> T) throws -> T {
+        guard let directoryURL else { return try operation() }
+        let component = ConnectionID(rawValue: id).fileComponent
+        return try SharedFileLock(url: directoryURL.appending(path: "PreferenceLocks/\(component).lock")).withLock { try operation() }
     }
 
     private func allPreferences() throws -> [String: CompanionSendPreferences] {

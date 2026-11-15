@@ -532,6 +532,7 @@ and Share Extension use the same light and dark appearances. The app's
 | Information / progress | `#2B4E9B` | `#7C9BE0` |
 
 Ordinary screens, sheets and nested settings use the adaptive paper background.
+The welcome screen adds a fine grid to that same background in both appearances.
 Forms and Lists hide their system scroll background and apply
 `tesseraeScreenBackground()`, including navigation destinations and selection
 pages. Native grouped rows keep their semantic fills; custom icon-picker tiles
@@ -579,8 +580,7 @@ references and are not bundled in the app.
 - Displays home cards show battery and connection type, using a Wi-Fi or
   Bluetooth icon with its label. Signal values belong to device details;
   VoiceOver connection content reports the same type as the visible card.
-- Warm paper background with warm light or charcoal cards, without the
-  previous ambient glow or decorative grid.
+- Warm paper background with warm light or charcoal cards.
 - Restrained 10–16 pt radii; pills only for compact states.
 - Soft paper-like elevation, not glass-heavy layers.
 - Brick-red actions and selection; independent semantic status colours.

@@ -100,6 +100,24 @@ final class BluetoothDisplayStore {
 
     var records: [BluetoothDisplayRecord] { snapshot.records.values.sorted { $0.id < $1.id } }
 
+    func migrateServer(from legacyID: String, to connectionID: String) {
+        guard !isReadOnly, legacyID != connectionID else { return }
+        if snapshot.links[connectionID] == nil { snapshot.links[connectionID] = snapshot.links[legacyID] }
+        if snapshot.servers[connectionID] == nil { snapshot.servers[connectionID] = snapshot.servers[legacyID] }
+        if snapshot.reportedModes?[connectionID] == nil, let legacyReports = snapshot.reportedModes?[legacyID] {
+            snapshot.reportedModes?[connectionID] = legacyReports
+        }
+        snapshot.links.removeValue(forKey: legacyID)
+        snapshot.servers.removeValue(forKey: legacyID)
+        snapshot.reportedModes?.removeValue(forKey: legacyID)
+        for id in snapshot.records.keys where snapshot.records[id]?.observedServerIDs.contains(legacyID) == true {
+            snapshot.records[id]?.observedServerIDs.remove(legacyID)
+            snapshot.records[id]?.observedServerIDs.insert(connectionID)
+        }
+        if activeServerID == legacyID { activeServerID = connectionID }
+        persist()
+    }
+
     /// The durable local records are the outbox. Only resolved identities can be reported.
     func pendingModeReports(displayIDs: [String], serverID: String?, includeStatus: Bool = false) -> [BluetoothModeReport] {
         guard !isReadOnly, hasPersistedSnapshot, let serverID else { return [] }

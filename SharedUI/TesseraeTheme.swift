@@ -195,10 +195,36 @@ enum TesseraeActionMetrics {
 }
 
 private struct TesseraeScreenBackdrop: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.displayScale) private var displayScale
+    let showsGrid: Bool
+
     var body: some View {
         TesseraeTheme.background
+            .overlay {
+                if showsGrid {
+                    Canvas { context, size in
+                        let lineWidth = 1 / displayScale
+                        let spacing: CGFloat = 24
+                        var lines = Path()
+                        for x in stride(from: lineWidth / 2, to: size.width, by: spacing) {
+                            lines.move(to: CGPoint(x: x, y: 0))
+                            lines.addLine(to: CGPoint(x: x, y: size.height))
+                        }
+                        for y in stride(from: lineWidth / 2, to: size.height, by: spacing) {
+                            lines.move(to: CGPoint(x: 0, y: y))
+                            lines.addLine(to: CGPoint(x: size.width, y: y))
+                        }
+                        context.stroke(lines, with: .color(gridColor), lineWidth: lineWidth)
+                    }
+                }
+            }
             .allowsHitTesting(false)
             .accessibilityHidden(true)
+    }
+
+    private var gridColor: Color {
+        colorScheme == .dark ? .white.opacity(0.07) : .black.opacity(0.06)
     }
 }
 
@@ -218,8 +244,8 @@ extension View {
         modifier(TesseraeCardModifier())
     }
 
-    func tesseraeScreenBackground() -> some View {
-        modifier(TesseraeScreenBackgroundModifier())
+    func tesseraeScreenBackground(grid: Bool = false) -> some View {
+        modifier(TesseraeScreenBackgroundModifier(showsGrid: grid))
     }
 
     func tesseraeIconActionLabel(compact: Bool = false) -> some View {
@@ -806,9 +832,11 @@ extension View {
 
 
 private struct TesseraeScreenBackgroundModifier: ViewModifier {
+    let showsGrid: Bool
+
     func body(content: Content) -> some View {
         content.background {
-            TesseraeScreenBackdrop()
+            TesseraeScreenBackdrop(showsGrid: showsGrid)
                 .ignoresSafeArea()
         }
     }

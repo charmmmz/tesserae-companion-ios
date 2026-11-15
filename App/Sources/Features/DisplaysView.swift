@@ -272,7 +272,7 @@ struct DisplaysView: View {
     }
 
     private func localState(_ display: DisplaySummary) -> DisplayBluetoothPresentation {
-        nearby.displayRecords.presentation(for: display, serverID: model.activeInstance?.id)
+        nearby.displayRecords.presentation(for: display, serverID: model.activeStorageID)
     }
 
     private func displayRow(
@@ -569,7 +569,7 @@ private struct DisplayCard: View {
     @Environment(AppModel.self) private var model
     @Environment(NearbyDeviceManager.self) private var nearby
     private var local: DisplayBluetoothPresentation {
-        nearby.displayRecords.presentation(for: display, serverID: model.activeInstance?.id)
+        nearby.displayRecords.presentation(for: display, serverID: model.activeStorageID)
     }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -767,7 +767,7 @@ extension View {
 struct DisplayDetailView: View {
     @Environment(NearbyDeviceManager.self) private var nearby
     private var local: DisplayBluetoothPresentation {
-        nearby.displayRecords.presentation(for: currentDisplay, serverID: model.activeInstance?.id)
+        nearby.displayRecords.presentation(for: currentDisplay, serverID: model.activeStorageID)
     }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private enum ScreenPage: Hashable {
