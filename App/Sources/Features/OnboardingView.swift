@@ -322,11 +322,7 @@ struct OnboardingView: View {
                         .foregroundStyle(.secondary)
                         .frame(minHeight: minimumNearbyServerRowHeight, alignment: .leading)
                 } else {
-                    Text("No nearby servers found.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .frame(minHeight: minimumNearbyServerRowHeight, alignment: .leading)
-                        .accessibilityIdentifier("self-hosted-discovery-empty")
+                    nearbyServerEmptyState
                 }
             } else {
                 ForEach(model.discoveredInstances) { instance in
@@ -384,15 +380,31 @@ struct OnboardingView: View {
     }
 
     private var nearbyServerPlaceholder: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Capsule().frame(width: 110, height: 9)
-            Capsule().frame(width: 155, height: 7)
+        nearbyServerEmptyState
+            .redacted(reason: .placeholder)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Searching for nearby servers…")
+            .accessibilityIdentifier("self-hosted-discovery-loading")
+    }
+
+    private var nearbyServerEmptyState: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Image(systemName: "magnifyingglass")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("No nearby servers found")
+                    .font(.subheadline.weight(.medium))
+                    .accessibilityIdentifier("self-hosted-discovery-empty")
+                Text("Check that this device and your server are on the same network.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .fixedSize(horizontal: false, vertical: true)
         }
-        .foregroundStyle(.secondary.opacity(0.2))
+        .padding(.vertical, 8)
         .frame(maxWidth: .infinity, minHeight: minimumNearbyServerRowHeight, alignment: .leading)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Searching for nearby servers…")
-        .accessibilityIdentifier("self-hosted-discovery-loading")
     }
 
     private var onboardingAlternatives: some View {

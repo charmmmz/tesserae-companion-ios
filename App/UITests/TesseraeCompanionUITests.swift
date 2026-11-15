@@ -114,6 +114,12 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertEqual(nearby.frame.midY, footerY, accuracy: 2)
         XCTAssertFalse(app.buttons["cloud-signin"].exists)
         XCTAssertFalse(app.buttons["Scan Pairing QR"].exists)
+        if !verifiesAppleEntry {
+            XCTAssertTrue(app.staticTexts["self-hosted-discovery-empty"].waitForExistence(timeout: 3))
+            XCTAssertTrue(app.staticTexts["Check that this device and your server are on the same network."].exists)
+            XCTAssertTrue(app.buttons["Refresh nearby Tesserae servers"].isHittable)
+            readabilityAttachment(app, "Self-hosted discovery with no servers")
+        }
 
         let brand = app.images["onboarding-brand"]
         let welcomeLogo = brand.frame

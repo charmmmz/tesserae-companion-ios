@@ -9,7 +9,8 @@
 "Nearby Tesserae" = "附近的 Tesserae";
 "Refresh nearby Tesserae servers" = "刷新附近的 Tesserae 服务器";
 "Couldn’t search nearby. Check Local Network access in iOS Settings." = "无法搜索附近的服务器。请在 iOS 设置中检查本地网络权限。";
-"No nearby servers found." = "未找到附近的服务器。";
+"No nearby servers found" = "未找到附近的服务器";
+"Check that this device and your server are on the same network." = "请确认这台设备和服务器连接的是同一个网络。";
 "Searching for nearby servers…" = "正在查找附近的服务器…";
 "Enter Server Address" = "输入服务器地址";
 "Nearby Devices" = "附近设备";
