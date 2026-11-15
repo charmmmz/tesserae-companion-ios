@@ -87,7 +87,9 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(connectionType.waitForExistence(timeout: 3))
         XCTAssertFalse(app.staticTexts["Tesserae Companion"].exists)
         XCTAssertTrue(connectionType.buttons["Self-Hosted"].isSelected)
-        XCTAssertTrue(app.buttons["Enter Server Address"].isHittable)
+        let manualAddress = app.buttons["Enter Server Address"]
+        XCTAssertTrue(manualAddress.isHittable)
+        let manualAddressHeight = manualAddress.frame.height
         XCTAssertTrue(app.staticTexts["Nearby Tesserae"].exists)
         XCTAssertFalse(app.buttons["cloud-signin"].exists)
         XCTAssertFalse(app.buttons["Scan Pairing QR"].exists)
@@ -128,6 +130,8 @@ final class TesseraeCompanionUITests: XCTestCase {
         let email = app.buttons["cloud-signin"]
         XCTAssertTrue(email.waitForExistence(timeout: 3))
         XCTAssertTrue(email.isHittable)
+        XCTAssertEqual(email.label, "Continue with Email")
+        XCTAssertEqual(email.frame.height, manualAddressHeight, accuracy: 1)
         if verifiesAppleEntry {
             let apple = app.buttons["cloud-signin-apple"]
             XCTAssertTrue(apple.isHittable)
@@ -2585,7 +2589,9 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertFalse(app.buttons["展开更多"].exists)
         XCTAssertFalse(app.buttons["更多选项"].exists)
         XCTAssertTrue(connectionType.buttons["自建"].isSelected)
-        XCTAssertTrue(app.buttons["输入服务器地址"].exists)
+        let manualAddress = app.buttons["输入服务器地址"]
+        XCTAssertTrue(manualAddress.exists)
+        let manualAddressHeight = manualAddress.frame.height
         XCTAssertFalse(app.buttons["cloud-signin"].exists)
         XCTAssertFalse(app.buttons["扫描配对二维码"].exists)
         readabilityAttachment(app, "Self-hosted onboarding in Simplified Chinese")
@@ -2594,6 +2600,8 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(connectionType.buttons["云端"].isSelected)
         let email = app.buttons["cloud-signin"]
         XCTAssertTrue(email.isHittable)
+        XCTAssertEqual(email.label, "通过邮箱继续")
+        XCTAssertEqual(email.frame.height, manualAddressHeight, accuracy: 1)
         if verifiesAppleEntry {
             let apple = app.buttons["cloud-signin-apple"]
             XCTAssertTrue(apple.isHittable)

@@ -52,7 +52,7 @@ struct CloudSignInView: View {
     }
 
     private var signInOptions: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 6) {
             if host.appleSignInAvailable {
                 Button("Continue with Apple") {
                     Task { await host.beginAppleSignIn() }
@@ -62,7 +62,7 @@ struct CloudSignInView: View {
                 .accessibilityIdentifier("cloud-signin-apple")
             }
 
-            Button("Continue with email link") {
+            Button("Continue with Email") {
                 Task { await host.beginCloudSignIn() }
             }
             .buttonStyle(ConnectionOptionButtonStyle(option: .email))
@@ -283,13 +283,12 @@ struct ConnectionOptionButtonStyle: ButtonStyle {
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.isEnabled) private var isEnabled
-    @ScaledMetric(relativeTo: .callout) private var scaledSignInHeight: CGFloat = 37
+    @ScaledMetric(relativeTo: .callout) private var scaledSignInArtworkSize: CGFloat = 37
     var option: Option = .serverAddress
 
     func makeBody(configuration: Configuration) -> some View {
         let isSignIn = option != .serverAddress
         let isApple = option == .apple
-        let signInHeight = max(30, scaledSignInHeight)
         let shape = RoundedRectangle(cornerRadius: CloudSignInButtonShape.cornerRadius, style: .continuous)
         let foreground = isApple ? (colorScheme == .dark ? Color.black : .white) : TesseraeTheme.accent
         let background = isApple
@@ -298,7 +297,7 @@ struct ConnectionOptionButtonStyle: ButtonStyle {
 
         HStack(spacing: 8) {
             if isSignIn {
-                signInIcon(height: signInHeight)
+                signInIcon
                     .accessibilityHidden(true)
             }
             configuration.label
@@ -308,28 +307,30 @@ struct ConnectionOptionButtonStyle: ButtonStyle {
                 .padding(.vertical, 6)
         }
         .padding(.horizontal, 12)
-        .frame(maxWidth: .infinity, minHeight: isSignIn ? signInHeight : 48)
+        .frame(maxWidth: .infinity, minHeight: 40)
         .foregroundStyle(foreground)
         .background(background, in: shape)
         .overlay {
             if !isApple { shape.strokeBorder(TesseraeTheme.accent.opacity(0.45), lineWidth: 1) }
         }
         .clipShape(shape)
+        .compositingGroup()
         .frame(minHeight: 44)
         .contentShape(Rectangle())
         .opacity(isEnabled ? (isApple && configuration.isPressed ? 0.8 : 1) : 0.5)
     }
 
-    private func signInIcon(height: CGFloat) -> some View {
-        let iconSize = height * 0.43
+    private var signInIcon: some View {
+        let artworkSize = max(30, scaledSignInArtworkSize)
+        let iconSize = artworkSize * 0.43
         return Color.clear
-            .frame(width: iconSize, height: height)
+            .frame(width: iconSize, height: iconSize)
             .overlay {
                 if option == .apple {
                     Image("AppleSignInArtwork")
                         .resizable()
                         .interpolation(.high)
-                        .frame(width: height, height: height)
+                        .frame(width: artworkSize, height: artworkSize)
                 } else {
                     Image(systemName: "envelope")
                         .resizable()

@@ -13,6 +13,7 @@ capabilities.
 
 ### Fixed
 
+- Pressing **Continue with Apple** dims the whole button evenly.
 - Display battery icons follow the latest reported percentage in list and detail
   views. Unknown readings show a question mark. Wi-Fi labels use neutral styling.
 
@@ -48,6 +49,9 @@ capabilities.
 
 ### Changed
 
+- The welcome screen uses shorter Cloud sign-in and **Enter Server Address**
+  buttons with a shared text size. The email button is labeled **Continue with
+  Email**.
 - The Lineups list returns to the layout used on 29 October, with display
   headings, intent icons, compact status dots and Dashboard counts. Per-row
   planned-update messages and enabled/disabled badges are removed.
