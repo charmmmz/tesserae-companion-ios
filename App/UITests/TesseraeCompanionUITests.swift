@@ -77,6 +77,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         let verifiesAppleEntry = ProcessInfo.processInfo.environment["TESSERAE_VERIFY_APPLE_BETA_ENTRY"] == "1"
         if verifiesAppleEntry {
             app.launchEnvironment["TESSERAE_CLOUD_TEST_NAMESPACE"] = UUID().uuidString
+            app.launchEnvironment["TESSERAE_UI_TEST_COLOR_SCHEME"] = "light"
         } else {
             app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         }
@@ -130,8 +131,11 @@ final class TesseraeCompanionUITests: XCTestCase {
         if verifiesAppleEntry {
             let apple = app.buttons["cloud-signin-apple"]
             XCTAssertTrue(apple.isHittable)
+            XCTAssertEqual(apple.frame.minX, email.frame.minX, accuracy: 1)
             XCTAssertEqual(apple.frame.width, email.frame.width, accuracy: 1)
             XCTAssertEqual(apple.frame.height, email.frame.height, accuracy: 1)
+            XCTAssertGreaterThanOrEqual(apple.frame.height.rounded(), 44)
+            XCTAssertGreaterThanOrEqual(email.frame.height.rounded(), 44)
         }
         XCTAssertTrue(nearby.isHittable)
         XCTAssertTrue(demo.isHittable)
@@ -2560,7 +2564,8 @@ final class TesseraeCompanionUITests: XCTestCase {
             "-AppleLanguages", "(zh-Hans)",
             "-AppleLocale", "zh_CN",
         ]
-        if ProcessInfo.processInfo.environment["TESSERAE_VERIFY_APPLE_BETA_ENTRY"] == "1" {
+        let verifiesAppleEntry = ProcessInfo.processInfo.environment["TESSERAE_VERIFY_APPLE_BETA_ENTRY"] == "1"
+        if verifiesAppleEntry {
             app.launchEnvironment["TESSERAE_CLOUD_TEST_NAMESPACE"] = UUID().uuidString
         } else {
             app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
@@ -2589,6 +2594,12 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(connectionType.buttons["云端"].isSelected)
         let email = app.buttons["cloud-signin"]
         XCTAssertTrue(email.isHittable)
+        if verifiesAppleEntry {
+            let apple = app.buttons["cloud-signin-apple"]
+            XCTAssertTrue(apple.isHittable)
+            XCTAssertEqual(apple.frame.width, email.frame.width, accuracy: 1)
+            XCTAssertEqual(apple.frame.height, email.frame.height, accuracy: 1)
+        }
         XCTAssertFalse(app.buttons["输入服务器地址"].exists)
         readabilityAttachment(app, "Cloud onboarding in Simplified Chinese dark mode")
 

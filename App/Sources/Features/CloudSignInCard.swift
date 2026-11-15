@@ -1,9 +1,7 @@
-import AuthenticationServices
 import SwiftUI
 
 struct CloudSignInView: View {
     @Environment(ConnectionHost.self) private var host
-    @ScaledMetric(relativeTo: .body) private var optionHeight: CGFloat = 48
     @State private var email = ""
     @State private var code = ""
     @State private var resendingCode: UUID?
@@ -54,20 +52,20 @@ struct CloudSignInView: View {
     }
 
     private var signInOptions: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 4) {
             if host.appleSignInAvailable {
-                CloudAppleSignInButton {
+                Button("Continue with Apple") {
                     Task { await host.beginAppleSignIn() }
                 }
-                .frame(maxWidth: .infinity)
-                .frame(height: optionHeight)
+                .buttonStyle(ConnectionOptionButtonStyle(option: .apple))
                 .disabled(host.isSwitching)
+                .accessibilityIdentifier("cloud-signin-apple")
             }
 
-            Button("Use Email Link") {
+            Button("Continue with email link") {
                 Task { await host.beginCloudSignIn() }
             }
-            .buttonStyle(ConnectionOptionButtonStyle(minimumHeight: optionHeight))
+            .buttonStyle(ConnectionOptionButtonStyle(option: .email))
             .disabled(!host.cloudAvailable || host.isSwitching)
             .accessibilityIdentifier("cloud-signin")
         }
@@ -279,51 +277,65 @@ private enum CloudSignInButtonShape {
 }
 
 struct ConnectionOptionButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-    var minimumHeight: CGFloat = 48
-
-    func makeBody(configuration: Configuration) -> some View {
-        let shape = RoundedRectangle(cornerRadius: CloudSignInButtonShape.cornerRadius, style: .circular)
-        configuration.label
-            .font(.body.weight(.medium))
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .frame(maxWidth: .infinity, minHeight: minimumHeight)
-            .foregroundStyle(TesseraeTheme.accent)
-            .background(configuration.isPressed ? TesseraeTheme.accentSoft : TesseraeTheme.background, in: shape)
-            .overlay { shape.strokeBorder(TesseraeTheme.accent.opacity(0.45), lineWidth: 1) }
-            .contentShape(shape)
-            .opacity(isEnabled ? 1 : 0.5)
+    enum Option {
+        case serverAddress, apple, email
     }
-}
 
-private struct CloudAppleSignInButton: UIViewRepresentable {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.isEnabled) private var isEnabled
-    let action: () -> Void
+    @ScaledMetric(relativeTo: .callout) private var scaledSignInHeight: CGFloat = 37
+    var option: Option = .serverAddress
 
-    func makeCoordinator() -> Coordinator { Coordinator(action: action) }
+    func makeBody(configuration: Configuration) -> some View {
+        let isSignIn = option != .serverAddress
+        let isApple = option == .apple
+        let signInHeight = max(30, scaledSignInHeight)
+        let shape = RoundedRectangle(cornerRadius: CloudSignInButtonShape.cornerRadius, style: .continuous)
+        let foreground = isApple ? (colorScheme == .dark ? Color.black : .white) : TesseraeTheme.accent
+        let background = isApple
+            ? (colorScheme == .dark ? Color.white : .black)
+            : (configuration.isPressed ? TesseraeTheme.accentSoft : TesseraeTheme.background)
 
-    func makeUIView(context: Context) -> ASAuthorizationAppleIDButton {
-        let button = ASAuthorizationAppleIDButton(type: .signIn, style: colorScheme == .dark ? .white : .black)
-        button.cornerRadius = CloudSignInButtonShape.cornerRadius
-        button.accessibilityIdentifier = "cloud-signin-apple"
-        button.addTarget(context.coordinator, action: #selector(Coordinator.signIn), for: .touchUpInside)
-        return button
+        HStack(spacing: 8) {
+            if isSignIn {
+                signInIcon(height: signInHeight)
+                    .accessibilityHidden(true)
+            }
+            configuration.label
+                .font(.callout.weight(.medium))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.vertical, 6)
+        }
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, minHeight: isSignIn ? signInHeight : 48)
+        .foregroundStyle(foreground)
+        .background(background, in: shape)
+        .overlay {
+            if !isApple { shape.strokeBorder(TesseraeTheme.accent.opacity(0.45), lineWidth: 1) }
+        }
+        .clipShape(shape)
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        .opacity(isEnabled ? (isApple && configuration.isPressed ? 0.8 : 1) : 0.5)
     }
 
-    func updateUIView(_ button: ASAuthorizationAppleIDButton, context: Context) {
-        context.coordinator.action = action
-        button.isEnabled = isEnabled
-    }
-
-    final class Coordinator: NSObject {
-        var action: () -> Void
-
-        init(action: @escaping () -> Void) { self.action = action }
-
-        @objc func signIn() { action() }
+    private func signInIcon(height: CGFloat) -> some View {
+        let iconSize = height * 0.43
+        return Color.clear
+            .frame(width: iconSize, height: height)
+            .overlay {
+                if option == .apple {
+                    Image("AppleSignInArtwork")
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(width: height, height: height)
+                } else {
+                    Image(systemName: "envelope")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: iconSize, height: iconSize)
+                }
+            }
     }
 }
