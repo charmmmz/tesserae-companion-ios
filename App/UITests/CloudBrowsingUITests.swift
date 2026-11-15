@@ -37,6 +37,13 @@ final class CloudBrowsingUITests: XCTestCase {
         XCTAssertTrue(element.isHittable)
     }
     private func startBrowser(_ app: XCUIApplication) {
+        let cloud = app.segmentedControls["connection-type"].buttons
+            .matching(NSPredicate(format: "label IN %@", ["Cloud", "云端"])).firstMatch
+        XCTAssertTrue(cloud.waitForExistence(timeout: 10))
+        if !cloud.isSelected {
+            reveal(cloud, app: app)
+            cloud.tap()
+        }
         let signIn = app.buttons["cloud-signin"]
         XCTAssertTrue(signIn.waitForExistence(timeout: 15)); reveal(signIn, app: app); signIn.tap()
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
@@ -390,10 +397,11 @@ final class CloudBrowsingUITests: XCTestCase {
     }
     func testBonjourConnectsActualLoopbackFixture() {
         let app = launch()
-        showSelfHosted(app)
+        let selfHosted = app.segmentedControls["connection-type"].buttons["Self-Hosted"]
+        XCTAssertTrue(selfHosted.waitForExistence(timeout: 10))
+        XCTAssertTrue(selfHosted.isSelected)
         let manual = app.buttons["Enter Server Address"]
         let loading = app.descendants(matching: .any)["self-hosted-discovery-loading"]
-        XCTAssertTrue(loading.exists)
         capture(app, "self-hosted-searching")
         XCTAssertTrue(manual.isHittable)
         var previousFrame = CGRect.null
@@ -593,11 +601,13 @@ final class CloudBrowsingUITests: XCTestCase {
         let confirm = app.alerts["Sign Out of Cloud?"].buttons["Sign Out"]
         XCTAssertTrue(confirm.waitForExistence(timeout: 5))
         confirm.tap()
-        XCTAssertTrue(app.buttons["cloud-signin"].waitForExistence(timeout: 8))
+        let connectionType = app.segmentedControls["connection-type"]
+        XCTAssertTrue(connectionType.waitForExistence(timeout: 8))
+        XCTAssertTrue(connectionType.buttons["Self-Hosted"].isSelected)
         XCTAssertFalse(saved.firstMatch.exists)
         XCTAssertFalse(app.staticTexts["Saved Connections"].exists)
         XCTAssertFalse(app.buttons["Choose Connection"].exists)
-        XCTAssertTrue(app.buttons["cloud-signin"].isHittable)
+        XCTAssertTrue(app.buttons["self-hosted-manual-address"].isHittable)
         XCTAssertTrue(app.onboardingShortcut("onboarding-nearby-devices").isHittable)
         XCTAssertTrue(app.onboardingShortcut("onboarding-demo").isHittable)
         capture(app, "welcome-after-cloud-sign-out")

@@ -85,16 +85,12 @@ final class TesseraeCompanionUITests: XCTestCase {
         let connectionType = app.segmentedControls["connection-type"]
         XCTAssertTrue(connectionType.waitForExistence(timeout: 3))
         XCTAssertFalse(app.staticTexts["Tesserae Companion"].exists)
-        XCTAssertTrue(connectionType.buttons["Cloud"].isSelected)
-        let email = app.buttons["cloud-signin"]
-        XCTAssertTrue(email.isHittable)
-        if verifiesAppleEntry {
-            let apple = app.buttons["cloud-signin-apple"]
-            XCTAssertTrue(apple.isHittable)
-            XCTAssertEqual(apple.frame.width, email.frame.width, accuracy: 1)
-            XCTAssertEqual(apple.frame.height, email.frame.height, accuracy: 1)
-        }
-        XCTAssertFalse(app.buttons["Enter Server Address"].exists)
+        XCTAssertTrue(connectionType.buttons["Self-Hosted"].isSelected)
+        XCTAssertTrue(app.buttons["Enter Server Address"].isHittable)
+        XCTAssertTrue(app.staticTexts["Nearby Tesserae"].exists)
+        XCTAssertFalse(app.buttons["cloud-signin"].exists)
+        XCTAssertFalse(app.buttons["Scan Pairing QR"].exists)
+
         let nearby = app.buttons["onboarding-nearby-devices"]
         let demo = app.buttons["onboarding-demo"]
         XCTAssertFalse(app.buttons["onboarding-more"].exists)
@@ -103,17 +99,6 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertEqual(nearby.frame.midY, demo.frame.midY, accuracy: 1)
         XCTAssertGreaterThan(nearby.frame.midY, app.frame.height * 0.85)
         let footerY = nearby.frame.midY
-        readabilityAttachment(app, "Cloud onboarding")
-
-        connectionType.buttons["Self-Hosted"].tap()
-        XCTAssertTrue(connectionType.buttons["Self-Hosted"].isSelected)
-        XCTAssertTrue(app.buttons["Enter Server Address"].isHittable)
-        XCTAssertTrue(app.staticTexts["Nearby Tesserae"].exists)
-        XCTAssertTrue(nearby.isHittable)
-        XCTAssertTrue(demo.isHittable)
-        XCTAssertEqual(nearby.frame.midY, footerY, accuracy: 2)
-        XCTAssertFalse(app.buttons["cloud-signin"].exists)
-        XCTAssertFalse(app.buttons["Scan Pairing QR"].exists)
         if !verifiesAppleEntry {
             XCTAssertTrue(app.staticTexts["self-hosted-discovery-empty"].waitForExistence(timeout: 3))
             XCTAssertTrue(app.staticTexts["Check that this device and your server are on the same network."].exists)
@@ -139,8 +124,20 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(connectionType.buttons["Self-Hosted"].isSelected)
 
         connectionType.buttons["Cloud"].tap()
-        XCTAssertTrue(app.buttons["cloud-signin"].waitForExistence(timeout: 3))
+        let email = app.buttons["cloud-signin"]
+        XCTAssertTrue(email.waitForExistence(timeout: 3))
+        XCTAssertTrue(email.isHittable)
+        if verifiesAppleEntry {
+            let apple = app.buttons["cloud-signin-apple"]
+            XCTAssertTrue(apple.isHittable)
+            XCTAssertEqual(apple.frame.width, email.frame.width, accuracy: 1)
+            XCTAssertEqual(apple.frame.height, email.frame.height, accuracy: 1)
+        }
+        XCTAssertTrue(nearby.isHittable)
+        XCTAssertTrue(demo.isHittable)
+        XCTAssertEqual(nearby.frame.midY, footerY, accuracy: 2)
         XCTAssertFalse(app.buttons["Enter Server Address"].exists)
+        readabilityAttachment(app, "Cloud onboarding")
     }
 
     func testOfflineRestoreOffersBluetoothAndOtherServers() {
@@ -2582,15 +2579,18 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertEqual(demo.label, "演示模式")
         XCTAssertFalse(app.buttons["展开更多"].exists)
         XCTAssertFalse(app.buttons["更多选项"].exists)
-        XCTAssertTrue(connectionType.buttons["云端"].isSelected)
-        XCTAssertFalse(app.buttons["输入服务器地址"].exists)
-        readabilityAttachment(app, "Cloud onboarding in Simplified Chinese dark mode")
-        connectionType.buttons["自建"].tap()
         XCTAssertTrue(connectionType.buttons["自建"].isSelected)
         XCTAssertTrue(app.buttons["输入服务器地址"].exists)
         XCTAssertFalse(app.buttons["cloud-signin"].exists)
         XCTAssertFalse(app.buttons["扫描配对二维码"].exists)
         readabilityAttachment(app, "Self-hosted onboarding in Simplified Chinese")
+
+        connectionType.buttons["云端"].tap()
+        XCTAssertTrue(connectionType.buttons["云端"].isSelected)
+        let email = app.buttons["cloud-signin"]
+        XCTAssertTrue(email.isHittable)
+        XCTAssertFalse(app.buttons["输入服务器地址"].exists)
+        readabilityAttachment(app, "Cloud onboarding in Simplified Chinese dark mode")
 
         app.onboardingShortcut("onboarding-demo").tap()
         let tabBar = app.tabBars.firstMatch

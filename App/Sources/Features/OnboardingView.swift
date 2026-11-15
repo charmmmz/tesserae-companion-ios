@@ -12,17 +12,22 @@ struct OnboardingView: View {
         case manual(address: String?)
     }
 
-    var isChoosingServer = false
+    let isChoosingServer: Bool
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(AppModel.self) private var model
     @Environment(ConnectionHost.self) private var connectionHost
     @ScaledMetric(relativeTo: .subheadline) private var nearbyServerRowHeight: CGFloat = 44
-    @State private var connectionType = ConnectionType.cloud
+    @State private var connectionType: ConnectionType
     @State private var welcomeStep: WelcomeStep?
     @State private var manualSetupPresented = false
     @State private var manualServerAddress: String?
+
+    init(isChoosingServer: Bool = false) {
+        self.isChoosingServer = isChoosingServer
+        _connectionType = State(initialValue: isChoosingServer ? .cloud : .selfHosted)
+    }
 
     var body: some View {
         NavigationStack {
@@ -60,7 +65,7 @@ struct OnboardingView: View {
             .task {
                 connectionHost.reloadSavedConnections()
             }
-            .onChange(of: shouldShowServerDiscovery) { _, visible in
+            .onChange(of: shouldShowServerDiscovery, initial: true) { _, visible in
                 guard visible, model.discoveredInstances.isEmpty else { return }
                 Task { await model.discoverNearby() }
             }
