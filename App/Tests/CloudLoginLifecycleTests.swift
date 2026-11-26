@@ -300,8 +300,11 @@ final class CloudLoginLifecycleTests: XCTestCase {
     func testAdvertisedAppleWebTakesPrecedenceAndPreservesCloudAuthorization() async throws {
         let fixture = fixture(issuer: appleIssuer)
         await fixture.http.configureApple(webAdvertised: true)
+        XCTAssertFalse(fixture.host.appleSignInAvailable)
+        XCTAssertNil(fixture.host.appleAccountLinkURL)
         await fixture.host.checkAppleSignInAvailability()
         XCTAssertTrue(fixture.host.appleSignInAvailable)
+        XCTAssertEqual(fixture.host.appleAccountLinkURL, URL(string: "https://staging.example.invalid:8443/app/#/settings/account"))
         await fixture.host.beginAppleSignIn()
         await fixture.host.beginAppleSignIn()
 
@@ -346,18 +349,30 @@ final class CloudLoginLifecycleTests: XCTestCase {
         XCTAssertNil(try fixture.vault.pending())
     }
 
-    func testProductionAppleRequiresWebCapability() async throws {
+    func testProductionAppleIsImmediatelyAvailableAndFollowsWebCapability() async throws {
         let issuer = AppConfiguration.defaultCloudIssuer
         let fixture = fixture(issuer: issuer)
+        let accountURL = URL(string: "https://cloud.tesserae.ink/app/#/settings/account")
+        XCTAssertTrue(fixture.host.appleSignInAvailable)
+        XCTAssertEqual(fixture.host.appleAccountLinkURL, accountURL)
+        await fixture.host.beginAppleSignIn()
+        XCTAssertEqual(fixture.host.loginPhase, .appleWeb)
+        XCTAssertEqual(fixture.browser.opened.last?.path, "/auth/apple/web/start")
+        fixture.browser.finish(nil, error: ASWebAuthenticationSessionError(.canceledLogin))
+        let coldStartRequests = await fixture.http.appleRequests
+        XCTAssertTrue(coldStartRequests.isEmpty)
+
         await fixture.host.checkAppleSignInAvailability()
         XCTAssertFalse(fixture.host.appleSignInAvailable)
+        XCTAssertNil(fixture.host.appleAccountLinkURL)
         await fixture.host.beginAppleSignIn()
-        XCTAssertTrue(fixture.browser.opened.isEmpty)
+        XCTAssertEqual(fixture.browser.opened.count, 1)
         XCTAssertNil(fixture.apple.nonce)
 
         await fixture.http.configureApple(advertised: false, webAdvertised: true)
         await fixture.host.checkAppleSignInAvailability()
         XCTAssertTrue(fixture.host.appleSignInAvailable)
+        XCTAssertEqual(fixture.host.appleAccountLinkURL, accountURL)
         await fixture.host.beginAppleSignIn()
         XCTAssertEqual(fixture.host.loginPhase, .appleWeb)
         XCTAssertEqual(fixture.browser.opened.last?.host, issuer.host)
@@ -365,6 +380,20 @@ final class CloudLoginLifecycleTests: XCTestCase {
         XCTAssertEqual(fixture.host.loginPhase, .idle)
         XCTAssertNil(fixture.host.loginError)
         XCTAssertNil(try fixture.vault.pending())
+    }
+
+    func testImmediateAppleAvailabilityRequiresCanonicalProductionRootAndCloudRuntime() throws {
+        let productionRoot = try XCTUnwrap(URL(string: "https://CLOUD.TESSERAE.INK:443/"))
+        let production = fixture(issuer: productionRoot)
+        XCTAssertTrue(production.host.appleSignInAvailable)
+
+        let differentPort = try XCTUnwrap(URL(string: "https://cloud.tesserae.ink:8443"))
+        XCTAssertFalse(fixture(issuer: differentPort).host.appleSignInAvailable)
+
+        let withoutRuntime = ConnectionHost(local: production.local, runtime: nil, vault: production.vault,
+            issuer: productionRoot, browser: production.browser, appleAuthorization: production.apple)
+        XCTAssertFalse(withoutRuntime.appleSignInAvailable)
+        XCTAssertNil(withoutRuntime.appleAccountLinkURL)
     }
 
     func testPendingAppleWebLoginRestoresAppleProgressAndCanBeCanceled() async throws {
@@ -385,6 +414,7 @@ final class CloudLoginLifecycleTests: XCTestCase {
         let fixture = fixture(issuer: appleIssuer)
         await fixture.host.checkAppleSignInAvailability()
         XCTAssertTrue(fixture.host.appleSignInAvailable)
+        XCTAssertNil(fixture.host.appleAccountLinkURL)
         await fixture.host.beginAppleSignIn()
 
         let pending = try XCTUnwrap(fixture.vault.pending())

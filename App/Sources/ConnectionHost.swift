@@ -29,12 +29,16 @@ final class ConnectionHost {
     private let sendPreferences: any CompanionSendPreferencesStoring
     private(set) var savedConnections: [SavedConnection] = []
     private(set) var loginPhase: LoginPhase = .idle
-    private let showsAppleSignInImmediately: Bool
-    private var discoveredAppleSignInMethod: CloudAppleSignInMethod?
+    private let usesNativeAppleBeta: Bool
+    private var serverAppleSignInMethod: CloudAppleSignInMethod?
     private var appleSignInMethod: CloudAppleSignInMethod? {
-        showsAppleSignInImmediately ? .native : discoveredAppleSignInMethod
+        usesNativeAppleBeta ? .native : serverAppleSignInMethod
     }
     var appleSignInAvailable: Bool { appleSignInMethod != nil }
+    var appleAccountLinkURL: URL? {
+        guard appleSignInMethod == .web else { return nil }
+        return AppConfiguration.cloudAccountSettingsURL(issuer: issuer)
+    }
     private var checksAppleAvailability = false
     private(set) var isSwitching = false
     private(set) var isRestoring = true
@@ -61,10 +65,13 @@ final class ConnectionHost {
          sendPreferences: any CompanionSendPreferencesStoring = InMemoryCompanionSendPreferencesStore()) {
         self.local = local; self.runtime = runtime; self.vault = vault; self.oauth = oauth
         self.issuer = issuer; self.browser = browser; self.appleAuthorization = appleAuthorization
-        showsAppleSignInImmediately = AppConfiguration.isAppleLoginBeta && runtime != nil
+        let supportsAppleSignIn = runtime != nil && CloudOAuthClient.supportsAppleSignIn(issuer: issuer)
+        usesNativeAppleBeta = supportsAppleSignIn && AppConfiguration.isAppleLoginBeta
             && issuer == AppConfiguration.bundledCloudIssuer
             && issuer.host?.lowercased() != AppConfiguration.defaultCloudIssuer.host
-            && CloudOAuthClient.supportsAppleSignIn(issuer: issuer)
+        if supportsAppleSignIn, (try? ConnectionIdentity.canonicalService(issuer)) == AppConfiguration.defaultCloudIssuer {
+            serverAppleSignInMethod = .web
+        }
         self.sendPreferences = sendPreferences
         self.submissionDirectory = submissionDirectory ?? URL.applicationSupportDirectory.appending(path: "CloudSubmissions")
     }
@@ -138,15 +145,11 @@ final class ConnectionHost {
     }
 
     func checkAppleSignInAvailability() async {
-        guard cloudAvailable, !showsAppleSignInImmediately, !checksAppleAvailability else { return }
+        guard cloudAvailable, !usesNativeAppleBeta, !checksAppleAvailability else { return }
         checksAppleAvailability = true
         defer { checksAppleAvailability = false }
-        do {
-            let method = try await oauth.appleSignInMethod(issuer: issuer)
-            if !Task.isCancelled { discoveredAppleSignInMethod = method }
-        } catch {
-            if !Task.isCancelled { discoveredAppleSignInMethod = nil }
-        }
+        let method = try? await oauth.appleSignInMethod(issuer: issuer)
+        if !Task.isCancelled { serverAppleSignInMethod = method }
     }
 
     func beginAppleSignIn() async {

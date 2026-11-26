@@ -373,7 +373,7 @@ struct CloudAccountSettings: View {
                     } label: {
                         Label("Cloud Usage & Features", systemImage: "chart.bar")
                     }
-                    Link(destination: accountWebURL) {
+                    Link(destination: AppConfiguration.cloudAccountSettingsURL(issuer: model.client.issuer)) {
                         Label("Cloud Settings in Browser", systemImage: "safari")
                     }
                     Link(destination: AppConfiguration.cloudSetupURL(issuer: model.client.issuer)) {
@@ -413,12 +413,6 @@ struct CloudAccountSettings: View {
     private var retryButton: some View {
         Button("Retry", systemImage: "arrow.clockwise") { Task { await model.refresh() } }
             .disabled(model.isLoading)
-    }
-
-    private var accountWebURL: URL {
-        var url = URLComponents(url: model.client.issuer.appending(path: "app/"), resolvingAgainstBaseURL: false)
-        url?.fragment = "/settings/account"
-        return url?.url ?? model.client.issuer
     }
 
     private func signOut(_ context: CloudPresentationContext) {

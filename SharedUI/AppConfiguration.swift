@@ -43,6 +43,12 @@ enum AppConfiguration {
         return parts.url!
     }
 
+    static func cloudAccountSettingsURL(issuer: URL) -> URL {
+        var parts = URLComponents(url: issuer.appending(path: "app/"), resolvingAgainstBaseURL: false)
+        parts?.fragment = "/settings/account"
+        return parts?.url ?? issuer
+    }
+
     static var cloudReadTestTransport: (any TesseraeHTTPTransporting)? {
 #if DEBUG
         let sharedProxy = systemFixture?.proxy == true
