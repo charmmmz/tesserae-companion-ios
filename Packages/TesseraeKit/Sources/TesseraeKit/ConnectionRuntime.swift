@@ -16,6 +16,24 @@ public struct CloudAuthorizedTransport: Sendable {
     public func send(_ original: URLRequest, timeout: TimeInterval = 10, authorizationTimeout: TimeInterval? = nil) async throws -> TesseraeHTTPResponse {
         guard let url = original.url, url.scheme == issuer.scheme, url.host == issuer.host, url.port == issuer.port,
               url.path.hasPrefix(issuer.appending(path: "api/t").path + "/") else { throw ConnectionError.invalidIdentity }
+        return try await sendAuthorized(original, timeout: timeout, authorizationTimeout: authorizationTimeout)
+    }
+
+    func sendAppleAccountLink(body: Data? = nil, timeout: TimeInterval) async throws -> TesseraeHTTPResponse {
+        guard issuer.scheme == "https", ["", "/"].contains(issuer.path) else { throw ConnectionError.invalidIdentity }
+        let path = body == nil ? "auth/apple/web/app/status" : "auth/apple/web/app/start"
+        var request = URLRequest(url: issuer.appending(path: path))
+        request.httpMethod = body == nil ? "GET" : "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let body {
+            request.httpBody = body
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
+        return try await sendAuthorized(request, timeout: timeout, authorizationTimeout: nil)
+    }
+
+    private func sendAuthorized(_ original: URLRequest, timeout: TimeInterval,
+                                authorizationTimeout: TimeInterval?) async throws -> TesseraeHTTPResponse {
         let deadline = ProcessInfo.processInfo.systemUptime + timeout
         let first = try await sessions.authorization(for: fence, timeout: min(timeout, authorizationTimeout ?? timeout))
         var request = original

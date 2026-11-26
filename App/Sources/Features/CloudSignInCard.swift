@@ -68,32 +68,7 @@ struct CloudSignInView: View {
             .buttonStyle(ConnectionOptionButtonStyle(option: .email))
             .disabled(!host.cloudAvailable || host.isSwitching)
             .accessibilityIdentifier("cloud-signin")
-
-            if let accountURL = host.appleAccountLinkURL {
-                appleAccountLink(to: accountURL)
-            }
         }
-    }
-
-    private func appleAccountLink(to url: URL) -> some View {
-        VStack(spacing: 0) {
-            Link(destination: url) {
-                Text("Manage sign-in methods")
-                    .font(.subheadline.weight(.medium))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .contentShape(Rectangle())
-            }
-            .tint(TesseraeTheme.accent)
-            .disabled(host.isSwitching)
-            .accessibilityIdentifier("cloud-link-apple-account")
-
-            Text("Sign in with your existing Cloud email, then go to Settings → Account → Link Apple account.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .multilineTextAlignment(.center)
     }
 
     private var signInProgress: some View {

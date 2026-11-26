@@ -1,4 +1,5 @@
 import AuthenticationServices
+import Observation
 import Foundation
 import TesseraeKit
 
@@ -227,5 +228,118 @@ extension CloudOAuthClient {
               }),
               parts.percentEncodedQuery == "ticket=\(ticket)" else { return nil }
         return parts.url
+    }
+}
+
+@MainActor @Observable
+final class CloudAppleAccountLinkModel {
+    private enum Phase: Equatable {
+        case idle, checking(UUID), starting(UUID), authorizing(UUID)
+    }
+
+    private enum Outcome: String {
+        case linked, cancelled, failed
+    }
+
+    private static let callbackPath = "/apple/link/callback"
+    private let browser: any CloudSignInBrowsing
+    private var phase: Phase = .idle
+    private(set) var isLinked: Bool?
+    private(set) var problem: String?
+
+    init(browser: any CloudSignInBrowsing = CloudSignInBrowser()) {
+        self.browser = browser
+    }
+
+    var isBusy: Bool { phase != .idle }
+
+    static func isLinkCallback(_ url: URL) -> Bool {
+        url.scheme == PendingCloudLogin.callbackScheme && url.path == callbackPath
+    }
+
+    func reset() {
+        phase = .idle
+        isLinked = nil
+        problem = nil
+        browser.cancel()
+    }
+
+    func check(_ client: CloudReadClient, isCurrent: () -> Bool) async {
+        guard !isBusy, isCurrent() else { return }
+        let phase = Phase.checking(UUID())
+        self.phase = phase
+        problem = nil
+        await readStatus(client, phase: phase, isCurrent: isCurrent)
+    }
+
+    func link(_ client: CloudReadClient, isCurrent: @escaping @MainActor () -> Bool) async {
+        guard !isBusy, isLinked == false, isCurrent() else { return }
+        let id = UUID()
+        phase = .starting(id)
+        problem = nil
+        do {
+            let state = try PendingCloudLogin.random()
+            let started = ProcessInfo.processInfo.systemUptime
+            let start = try await client.startAppleAccountLink(state: state)
+            guard phase == .starting(id) else { return }
+            guard !Task.isCancelled, isCurrent() else { reset(); return }
+            switch start {
+            case .alreadyLinked:
+                await readStatus(client, phase: .starting(id), requireLinked: true, isCurrent: isCurrent)
+            case let .authorization(url, expiresIn):
+                let deadline = started + expiresIn
+                guard ProcessInfo.processInfo.systemUptime < deadline else { throw CloudLoginError.expired }
+                phase = .authorizing(id)
+                try browser.open(url) { [weak self] callback, error in
+                    guard let self, self.phase == .authorizing(id) else { return }
+                    guard isCurrent() else { self.reset(); return }
+                    self.phase = .idle
+                    if (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin { return }
+                    guard let callback, let outcome = Self.outcome(callback, state: state, deadline: deadline) else {
+                        self.reportLinkFailure()
+                        return
+                    }
+                    switch outcome {
+                    case .cancelled: return
+                    case .failed: self.reportLinkFailure()
+                    case .linked:
+                        self.phase = .checking(id)
+                        Task { await self.readStatus(client, phase: .checking(id), requireLinked: true, isCurrent: isCurrent) }
+                    }
+                }
+            }
+        } catch {
+            guard phase == .starting(id) || phase == .authorizing(id) else { return }
+            phase = .idle
+            if isCurrent(), !Task.isCancelled { reportLinkFailure() }
+        }
+    }
+
+    private func readStatus(_ client: CloudReadClient, phase: Phase, requireLinked: Bool = false,
+                            isCurrent: () -> Bool) async {
+        defer { if self.phase == phase { self.phase = .idle } }
+        do {
+            let linked = try await client.appleAccountLinked()
+            guard self.phase == phase, !Task.isCancelled, isCurrent() else { return }
+            isLinked = linked
+            if requireLinked, linked != true { reportLinkFailure() }
+        } catch {
+            guard self.phase == phase, !Task.isCancelled, isCurrent() else { return }
+            problem = String(localized: "Couldn’t check whether Apple is linked. Try again.")
+        }
+    }
+
+    private func reportLinkFailure() {
+        problem = String(localized: "Couldn’t confirm the Apple account link. Try again.")
+    }
+
+    private static func outcome(_ url: URL, state: String, deadline: TimeInterval) -> Outcome? {
+        guard ProcessInfo.processInfo.systemUptime < deadline, isLinkCallback(url),
+              let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              parts.host == nil, parts.user == nil, parts.password == nil, parts.port == nil, parts.fragment == nil,
+              parts.percentEncodedPath == callbackPath, let fields = parts.queryItems, fields.count == 2,
+              fields.contains(URLQueryItem(name: "state", value: state)),
+              let result = fields.first(where: { $0.name == "result" })?.value else { return nil }
+        return Outcome(rawValue: result)
     }
 }

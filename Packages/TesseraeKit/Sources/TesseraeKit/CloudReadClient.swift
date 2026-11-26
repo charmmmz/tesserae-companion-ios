@@ -1,5 +1,10 @@
 import Foundation
 
+public enum CloudAppleAccountLinkStart: Sendable {
+    case authorization(url: URL, expiresIn: TimeInterval)
+    case alreadyLinked
+}
+
 public struct CloudReadClient: Sendable {
     public var fence: ConnectionFence { transport.fence }
     public var issuer: URL { transport.issuer }
@@ -20,6 +25,42 @@ public struct CloudReadClient: Sendable {
         let result: CloudAccount = try await read(["me"])
         try validate(result)
         return result
+    }
+
+    public func appleAccountLinked() async throws -> Bool? {
+        guard issuer.scheme == "https", ["", "/"].contains(issuer.path) else { return nil }
+        let response = try await transport.sendAppleAccountLink(timeout: timeout)
+        if response.statusCode == 404 { return nil }
+        try requireSuccess(response)
+        struct Status: Decodable { let linked: Bool }
+        guard let status = try? JSONDecoder().decode(Status.self, from: response.data) else {
+            throw CloudReadError.invalidResponse
+        }
+        return status.linked
+    }
+
+    public func startAppleAccountLink(state: String) async throws -> CloudAppleAccountLinkStart {
+        let data = try JSONEncoder().encode(["state": state])
+        let response = try await transport.sendAppleAccountLink(body: data, timeout: timeout)
+        if response.statusCode == 409 { return .alreadyLinked }
+        try requireSuccess(response)
+        struct Start: Decodable {
+            let authorization_url: String
+            let expires_in: TimeInterval
+        }
+        guard let start = try? JSONDecoder().decode(Start.self, from: response.data),
+              (0...900).contains(start.expires_in), start.expires_in > 0,
+              let parts = URLComponents(string: start.authorization_url),
+              parts.scheme == "https", parts.host?.lowercased() == issuer.host?.lowercased(),
+              (parts.port ?? 443) == (issuer.port ?? 443), parts.user == nil, parts.password == nil,
+              parts.fragment == nil, parts.percentEncodedPath == "/auth/apple/web/app/link",
+              let query = parts.queryItems, query.count == 1, query[0].name == "ticket",
+              let ticket = query[0].value, ticket.utf8.count == 43,
+              ticket.utf8.allSatisfy({ (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || $0 == 45 || $0 == 95 }),
+              parts.percentEncodedQuery == "ticket=\(ticket)", let url = parts.url else {
+            throw CloudReadError.invalidResponse
+        }
+        return .authorization(url: url, expiresIn: start.expires_in)
     }
 
     public func devices() async throws -> [CloudDevice] {

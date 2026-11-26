@@ -35,17 +35,21 @@ struct PendingCloudLogin: Codable, Sendable {
     let verifier: String
     let createdAt: Date
     let browserEntry: BrowserEntry?
+    let requestsAppleAccountLink: Bool?
     var consumed = false
     var appleStage: AppleStage?
-    static let callback = "com.charmmmz.tesseraecompanion:/oauth/callback"
+    static let callbackScheme = "com.charmmmz.tesseraecompanion"
+    static let callback = "\(callbackScheme):/oauth/callback"
     static let clientID = "tesserae-companion"
     static let scopes = "app:read app:send app:refresh"
 
-    init(issuer: URL, now: Date = Date(), browserEntry: BrowserEntry? = nil, appleStage: AppleStage? = nil) throws {
+    init(issuer: URL, now: Date = Date(), browserEntry: BrowserEntry? = nil, appleStage: AppleStage? = nil,
+         requestsAppleAccountLink: Bool = false) throws {
         id = UUID(); self.issuer = issuer; createdAt = now
         state = try Self.random(); verifier = try Self.random()
         self.browserEntry = browserEntry
         self.appleStage = appleStage
+        self.requestsAppleAccountLink = requestsAppleAccountLink ? true : nil
     }
 
     var acceptsCallback: Bool { appleStage != .provingIdentity }
@@ -60,14 +64,15 @@ struct PendingCloudLogin: Codable, Sendable {
             URLQueryItem(name: "client_id", value: Self.clientID),
             URLQueryItem(name: "redirect_uri", value: Self.callback),
             URLQueryItem(name: "resource", value: issuer.appending(path: "api/t").absoluteString),
-            URLQueryItem(name: "scope", value: Self.scopes),
+            URLQueryItem(name: "scope", value: requestsAppleAccountLink == true
+                ? "\(Self.scopes) \(CloudTokenResponse.appleAccountLinkScope)" : Self.scopes),
             URLQueryItem(name: "state", value: state),
             URLQueryItem(name: "code_challenge_method", value: "S256"),
             URLQueryItem(name: "code_challenge", value: Data(SHA256.hash(data: Data(verifier.utf8))).base64URL)
         ]
         return components.url!
     }
-    private static func random() throws -> String {
+    static func random() throws -> String {
         var bytes = [UInt8](repeating: 0, count: 32)
         guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else {
             throw CloudLoginError.unavailable
@@ -111,7 +116,7 @@ struct CloudLoginVault: Sendable {
     }
     func claim(_ url: URL, issuer: URL, now: Date = Date()) throws -> (PendingCloudLogin, String)? {
         guard let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
-              parts.scheme == "com.charmmmz.tesseraecompanion", parts.host == nil,
+              parts.scheme == PendingCloudLogin.callbackScheme, parts.host == nil,
               parts.path == "/oauth/callback", parts.fragment == nil, parts.user == nil, parts.port == nil else {
             throw CloudLoginError.invalidCallback
         }
@@ -181,6 +186,18 @@ struct CloudOAuthClient: Sendable {
     init(transport: (any TesseraeHTTPTransporting)? = nil) {
         self.transport = transport ?? URLSessionTesseraeTransport.cloud(resourceTimeout: Self.requestTimeout)
     }
+    func supportsAppleAccountLinkScope(issuer: URL) async -> Bool {
+        guard Self.supportsAppleSignIn(issuer: issuer), let expectedIssuer = try? ConnectionIdentity.canonicalService(issuer) else { return false }
+        struct Discovery: Decodable { let issuer: URL; let scopes_supported: [String] }
+        let request = URLRequest(url: issuer.appending(path: ".well-known/oauth-authorization-server"),
+                                 cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 2)
+        guard let response = try? await transport.send(request), response.statusCode == 200,
+              let discovery = try? JSONDecoder().decode(Discovery.self, from: response.data),
+              (try? ConnectionIdentity.canonicalService(discovery.issuer)) == expectedIssuer else {
+            return false
+        }
+        return discovery.scopes_supported.contains(CloudTokenResponse.appleAccountLinkScope)
+    }
     func exchange(_ attempt: PendingCloudLogin, code: String) async throws -> CloudTokenResponse {
         let response = try await post(issuer: attempt.issuer, path: "oauth/token", fields: [
             "grant_type": "authorization_code", "client_id": PendingCloudLogin.clientID,
@@ -216,7 +233,7 @@ final class CloudSignInBrowser: NSObject, ASWebAuthenticationPresentationContext
     private var session: ASWebAuthenticationSession?
     func open(_ url: URL, completion: @escaping @MainActor (URL?, Error?) -> Void) throws {
         let session = ASWebAuthenticationSession(url: url,
-            callbackURLScheme: "com.charmmmz.tesseraecompanion") { url, error in
+            callbackURLScheme: PendingCloudLogin.callbackScheme) { url, error in
                 Task { @MainActor in completion(url, error) }
             }
         self.session = session

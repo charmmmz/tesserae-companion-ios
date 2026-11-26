@@ -29,12 +29,25 @@ private actor LoginHTTP: TesseraeHTTPTransporting {
     var expectedAppleUser = "u1"
     var advertisesApple = true
     var advertisesAppleWeb = false
+    var discoveryIssuer: URL?
+    var accountLinkStatus: Int = 404
+    var accountLinked = false
+    var accountLinkStartStatus: Int = 200
+    var accountLinkURL: String?
     private var refusesNextAppleEmail = false
 
     struct AppleRequest: Equatable {
         let path: String
         let method: String
         let body: [String: String]
+        let authorization: String?
+
+        init(path: String, method: String, body: [String: String], authorization: String? = nil) {
+            self.path = path
+            self.method = method
+            self.body = body
+            self.authorization = authorization
+        }
     }
 
     func configureApple(verifyEmail: Bool = false, userID: String = "u1", advertised: Bool = true, webAdvertised: Bool = false) {
@@ -51,10 +64,21 @@ private actor LoginHTTP: TesseraeHTTPTransporting {
     func refuseNextAppleEmailRequest() { refusesNextAppleEmail = true }
     func count(_ code: String) -> Int { codes.filter { $0 == code }.count }
     func hasRequest(_ path: String) -> Bool { appleRequests.contains { $0.path == path } }
+    func advertiseAccountLinkScope(issuer: URL) { discoveryIssuer = issuer }
+    func configureAccountLink(status: Int = 200, linked: Bool = false, startStatus: Int = 200, startURL: String? = nil) {
+        accountLinkStatus = status
+        accountLinked = linked
+        accountLinkStartStatus = startStatus
+        accountLinkURL = startURL
+    }
     func send(_ request: URLRequest) async throws -> TesseraeHTTPResponse {
+        if request.url?.path == "/.well-known/oauth-authorization-server", let discoveryIssuer {
+            return Self.json(#"{"issuer":"\#(discoveryIssuer.absoluteString)","scopes_supported":["app:read","app:apple:link"]}"#)
+        }
         if let path = request.url?.path, path == "/auth/providers" || path.hasPrefix("/auth/apple/") {
             let body = try request.httpBody.map { try JSONDecoder().decode([String: String].self, from: $0) } ?? [:]
-            appleRequests.append(AppleRequest(path: path, method: request.httpMethod ?? "", body: body))
+            appleRequests.append(AppleRequest(path: path, method: request.httpMethod ?? "", body: body,
+                authorization: request.value(forHTTPHeaderField: "Authorization")))
             if blocked.contains(path) { await withCheckedContinuation { continuations[path] = $0 } }
             if refusals.contains(path) { return TesseraeHTTPResponse(data: Data(), statusCode: 503) }
             switch path {
@@ -75,6 +99,15 @@ private actor LoginHTTP: TesseraeHTTPTransporting {
                 return TesseraeHTTPResponse(data: Data(), statusCode: 204)
             case "/auth/apple/verify":
                 return body["code"] == "123456" ? consent(request) : TesseraeHTTPResponse(data: Data(), statusCode: 400)
+            case "/auth/apple/web/app/status":
+                guard accountLinkStatus == 200 else { return TesseraeHTTPResponse(data: Data(), statusCode: accountLinkStatus) }
+                return Self.json(#"{"linked":\#(accountLinked)}"#)
+            case "/auth/apple/web/app/start":
+                if accountLinkStartStatus == 409 { accountLinked = true }
+                guard accountLinkStartStatus == 200 else { return TesseraeHTTPResponse(data: Data(), statusCode: accountLinkStartStatus) }
+                let ticket = String(repeating: "t", count: 43)
+                let url = accountLinkURL ?? request.url!.deletingLastPathComponent().appending(path: "link").absoluteString + "?ticket=\(ticket)"
+                return Self.json(#"{"authorization_url":"\#(url)","expires_in":600}"#)
             default:
                 break
             }
@@ -149,6 +182,135 @@ private final class LoginAppleAuthorization: CloudAppleAuthorizing {
 final class CloudLoginLifecycleTests: XCTestCase {
     private let issuer = URL(string: "http://localhost:9000")!
     private let appleIssuer = URL(string: "https://staging.example.invalid:8443")!
+
+    func testNewCloudLoginRequestsAppleLinkScopeOnlyFromTheCurrentIssuer() async {
+        let fixture = fixture(issuer: appleIssuer)
+        await fixture.http.advertiseAccountLinkScope(issuer: URL(string: "https://different.example.invalid")!)
+        await fixture.host.beginCloudSignIn()
+        XCTAssertEqual(fixture.browser.opened.last.flatMap(loginScope), PendingCloudLogin.scopes)
+        fixture.host.cancelCloudSignIn()
+
+        await fixture.http.advertiseAccountLinkScope(issuer: appleIssuer)
+        await fixture.host.beginCloudSignIn()
+        XCTAssertEqual(fixture.browser.opened.last.flatMap(loginScope),
+            "\(PendingCloudLogin.scopes) \(CloudTokenResponse.appleAccountLinkScope)")
+        fixture.host.cancelCloudSignIn()
+    }
+
+    func testAppleLinkUsesTheExistingGrantAndConfirmsSuccessWithCloud() async throws {
+        let fixture = fixture(issuer: appleIssuer)
+        let client = try await appleAccountClient(fixture)
+        let model = CloudAppleAccountLinkModel(browser: fixture.browser)
+        await fixture.http.configureAccountLink()
+        await model.check(client, isCurrent: { true })
+        XCTAssertEqual(model.isLinked, false)
+
+        await model.link(client, isCurrent: { true })
+        let requested = await fixture.http.appleRequests
+        XCTAssertEqual(requested.map(\.path), ["/auth/apple/web/app/status", "/auth/apple/web/app/start"])
+        XCTAssertTrue(requested.allSatisfy { $0.authorization == "Bearer access-existing" })
+        XCTAssertEqual(requested.last?.method, "POST")
+        let state = try XCTUnwrap(requested.last?.body["state"])
+        XCTAssertEqual(state.count, 43)
+        let opened = try XCTUnwrap(fixture.browser.opened.last)
+        XCTAssertEqual(opened.path, "/auth/apple/web/app/link")
+        XCTAssertEqual(opened.port, 8443)
+
+        await fixture.http.configureAccountLink(linked: true)
+        fixture.browser.finish(linkCallback(state: state))
+        try await waitForAppleAccountLink(model)
+        XCTAssertEqual(model.isLinked, true)
+        XCTAssertNil(model.problem)
+        let refreshed = await fixture.http.appleRequests
+        XCTAssertEqual(refreshed.last?.path, "/auth/apple/web/app/status")
+    }
+
+    func testAppleLinkRejectsAnUntrustedURLOrCallbackAndNeverAssumesLinked() async throws {
+        let fixture = fixture(issuer: appleIssuer)
+        let client = try await appleAccountClient(fixture)
+        let model = CloudAppleAccountLinkModel(browser: fixture.browser)
+        await fixture.http.configureAccountLink(startURL: "https://other.example.invalid/auth/apple/web/app/link?ticket=\(String(repeating: "t", count: 43))")
+        await model.check(client, isCurrent: { true })
+        await model.link(client, isCurrent: { true })
+        XCTAssertTrue(fixture.browser.opened.isEmpty)
+        XCTAssertNotNil(model.problem)
+
+        await fixture.http.configureAccountLink()
+        await model.link(client, isCurrent: { true })
+        fixture.browser.finish(linkCallback(state: "wrong-state"))
+        XCTAssertEqual(model.isLinked, false)
+        XCTAssertNotNil(model.problem)
+        let first = await fixture.http.appleRequests
+        XCTAssertEqual(first.filter { $0.path.hasSuffix("/status") }.count, 1)
+
+        await model.link(client, isCurrent: { true })
+        let started = await fixture.http.appleRequests
+        fixture.browser.finish(linkCallback(state: try XCTUnwrap(started.last?.body["state"])))
+        try await waitForAppleAccountLink(model)
+        XCTAssertEqual(model.isLinked, false)
+        XCTAssertNotNil(model.problem)
+    }
+
+    func testAppleLinkCancellationAndLateCallbackDoNotChangeTheCurrentAccount() async throws {
+        let fixture = fixture(issuer: appleIssuer)
+        let client = try await appleAccountClient(fixture)
+        let model = CloudAppleAccountLinkModel(browser: fixture.browser)
+        // An older Cloud deployment keeps the settings row hidden.
+        await model.check(client, isCurrent: { true })
+        XCTAssertNil(model.isLinked)
+        XCTAssertNil(model.problem)
+
+        await fixture.http.configureAccountLink()
+        await model.check(client, isCurrent: { true })
+        await model.link(client, isCurrent: { true })
+        fixture.browser.finish(nil, error: ASWebAuthenticationSessionError(.canceledLogin))
+        XCTAssertEqual(model.isLinked, false)
+        XCTAssertFalse(model.isBusy)
+        XCTAssertNil(model.problem)
+
+        await model.link(client, isCurrent: { true })
+        let requests = await fixture.http.appleRequests
+        let state = try XCTUnwrap(requests.last?.body["state"])
+        model.reset()
+        fixture.browser.finish(linkCallback(state: state))
+        XCTAssertNil(model.isLinked)
+        XCTAssertNil(model.problem)
+        let after = await fixture.http.appleRequests
+        XCTAssertEqual(after, requests)
+    }
+
+    func testAppleLinkConflictReadsTheCurrentStatusWithoutOpeningABrowser() async throws {
+        let fixture = fixture(issuer: appleIssuer)
+        let client = try await appleAccountClient(fixture)
+        let model = CloudAppleAccountLinkModel(browser: fixture.browser)
+        await fixture.http.configureAccountLink(startStatus: 409)
+        await model.check(client, isCurrent: { true })
+        await model.link(client, isCurrent: { true })
+        XCTAssertEqual(model.isLinked, true)
+        XCTAssertTrue(fixture.browser.opened.isEmpty)
+        XCTAssertNil(model.problem)
+    }
+
+    private func loginScope(_ url: URL) -> String? {
+        URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "scope" }?.value
+    }
+
+    private func appleAccountClient(_ fixture: Fixture) async throws -> CloudReadClient {
+        let data = LoginHTTP.token("existing", resource: appleIssuer.appending(path: "api/t").absoluteString)
+        let response = try JSONDecoder().decode(CloudTokenResponse.self, from: data)
+        let fence = try await fixture.runtime.installCloud(issuer: appleIssuer, response: response)
+        return try await CloudReadClient(transport: fixture.runtime.cloudTransport(for: fence.connectionID))
+    }
+
+    private func linkCallback(state: String) -> URL {
+        URL(string: "\(PendingCloudLogin.callbackScheme):/apple/link/callback?state=\(state)&result=linked")!
+    }
+
+    private func waitForAppleAccountLink(_ model: CloudAppleAccountLinkModel) async throws {
+        for _ in 0..<100 where model.isBusy { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertFalse(model.isBusy)
+    }
+
     private struct Fixture {
         let host: ConnectionHost
         let local: AppModel
@@ -301,10 +463,8 @@ final class CloudLoginLifecycleTests: XCTestCase {
         let fixture = fixture(issuer: appleIssuer)
         await fixture.http.configureApple(webAdvertised: true)
         XCTAssertFalse(fixture.host.appleSignInAvailable)
-        XCTAssertNil(fixture.host.appleAccountLinkURL)
         await fixture.host.checkAppleSignInAvailability()
         XCTAssertTrue(fixture.host.appleSignInAvailable)
-        XCTAssertEqual(fixture.host.appleAccountLinkURL, URL(string: "https://staging.example.invalid:8443/app/#/settings/account"))
         await fixture.host.beginAppleSignIn()
         await fixture.host.beginAppleSignIn()
 
@@ -352,9 +512,7 @@ final class CloudLoginLifecycleTests: XCTestCase {
     func testProductionAppleIsImmediatelyAvailableAndFollowsWebCapability() async throws {
         let issuer = AppConfiguration.defaultCloudIssuer
         let fixture = fixture(issuer: issuer)
-        let accountURL = URL(string: "https://cloud.tesserae.ink/app/#/settings/account")
         XCTAssertTrue(fixture.host.appleSignInAvailable)
-        XCTAssertEqual(fixture.host.appleAccountLinkURL, accountURL)
         await fixture.host.beginAppleSignIn()
         XCTAssertEqual(fixture.host.loginPhase, .appleWeb)
         XCTAssertEqual(fixture.browser.opened.last?.path, "/auth/apple/web/start")
@@ -364,7 +522,6 @@ final class CloudLoginLifecycleTests: XCTestCase {
 
         await fixture.host.checkAppleSignInAvailability()
         XCTAssertFalse(fixture.host.appleSignInAvailable)
-        XCTAssertNil(fixture.host.appleAccountLinkURL)
         await fixture.host.beginAppleSignIn()
         XCTAssertEqual(fixture.browser.opened.count, 1)
         XCTAssertNil(fixture.apple.nonce)
@@ -372,7 +529,6 @@ final class CloudLoginLifecycleTests: XCTestCase {
         await fixture.http.configureApple(advertised: false, webAdvertised: true)
         await fixture.host.checkAppleSignInAvailability()
         XCTAssertTrue(fixture.host.appleSignInAvailable)
-        XCTAssertEqual(fixture.host.appleAccountLinkURL, accountURL)
         await fixture.host.beginAppleSignIn()
         XCTAssertEqual(fixture.host.loginPhase, .appleWeb)
         XCTAssertEqual(fixture.browser.opened.last?.host, issuer.host)
@@ -393,7 +549,6 @@ final class CloudLoginLifecycleTests: XCTestCase {
         let withoutRuntime = ConnectionHost(local: production.local, runtime: nil, vault: production.vault,
             issuer: productionRoot, browser: production.browser, appleAuthorization: production.apple)
         XCTAssertFalse(withoutRuntime.appleSignInAvailable)
-        XCTAssertNil(withoutRuntime.appleAccountLinkURL)
     }
 
     func testPendingAppleWebLoginRestoresAppleProgressAndCanBeCanceled() async throws {
@@ -414,7 +569,6 @@ final class CloudLoginLifecycleTests: XCTestCase {
         let fixture = fixture(issuer: appleIssuer)
         await fixture.host.checkAppleSignInAvailability()
         XCTAssertTrue(fixture.host.appleSignInAvailable)
-        XCTAssertNil(fixture.host.appleAccountLinkURL)
         await fixture.host.beginAppleSignIn()
 
         let pending = try XCTUnwrap(fixture.vault.pending())

@@ -35,10 +35,6 @@ final class ConnectionHost {
         usesNativeAppleBeta ? .native : serverAppleSignInMethod
     }
     var appleSignInAvailable: Bool { appleSignInMethod != nil }
-    var appleAccountLinkURL: URL? {
-        guard appleSignInMethod == .web else { return nil }
-        return AppConfiguration.cloudAccountSettingsURL(issuer: issuer)
-    }
     private var checksAppleAvailability = false
     private(set) var isSwitching = false
     private(set) var isRestoring = true
@@ -121,22 +117,27 @@ final class ConnectionHost {
         if loginPhase == .committing {
             await serialized { }; await beginCloudSignIn(); return
         }
-        beginBrowserSignIn(.email)
+        await beginBrowserSignIn(.email)
     }
 
-    private func beginBrowserSignIn(_ entry: PendingCloudLogin.BrowserEntry) {
+    private func beginBrowserSignIn(_ entry: PendingCloudLogin.BrowserEntry) async {
         guard cancelCloudSignIn() else { return }
-        selectionIntent = UUID()
+        let intent = UUID()
+        selectionIntent = intent
+        let phase: LoginPhase = entry == .apple ? .appleWeb : .browser
+        loginPhase = phase
+        loginError = nil
+        let requestsAppleAccountLink = await oauth.supportsAppleAccountLinkScope(issuer: issuer)
+        guard selectionIntent == intent, loginPhase == phase else { return }
+        if Task.isCancelled { cancelCloudSignIn(); return }
         do {
-            let attempt = try PendingCloudLogin(issuer: issuer, browserEntry: entry)
+            let attempt = try PendingCloudLogin(issuer: issuer, browserEntry: entry, requestsAppleAccountLink: requestsAppleAccountLink)
             let url = switch entry {
             case .email: AppConfiguration.cloudBrowserURL(attempt.authorizationURL)
             case .apple: try CloudOAuthClient.appleWebStartURL(attempt)
             }
             try vault.replace(attempt)
             attemptID = attempt.id
-            loginPhase = entry == .apple ? .appleWeb : .browser
-            loginError = nil
             try openCloudBrowser(url, attemptID: attempt.id)
         } catch {
             _ = cancelCloudSignIn()
@@ -155,7 +156,7 @@ final class ConnectionHost {
     func beginAppleSignIn() async {
         guard let method = appleSignInMethod, !isSigningIn, !isSwitching else { return }
         if method == .web {
-            beginBrowserSignIn(.apple)
+            await beginBrowserSignIn(.apple)
             return
         }
         guard cancelCloudSignIn() else { return }
@@ -296,6 +297,7 @@ final class ConnectionHost {
     }
 
     func receiveCloudCallback(_ url: URL, browserAttemptID: UUID? = nil) async {
+        guard !CloudAppleAccountLinkModel.isLinkCallback(url) else { return }
         if let browserAttemptID, browserAttemptID != attemptID { return }
         switch loginPhase {
         case .applePreparing, .appleAuthorizing, .appleCompleting, .appleEmail, .appleSendingCode, .appleCode, .appleVerifyingCode:

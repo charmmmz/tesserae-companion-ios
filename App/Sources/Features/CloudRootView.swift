@@ -338,6 +338,7 @@ struct CloudAccountSettings: View {
     @State private var confirmsSignOut = false
     @State private var signOutContext: CloudPresentationContext?
     @State private var signingOut = false
+    @State private var appleLink = CloudAppleAccountLinkModel()
 
     var body: some View {
         Form {
@@ -365,6 +366,7 @@ struct CloudAccountSettings: View {
                     LabeledContent("Workspace", value: account.tenant.name)
                         .accessibilityIdentifier("cloud-account-workspace")
                     LabeledContent("Role", value: String(localized: account.role == "owner" ? "Owner" : "Member"))
+                    if let context = appleLinkContext { appleLinkRows(context) }
                 }
 
                 Section {
@@ -373,7 +375,7 @@ struct CloudAccountSettings: View {
                     } label: {
                         Label("Cloud Usage & Features", systemImage: "chart.bar")
                     }
-                    Link(destination: AppConfiguration.cloudAccountSettingsURL(issuer: model.client.issuer)) {
+                    Link(destination: accountWebURL) {
                         Label("Cloud Settings in Browser", systemImage: "safari")
                     }
                     Link(destination: AppConfiguration.cloudSetupURL(issuer: model.client.issuer)) {
@@ -402,6 +404,12 @@ struct CloudAccountSettings: View {
         .tesseraeScreenBackground()
         .navigationTitle("Cloud Account")
         .navigationBarTitleDisplayMode(.inline)
+        .task(id: appleLinkContext) {
+            appleLink.reset()
+            guard let context = appleLinkContext else { return }
+            await appleLink.check(model.client, isCurrent: appleLinkValidity(context))
+        }
+        .onDisappear { appleLink.reset() }
         .alert("Sign Out of Cloud?", isPresented: $confirmsSignOut, presenting: signOutContext) { context in
             Button("Sign Out", role: .destructive) { signOut(context) }
             Button("Cancel", role: .cancel) {}
@@ -413,6 +421,53 @@ struct CloudAccountSettings: View {
     private var retryButton: some View {
         Button("Retry", systemImage: "arrow.clockwise") { Task { await model.refresh() } }
             .disabled(model.isLoading)
+    }
+
+    private var appleLinkContext: CloudPresentationContext? {
+        guard host.cloud === model, model.snapshot != nil, !model.needsSignIn, !model.isRestricted,
+              CloudOAuthClient.supportsAppleSignIn(issuer: model.client.issuer) else { return nil }
+        return host.cloudPresentationContext
+    }
+
+    private func appleLinkValidity(_ context: CloudPresentationContext) -> @MainActor () -> Bool {
+        { [host, model] in
+            host.cloudPresentationContext == context && host.cloud === model && !model.needsSignIn && !model.isRestricted
+        }
+    }
+
+    @ViewBuilder
+    private func appleLinkRows(_ context: CloudPresentationContext) -> some View {
+        if appleLink.isLinked == true {
+            LabeledContent {
+                Text("Linked").foregroundStyle(.secondary)
+            } label: {
+                Label("Apple", systemImage: "apple.logo")
+            }
+            .accessibilityIdentifier("cloud-apple-linked")
+        } else if appleLink.isLinked == false {
+            Button("Link Apple account", systemImage: "apple.logo") {
+                Task { await appleLink.link(model.client, isCurrent: appleLinkValidity(context)) }
+            }
+            .disabled(appleLink.isBusy || signingOut || host.isSwitching || host.isSigningIn)
+            .accessibilityIdentifier("cloud-apple-link")
+        } else if appleLink.problem != nil {
+            Button("Check Apple account status", systemImage: "arrow.clockwise") {
+                Task { await appleLink.check(model.client, isCurrent: appleLinkValidity(context)) }
+            }
+            .disabled(appleLink.isBusy)
+        }
+        if appleLink.isBusy {
+            ProgressView("Checking Apple account…")
+        }
+        if let problem = appleLink.problem {
+            Text(problem).font(.footnote).foregroundStyle(.secondary)
+        }
+    }
+
+    private var accountWebURL: URL {
+        var url = URLComponents(url: model.client.issuer.appending(path: "app/"), resolvingAgainstBaseURL: false)
+        url?.fragment = "/settings/account"
+        return url?.url ?? model.client.issuer
     }
 
     private func signOut(_ context: CloudPresentationContext) {
