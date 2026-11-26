@@ -39,7 +39,7 @@ struct CloudSignInView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .task {
-            if host.loginPhase == .idle { await host.checkAppleSignInAvailability() }
+            await host.checkAppleSignInAvailability()
         }
         .onChange(of: host.loginPhase) { _, phase in
             if phase == .idle || phase == .appleConsent || phase == .exchanging {
@@ -216,7 +216,7 @@ struct CloudSignInView: View {
     private var progressTitle: LocalizedStringKey {
         switch host.loginPhase {
         case .browser: "Check your email"
-        case .appleAuthorizing: "Waiting for Apple…"
+        case .appleAuthorizing, .appleWeb: "Waiting for Apple…"
         case .appleCompleting: "Checking with Apple…"
         case .appleConsent: "Choose a workspace"
         default: "Connecting to Cloud…"

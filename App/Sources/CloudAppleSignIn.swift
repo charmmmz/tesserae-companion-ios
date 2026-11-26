@@ -105,14 +105,37 @@ enum CloudAppleSignInOutcome: Sendable {
     case verifyEmail
 }
 
+enum CloudAppleSignInMethod: Sendable {
+    case web, native
+}
+
 extension CloudOAuthClient {
     static func supportsAppleSignIn(issuer: URL) -> Bool { appleIssuer(issuer) != nil }
 
-    func appleSignInAvailable(issuer: URL) async throws -> Bool {
-        guard Self.supportsAppleSignIn(issuer: issuer) else { return false }
-        struct Providers: Decodable { let apple_native: Bool? }
+    func appleSignInMethod(issuer: URL) async throws -> CloudAppleSignInMethod? {
+        guard Self.supportsAppleSignIn(issuer: issuer) else { return nil }
+        struct Providers: Decodable {
+            let apple_web: Bool?
+            let apple_native: Bool?
+        }
         let response = try await appleRequest(issuer: issuer, path: "auth/providers")
-        return response.statusCode == 200 && (try? JSONDecoder().decode(Providers.self, from: response.data).apple_native) == true
+        guard response.statusCode == 200,
+              let providers = try? JSONDecoder().decode(Providers.self, from: response.data) else { return nil }
+        if providers.apple_web == true { return .web }
+        if providers.apple_native == true, issuer.host?.lowercased() != AppConfiguration.defaultCloudIssuer.host {
+            return .native
+        }
+        return nil
+    }
+
+    static func appleWebStartURL(_ attempt: PendingCloudLogin) throws -> URL {
+        guard var start = appleIssuer(attempt.issuer),
+              let authorization = URLComponents(url: attempt.authorizationURL, resolvingAgainstBaseURL: false),
+              let query = authorization.percentEncodedQuery else { throw CloudLoginError.unavailable }
+        start.path = "/auth/apple/web/start"
+        start.queryItems = [URLQueryItem(name: "next", value: "\(authorization.percentEncodedPath)?\(query)")]
+        guard let url = start.url else { throw CloudLoginError.unavailable }
+        return url
     }
 
     func startAppleSignIn(_ attempt: PendingCloudLogin) async throws -> CloudAppleSignInStart {

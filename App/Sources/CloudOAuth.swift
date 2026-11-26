@@ -20,6 +20,10 @@ enum CloudLoginError: Error, LocalizedError {
 }
 
 struct PendingCloudLogin: Codable, Sendable {
+    enum BrowserEntry: String, Codable, Sendable {
+        case email, apple
+    }
+
     enum AppleStage: Codable, Sendable, Equatable {
         case provingIdentity
         case consent(userID: String)
@@ -30,15 +34,17 @@ struct PendingCloudLogin: Codable, Sendable {
     let state: String
     let verifier: String
     let createdAt: Date
+    let browserEntry: BrowserEntry?
     var consumed = false
     var appleStage: AppleStage?
     static let callback = "com.charmmmz.tesseraecompanion:/oauth/callback"
     static let clientID = "tesserae-companion"
     static let scopes = "app:read app:send app:refresh"
 
-    init(issuer: URL, now: Date = Date(), appleStage: AppleStage? = nil) throws {
+    init(issuer: URL, now: Date = Date(), browserEntry: BrowserEntry? = nil, appleStage: AppleStage? = nil) throws {
         id = UUID(); self.issuer = issuer; createdAt = now
         state = try Self.random(); verifier = try Self.random()
+        self.browserEntry = browserEntry
         self.appleStage = appleStage
     }
 

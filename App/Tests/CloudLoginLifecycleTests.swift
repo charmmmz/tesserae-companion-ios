@@ -1,3 +1,5 @@
+import AuthenticationServices
+import CryptoKit
 import Foundation
 import TesseraeKit
 import XCTest
@@ -26,6 +28,7 @@ private actor LoginHTTP: TesseraeHTTPTransporting {
     var requiresVerification = false
     var expectedAppleUser = "u1"
     var advertisesApple = true
+    var advertisesAppleWeb = false
     private var refusesNextAppleEmail = false
 
     struct AppleRequest: Equatable {
@@ -34,10 +37,11 @@ private actor LoginHTTP: TesseraeHTTPTransporting {
         let body: [String: String]
     }
 
-    func configureApple(verifyEmail: Bool = false, userID: String = "u1", advertised: Bool = true) {
+    func configureApple(verifyEmail: Bool = false, userID: String = "u1", advertised: Bool = true, webAdvertised: Bool = false) {
         requiresVerification = verifyEmail
         expectedAppleUser = userID
         advertisesApple = advertised
+        advertisesAppleWeb = webAdvertised
     }
     func block(_ code: String, refused: Bool = false) {
         blocked.insert(code)
@@ -55,6 +59,9 @@ private actor LoginHTTP: TesseraeHTTPTransporting {
             if refusals.contains(path) { return TesseraeHTTPResponse(data: Data(), statusCode: 503) }
             switch path {
             case "/auth/providers":
+                if advertisesAppleWeb {
+                    return Self.json(#"{"apple_web":true,"apple_native":\#(advertisesApple)}"#)
+                }
                 return Self.json(advertisesApple ? #"{"apple_native":true}"# : #"{"providers":[]}"#)
             case "/auth/apple/start":
                 return Self.json(#"{"attempt_id":"apple-attempt","nonce":"server-nonce"}"#)
@@ -111,11 +118,18 @@ private actor LoginHTTP: TesseraeHTTPTransporting {
 private final class LoginBrowser: CloudSignInBrowsing {
     var opened: [URL] = []
     var failToOpen = false
+    private var completion: (@MainActor (URL?, Error?) -> Void)?
     func open(_ url: URL, completion: @escaping @MainActor (URL?, Error?) -> Void) throws {
         if failToOpen { throw CloudLoginError.unavailable }
         opened.append(url)
+        self.completion = completion
     }
     func cancel() {}
+    func finish(_ url: URL?, error: Error? = nil) {
+        let callback = completion
+        completion = nil
+        callback?(url, error)
+    }
 }
 
 @MainActor
@@ -281,6 +295,90 @@ final class CloudLoginLifecycleTests: XCTestCase {
             _ = try await fixture.runtime.sessions.authorization(for: fence)
             XCTFail("Failed installation must not remain usable")
         } catch { XCTAssertEqual(error as? ConnectionError, .signedOut) }
+    }
+
+    func testAdvertisedAppleWebTakesPrecedenceAndPreservesCloudAuthorization() async throws {
+        let fixture = fixture(issuer: appleIssuer)
+        await fixture.http.configureApple(webAdvertised: true)
+        await fixture.host.checkAppleSignInAvailability()
+        XCTAssertTrue(fixture.host.appleSignInAvailable)
+        await fixture.host.beginAppleSignIn()
+        await fixture.host.beginAppleSignIn()
+
+        XCTAssertEqual(fixture.host.loginPhase, .appleWeb)
+        XCTAssertEqual(fixture.browser.opened.count, 1)
+        XCTAssertNil(fixture.apple.nonce)
+        let requests = await fixture.http.appleRequests
+        XCTAssertEqual(requests.map(\.path), ["/auth/providers"])
+
+        let pending = try XCTUnwrap(fixture.vault.pending())
+        let url = try XCTUnwrap(fixture.browser.opened.first)
+        XCTAssertEqual(url.scheme, appleIssuer.scheme)
+        XCTAssertEqual(url.host, appleIssuer.host)
+        XCTAssertEqual(url.port, appleIssuer.port)
+        XCTAssertEqual(url.path, "/auth/apple/web/start")
+        let query = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+        XCTAssertEqual(query.map(\.name), ["next"])
+        let next = try XCTUnwrap(query.first?.value)
+        let original = try XCTUnwrap(URLComponents(url: pending.authorizationURL, resolvingAgainstBaseURL: false))
+        XCTAssertEqual(next, "/oauth/authorize?\(try XCTUnwrap(original.percentEncodedQuery))")
+        let authorization = try XCTUnwrap(URLComponents(string: next))
+        let items = try XCTUnwrap(authorization.queryItems)
+        let fields = Dictionary(uniqueKeysWithValues: items.map { ($0.name, $0.value ?? "") })
+        let challenge = Data(SHA256.hash(data: Data(pending.verifier.utf8))).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        XCTAssertEqual(fields, [
+            "response_type": "code", "client_id": PendingCloudLogin.clientID, "redirect_uri": PendingCloudLogin.callback,
+            "resource": appleIssuer.appending(path: "api/t").absoluteString, "scope": PendingCloudLogin.scopes,
+            "state": pending.state, "code_challenge_method": "S256", "code_challenge": challenge
+        ])
+
+        let callback = try XCTUnwrap(URL(string: PendingCloudLogin.callback + "?state=\(pending.state)&code=apple-web"))
+        fixture.browser.finish(callback)
+        let deadline = ContinuousClock.now + .seconds(3)
+        while fixture.host.isSigningIn, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let expected = ConnectionIdentity.cloud(issuer: appleIssuer, userID: "u1", tenantID: "t1").id
+        XCTAssertEqual(fixture.host.cloud?.fence.connectionID, expected)
+        XCTAssertEqual(try fixture.runtime.registry.selectedID(), expected)
+        XCTAssertNil(try fixture.vault.pending())
+    }
+
+    func testProductionAppleRequiresWebCapability() async throws {
+        let issuer = AppConfiguration.defaultCloudIssuer
+        let fixture = fixture(issuer: issuer)
+        await fixture.host.checkAppleSignInAvailability()
+        XCTAssertFalse(fixture.host.appleSignInAvailable)
+        await fixture.host.beginAppleSignIn()
+        XCTAssertTrue(fixture.browser.opened.isEmpty)
+        XCTAssertNil(fixture.apple.nonce)
+
+        await fixture.http.configureApple(advertised: false, webAdvertised: true)
+        await fixture.host.checkAppleSignInAvailability()
+        XCTAssertTrue(fixture.host.appleSignInAvailable)
+        await fixture.host.beginAppleSignIn()
+        XCTAssertEqual(fixture.host.loginPhase, .appleWeb)
+        XCTAssertEqual(fixture.browser.opened.last?.host, issuer.host)
+        fixture.browser.finish(nil, error: ASWebAuthenticationSessionError(.canceledLogin))
+        XCTAssertEqual(fixture.host.loginPhase, .idle)
+        XCTAssertNil(fixture.host.loginError)
+        XCTAssertNil(try fixture.vault.pending())
+    }
+
+    func testPendingAppleWebLoginRestoresAppleProgressAndCanBeCanceled() async throws {
+        let fixture = fixture(issuer: appleIssuer)
+        let pending = try PendingCloudLogin(issuer: appleIssuer, browserEntry: .apple)
+        try fixture.vault.replace(pending)
+
+        await fixture.host.restore()
+        XCTAssertEqual(fixture.host.loginPhase, .appleWeb)
+        XCTAssertTrue(fixture.host.canCancelLogin)
+        XCTAssertTrue(fixture.browser.opened.isEmpty)
+        XCTAssertTrue(fixture.host.cancelCloudSignIn())
+        XCTAssertEqual(fixture.host.loginPhase, .idle)
+        XCTAssertNil(try fixture.vault.pending())
     }
 
     func testAdvertisedAppleDirectLoginReusesPKCEAndCloudInstallation() async throws {
