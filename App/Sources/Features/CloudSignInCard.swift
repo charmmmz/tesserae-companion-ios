@@ -283,11 +283,10 @@ struct ConnectionOptionButtonStyle: ButtonStyle {
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.isEnabled) private var isEnabled
-    @ScaledMetric(relativeTo: .callout) private var scaledSignInArtworkSize: CGFloat = 37
+    @ScaledMetric(relativeTo: .callout) private var scaledArtworkSize: CGFloat = 37
     var option: Option = .serverAddress
 
     func makeBody(configuration: Configuration) -> some View {
-        let isSignIn = option != .serverAddress
         let isApple = option == .apple
         let shape = RoundedRectangle(cornerRadius: CloudSignInButtonShape.cornerRadius, style: .continuous)
         let foreground = isApple ? (colorScheme == .dark ? Color.black : .white) : TesseraeTheme.accent
@@ -296,10 +295,8 @@ struct ConnectionOptionButtonStyle: ButtonStyle {
             : (configuration.isPressed ? TesseraeTheme.accentSoft : TesseraeTheme.background)
 
         HStack(spacing: 8) {
-            if isSignIn {
-                signInIcon
-                    .accessibilityHidden(true)
-            }
+            optionIcon
+                .accessibilityHidden(true)
             configuration.label
                 .font(.callout.weight(.medium))
                 .multilineTextAlignment(.center)
@@ -320,8 +317,8 @@ struct ConnectionOptionButtonStyle: ButtonStyle {
         .opacity(isEnabled ? (isApple && configuration.isPressed ? 0.8 : 1) : 0.5)
     }
 
-    private var signInIcon: some View {
-        let artworkSize = max(30, scaledSignInArtworkSize)
+    private var optionIcon: some View {
+        let artworkSize = max(30, scaledArtworkSize)
         let iconSize = artworkSize * 0.43
         return Color.clear
             .frame(width: iconSize, height: iconSize)
@@ -332,7 +329,7 @@ struct ConnectionOptionButtonStyle: ButtonStyle {
                         .interpolation(.high)
                         .frame(width: artworkSize, height: artworkSize)
                 } else {
-                    Image(systemName: "envelope")
+                    Image(systemName: option == .serverAddress ? "server.rack" : "envelope")
                         .resizable()
                         .scaledToFit()
                         .frame(width: iconSize, height: iconSize)
