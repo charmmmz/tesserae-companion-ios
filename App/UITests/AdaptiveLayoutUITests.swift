@@ -183,6 +183,31 @@ final class AdaptiveLayoutUITests: XCTestCase {
         waitUntilHittable(list)
     }
 
+    func testPortraitDashboardPushLeavesSpaceBelowPreview() {
+        let app = demo()
+        app.buttons["Dashboards"].firstMatch.tap()
+        expandDashboardSection("display-e1004-desk", app: app)
+        let push = app.buttons["dashboard-push-morning-display-e1004-desk"]
+        XCTAssertTrue(push.waitForExistence(timeout: 5))
+        reveal(push, app: app)
+        push.tap()
+
+        let image = app.descendants(matching: .any)["dashboard-push-preview-morning"].firstMatch
+        let caption = app.staticTexts["dashboard-push-preview-caption-morning"]
+        let submit = app.buttons["Push to Desk"]
+        XCTAssertTrue(image.waitForExistence(timeout: 10))
+        XCTAssertTrue(caption.isHittable)
+        waitForStableFrame(submit)
+        capture("Portrait Dashboard Push footer", app: app)
+        XCTAssertTrue(submit.isHittable)
+        XCTAssertGreaterThanOrEqual(submit.frame.height, 44)
+        XCTAssertEqual(submit.frame.midX, caption.frame.midX, accuracy: 2)
+        XCTAssertGreaterThanOrEqual(
+            submit.frame.minY - caption.frame.maxY, 28,
+            "Leave room for the preview card’s 16-point inset and at least 12 points above the push button."
+        )
+    }
+
     func testAccessibilityDashboardModalKeepsActionReachable() {
         let app = demo(accessibilityText: true)
         app.buttons["Dashboards"].firstMatch.tap()

@@ -1087,6 +1087,8 @@ struct DashboardPreviewActionSheet: View {
                     || !canPerformAction
             )
             .padding(.horizontal, TesseraeComposerLayout.pagePadding)
+            .padding(.vertical, TesseraeComposerLayout.selectionCardSpacing)
+            .padding(.top, TesseraeComposerLayout.pagePadding)
         }
         .interactiveDismissDisabled(isSubmitting)
         .onChange(of: boundDeviceIDs) { _, ids in selectedDeviceIDs.formIntersection(ids) }
@@ -1099,9 +1101,7 @@ struct DashboardPreviewActionSheet: View {
             )
         }
         .tesseraeHapticFeedback(trigger: hapticEvent)
-        .padding(.bottom, TesseraeComposerLayout.pagePadding)
         .frame(idealWidth: 560, idealHeight: preferredSheetHeight)
-        // Include the footer padding so the backdrop reaches the sheet's bottom safe area.
         .tesseraeScreenBackground()
         .presentationSizing(.fitted)
         .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.height(preferredSheetHeight), .large])
@@ -1156,7 +1156,9 @@ struct DashboardPreviewActionSheet: View {
 
     private var preferredSheetHeight: CGFloat {
         if dynamicTypeSize.isAccessibilitySize { return 760 }
-        return showsDisplayPicker ? min(720, 510 + CGFloat(displays.count) * 44) : 440
+        let previewHeight = 440 + TesseraeComposerLayout.contentCardSpacing
+        let pickerHeight = 510 + CGFloat(displays.count) * 44
+        return min(720, (showsDisplayPicker ? pickerHeight : previewHeight) + TesseraeComposerLayout.pagePadding)
     }
 
     private var webURL: URL? {
