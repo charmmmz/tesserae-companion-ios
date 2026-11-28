@@ -216,6 +216,19 @@ struct RootView: View {
                 accessibilityIdentifier: "cloud-authorization-message",
                 action: TesseraeMessageAction(title: String(localized: "Choose Connection")) { serversPresented = true }))
         }
+        .onChange(of: connectionHost.unconfirmedSignOutID) { _, id in
+            guard id != nil else { return }
+            let explanation = String(localized: "Signed out on this device. The server couldn’t confirm sign-out.")
+            messageCenter.post(TesseraeMessage(
+                id: "connection.sign-out",
+                text: String(localized: "Server sign-out unconfirmed"),
+                kind: .warning,
+                lifetime: .automatic(seconds: 6),
+                survivesPresentationChange: true,
+                accessibilityText: explanation
+            ))
+            AccessibilityNotification.Announcement(explanation).post()
+        }
         .alert(
             "Something Went Wrong",
             isPresented: Binding(

@@ -1306,6 +1306,8 @@
 "Check Apple account status" = "检查 Apple 账号状态";
 "Checking Apple account…" = "正在检查 Apple 账号…";
 "Linking Apple account…" = "正在绑定 Apple 账号…";
+"Server sign-out unconfirmed" = "服务器尚未确认退出";
+"Signed out on this device. The server couldn’t confirm sign-out." = "已在此设备退出登录。服务器尚未确认退出。";
 "Couldn’t check whether Apple is linked. Try again." = "无法检查 Apple 账号绑定状态，请重试。";
 "Couldn’t confirm the Apple account link. Try again." = "无法确认 Apple 账号绑定，请重试。";
 "Verify Your Existing Email" = "验证现有账号邮箱";

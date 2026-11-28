@@ -39,6 +39,7 @@ final class ConnectionHost {
     private(set) var isSwitching = false
     private(set) var isRestoring = true
     var loginError: String?
+    private(set) var unconfirmedSignOutID: UUID?
     private let runtime: ConnectionRuntime?
     private let local: AppModel
     private let vault: CloudLoginVault
@@ -459,6 +460,7 @@ final class ConnectionHost {
             guard cloudPresentationContext == expectedCloud, !isSwitching, !isSigningIn else { return }
         }
         if loginPhase != .committing, !cancelCloudSignIn() { return }
+        loginError = nil
         let intent = UUID(); selectionIntent = intent
         var remoteFence: ConnectionFence?
         var legacySession: CompanionConnectionSession?
@@ -478,7 +480,7 @@ final class ConnectionHost {
         }
         if let remoteFence, let runtime {
             do { try await runtime.sessions.retryRevocations(for: remoteFence.connectionID) }
-            catch { if selectionIntent == intent { loginError = ConnectionError.remoteRevocationUnconfirmed.localizedDescription } }
+            catch { if selectionIntent == intent { unconfirmedSignOutID = intent } }
         } else if let legacySession, local.connectionSession == legacySession {
             await local.disconnect()
         }

@@ -430,7 +430,27 @@ final class CloudLoginLifecycleTests: XCTestCase {
         await fixture.host.signOut(expectedCloud: replacement)
         XCTAssertNil(fixture.host.cloud)
         XCTAssertNil(try fixture.runtime.registry.selectedID())
+        XCTAssertNil(fixture.host.unconfirmedSignOutID)
     }
+
+    func testSelfHostedSignOutReportsUnconfirmedRevocationWithoutALoginError() async throws {
+        let fixture = fixture()
+        let instance = TesseraeInstance(id: "test-server", name: "Test Server", baseURL: issuer,
+            serverVersion: "1.0", timezone: "UTC", webURL: "/")
+        let fence = try await fixture.runtime.installLocal(.init(instance: instance, token: "local-token",
+            tokenID: "local", scopes: [], createdAt: Date()))
+        await fixture.host.restore()
+        XCTAssertEqual(fixture.local.activeFenceForSignOut, fence)
+
+        // The fixture transport returns 503 for the server's revocation request.
+        await fixture.host.signOut()
+
+        XCTAssertNil(fixture.local.activeInstance)
+        XCTAssertNil(try fixture.runtime.registry.selectedID())
+        XCTAssertNil(fixture.host.loginError)
+        XCTAssertNotNil(fixture.host.unconfirmedSignOutID)
+    }
+
     func testDeniedReturnsIdleAndWrongStateKeepsCurrentAttempt() async throws {
         let fixture = fixture()
         let pending = try PendingCloudLogin(issuer: issuer)
