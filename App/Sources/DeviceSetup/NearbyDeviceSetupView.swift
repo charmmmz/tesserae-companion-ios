@@ -320,7 +320,7 @@ struct NearbyDeviceSetupView: View {
         .font(.body.weight(.semibold))
         .multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)
-        .frame(maxWidth: .infinity, minHeight: 44)
+        .frame(maxWidth: .infinity)
     }
 
     private var connecting: some View {

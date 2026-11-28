@@ -223,6 +223,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["TESSERAE_USE_IN_MEMORY_CREDENTIALS"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_BLE"] = "1"
+        app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]
         app.launch()
         let nearby = app.onboardingShortcut("onboarding-nearby-devices")
         XCTAssertTrue(nearby.waitForExistence(timeout: 4))
@@ -233,6 +234,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         let scan = app.buttons["Scan Code"]
         let code = app.buttons["Enter 6-Digit Code"]
         assertVerificationButtonsMatch(scan, code)
+        XCTAssertLessThanOrEqual(scan.frame.height.rounded(), 56)
         readabilityAttachment(app, "Verify Display buttons")
         code.tap()
         XCTAssertTrue(app.navigationBars["Maintenance"].waitForExistence(timeout: 4))
