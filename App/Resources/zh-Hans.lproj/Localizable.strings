@@ -554,7 +554,7 @@
 "Saving screen mode…" = "正在保存屏幕模式…";
 "Scan Again" = "重新扫描";
 "Scan Code" = "扫描验证码";
-"Scan the temporary code shown on the display." = "扫描显示屏上的临时验证码。";
+"Use the QR code or 6-digit code on the display." = "扫描屏幕上的二维码，或输入 6 位验证码。";
 "Try Again" = "重试";
 "Update your Tesserae Server to continue." = "请更新 Tesserae 服务器后继续。";
 "Clear Activity on This Device" = "清除这台设备上的活动";

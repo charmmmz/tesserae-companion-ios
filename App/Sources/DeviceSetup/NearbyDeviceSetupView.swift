@@ -273,31 +273,54 @@ struct NearbyDeviceSetupView: View {
     }
 
     private var authentication: some View {
-        VStack(spacing: 20) {
+        let scan = Label("Scan Code", systemImage: "camera")
+        let passkey = Label("Enter 6-Digit Code", systemImage: "circle.grid.3x3.fill")
+
+        return VStack(spacing: 20) {
             Spacer()
             Image(systemName: "qrcode.viewfinder")
                 .font(.system(size: 54))
                 .foregroundStyle(.tint)
-            Text("Scan the temporary code shown on the display.")
+            Text("Use the QR code or 6-digit code on the display.")
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .lineLimit(nil)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer()
-            Button("Scan Code", systemImage: "camera") {
-                scannerPresented = true
+            VStack(spacing: 12) {
+                Button {
+                    scannerPresented = true
+                } label: {
+                    verificationLabel(scan, matching: passkey)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(TesseraeTheme.accentFill)
+                .foregroundStyle(.white)
+
+                Button {
+                    screen = .connecting
+                    nearby.connect(to: device, qrCode: nil)
+                } label: {
+                    verificationLabel(passkey, matching: scan)
+                }
+                .buttonStyle(.bordered)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(TesseraeTheme.accentFill)
-            .foregroundStyle(.white)
+            .buttonBorderShape(.capsule)
             .controlSize(.large)
-            Button("Enter 6-Digit Code") {
-                screen = .connecting
-                nearby.connect(to: device, qrCode: nil)
-            }
-            .buttonStyle(.bordered)
         }
         .padding(28)
+    }
+
+    private func verificationLabel(_ label: Label<Text, Image>, matching other: Label<Text, Image>) -> some View {
+        // Match the taller label after wrapping at the current width and Dynamic Type size.
+        ZStack {
+            other.hidden()
+            label
+        }
+        .font(.body.weight(.semibold))
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, minHeight: 44)
     }
 
     private var connecting: some View {

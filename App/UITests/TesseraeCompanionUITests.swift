@@ -230,7 +230,11 @@ final class TesseraeCompanionUITests: XCTestCase {
         nearby.tap()
         app.buttons.containing(.staticText, identifier: "Tesserae-A1B2C3").firstMatch.tap()
         app.buttons["Continue"].tap()
-        app.buttons["Enter 6-Digit Code"].tap()
+        let scan = app.buttons["Scan Code"]
+        let code = app.buttons["Enter 6-Digit Code"]
+        assertVerificationButtonsMatch(scan, code)
+        readabilityAttachment(app, "Verify Display buttons")
+        code.tap()
         XCTAssertTrue(app.navigationBars["Maintenance"].waitForExistence(timeout: 4))
         XCTAssertFalse(app.buttons["nearby-change-server"].exists)
 
@@ -2528,6 +2532,7 @@ final class TesseraeCompanionUITests: XCTestCase {
         let code = app.buttons["输入 6 位验证码"]
         XCTAssertTrue(code.waitForExistence(timeout: 3))
         for _ in 0..<4 where !code.isHittable { app.swipeUp() }
+        assertVerificationButtonsMatch(app.buttons["扫描验证码"], code)
         readabilityAttachment(app, "Chinese AX5 dark Bluetooth verification")
         code.tap()
         XCTAssertTrue(app.navigationBars["维护"].waitForExistence(timeout: 4))
@@ -2539,6 +2544,18 @@ final class TesseraeCompanionUITests: XCTestCase {
         XCTAssertTrue(app.buttons["10 秒"].waitForExistence(timeout: 3))
         app.buttons["10 秒"].tap()
         XCTAssertTrue(app.navigationBars["维护"].exists)
+    }
+
+    private func assertVerificationButtonsMatch(_ scan: XCUIElement, _ code: XCUIElement) {
+        XCTAssertTrue(scan.waitForExistence(timeout: 3))
+        XCTAssertTrue(code.waitForExistence(timeout: 3))
+        let scanFrame = scan.frame
+        let codeFrame = code.frame
+        XCTAssertEqual(scanFrame.minX, codeFrame.minX, accuracy: 1)
+        XCTAssertEqual(scanFrame.width, codeFrame.width, accuracy: 1)
+        XCTAssertEqual(scanFrame.height, codeFrame.height, accuracy: 1)
+        XCTAssertGreaterThanOrEqual(scanFrame.height.rounded(), 44)
+        XCTAssertGreaterThanOrEqual(codeFrame.height.rounded(), 44)
     }
 
     private func readabilityApp(largeText: Bool = true, scheme: String = "dark") -> XCUIApplication {
