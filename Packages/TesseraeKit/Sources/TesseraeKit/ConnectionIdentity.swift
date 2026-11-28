@@ -1,5 +1,8 @@
 import CryptoKit
 import Foundation
+import OSLog
+
+let connectionLogger = Logger(subsystem: "com.charmmmz.tesseraecompanion", category: "Connection")
 
 public struct ConnectionID: RawRepresentable, Codable, Hashable, Sendable {
     public let rawValue: String
@@ -54,6 +57,7 @@ public struct ConnectionFence: Codable, Hashable, Sendable {
 
 public enum ConnectionError: Error, Equatable, LocalizedError, Sendable {
     case invalidIdentity, unavailable, sessionChanged, signedOut, coordinationTimeout
+    case networkTimeout, operationTimeout
     case rotationOutcomeUnknown, authorizationRequired, accessRestricted(String), invalidTokenResponse
     case remoteRevocationUnconfirmed
 
@@ -64,6 +68,8 @@ public enum ConnectionError: Error, Equatable, LocalizedError, Sendable {
         case .sessionChanged: "This connection changed. Choose the destination again."
         case .signedOut: "Sign in to this connection again."
         case .coordinationTimeout: "Another process is updating this connection. Try again shortly."
+        case .networkTimeout: "The Cloud request timed out. Check your connection."
+        case .operationTimeout: "The Cloud operation took too long. Try again."
         case .rotationOutcomeUnknown: "The sign-in update could not be confirmed. Sign in again."
         case .authorizationRequired: "This authorization expired or was revoked. Sign in again."
         case let .accessRestricted(reason): "Access to this connection is restricted (\(reason))."

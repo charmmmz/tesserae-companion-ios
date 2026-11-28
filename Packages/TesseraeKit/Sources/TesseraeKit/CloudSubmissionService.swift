@@ -175,7 +175,8 @@ public actor CloudSubmissionService {
         guard !stopped else { throw ConnectionError.sessionChanged }
         let transport = try await runtime.cloudTransport(for: fence.connectionID, timeout: remaining(limit: 10))
         guard transport.fence == fence else { throw ConnectionError.sessionChanged }
-        let snapshot = try await CloudReadClient(transport: transport, timeout: remaining(limit: 10)).bootstrap()
+        let snapshot = try await CloudReadClient(transport: transport,
+            timeout: remaining(limit: CloudAuthorizedTransport.readTimeout)).bootstrap()
         guard snapshot.account.auth.scopes.contains(scope) else { throw ConnectionError.accessRestricted("insufficient_scope") }
         _ = try await runtime.sessions.authorization(for: fence, timeout: remaining(limit: 10))
         guard !stopped else { throw ConnectionError.sessionChanged }
@@ -238,8 +239,16 @@ public actor CloudSubmissionService {
                 let completionStore = store.completionAccess()
                 if let claim {
                     let reason: CloudSubmissionProblem = error is CancellationError ? .cancelled : .network
+                    let message = switch error {
+                    case ConnectionError.networkTimeout:
+                        "The Cloud send timed out. Check the display before sending again."
+                    case ConnectionError.coordinationTimeout:
+                        "Waiting for the shared connection timed out. Check the display before sending again."
+                    default:
+                        "This send could not be confirmed. Check the display before sending again."
+                    }
                     let results = task.targetIDs.map { CloudTargetResult(id: $0,
-                        outcome: .unknown(reason, message: "This send could not be confirmed. Check the display before sending again.")) }
+                        outcome: .unknown(reason, message: message)) }
                     _ = try? completionStore.resolve(batchID: batch.id, taskID: task.id, claim: claim, results: results, now: clock())
                 }
                 try? completionStore.stop(batch.id, reason: claim == nil ? .stopped : .network, now: clock())

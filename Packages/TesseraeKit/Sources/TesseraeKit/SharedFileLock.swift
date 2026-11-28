@@ -13,7 +13,10 @@ struct SharedFileLock: Sendable {
         while flock(descriptor, LOCK_EX | LOCK_NB) != 0 {
             guard errno == EWOULDBLOCK || errno == EAGAIN else { throw ConnectionError.unavailable }
             if checksCancellation { try Task.checkCancellation() }
-            guard ProcessInfo.processInfo.systemUptime < deadline else { throw ConnectionError.coordinationTimeout }
+            guard ProcessInfo.processInfo.systemUptime < deadline else {
+                connectionLogger.notice("Shared connection lock wait timed out")
+                throw ConnectionError.coordinationTimeout
+            }
             Thread.sleep(forTimeInterval: 0.01)
         }
         defer { flock(descriptor, LOCK_UN) }

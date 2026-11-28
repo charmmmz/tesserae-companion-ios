@@ -8,9 +8,11 @@ private actor ProtectedResourceFixture: TesseraeHTTPTransporting {
     var count = 0
     var refreshCount = 0
     var observedTimeout: TimeInterval = 0
+    private var errors: [URLError.Code] = []
     private var continuation: CheckedContinuation<Void, Never>?
 
     func configure(status: Int = 200, hold: Bool = false) { self.status = status; self.hold = hold }
+    func failWith(_ errors: [URLError.Code]) { self.errors = errors }
     func unblock() { continuation?.resume(); continuation = nil }
     func send(_ request: URLRequest) async throws -> TesseraeHTTPResponse {
         if request.url?.path == "/oauth/token" {
@@ -19,6 +21,7 @@ private actor ProtectedResourceFixture: TesseraeHTTPTransporting {
         }
         count += 1
         observedTimeout = request.timeoutInterval
+        if !errors.isEmpty { throw URLError(errors.removeFirst()) }
         if hold { await withCheckedContinuation { continuation = $0 } }
         return TesseraeHTTPResponse(data: Data(), statusCode: status)
     }
@@ -51,10 +54,58 @@ private actor ProtectedResourceFixture: TesseraeHTTPTransporting {
         await http.configure(hold: true)
         let started = ContinuousClock.now
         let request = URLRequest(url: URL(string: "http://localhost:9000/api/t/bootstrap")!)
-        await #expect(throws: ConnectionError.coordinationTimeout) { try await client.send(request, timeout: 0.08) }
+        do {
+            _ = try await client.send(request, timeout: 0.08)
+            Issue.record("The Cloud request must honor the total budget")
+        } catch {
+            #expect((error as? ConnectionError) == .networkTimeout)
+            #expect(error.localizedDescription == "The Cloud request timed out. Check your connection.")
+        }
         #expect(started.duration(to: .now) < .seconds(1))
         #expect(await http.observedTimeout <= 0.08)
+        #expect(await http.count == 1)
         await http.unblock()
+    }
+
+    @Test(arguments: [URLError.Code.networkConnectionLost, .timedOut])
+    func readRetriesTransientNetworkFailureOnce(code: URLError.Code) async throws {
+        let (_, _, client, http) = try await fixture()
+        await http.failWith([code])
+        let request = URLRequest(url: URL(string: "http://localhost:9000/api/t/bootstrap")!)
+        #expect(try await client.send(request).statusCode == 200)
+        #expect(await http.count == 2)
+    }
+
+    @Test func repeatedTransientNetworkFailureStopsAfterOneRetry() async throws {
+        let (_, _, client, http) = try await fixture()
+        await http.failWith([.networkConnectionLost, .networkConnectionLost])
+        let request = URLRequest(url: URL(string: "http://localhost:9000/api/t/bootstrap")!)
+        await #expect(throws: URLError.self) { try await client.send(request) }
+        #expect(await http.count == 2)
+    }
+
+    @Test func writeTimeoutUsesNetworkMessageWithoutReplay() async throws {
+        let (_, _, client, http) = try await fixture()
+        await http.failWith([.timedOut])
+        var request = URLRequest(url: URL(string: "http://localhost:9000/api/t/send/image")!)
+        request.httpMethod = "POST"
+        do {
+            _ = try await client.send(request)
+            Issue.record("The timed-out Cloud write must report an error")
+        } catch {
+            #expect((error as? ConnectionError) == .networkTimeout)
+            #expect(error.localizedDescription == "The Cloud request timed out. Check your connection.")
+        }
+        #expect(await http.count == 1)
+    }
+
+    @Test(arguments: [URLError.Code.cancelled, .serverCertificateUntrusted])
+    func readDoesNotRetryNonTransientErrors(code: URLError.Code) async throws {
+        let (_, _, client, http) = try await fixture()
+        await http.failWith([code])
+        let request = URLRequest(url: URL(string: "http://localhost:9000/api/t/bootstrap")!)
+        await #expect(throws: URLError.self) { try await client.send(request) }
+        #expect(await http.count == 1)
     }
 
     @Test func lateSuccessFromOldLoginNeverReachesConsumer() async throws {

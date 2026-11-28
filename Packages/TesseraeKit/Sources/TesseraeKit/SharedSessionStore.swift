@@ -134,7 +134,10 @@ public struct SharedSessionStore: Sendable {
         while true {
             try Task.checkCancellation()
             let remaining = deadline - ProcessInfo.processInfo.systemUptime
-            guard remaining > 0 else { throw ConnectionError.coordinationTimeout }
+            guard remaining > 0 else {
+                connectionLogger.notice("Shared session authorization wait timed out")
+                throw ConnectionError.coordinationTimeout
+            }
             let decision = try await transaction(fence.connectionID, timeout: remaining) { envelope -> (CredentialEnvelope?, AuthorizationDecision) in
                 var current = try checked(envelope, fence: fence)
                 switch current.state {

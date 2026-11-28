@@ -24,7 +24,7 @@ public actor CloudSystemEntry {
     }
 
     public func authorizedReadContext(for fence: ConnectionFence) async throws -> CloudEntryReadContext {
-        try await readContext(for: fence, deadline: CloudEntryDeadline(timeout: 10))
+        try await readContext(for: fence, deadline: CloudEntryDeadline(timeout: CloudAuthorizedTransport.readTimeout))
     }
 
     public func pendingInputs(in context: CloudEntryReadContext) async throws -> [CloudPendingInput] {
@@ -168,7 +168,8 @@ public actor CloudSystemEntry {
     private func readContext(for fence: ConnectionFence, deadline: CloudEntryDeadline) async throws -> CloudEntryReadContext {
         let transport = try await runtime.cloudTransport(for: fence.connectionID, timeout: deadline.remaining(limit: 10))
         guard transport.fence == fence else { throw ConnectionError.sessionChanged }
-        let snapshot = try await CloudReadClient(transport: transport, timeout: deadline.remaining(limit: 10)).bootstrap()
+        let snapshot = try await CloudReadClient(transport: transport,
+            timeout: deadline.remaining(limit: CloudAuthorizedTransport.readTimeout)).bootstrap()
         try await runtime.sessions.validate(fence, timeout: deadline.remaining(limit: 10))
         _ = try deadline.remaining()
         return .init(fence: fence, snapshot: snapshot)

@@ -102,7 +102,9 @@ struct CloudOAuthHTTP: Sendable {
         let fields = ["grant_type": "refresh_token", "client_id": "tesserae-companion",
                       "resource": tokens.response.resource, "refresh_token": tokens.response.refreshToken]
         let prepared = request(issuer: tokens.issuer, path: "oauth/token", fields: fields, timeout: timeout)
-        let result = try await boundedHTTP(timeout: timeout) { try await transport.send(prepared) }
+        let result = try await boundedHTTP(timeout: timeout, operationName: "Cloud authorization refresh") {
+            try await transport.send(prepared)
+        }
         if result.statusCode == 400 {
             struct Refusal: Decodable { let error: String }
             if (try? JSONDecoder().decode(Refusal.self, from: result.data).error) == "invalid_grant" {
@@ -135,7 +137,9 @@ struct CloudOAuthHTTP: Sendable {
             prepared = request(issuer: pending.issuer, path: "oauth/revoke",
                 fields: ["token": pending.token, "client_id": "tesserae-companion"], timeout: timeout)
         }
-        let result = try await boundedHTTP(timeout: timeout) { try await transport.send(prepared) }
+        let result = try await boundedHTTP(timeout: timeout, operationName: "Session revocation") {
+            try await transport.send(prepared)
+        }
         let accepted = pending.isLocal == true ? [204, 401] : [200]
         guard accepted.contains(result.statusCode) else { throw ConnectionError.unavailable }
     }
@@ -189,14 +193,19 @@ private final class AsyncCompletion<Value: Sendable>: @unchecked Sendable {
     }
 }
 
-func boundedHTTP(timeout: TimeInterval,
+func boundedHTTP(timeout: TimeInterval, operationName: String,
                  operation: @escaping @Sendable () async throws -> TesseraeHTTPResponse) async throws -> TesseraeHTTPResponse {
-    try await boundedOperation(timeout: timeout, operation: operation)
+    do {
+        return try await boundedOperation(timeout: timeout, timeoutError: .networkTimeout, operation: operation)
+    } catch let error where (error as? ConnectionError) == .networkTimeout || (error as? URLError)?.code == .timedOut {
+        connectionLogger.notice("Network request timed out (\(operationName, privacy: .public))")
+        throw ConnectionError.networkTimeout
+    }
 }
 
-func boundedOperation<Value: Sendable>(timeout: TimeInterval,
+func boundedOperation<Value: Sendable>(timeout: TimeInterval, timeoutError: ConnectionError = .operationTimeout,
                  operation: @escaping @Sendable () async throws -> Value) async throws -> Value {
-    guard timeout > 0 else { throw ConnectionError.coordinationTimeout }
+    guard timeout > 0 else { throw timeoutError }
     let completion = AsyncCompletion<Value>()
     return try await withTaskCancellationHandler {
         try await withCheckedThrowingContinuation { continuation in
@@ -211,7 +220,7 @@ func boundedOperation<Value: Sendable>(timeout: TimeInterval,
             let timer = Task {
                 do {
                     try await Task.sleep(for: .seconds(timeout))
-                    completion.finish(.failure(ConnectionError.coordinationTimeout))
+                    completion.finish(.failure(timeoutError))
                 } catch { }
             }
             completion.track(timer)

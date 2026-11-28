@@ -10,8 +10,8 @@ public struct CloudReadClient: Sendable {
     public var issuer: URL { transport.issuer }
     private let transport: CloudAuthorizedTransport
 
-    private let timeout: TimeInterval
-    public init(transport: CloudAuthorizedTransport, timeout: TimeInterval = 10) {
+    private let timeout: TimeInterval?
+    public init(transport: CloudAuthorizedTransport, timeout: TimeInterval? = nil) {
         self.transport = transport; self.timeout = timeout
     }
 
@@ -94,7 +94,7 @@ public struct CloudReadClient: Sendable {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(DeviceLookupRequest(mac: mac))
-        let response = try await transport.send(request, timeout: timeout, authorizationTimeout: min(10, timeout))
+        let response = try await transport.send(request, timeout: timeout, authorizationTimeout: 10)
         try requireSuccess(response)
 
         struct Lookup: Decodable {
@@ -177,7 +177,7 @@ public struct CloudReadClient: Sendable {
         var request = URLRequest(url: query.isEmpty ? url : url.appending(queryItems: query))
         request.httpMethod = "GET"
         request.setValue(accept, forHTTPHeaderField: "Accept")
-        return try await transport.send(request, timeout: timeout, authorizationTimeout: min(10, timeout))
+        return try await transport.send(request, timeout: timeout)
     }
 
     private func requireSuccess(_ response: TesseraeHTTPResponse, expectedStatus: Int = 200) throws {

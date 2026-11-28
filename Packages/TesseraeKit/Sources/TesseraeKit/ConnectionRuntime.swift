@@ -1,6 +1,8 @@
 import Foundation
 
 public struct CloudAuthorizedTransport: Sendable {
+    static let readTimeout: TimeInterval = 20
+
     public let issuer: URL
     public let fence: ConnectionFence
     private let sessions: SharedSessionStore
@@ -13,13 +15,13 @@ public struct CloudAuthorizedTransport: Sendable {
         self.transport = transport
     }
 
-    public func send(_ original: URLRequest, timeout: TimeInterval = 10, authorizationTimeout: TimeInterval? = nil) async throws -> TesseraeHTTPResponse {
+    public func send(_ original: URLRequest, timeout: TimeInterval? = nil, authorizationTimeout: TimeInterval? = nil) async throws -> TesseraeHTTPResponse {
         guard let url = original.url, url.scheme == issuer.scheme, url.host == issuer.host, url.port == issuer.port,
               url.path.hasPrefix(issuer.appending(path: "api/t").path + "/") else { throw ConnectionError.invalidIdentity }
         return try await sendAuthorized(original, timeout: timeout, authorizationTimeout: authorizationTimeout)
     }
 
-    func sendAppleAccountLink(body: Data? = nil, timeout: TimeInterval) async throws -> TesseraeHTTPResponse {
+    func sendAppleAccountLink(body: Data? = nil, timeout: TimeInterval?) async throws -> TesseraeHTTPResponse {
         guard issuer.scheme == "https", ["", "/"].contains(issuer.path) else { throw ConnectionError.invalidIdentity }
         let path = body == nil ? "auth/apple/web/app/status" : "auth/apple/web/app/start"
         var request = URLRequest(url: issuer.appending(path: path))
@@ -32,33 +34,60 @@ public struct CloudAuthorizedTransport: Sendable {
         return try await sendAuthorized(request, timeout: timeout, authorizationTimeout: nil)
     }
 
-    private func sendAuthorized(_ original: URLRequest, timeout: TimeInterval,
+    private func sendAuthorized(_ original: URLRequest, timeout: TimeInterval?,
                                 authorizationTimeout: TimeInterval?) async throws -> TesseraeHTTPResponse {
-        let deadline = ProcessInfo.processInfo.systemUptime + timeout
-        let first = try await sessions.authorization(for: fence, timeout: min(timeout, authorizationTimeout ?? timeout))
+        let method = original.httpMethod ?? "GET"
+        let isRead = method == "GET" || method == "HEAD"
+        let timeout = timeout ?? (isRead ? Self.readTimeout : 10)
+        let deadline = try CloudEntryDeadline(timeout: timeout)
+        let sessionLimit = authorizationTimeout ?? (isRead ? 10 : timeout)
+        var authorization = try await sessions.authorization(for: fence, timeout: deadline.remaining(limit: sessionLimit))
         var request = original
-        request.setValue("Bearer \(first.token)", forHTTPHeaderField: "Authorization")
         request.cachePolicy = .reloadIgnoringLocalCacheData
-        let result = try await sendWithinBudget(request, deadline: deadline)
-        try await sessions.validate(fence, timeout: min(max(0, deadline - ProcessInfo.processInfo.systemUptime), authorizationTimeout ?? timeout))
-        // Only safe reads may be repeated. Sending and rendering are owned by A3, without automatic replay.
-        guard result.statusCode == 401, ["GET", "HEAD"].contains(request.httpMethod ?? "GET") else { return result }
-        let remaining = deadline - ProcessInfo.processInfo.systemUptime
-        guard remaining > 0 else { throw ConnectionError.coordinationTimeout }
-        let next = try await sessions.authorization(for: fence, timeout: min(remaining, authorizationTimeout ?? remaining), rejecting: first)
-        request.setValue("Bearer \(next.token)", forHTTPHeaderField: "Authorization")
-        let retried = try await sendWithinBudget(request, deadline: deadline)
-        try await sessions.validate(fence, timeout: min(max(0, deadline - ProcessInfo.processInfo.systemUptime), authorizationTimeout ?? timeout))
-        return retried
+        var canRetryNetwork = isRead
+        var canRefreshAuthorization = isRead
+
+        while true {
+            request.setValue("Bearer \(authorization.token)", forHTTPHeaderField: "Authorization")
+            let result: TesseraeHTTPResponse
+            do {
+                result = try await sendWithinBudget(request, deadline: deadline, canRetry: canRetryNetwork)
+            } catch let error where canRetryNetwork && Self.isTransientNetworkError(error) {
+                let retryDelay: TimeInterval = 0.25
+                guard deadline.uptime - ProcessInfo.processInfo.systemUptime > retryDelay else { throw error }
+                canRetryNetwork = false
+                try await Task.sleep(for: .seconds(retryDelay))
+                try await sessions.validate(fence, timeout: deadline.remaining(limit: sessionLimit))
+                connectionLogger.notice("Retrying Cloud \(method, privacy: .public) after a temporary network error")
+                continue
+            }
+            try await sessions.validate(fence, timeout: deadline.remaining(limit: sessionLimit))
+            guard result.statusCode == 401, canRefreshAuthorization else { return result }
+            canRefreshAuthorization = false
+            authorization = try await sessions.authorization(for: fence, timeout: deadline.remaining(limit: sessionLimit),
+                                                              rejecting: authorization)
+        }
     }
 
-    private func sendWithinBudget(_ request: URLRequest, deadline: TimeInterval) async throws -> TesseraeHTTPResponse {
-        let remaining = deadline - ProcessInfo.processInfo.systemUptime
-        guard remaining > 0 else { throw ConnectionError.coordinationTimeout }
+    private func sendWithinBudget(_ request: URLRequest, deadline: CloudEntryDeadline,
+                                  canRetry: Bool) async throws -> TesseraeHTTPResponse {
+        let remaining = deadline.uptime - ProcessInfo.processInfo.systemUptime
+        // Leave time for a retry if the first attempt stops receiving data.
+        let idleTimeout = canRetry ? min(request.timeoutInterval, 15) : request.timeoutInterval
         var prepared = request
-        prepared.timeoutInterval = max(0.001, min(prepared.timeoutInterval, remaining))
+        prepared.timeoutInterval = max(0.001, min(idleTimeout, remaining))
         let frozen = prepared
-        return try await boundedHTTP(timeout: remaining) { try await transport.send(frozen) }
+        return try await boundedHTTP(timeout: remaining, operationName: "Cloud \(request.httpMethod ?? "GET")") {
+            try await transport.send(frozen)
+        }
+    }
+
+    private static func isTransientNetworkError(_ error: any Error) -> Bool {
+        if (error as? ConnectionError) == .networkTimeout { return true }
+        switch (error as? URLError)?.code {
+        case .networkConnectionLost, .notConnectedToInternet, .dnsLookupFailed, .cannotConnectToHost: return true
+        default: return false
+        }
     }
 }
 

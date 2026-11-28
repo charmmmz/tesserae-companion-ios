@@ -64,6 +64,8 @@ private actor CloudReadFixture: TesseraeHTTPTransporting {
         #expect(requests[0].httpMethod == "GET")
         #expect(requests[0].url?.path == "/api/t/bootstrap")
         #expect(requests[0].value(forHTTPHeaderField: "Authorization")?.hasPrefix("Bearer ") == true)
+        #expect(requests[0].timeoutInterval > 10)
+        #expect(requests[0].timeoutInterval <= 20)
     }
 
     @Test(arguments: ["user", "tenant", "issuer", "resource", "scope", "role"])
@@ -103,6 +105,7 @@ private actor CloudReadFixture: TesseraeHTTPTransporting {
         try #require(requests.count == 1)
         #expect(requests[0].httpMethod == "POST")
         #expect(requests[0].url?.path == "/api/t/app/device-pairing")
+        #expect(requests[0].timeoutInterval <= 10)
     }
 
     @Test func looksUpADeviceWithTheCloudWorkspaceGrantAndNormalizedMAC() async throws {

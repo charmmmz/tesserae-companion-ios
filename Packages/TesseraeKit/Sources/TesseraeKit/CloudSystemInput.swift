@@ -110,14 +110,14 @@ public struct CloudEntryReadContext: Sendable {
 struct CloudEntryDeadline: Sendable {
     let uptime: TimeInterval
     init(timeout: TimeInterval) throws {
-        guard timeout > 0, timeout.isFinite else { throw ConnectionError.coordinationTimeout }
+        guard timeout > 0, timeout.isFinite else { throw ConnectionError.operationTimeout }
         uptime = ProcessInfo.processInfo.systemUptime + timeout
     }
     init(uptime: TimeInterval) { self.uptime = uptime }
     func remaining(limit: TimeInterval = .greatestFiniteMagnitude) throws -> TimeInterval {
         try Task.checkCancellation()
         let left = min(limit, uptime - ProcessInfo.processInfo.systemUptime)
-        guard left > 0 else { throw ConnectionError.coordinationTimeout }
+        guard left > 0 else { throw ConnectionError.operationTimeout }
         return left
     }
 }
