@@ -1325,3 +1325,19 @@
 "Could not request a code. Check the email address or start sign-in again." = "无法请求验证码。请检查邮箱地址或重新登录。";
 "Could not verify the code. Check it or start sign-in again." = "无法验证验证码。请检查验证码或重新登录。";
 "Please wait a moment before trying again." = "请稍后再试。";
+
+/* Bluetooth Cloud pairing */
+"Use the display’s setup hotspot, or enter Maintenance on the display." = "请使用屏幕的设置热点，或在屏幕上进入维护模式。";
+"Use Display’s Wi-Fi" = "使用屏幕已保存的 Wi-Fi";
+"Add to %@" = "添加到 %@";
+"The display connects to Wi-Fi, then registers with Tesserae Cloud." = "屏幕连接 Wi-Fi 后会注册到 Tesserae Cloud。";
+"Switch the display to Automatic before adding it to Cloud." = "请先将屏幕切换到自动模式，再添加到云端。";
+"Sign in to Cloud again from Choose Connection to allow display pairing." = "请从「选择连接」重新登录云端，授权配对屏幕。";
+"Use the display’s setup hotspot to pair with Cloud, or update the display firmware for Bluetooth pairing." = "请使用屏幕的设置热点配对云端，或更新固件以使用蓝牙配对。";
+"Added to Tesserae Cloud" = "已添加到 Tesserae Cloud";
+"The display is restarting. You can find it in Displays." = "屏幕正在重启。可在「屏幕」中查看。";
+"Registering with Tesserae Cloud…" = "正在注册到 Tesserae Cloud…";
+"Added to Tesserae Cloud. Display is restarting…" = "已添加到 Tesserae Cloud，屏幕正在重启…";
+"Cloud registration failed." = "云端注册失败。";
+"Cloud registration could not be confirmed. Check Displays before trying again." = "无法确认云端注册。请先查看「屏幕」再重试。";
+"Unable to Update Known Networks" = "无法更新已知网络";

@@ -127,11 +127,15 @@ final class ConnectionHost {
         let phase: LoginPhase = entry == .apple ? .appleWeb : .browser
         loginPhase = phase
         loginError = nil
-        let requestsAppleAccountLink = await oauth.supportsAppleAccountLinkScope(issuer: issuer)
+        let supportedScopes = await oauth.supportedAppScopes(issuer: issuer)
         guard selectionIntent == intent, loginPhase == phase else { return }
         if Task.isCancelled { cancelCloudSignIn(); return }
         do {
-            let attempt = try PendingCloudLogin(issuer: issuer, browserEntry: entry, requestsAppleAccountLink: requestsAppleAccountLink)
+            let attempt = try PendingCloudLogin(
+                issuer: issuer, browserEntry: entry,
+                requestsAppleAccountLink: supportedScopes.contains(CloudTokenResponse.appleAccountLinkScope),
+                requestsDevicePairing: supportedScopes.contains(CloudTokenResponse.devicePairingScope)
+            )
             let url = switch entry {
             case .email: AppConfiguration.cloudBrowserURL(attempt.authorizationURL)
             case .apple: try CloudOAuthClient.appleWebStartURL(attempt)
@@ -511,6 +515,26 @@ final class ConnectionHost {
         update()
         return true
     }
+    var setupNetworkAliases: [String: String] {
+        Dictionary(uniqueKeysWithValues: savedConnections.compactMap { connection in
+            connection.legacyInstanceID.map { (connection.id.rawValue, $0) }
+        })
+    }
+
+    func createCloudDevicePairing(mac: String, context: CloudPresentationContext) async throws -> String {
+        guard cloudPresentationContext == context, let cloud, !isSwitching, !isSigningIn,
+              !cloud.needsSignIn, !cloud.isRestricted,
+              let account = cloud.snapshot?.account, account.role == "owner",
+              account.auth.scopes.contains(CloudTokenResponse.devicePairingScope) else {
+            throw NearbyDeviceSetupError.serverConnectionChanged
+        }
+        let code = try await cloud.client.createDevicePairing(mac: mac)
+        guard cloudPresentationContext == context, !isSwitching, !isSigningIn else {
+            throw NearbyDeviceSetupError.serverConnectionChanged
+        }
+        return code
+    }
+
     func cloudSendPreferences(context: CloudPresentationContext) async throws -> CompanionSendPreferences? {
         _ = try cloudAccess(context)
         let value = try await sendPreferences.preferences(for: context.fence.connectionID.rawValue)

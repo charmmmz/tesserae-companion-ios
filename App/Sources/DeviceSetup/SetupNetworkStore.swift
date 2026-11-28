@@ -12,102 +12,136 @@ struct SetupKnownNetwork: Codable, Identifiable, Equatable, Sendable {
 @MainActor
 @Observable
 final class SetupNetworkStore {
-    private static let defaultsKeyPrefix = "device-setup.networks."
+    private static let legacyPrefix = "device-setup.networks."
+    private static let sharedKey = "device-setup.shared-networks.v1"
 
     private let defaults: UserDefaults
     private let credentials: any CredentialStoring
+    private var migration: Task<Void, Error>?
+    private var pendingWrite: Task<Void, Never>?
+    private var legacyAliases: [String: String] = [:]
     private(set) var networks: [SetupKnownNetwork] = []
-    private var loadedInstanceID: String?
 
-    init(
-        defaults: UserDefaults = .standard,
-        credentials: any CredentialStoring
-    ) {
+    init(defaults: UserDefaults = .standard, credentials: any CredentialStoring) {
         self.defaults = defaults
         self.credentials = credentials
     }
 
-    func load(instanceID: String) {
-        loadedInstanceID = instanceID
-        guard
-            let data = defaults.data(
-                forKey: Self.defaultsKeyPrefix + instanceID
-            ),
-            let decoded = try? JSONDecoder().decode(
-                [SetupKnownNetwork].self,
-                from: data
-            )
-        else {
-            networks = []
+    func load(aliases: [String: String] = [:]) async throws {
+        legacyAliases.merge(aliases) { _, current in current }
+        if let migration { return try await migration.value }
+        if let data = defaults.data(forKey: Self.sharedKey) {
+            networks = try JSONDecoder().decode([SetupKnownNetwork].self, from: data)
             return
         }
-        networks = decoded.sorted { $0.lastUsedAt > $1.lastUsedAt }
+        let migration = Task { try await migrateLegacyNetworks() }
+        self.migration = migration
+        defer { self.migration = nil }
+        try await migration.value
     }
 
-    func savedPassword(instanceID: String, ssid: String) async throws -> String? {
-        try await credentials.token(for: credentialKey(
-            instanceID: instanceID,
-            ssid: ssid
-        ))
+    func savedPassword(ssid: String) async throws -> String? {
+        await pendingWrite?.value
+        try await load()
+        guard networks.contains(where: { $0.ssid == ssid && $0.hasSavedPassword }) else { return nil }
+        return try await credentials.token(for: credentialKey(ssid))
     }
 
-    func migratePasswords(from legacyID: String, to connectionID: String) async throws {
-        guard legacyID != connectionID else { return }
-        load(instanceID: connectionID)
-        for network in networks where network.hasSavedPassword {
-            let oldKey = credentialKey(instanceID: legacyID, ssid: network.ssid)
-            let newKey = credentialKey(instanceID: connectionID, ssid: network.ssid)
-            if try await credentials.token(for: newKey) == nil,
-               let password = try await credentials.token(for: oldKey) {
-                try await credentials.save(token: password, for: newKey)
+    func record(ssid: String, password: String, savePassword: Bool) async throws {
+        try await write {
+            try await self.load()
+            if savePassword {
+                try await self.credentials.save(token: password, for: self.credentialKey(ssid))
+            } else {
+                try await self.removePasswords(for: ssid)
             }
-            try await credentials.removeToken(for: oldKey)
+            let entry = SetupKnownNetwork(ssid: ssid, lastUsedAt: Date(), hasSavedPassword: savePassword)
+            try self.persist([entry] + self.networks.filter { $0.ssid != ssid })
         }
     }
 
-    func record(
-        instanceID: String,
-        ssid: String,
-        password: String,
-        savePassword: Bool
-    ) async throws {
-        let key = credentialKey(instanceID: instanceID, ssid: ssid)
-        if savePassword {
-            try await credentials.save(token: password, for: key)
-        } else {
-            try await credentials.removeToken(for: key)
-        }
-
-        if loadedInstanceID != instanceID { load(instanceID: instanceID) }
-        networks.removeAll { $0.ssid == ssid }
-        networks.insert(
-            SetupKnownNetwork(
-                ssid: ssid,
-                lastUsedAt: Date(),
-                hasSavedPassword: savePassword
-            ),
-            at: 0
-        )
-        // Network history is a convenience list, not an audit log.
-        networks = Array(networks.prefix(12))
-        if let data = try? JSONEncoder().encode(networks) {
-            defaults.set(data, forKey: Self.defaultsKeyPrefix + instanceID)
+    func remove(ssid: String) async throws {
+        try await write {
+            try await self.load()
+            try await self.removePasswords(for: ssid)
+            try self.persist(self.networks.filter { $0.ssid != ssid })
         }
     }
 
-    func remove(instanceID: String, ssid: String) async throws {
-        try await credentials.removeToken(for: credentialKey(
-            instanceID: instanceID,
-            ssid: ssid
-        ))
-        if loadedInstanceID != instanceID { load(instanceID: instanceID) }
-        networks.removeAll { $0.ssid == ssid }
-        if let data = try? JSONEncoder().encode(networks) {
-            defaults.set(data, forKey: Self.defaultsKeyPrefix + instanceID)
+    private func write(_ update: @escaping @MainActor () async throws -> Void) async throws {
+        let previous = pendingWrite
+        let task = Task {
+            await previous?.value
+            try await update()
+        }
+        pendingWrite = Task { _ = await task.result }
+        try await task.value
+    }
+
+    private func migrateLegacyNetworks() async throws {
+        var history: [String: Date] = [:]
+        var passwords: [String: Set<String>] = [:]
+        for (id, entries) in legacyNetworks() {
+            for entry in entries {
+                history[entry.ssid] = max(history[entry.ssid] ?? .distantPast, entry.lastUsedAt)
+                guard entry.hasSavedPassword else { continue }
+                for key in legacyCredentialKeys(id: id, ssid: entry.ssid) {
+                    if let password = try await credentials.token(for: key) {
+                        passwords[entry.ssid, default: []].insert(password)
+                    }
+                }
+            }
+        }
+        var migrated: [SetupKnownNetwork] = []
+        for (ssid, date) in history {
+            let candidates = passwords[ssid] ?? []
+            let password = candidates.count == 1 ? candidates.first : nil
+            let key = credentialKey(ssid)
+            if let password {
+                try await credentials.save(token: password, for: key)
+                guard try await credentials.token(for: key) == password else {
+                    throw CocoaError(.fileWriteUnknown)
+                }
+            } else {
+                try await credentials.removeToken(for: key)
+            }
+            migrated.append(.init(ssid: ssid, lastUsedAt: date, hasSavedPassword: password != nil))
+        }
+        try persist(migrated.sorted {
+            $0.lastUsedAt == $1.lastUsedAt ? $0.ssid < $1.ssid : $0.lastUsedAt > $1.lastUsedAt
+        })
+    }
+
+    private func persist(_ updated: [SetupKnownNetwork]) throws {
+        defaults.set(try JSONEncoder().encode(updated), forKey: Self.sharedKey)
+        networks = updated
+    }
+
+    private func legacyNetworks() -> [(String, [SetupKnownNetwork])] {
+        defaults.dictionaryRepresentation().compactMap { key, value in
+            guard key.hasPrefix(Self.legacyPrefix), let data = value as? Data,
+                  let entries = try? JSONDecoder().decode([SetupKnownNetwork].self, from: data) else { return nil }
+            return (String(key.dropFirst(Self.legacyPrefix.count)), entries)
         }
     }
 
-    private func credentialKey(instanceID: String, ssid: String) -> String {
-        "\(instanceID).\(Data(ssid.utf8).base64EncodedString())"
+    private func removePasswords(for ssid: String) async throws {
+        for (id, entries) in legacyNetworks() where entries.contains(where: { $0.ssid == ssid }) {
+            for key in legacyCredentialKeys(id: id, ssid: ssid) {
+                try await credentials.removeToken(for: key)
+            }
+        }
+        try await credentials.removeToken(for: credentialKey(ssid))
+    }
+
+    private func legacyCredentialKeys(id: String, ssid: String) -> Set<String> {
+        let suffix = Data(ssid.utf8).base64EncodedString()
+        var keys: Set<String> = ["\(id).\(suffix)"]
+        if let alias = legacyAliases[id] { keys.insert("\(alias).\(suffix)") }
+        return keys
+    }
+
+    private func credentialKey(_ ssid: String) -> String {
+        "shared:\(Data(ssid.utf8).base64EncodedString())"
     }
 }

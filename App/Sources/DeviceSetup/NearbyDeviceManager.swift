@@ -182,6 +182,8 @@ final class NearbyDeviceManager: NSObject {
     private(set) var refreshSpeedSetting = NearbyRefreshSpeedSetting()
     private(set) var connectionState: NearbyDeviceConnectionState = .idle
     private(set) var statusMessage: String?
+    private(set) var cloudPairingError: String?
+    private var cloudPairingTimeout: Task<Void, Never>?
     private(set) var isScanning = false
     private(set) var bluetoothUnavailableMessage: String?
 
@@ -574,6 +576,32 @@ final class NearbyDeviceManager: NSObject {
         ).stageCommand)
     }
 
+    func applyCloudPairing(code: String, ssid: String?, password: String, info: BLESetupDeviceInfo) -> Bool {
+        guard connectionState == .ready, activeDevice?.mode == .maintenance,
+              deviceInfo == info, info.cloudPairingURL != nil else {
+            return false
+        }
+        cloudPairingError = nil
+        connectionState = .testingWiFi
+        cloudPairingTimeout = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(60))
+            guard !Task.isCancelled, let self else { return }
+            self.fail(String(localized: "Cloud registration could not be confirmed. Check Displays before trying again."))
+        }
+        var command: [String: Any] = ["op": "stage_cloud", "cloud_code": code]
+        if let ssid {
+            command["ssid"] = ssid
+            command["password"] = password
+        }
+        sendCommand(command)
+        return true
+    }
+
+    private func finishCloudPairing() {
+        cloudPairingTimeout?.cancel()
+        cloudPairingTimeout = nil
+    }
+
     func requestDiagnostics() {
         sendCommand(["op": "diagnostics"])
     }
@@ -616,6 +644,8 @@ final class NearbyDeviceManager: NSObject {
     }
 
     private func resetConnectionState() {
+        finishCloudPairing()
+        cloudPairingError = nil
         resetRefreshSpeedSetting()
         resetPhotoSession()
         connectedPeripheral = nil
@@ -900,7 +930,19 @@ final class NearbyDeviceManager: NSObject {
             statusMessage = String(localized: "Checking Tesserae server…")
         case "server_connected":
             statusMessage = String(localized: "Server verified. Saving configuration…")
-        case "configured":
+        case "testing_cloud" where cloudPairingTimeout != nil:
+            connectionState = .testingServer
+            statusMessage = String(localized: "Registering with Tesserae Cloud…")
+        case "cloud_registered" where cloudPairingTimeout != nil:
+            finishCloudPairing()
+            connectionState = .configured
+            statusMessage = String(localized: "Added to Tesserae Cloud. Display is restarting…")
+        case "cloud_failed" where cloudPairingTimeout != nil:
+            finishCloudPairing()
+            connectionState = .ready
+            statusMessage = nil
+            cloudPairingError = object["message"] as? String ?? String(localized: "Cloud registration failed.")
+        case "configured" where cloudPairingTimeout == nil:
             connectionState = .configured
             statusMessage = resolvedHardware == .picPak42
                 ? String(localized: "Wi-Fi saved. Display is restarting…")
@@ -1091,6 +1133,7 @@ final class NearbyDeviceManager: NSObject {
     }
 
     private func fail(_ message: String) {
+        finishCloudPairing()
         pendingPhotoPreview = nil
         resetRefreshSpeedSetting()
         photoTimeoutTask?.cancel()
@@ -1446,7 +1489,11 @@ extension NearbyDeviceManager: @preconcurrency CBCentralManagerDelegate {
                 let fallback = failedToConnect
                     ? String(localized: "Could not connect to the display.")
                     : String(localized: "The display disconnected unexpectedly.")
-                fail(error?.localizedDescription ?? fallback)
+                if cloudPairingTimeout != nil {
+                    fail(String(localized: "Cloud registration could not be confirmed. Check Displays before trying again."))
+                } else {
+                    fail(error?.localizedDescription ?? fallback)
+                }
                 return
             }
         }

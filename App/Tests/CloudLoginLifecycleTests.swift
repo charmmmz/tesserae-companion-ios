@@ -64,7 +64,12 @@ private actor LoginHTTP: TesseraeHTTPTransporting {
     func refuseNextAppleEmailRequest() { refusesNextAppleEmail = true }
     func count(_ code: String) -> Int { codes.filter { $0 == code }.count }
     func hasRequest(_ path: String) -> Bool { appleRequests.contains { $0.path == path } }
-    func advertiseAccountLinkScope(issuer: URL) { discoveryIssuer = issuer }
+    private var advertisesDevicePairing = false
+
+    func advertiseOptionalScopes(issuer: URL, devicePairing: Bool = false) {
+        discoveryIssuer = issuer
+        advertisesDevicePairing = devicePairing
+    }
     func configureAccountLink(status: Int = 200, linked: Bool = false, startStatus: Int = 200, startURL: String? = nil) {
         accountLinkStatus = status
         accountLinked = linked
@@ -73,7 +78,8 @@ private actor LoginHTTP: TesseraeHTTPTransporting {
     }
     func send(_ request: URLRequest) async throws -> TesseraeHTTPResponse {
         if request.url?.path == "/.well-known/oauth-authorization-server", let discoveryIssuer {
-            return Self.json(#"{"issuer":"\#(discoveryIssuer.absoluteString)","scopes_supported":["app:read","app:apple:link"]}"#)
+            let pairing = advertisesDevicePairing ? #","app:device:pair""# : ""
+            return Self.json(#"{"issuer":"\#(discoveryIssuer.absoluteString)","scopes_supported":["app:read","app:apple:link"\#(pairing)]}"#)
         }
         if let path = request.url?.path, path == "/auth/providers" || path.hasPrefix("/auth/apple/") {
             let body = try request.httpBody.map { try JSONDecoder().decode([String: String].self, from: $0) } ?? [:]
@@ -183,17 +189,23 @@ final class CloudLoginLifecycleTests: XCTestCase {
     private let issuer = URL(string: "http://localhost:9000")!
     private let appleIssuer = URL(string: "https://staging.example.invalid:8443")!
 
-    func testNewCloudLoginRequestsAppleLinkScopeOnlyFromTheCurrentIssuer() async {
+    func testNewCloudLoginRequestsOptionalScopesOnlyFromTheCurrentIssuer() async {
         let fixture = fixture(issuer: appleIssuer)
-        await fixture.http.advertiseAccountLinkScope(issuer: URL(string: "https://different.example.invalid")!)
+        await fixture.http.advertiseOptionalScopes(issuer: URL(string: "https://different.example.invalid")!, devicePairing: true)
         await fixture.host.beginCloudSignIn()
         XCTAssertEqual(fixture.browser.opened.last.flatMap(loginScope), PendingCloudLogin.scopes)
         fixture.host.cancelCloudSignIn()
 
-        await fixture.http.advertiseAccountLinkScope(issuer: appleIssuer)
+        await fixture.http.advertiseOptionalScopes(issuer: appleIssuer)
         await fixture.host.beginCloudSignIn()
         XCTAssertEqual(fixture.browser.opened.last.flatMap(loginScope),
             "\(PendingCloudLogin.scopes) \(CloudTokenResponse.appleAccountLinkScope)")
+        fixture.host.cancelCloudSignIn()
+
+        await fixture.http.advertiseOptionalScopes(issuer: appleIssuer, devicePairing: true)
+        await fixture.host.beginCloudSignIn()
+        let scopes = fixture.browser.opened.last.flatMap(loginScope)
+        XCTAssertEqual(scopes, "\(PendingCloudLogin.scopes) \(CloudTokenResponse.appleAccountLinkScope) \(CloudTokenResponse.devicePairingScope)")
         fixture.host.cancelCloudSignIn()
     }
 

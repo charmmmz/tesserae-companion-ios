@@ -60,7 +60,7 @@ struct SettingsView: View {
                     .accessibilityIdentifier("choose-connection")
                 }
 
-                if connectionHost.cloud == nil && model.connectionMode != .demo {
+                if connectionHost.cloud != nil || model.connectionMode != .demo {
                     Section("Displays") {
                         NavigationLink {
                             NearbyDisplaysView()

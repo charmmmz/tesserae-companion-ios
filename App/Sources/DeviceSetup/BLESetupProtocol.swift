@@ -332,6 +332,7 @@ struct BLESetupDeviceInfo: Decodable, Equatable, Sendable {
     var family: String? = nil
     var kind: String? = nil
     var wifiMAC: String? = nil
+    var cloudPairingURL: URL? = nil
 
     var hardwareMAC: String? {
         if let explicit = DeviceHardwareIdentity.normalizedMAC(wifiMAC) { return explicit }
@@ -347,6 +348,7 @@ struct BLESetupDeviceInfo: Decodable, Equatable, Sendable {
         case `protocol`, id, sid, hardware, model, firmware, mode, photo, family, kind
         case connectionNonce = "connection_nonce"
         case wifiMAC = "wifi_mac"
+        case cloudPairingURL = "cloud_pairing_url"
     }
 
     func validate(qrCode: BLESetupQRCode) throws -> Data {

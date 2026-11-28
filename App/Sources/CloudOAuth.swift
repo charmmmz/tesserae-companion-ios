@@ -36,6 +36,7 @@ struct PendingCloudLogin: Codable, Sendable {
     let createdAt: Date
     let browserEntry: BrowserEntry?
     let requestsAppleAccountLink: Bool?
+    let requestsDevicePairing: Bool?
     var consumed = false
     var appleStage: AppleStage?
     static let callbackScheme = "com.charmmmz.tesseraecompanion"
@@ -44,12 +45,13 @@ struct PendingCloudLogin: Codable, Sendable {
     static let scopes = "app:read app:send app:refresh"
 
     init(issuer: URL, now: Date = Date(), browserEntry: BrowserEntry? = nil, appleStage: AppleStage? = nil,
-         requestsAppleAccountLink: Bool = false) throws {
+         requestsAppleAccountLink: Bool = false, requestsDevicePairing: Bool = false) throws {
         id = UUID(); self.issuer = issuer; createdAt = now
         state = try Self.random(); verifier = try Self.random()
         self.browserEntry = browserEntry
         self.appleStage = appleStage
         self.requestsAppleAccountLink = requestsAppleAccountLink ? true : nil
+        self.requestsDevicePairing = requestsDevicePairing ? true : nil
     }
 
     var acceptsCallback: Bool { appleStage != .provingIdentity }
@@ -59,13 +61,15 @@ struct PendingCloudLogin: Codable, Sendable {
     }
     var authorizationURL: URL {
         var components = URLComponents(url: issuer.appending(path: "oauth/authorize"), resolvingAgainstBaseURL: false)!
+        var scopes = [Self.scopes]
+        if requestsAppleAccountLink == true { scopes.append(CloudTokenResponse.appleAccountLinkScope) }
+        if requestsDevicePairing == true { scopes.append(CloudTokenResponse.devicePairingScope) }
         components.queryItems = [
             URLQueryItem(name: "response_type", value: "code"),
             URLQueryItem(name: "client_id", value: Self.clientID),
             URLQueryItem(name: "redirect_uri", value: Self.callback),
             URLQueryItem(name: "resource", value: issuer.appending(path: "api/t").absoluteString),
-            URLQueryItem(name: "scope", value: requestsAppleAccountLink == true
-                ? "\(Self.scopes) \(CloudTokenResponse.appleAccountLinkScope)" : Self.scopes),
+            URLQueryItem(name: "scope", value: scopes.joined(separator: " ")),
             URLQueryItem(name: "state", value: state),
             URLQueryItem(name: "code_challenge_method", value: "S256"),
             URLQueryItem(name: "code_challenge", value: Data(SHA256.hash(data: Data(verifier.utf8))).base64URL)
@@ -186,17 +190,17 @@ struct CloudOAuthClient: Sendable {
     init(transport: (any TesseraeHTTPTransporting)? = nil) {
         self.transport = transport ?? URLSessionTesseraeTransport.cloud(resourceTimeout: Self.requestTimeout)
     }
-    func supportsAppleAccountLinkScope(issuer: URL) async -> Bool {
-        guard Self.supportsAppleSignIn(issuer: issuer), let expectedIssuer = try? ConnectionIdentity.canonicalService(issuer) else { return false }
+    func supportedAppScopes(issuer: URL) async -> Set<String> {
+        guard Self.supportsAppleSignIn(issuer: issuer), let expectedIssuer = try? ConnectionIdentity.canonicalService(issuer) else { return [] }
         struct Discovery: Decodable { let issuer: URL; let scopes_supported: [String] }
         let request = URLRequest(url: issuer.appending(path: ".well-known/oauth-authorization-server"),
                                  cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 2)
         guard let response = try? await transport.send(request), response.statusCode == 200,
               let discovery = try? JSONDecoder().decode(Discovery.self, from: response.data),
               (try? ConnectionIdentity.canonicalService(discovery.issuer)) == expectedIssuer else {
-            return false
+            return []
         }
-        return discovery.scopes_supported.contains(CloudTokenResponse.appleAccountLinkScope)
+        return Set(discovery.scopes_supported)
     }
     func exchange(_ attempt: PendingCloudLogin, code: String) async throws -> CloudTokenResponse {
         let response = try await post(issuer: attempt.issuer, path: "oauth/token", fields: [

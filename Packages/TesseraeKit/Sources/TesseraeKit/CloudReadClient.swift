@@ -63,6 +63,26 @@ public struct CloudReadClient: Sendable {
         return .authorization(url: url, expiresIn: start.expires_in)
     }
 
+    public func createDevicePairing(mac: String) async throws -> String {
+        guard issuer.scheme == "https",
+              let mac = DeviceHardwareIdentity.normalizedMAC(mac) else { throw CloudReadError.invalidResponse }
+        var request = URLRequest(url: issuer.appending(path: "api/t/app/device-pairing"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(["mac": mac])
+        let response = try await transport.send(request, timeout: timeout)
+        try requireSuccess(response)
+        struct Pairing: Decodable { let code: String }
+        guard response.statusCode == 201,
+              let pairing = try? JSONDecoder().decode(Pairing.self, from: response.data),
+              pairing.code.utf8.count == 32,
+              pairing.code.utf8.allSatisfy({
+                  (48...57).contains($0) || (65...90).contains($0)
+                      || (97...122).contains($0) || $0 == 45 || $0 == 95
+              }) else { throw CloudReadError.invalidResponse }
+        return pairing.code
+    }
+
     public func devices() async throws -> [CloudDevice] {
         struct Response: Decodable { let devices: [CloudDevice] }
         let result: Response = try await read(["devices"])
