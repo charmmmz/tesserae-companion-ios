@@ -713,6 +713,14 @@ final class ConnectionHost {
         }
         return batch
     }
+    func waitForCloudResult(_ id: UUID, context: CloudPresentationContext) async throws -> CloudSubmissionBatch {
+        while true {
+            try Task.checkCancellation()
+            let batch = try await cloudSubmissionResult(id, context: context)
+            if !batch.isActive { return batch }
+            try await Task.sleep(for: .milliseconds(500))
+        }
+    }
     func cloudSubmissionPreview(_ id: UUID, taskID: UUID, context: CloudPresentationContext) async throws -> Data? {
         _ = try await cloudSubmissionResult(id, context: context)
         let (_, service) = try cloudAccess(context)

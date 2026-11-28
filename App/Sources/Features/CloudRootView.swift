@@ -2,17 +2,24 @@ import SwiftUI
 import TesseraeKit
 
 struct CloudRootView: View {
+    private enum Tab: Hashable { case displays, dashboards }
     let model: CloudBrowseModel
     @Environment(CompanionPresentation.self) private var presentation
     @Environment(ConnectionHost.self) private var host
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @State private var tab: Tab = .displays
+
     var body: some View {
         @Bindable var presentation = presentation
-        TabView {
-            CloudResourceList(model: model, isDevice: true)
+        TabView(selection: $tab) {
+            CloudResourceList(model: model, isDevice: true, isActive: tab == .displays && presentation.sheet == nil,
+                showResult: showResult)
                 .tabItem { Label("Displays", systemImage: "display").accessibilityIdentifier("cloud-displays-tab") }
-            CloudResourceList(model: model, isDevice: false)
+                .tag(Tab.displays)
+            CloudResourceList(model: model, isDevice: false, isActive: tab == .dashboards && presentation.sheet == nil,
+                showResult: showResult)
                 .tabItem { Label("Dashboards", systemImage: "rectangle.stack").accessibilityIdentifier("cloud-pages-tab") }
+                .tag(Tab.dashboards)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if horizontalSizeClass != .compact && canSend { TesseraeFloatingSendAction() }
@@ -37,297 +44,16 @@ struct CloudRootView: View {
         }
         .task { if model.snapshot == nil { await model.refresh() } }
     }
+
+    private func showResult(_ id: UUID) {
+        guard host.cloud === model, host.cloudPresentationContext != nil else { return }
+        presentation.cloudResultID = id
+        presentation.sheet = .cloudResults
+    }
+
     private var canSend: Bool {
         host.canUseCloudSubmissions && !model.devices.isEmpty
             && model.snapshot?.account.auth.scopes.contains("app:send") == true
-    }
-}
-
-private struct CloudResourceList: View {
-    let model: CloudBrowseModel
-    let isDevice: Bool
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @Environment(CompanionPresentation.self) private var presentation
-    @State private var selectedID: String?
-    @State private var connectionsPresented = false
-    private var ids: [String] { isDevice ? model.devices.map(\.id) : model.pages.map(\.id) }
-
-    var body: some View {
-        NavigationSplitView {
-            List(selection: $selectedID) {
-                if let account = model.snapshot?.account {
-                    Section {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(account.tenant.name).font(.headline)
-                            Text(account.user.email).font(.subheadline).foregroundStyle(.secondary)
-                        }
-                        .accessibilityIdentifier("cloud-current-tenant")
-                    }
-                }
-                if let problem = model.problem {
-                    Section {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Label(problem, systemImage: "exclamationmark.triangle")
-                            if let date = model.fetchedAt, model.snapshot != nil {
-                                Text("Last updated: \(date.formatted(date: .abbreviated, time: .shortened))")
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                            Button("Choose Connection", systemImage: "arrow.triangle.swap") { connectionsPresented = true }
-                        }
-                        .accessibilityIdentifier("cloud-read-problem")
-                    }
-                }
-                Section {
-                    if isDevice {
-                        ForEach(model.devices) { device in
-                            NavigationLink(value: device.id) {
-                                Label {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(device.name).font(.headline)
-                                        Text("\(device.panel.width) × \(device.panel.height)")
-                                            .font(.caption).foregroundStyle(.secondary)
-                                    }
-                                } icon: { Image(systemName: "display") }
-                            }
-                            .accessibilityIdentifier("cloud-device-\(device.id)")
-                        }
-                    } else {
-                        ForEach(model.pages) { page in
-                            NavigationLink(value: page.id) {
-                                Label(page.name, systemImage: "rectangle.stack")
-                            }
-                            .accessibilityIdentifier("cloud-page-\(page.id)")
-                        }
-                    }
-                    if ids.isEmpty {
-                        if model.isLoading {
-                            ProgressView("Loading Cloud…")
-                                .frame(maxWidth: .infinity, minHeight: 150)
-                        } else if model.problem == nil {
-                            VStack(spacing: 12) {
-                                ContentUnavailableView(String(localized: isDevice ? "No Cloud Displays" : "No Cloud Dashboards"),
-                                    systemImage: isDevice ? "display" : "rectangle.stack",
-                                    description: Text(String(localized: isDevice ? "Set up a display in Tesserae Cloud, then refresh this list." : "Create a dashboard in Tesserae Cloud to see it here.")))
-                                Link(String(localized: isDevice ? "Set Up in Cloud" : "Open Tesserae Cloud"),
-                                    destination: isDevice ? AppConfiguration.cloudSetupURL(issuer: model.client.issuer) : model.client.issuer.appending(path: "app/"))
-                                    .accessibilityIdentifier("cloud-setup-link")
-                            }
-                        }
-                    }
-                }
-            }
-            .scrollContentBackground(.hidden)
-            .tesseraeScreenBackground()
-            .navigationTitle(String(localized: isDevice ? "Displays" : "Dashboards"))
-            .refreshable { await model.refresh() }
-            .toolbar {
-                TesseraeRootToolbar(showsGlobalActions: horizontalSizeClass == .compact || selectedID == nil) {
-                    Button("Refresh List", systemImage: "arrow.clockwise") { Task { await model.refresh() } }
-                        .disabled(model.isLoading)
-                        .accessibilityIdentifier("cloud-refresh-list")
-                    if horizontalSizeClass == .compact || selectedID == nil {
-                        Button("Send Results", systemImage: "clock") {
-                            presentation.cloudResultID = nil; presentation.sheet = .cloudResults
-                        }
-                        .accessibilityIdentifier("cloud-send-results")
-                    }
-                }
-            }
-            .tesseraeRootPageChrome()
-        } detail: {
-            if let selectedID {
-                CloudResourceDetail(model: model, id: selectedID, isDevice: isDevice)
-                    .id("\(model.fence.epoch):\(isDevice):\(selectedID)")
-            } else {
-                ContentUnavailableView("Select an Item", systemImage: isDevice ? "display" : "rectangle.stack")
-                    .tesseraeScreenBackground()
-            }
-        }
-        .onChange(of: ids) { _, ids in
-            if let selectedID, !ids.contains(selectedID) { self.selectedID = nil }
-        }
-        .sheet(isPresented: $connectionsPresented) { OnboardingView(isChoosingServer: true) }
-    }
-}
-
-private struct CloudResourceDetail: View {
-    let model: CloudBrowseModel
-    let id: String
-    let isDevice: Bool
-    @Environment(ConnectionHost.self) private var host
-    @Environment(CompanionPresentation.self) private var presentation
-    @State private var refreshDecision = UUID()
-    @State private var startingRefresh = false
-    @State private var refreshError: String?
-    @State private var retriedAfterRateLimit = false
-    private var previewState: CloudBrowseModel.Preview? { model.previews[CloudBrowseModel.key(id, isDevice)] }
-    private var previewRetryDate: Date? {
-        guard case .rateLimited(let until) = previewState else { return nil }
-        return until
-    }
-    private var isPreviewRateLimited: Bool {
-        if case .rateLimited = previewState { return true }
-        return false
-    }
-    private var device: CloudDevice? { isDevice ? model.devices.first { $0.id == id } : nil }
-    private var page: CloudPage? { isDevice ? nil : model.pages.first { $0.id == id } }
-    private var exists: Bool { device != nil || page != nil }
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                if exists && model.verifiedDetails.contains(CloudBrowseModel.key(id, isDevice)) {
-                    Text(isDevice ? device!.name : page!.name).font(.title2.bold())
-                    preview
-                    if device?.pageID != nil,
-                       model.snapshot?.account.auth.scopes.contains("app:refresh") == true {
-                        regenerateFrameAction
-                    }
-                    if let device {
-                        LabeledContent("Panel", value: "\(device.panel.width) × \(device.panel.height)")
-                        if let battery = device.batteryPercent {
-                            LabeledContent("Battery", value: "\(Int(battery))%")
-                        }
-                        if let seen = device.lastSeenAt { LabeledContent("Last Seen", value: seen.formatted()) }
-                        if let frame = device.frame { LabeledContent("Frame Generated", value: frame.renderedAt.formatted()) }
-                    }
-                    if let page { LabeledContent("Updated", value: page.updatedAt.formatted()) }
-                } else if exists, case .rateLimited(let until) = previewState {
-                    rateLimitedPreview(until: until)
-                } else if exists && (previewState == nil || previewState == .loading) {
-                    ProgressView("Loading Preview…").frame(maxWidth: .infinity, minHeight: 180)
-                } else {
-                    ContentUnavailableView("Item Unavailable", systemImage: "rectangle.slash",
-                        description: Text(model.problem ?? String(localized: "This item is no longer available.")))
-                }
-            }
-            .frame(maxWidth: 820).padding(20).frame(maxWidth: .infinity)
-        }
-        .tesseraeScreenBackground()
-        .navigationTitle(String(localized: isDevice ? "Display" : "Dashboard"))
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            TesseraeRootToolbar {
-                Button("Send Results", systemImage: "clock") {
-                    presentation.cloudResultID = nil; presentation.sheet = .cloudResults
-                }
-                .accessibilityIdentifier("cloud-send-results")
-                if !isPreviewRateLimited {
-                    Button("Reload Preview", systemImage: "arrow.clockwise") { reloadPreview() }
-                        .disabled(previewState == .loading)
-                        .accessibilityIdentifier("cloud-reload-preview")
-                }
-            }
-        }
-        .tesseraeRootPageChrome()
-        .task(id: model.previewVersion(id: id, isDevice: isDevice)) {
-            await model.openDetail(id: id, isDevice: isDevice)
-        }
-        .task(id: previewRetryDate) {
-            guard let date = previewRetryDate, !retriedAfterRateLimit else { return }
-            do {
-                while date > .now {
-                    let remaining = date.timeIntervalSinceNow
-                    try await Task.sleep(for: .seconds(min(max(0, remaining), 60)))
-                }
-                try Task.checkCancellation()
-            } catch { return }
-            guard exists, previewRetryDate == date else { return }
-            retriedAfterRateLimit = true
-            await model.openDetail(id: id, isDevice: isDevice, reuseCached: false)
-        }
-        .onDisappear {
-            retriedAfterRateLimit = false
-            model.closeDetail(id: id, isDevice: isDevice)
-        }
-    }
-
-    private var regenerateFrameAction: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Button {
-                refreshCurrentPage()
-            } label: {
-                Label("Regenerate Display Frame", systemImage: "display.badge.arrow.down")
-                    .frame(minHeight: 44)
-            }
-            .buttonStyle(.bordered)
-            .disabled(startingRefresh || !host.canUseCloudSubmissions)
-            .accessibilityIdentifier("cloud-refresh-current")
-            if startingRefresh {
-                ProgressView("Preparing Refresh…")
-            }
-            if let refreshError {
-                Text(refreshError).foregroundStyle(TesseraeTheme.danger)
-            }
-            Text("The display can pick up the new frame the next time it wakes.")
-                .font(.footnote).foregroundStyle(.secondary)
-        }
-    }
-
-    private func reloadPreview() {
-        Task { await model.openDetail(id: id, isDevice: isDevice, reuseCached: false) }
-    }
-
-    private func rateLimitedPreview(until: Date?) -> some View {
-        VStack(spacing: 12) {
-            ContentUnavailableView {
-                Label("Preview Temporarily Unavailable", systemImage: "clock")
-                    .accessibilityIdentifier("cloud-preview-rate-limited")
-            } description: {
-                if let until {
-                    Text("Try again at \(until.formatted(date: .omitted, time: .standard)).")
-                } else {
-                    Text("Cloud is busy. Wait before trying again.")
-                }
-            }
-            TimelineView(.periodic(from: .now, by: 1)) { clock in
-                Button {
-                    reloadPreview()
-                } label: {
-                    Text("Reload Preview").frame(minHeight: 44)
-                }
-                .buttonStyle(.bordered)
-                .disabled(until.map { clock.date < $0 } ?? false)
-                .accessibilityIdentifier("cloud-reload-preview")
-            }
-        }
-    }
-
-    private func refreshCurrentPage() {
-        guard !startingRefresh, host.cloud === model, let context = host.cloudPresentationContext else { return }
-        startingRefresh = true; refreshError = nil
-        let decision = refreshDecision
-        Task {
-            defer { startingRefresh = false }
-            do {
-                let id = try await host.refreshCloudCurrentPage(id, decision: decision, context: context)
-                refreshDecision = UUID()
-                host.withCurrentCloudPresentation(context) {
-                    presentation.cloudResultID = id; presentation.sheet = .cloudResults
-                }
-            } catch { refreshError = error.localizedDescription }
-        }
-    }
-    @ViewBuilder private var preview: some View {
-        switch previewState {
-        case .image(let data):
-            if let image = UIImage(data: data) {
-                Image(uiImage: image).resizable().scaledToFit()
-                    .accessibilityLabel("Existing Cloud Preview")
-                    .accessibilityIdentifier("cloud-preview-image")
-            } else {
-                ContentUnavailableView("Preview Unavailable", systemImage: "photo.badge.exclamationmark",
-                    description: Text("This saved preview could not be opened."))
-            }
-        case .missing:
-            ContentUnavailableView("No Preview Yet", systemImage: "photo",
-                description: Text("A preview will appear when a saved image is available in Cloud."))
-                .accessibilityIdentifier("cloud-no-preview")
-        case .unavailable(let message):
-            ContentUnavailableView("Preview Unavailable", systemImage: "wifi.exclamationmark", description: Text(message))
-        case .rateLimited(let until):
-            rateLimitedPreview(until: until)
-        default: ProgressView("Loading Preview…").frame(maxWidth: .infinity, minHeight: 180)
-        }
     }
 }
 

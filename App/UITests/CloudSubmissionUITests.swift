@@ -31,7 +31,16 @@ import XCTest
     private func authorize(_ app: XCUIApplication, account: String = "owner_a", tenantName: String = "A3 Studio A (owner)") async throws {
         let (_, response) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:8879/select?account=\(account)")!)
         XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+        let cancel = app.buttons["cloud-signin-cancel"]
+        if cancel.exists && cancel.isHittable { cancel.tap() }
         let signIn = app.buttons["cloud-signin"]
+        if !signIn.exists {
+            let cloud = app.segmentedControls["connection-type"].buttons
+                .matching(NSPredicate(format: "label IN %@", ["Cloud", "云端"])).firstMatch
+            XCTAssertTrue(cloud.waitForExistence(timeout: 10))
+            reveal(cloud, in: app)
+            if !cloud.isSelected { cloud.tap() }
+        }
         XCTAssertTrue(signIn.waitForExistence(timeout: 15)); reveal(signIn, in: app); signIn.tap()
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         let consent = springboard.buttons["Continue"]
@@ -40,8 +49,19 @@ import XCTest
         XCTAssertTrue(allow.waitForExistence(timeout: 20))
         app.buttons["Account"].tap()
         let tenant = app.buttons[tenantName]
-        XCTAssertTrue(tenant.waitForExistence(timeout: 5)); tenant.tap(); allow.tap()
-        XCTAssertTrue(app.buttons["cloud-device-a3_land"].waitForExistence(timeout: 15))
+        XCTAssertTrue(tenant.waitForExistence(timeout: 5)); tenant.tap()
+        app.webViews.firstMatch.swipeUp()
+        allow.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.2)).tap()
+        if !allow.waitForNonExistence(timeout: 3) {
+            allow.tap()
+        }
+        let current = app.descendants(matching: .any)["cloud-current-tenant"].firstMatch
+        let workspace = tenantName.replacingOccurrences(of: " (owner)", with: "")
+        let selected = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            current.exists && current.label.contains(workspace)
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [selected], timeout: 15), .completed)
+        XCTAssertTrue(app.buttons["cloud-device-a3_land"].exists)
     }
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
         for _ in 0..<8 {
@@ -149,27 +169,38 @@ import XCTest
         capture(app, "A3-restarted-durable-result-without-replay")
     }
 
-    func testBrowseOtherDashboardAndRefreshCurrentPage() throws {
-        try XCTSkipUnless(ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_EXISTING_NAMESPACE"] != nil)
+    func testBrowseOtherDashboardAndRefreshCurrentPage() async throws {
         let app = launch()
+        if !app.buttons["cloud-device-a3_land"].waitForExistence(timeout: 4) {
+            try await authorize(app)
+        }
         XCTAssertTrue(app.buttons["cloud-device-a3_land"].waitForExistence(timeout: 15))
-        let dashboards = app.buttons["Dashboards"].firstMatch
-        dashboards.tap()
+        capture(app, "cloud-displays-cards")
+        app.tabBars.buttons["Dashboards"].tap()
+        let search = app.textFields["cloud-dashboard-search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        capture(app, "cloud-dashboard-cards")
+        search.tap()
+        search.typeText("Portrait")
+        XCTAssertFalse(app.buttons["cloud-page-a3_page_land"].exists)
         let other = app.buttons["cloud-page-a3_page_portrait"]
-        XCTAssertTrue(other.waitForExistence(timeout: 8)); other.tap()
+        XCTAssertTrue(other.waitForExistence(timeout: 8)); reveal(other, in: app); other.tap()
         XCTAssertTrue(app.images["cloud-preview-image"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["cloud-dashboard-web"].firstMatch.exists)
         XCTAssertFalse(app.buttons["cloud-refresh-current"].exists)
+        XCTAssertFalse(app.buttons["root-send-action"].exists)
         capture(app, "A3-other-dashboard-read-only")
         app.navigationBars.buttons.firstMatch.tap()
-        app.buttons["Displays"].firstMatch.tap()
+        app.tabBars.buttons["Displays"].tap()
         app.buttons["cloud-device-a3_land"].tap()
+        XCTAssertFalse(app.staticTexts["Next in Line"].exists)
+        XCTAssertFalse(app.staticTexts["Next Screen"].exists)
+        capture(app, "cloud-display-screen-preview")
         let refresh = app.buttons["cloud-refresh-current"]
         XCTAssertTrue(refresh.waitForExistence(timeout: 10)); refresh.tap()
-        let result = app.buttons["cloud-result-target-a3_land"]
-        XCTAssertTrue(result.waitForExistence(timeout: 10))
-        let generated = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in result.label.contains("Frame Generated") }, object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [generated], timeout: 20), .completed)
-        capture(app, "A3-current-bound-page-generated-result")
+        XCTAssertTrue(app.descendants(matching: .any)["cloud-refresh-ready"].firstMatch.waitForExistence(timeout: 20))
+        XCTAssertFalse(app.navigationBars["Send Result"].exists)
+        capture(app, "cloud-display-refresh-confirmation")
     }
 
     private func prepareMarker(_ app: XCUIApplication, targets: Set<String>) {

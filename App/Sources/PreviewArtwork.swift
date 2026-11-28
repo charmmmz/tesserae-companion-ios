@@ -32,6 +32,7 @@ struct PreviewArtwork: View {
     let accessibilityIdentifier: String
     var placeholderDetail: String?
     var contentMode: ContentMode = .fit
+    var cachesDecodedImage = true
 
     var body: some View {
         ZStack {
@@ -70,7 +71,8 @@ struct PreviewArtwork: View {
     }
 
     private var image: UIImage? {
-        PreviewImageCache.shared.image(for: state?.data)
+        guard cachesDecodedImage else { return state?.data.flatMap { UIImage(data: $0) } }
+        return PreviewImageCache.shared.image(for: state?.data)
     }
 
     @ViewBuilder

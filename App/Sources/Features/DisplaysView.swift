@@ -565,6 +565,66 @@ private struct DisplayReorderLongPressGesture: UIGestureRecognizerRepresentable 
     }
 }
 
+struct DisplayCardLayout<Details: View, Preview: View>: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ViewBuilder let details: () -> Details
+    @ViewBuilder let preview: (CGSize) -> Preview
+
+    var body: some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 14))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: 14))
+        let canvasSize = dynamicTypeSize.isAccessibilitySize
+            ? CGSize(width: 224, height: 236)
+            : CGSize(width: 112, height: 118)
+
+        layout {
+            details().frame(maxWidth: .infinity, alignment: .leading)
+            preview(canvasSize)
+        }
+        .tesseraeCard()
+    }
+}
+
+struct DisplayPreviewCard<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) { content }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .tesseraeCard()
+    }
+}
+
+struct DisplayDetailCard<Content: View>: View {
+    let title: LocalizedStringKey
+    let systemImage: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Label(title, systemImage: systemImage).font(.headline)
+            content
+        }
+        .tesseraeCard()
+    }
+}
+
+struct DisplayDetailRow<Value: View>: View {
+    let title: LocalizedStringKey
+    @ViewBuilder let value: Value
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 16) {
+            Text(title).foregroundStyle(.secondary)
+            Spacer(minLength: 12)
+            value.multilineTextAlignment(.trailing)
+        }
+        .font(.subheadline)
+        .frame(maxWidth: .infinity)
+    }
+}
+
 private struct DisplayCard: View {
     @Environment(AppModel.self) private var model
     @Environment(NearbyDeviceManager.self) private var nearby
@@ -575,20 +635,8 @@ private struct DisplayCard: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let display: DisplaySummary
     let preview: PreviewImageState?
-    private var previewCanvasSize: CGSize {
-        dynamicTypeSize.isAccessibilitySize
-            ? CGSize(width: 224, height: 236)
-            : CGSize(width: 112, height: 118)
-    }
-
-    private var cardLayout: AnyLayout {
-        dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 14))
-            : AnyLayout(HStackLayout(alignment: .center, spacing: 14))
-    }
-
     var body: some View {
-        cardLayout {
+        DisplayCardLayout {
             VStack(alignment: .leading, spacing: 9) {
                 HStack(alignment: .center, spacing: 8) {
                     displayIdentityIcon
@@ -621,11 +669,9 @@ private struct DisplayCard: View {
                 .foregroundStyle(.secondary)
                 .accessibilityIdentifier("display-metrics-\(display.id)")
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            panelPreview
+        } preview: { canvasSize in
+            panelPreview(in: canvasSize)
         }
-        .tesseraeCard()
     }
 
     private var displayIdentityIcon: some View {
@@ -654,7 +700,7 @@ private struct DisplayCard: View {
         TesseraeTheme.surface
     }
 
-    private var panelPreview: some View {
+    private func panelPreview(in previewCanvasSize: CGSize) -> some View {
         let previewSize = display.panel.fittedPreviewSize(
             maxWidth: previewCanvasSize.width,
             maxHeight: previewCanvasSize.height
@@ -1213,7 +1259,7 @@ struct DisplayDetailView: View {
     }
 
     private var screenCarouselCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        DisplayPreviewCard {
             screenPageHeader
 
             TabView(selection: Binding(get: { visibleScreenPage }, set: { selectedScreenPage = $0 })) {
@@ -1247,7 +1293,6 @@ struct DisplayDetailView: View {
                     )
             }
         }
-        .tesseraeCard()
         .animation(
             reduceMotion ? nil : .easeInOut(duration: 0.22),
             value: visibleScreenPage
@@ -1396,30 +1441,14 @@ struct DisplayDetailView: View {
         systemImage: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Label(title, systemImage: systemImage)
-                .font(.headline)
-
-            content()
-        }
-        .tesseraeCard()
+        DisplayDetailCard(title: title, systemImage: systemImage, content: content)
     }
 
     private func detailRow<Value: View>(
         _ title: LocalizedStringKey,
         @ViewBuilder value: () -> Value
     ) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 16) {
-            Text(title)
-                .foregroundStyle(.secondary)
-
-            Spacer(minLength: 12)
-
-            value()
-                .multilineTextAlignment(.trailing)
-        }
-        .font(.subheadline)
-        .frame(maxWidth: .infinity)
+        DisplayDetailRow(title: title, value: value)
     }
 }
 

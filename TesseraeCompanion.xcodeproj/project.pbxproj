@@ -52,6 +52,7 @@
 		4965F159C43AD0172327ED86 /* LineupEditingStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58AAE4A00D19C74A3DD7E7FC /* LineupEditingStateTests.swift */; };
 		4B98C3F8FFCE806E85BF0034 /* TesseraeIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE83E45C36CFD34C381B1684 /* TesseraeIntents.swift */; };
 		4D94535610EB3D1C396453C6 /* ActivityPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9C23085D21C3F8015FC68D9 /* ActivityPresentation.swift */; };
+		2B5A9107D8E90D615918571F /* CloudBrowseViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C25E067F996DD62AA96082A1 /* CloudBrowseViews.swift */; };
 		4DA9A9E9916C357E61012150 /* CloudRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EEBD7F53DAB87E0A20B5CED /* CloudRootView.swift */; };
 		4E49B020891D38A919ECF53E /* FittedPreviewLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A04E5CC172EAC80A6C24F75 /* FittedPreviewLayout.swift */; };
 		4F402A0069B78FDE2256EE9F /* TesseraePanelImagePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 135374B71848FF0E87F4A6D3 /* TesseraePanelImagePreview.swift */; };
@@ -251,6 +252,7 @@
 		5B78EBE8F9EA638D2B8BE520 /* BLEPhotoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BLEPhotoTests.swift; sourceTree = "<group>"; };
 		5BEB87772E7D7FCDD812DDC7 /* NearbyDeviceSetupError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearbyDeviceSetupError.swift; sourceTree = "<group>"; };
 		5CCA51F737B4F27E6617E7E4 /* PhosphorRegularGlyphs.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = PhosphorRegularGlyphs.json; sourceTree = "<group>"; };
+		C25E067F996DD62AA96082A1 /* CloudBrowseViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudBrowseViews.swift; sourceTree = "<group>"; };
 		5EEBD7F53DAB87E0A20B5CED /* CloudRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudRootView.swift; sourceTree = "<group>"; };
 		61AF530D779237A174E117C6 /* PreviewArtwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewArtwork.swift; sourceTree = "<group>"; };
 		63B3CC1F9EFE4C397C9BFB34 /* TesseraeShared-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "TesseraeShared-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -573,6 +575,7 @@
 			children = (
 				A9C23085D21C3F8015FC68D9 /* ActivityPresentation.swift */,
 				AB1A411679F997EDCC5BDFF5 /* ActivityView.swift */,
+				C25E067F996DD62AA96082A1 /* CloudBrowseViews.swift */,
 				5EEBD7F53DAB87E0A20B5CED /* CloudRootView.swift */,
 				D4C436D32790274BE48BFBF0 /* CloudSendView.swift */,
 				F87A7131F2CA6614CAD44081 /* CloudSignInCard.swift */,
@@ -879,6 +882,7 @@
 				A40000000000000000000011 /* CloudEntryOutcomeView.swift in Sources */,
 				66DB0CEA246D97E01D7A08C5 /* CloudPhotoPreparer.swift in Sources */,
 				91ED9EF1C7B225D7867FA2AE /* CloudReadFaultTransport.swift in Sources */,
+				2B5A9107D8E90D615918571F /* CloudBrowseViews.swift in Sources */,
 				4DA9A9E9916C357E61012150 /* CloudRootView.swift in Sources */,
 				7DC485EAADAFB9F2F8CFEDF2 /* CloudSendView.swift in Sources */,
 				28D2514B076F314B42EFA141 /* CloudSignInCard.swift in Sources */,

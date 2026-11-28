@@ -438,9 +438,8 @@ import XCTest
         XCTAssertTrue(shortcuts.buttons["Play, A4 Cloud Current Page"].waitForExistence(timeout: 10))
         let app = launch()
         XCTAssertTrue(app.buttons["cloud-device-a4_land"].waitForExistence(timeout: 15))
-        let refresh = app.buttons["cloud-refresh-list"]
-        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: refresh)
-        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 10), .completed)
+        let refresh = app.scrollViews["cloud-resource-list"]
+        XCTAssertTrue(refresh.waitForExistence(timeout: 10))
         let photos = XCUIApplication(bundleIdentifier: "com.apple.mobileslideshow")
         photos.activate()
         let share = photos.buttons["PUOneUpBarButtonItemIdentifierShare"]
@@ -461,7 +460,7 @@ import XCTest
         let shouldStart = try await waitFor("start-refresh", seconds: 35)
         XCTAssertTrue(shouldStart)
         guard shouldStart else { return }
-        refresh.tap()
+        refresh.swipeDown()
         try publish("refresh-tapped")
         let shouldOpenShare = try await waitFor("show-photos", seconds: 10)
         XCTAssertTrue(shouldOpenShare, "The external schedule aborted or did not dispatch Share")

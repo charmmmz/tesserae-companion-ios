@@ -89,6 +89,30 @@ final class CloudBrowseModel {
         refreshTask = task
         await task.value
     }
+    func cardPreview(id: String, isDevice: Bool, version: String) async -> Data? {
+        guard isActive, !needsSignIn, !isRestricted,
+              retryAfter.map({ $0 <= now() }) != false,
+              previewVersion(id: id, isDevice: isDevice) == version else { return nil }
+        let generation = generation
+        do {
+            let data = try await (isDevice ? client.devicePreview(id: id) : client.pagePreview(id: id))
+            guard self.generation == generation, !Task.isCancelled,
+                  previewVersion(id: id, isDevice: isDevice) == version else { return nil }
+            return data
+        } catch {
+            guard self.generation == generation, !Task.isCancelled else { return nil }
+            switch error {
+            case CloudReadError.unauthorized, CloudReadError.forbidden, CloudReadError.retryLater,
+                 ConnectionError.authorizationRequired, ConnectionError.accessRestricted,
+                 ConnectionError.signedOut, ConnectionError.rotationOutcomeUnknown, ConnectionError.sessionChanged:
+                handle(error)
+            default:
+                break
+            }
+            return nil
+        }
+    }
+
     func openDetail(id: String, isDevice: Bool, reuseCached: Bool = true) async {
         guard isActive else { return }
         let key = Self.key(id, isDevice)

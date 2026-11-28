@@ -91,7 +91,7 @@ final class CloudBrowsingUITests: XCTestCase {
         XCTAssertTrue(device.waitForExistence(timeout: 15))
         for status in [402, 503, 429] {
             try await fault("status", status: status)
-            app.buttons["cloud-refresh-list"].firstMatch.tap()
+            app.scrollViews["cloud-resource-list"].swipeDown()
             XCTAssertTrue(app.descendants(matching: .any)["cloud-read-problem"].firstMatch.waitForExistence(timeout: 15))
             XCTAssertTrue(device.exists)
             capture(app, "cloud-injected-\(status)-kept-current-data")
@@ -101,23 +101,23 @@ final class CloudBrowsingUITests: XCTestCase {
                 XCTAssertEqual(XCTWaiter.wait(for: [wait], timeout: 6), .completed)
             }
             try await fault("pass")
-            app.buttons["cloud-refresh-list"].firstMatch.tap(); waitForRecovery(app)
+            app.scrollViews["cloud-resource-list"].swipeDown(); waitForRecovery(app)
         }
         try await fault("offline")
-        app.buttons["cloud-refresh-list"].firstMatch.tap()
+        app.scrollViews["cloud-resource-list"].swipeDown()
         XCTAssertTrue(app.descendants(matching: .any)["cloud-read-problem"].firstMatch.waitForExistence(timeout: 15))
         XCTAssertTrue(device.exists); capture(app, "cloud-injected-offline-with-correct-tenant")
         try await fault("pass")
-        app.buttons["cloud-refresh-list"].firstMatch.tap(); waitForRecovery(app)
+        app.scrollViews["cloud-resource-list"].swipeDown(); waitForRecovery(app)
         for status in [401, 403] {
             try await fault("status", status: status)
-            app.buttons["cloud-refresh-list"].firstMatch.tap()
+            app.scrollViews["cloud-resource-list"].swipeDown()
             XCTAssertTrue(app.descendants(matching: .any)["cloud-read-problem"].firstMatch.waitForExistence(timeout: 15))
             XCTAssertFalse(device.exists)
             XCTAssertFalse(app.images["cloud-preview-image"].exists)
             capture(app, "cloud-injected-\(status)-private-data-hidden")
             try await fault("pass")
-            app.buttons["cloud-refresh-list"].firstMatch.tap(); waitForRecovery(app)
+            app.scrollViews["cloud-resource-list"].swipeDown(); waitForRecovery(app)
         }
     }
     func testDetailRecoversFromRateLimitedListAndSeparatesReloadFromRegenerate() async throws {
@@ -129,7 +129,7 @@ final class CloudBrowsingUITests: XCTestCase {
         XCTAssertTrue(device.waitForExistence(timeout: 15))
 
         try await fault("status", status: 429, retryAfter: 10)
-        app.buttons["cloud-refresh-list"].firstMatch.tap()
+        app.scrollViews["cloud-resource-list"].swipeDown()
         XCTAssertTrue(app.descendants(matching: .any)["cloud-read-problem"].firstMatch.waitForExistence(timeout: 5))
         device.tap()
         XCTAssertTrue(app.staticTexts["Preview Temporarily Unavailable"].waitForExistence(timeout: 5))
@@ -142,20 +142,18 @@ final class CloudBrowsingUITests: XCTestCase {
         XCTAssertTrue(app.images["cloud-preview-image"].waitForExistence(timeout: 15))
         capture(app, "cloud-preview-recovered-automatically")
 
-        let reload = app.buttons["cloud-reload-preview"].firstMatch
         let regenerate = app.buttons["cloud-refresh-current"]
-        XCTAssertEqual(reload.label, "Reload Preview")
         reveal(regenerate, app: app)
-        XCTAssertEqual(regenerate.label, "Regenerate Display Frame")
+        XCTAssertEqual(regenerate.label, "Refresh")
         XCTAssertGreaterThanOrEqual(regenerate.frame.height, 44)
-        XCTAssertGreaterThan(regenerate.frame.minY, app.images["cloud-preview-image"].frame.minY)
+        XCTAssertLessThan(regenerate.frame.minY, app.images["cloud-preview-image"].frame.minY)
         capture(app, "cloud-display-preview-actions")
-        reload.tap()
+        app.scrollViews["cloud-resource-detail"].swipeDown()
         XCTAssertTrue(app.images["cloud-preview-image"].waitForExistence(timeout: 8))
-        XCTAssertFalse(app.navigationBars["Send Result"].exists)
+        XCTAssertFalse(app.navigationBars["Refresh Details"].exists)
         reveal(regenerate, app: app)
         regenerate.tap()
-        XCTAssertTrue(app.buttons["cloud-result-target-a2_shared"].waitForExistence(timeout: 12))
+        XCTAssertTrue(app.descendants(matching: .any)["cloud-refresh-ready"].firstMatch.waitForExistence(timeout: 12))
         capture(app, "cloud-regenerate-result")
     }
 
@@ -179,7 +177,7 @@ final class CloudBrowsingUITests: XCTestCase {
         app.buttons["root-send-close"].tap()
 
         try await fault("delete-device")
-        app.buttons["cloud-refresh-list"].firstMatch.tap()
+        app.scrollViews["cloud-resource-list"].swipeDown()
         let originalRow = app.buttons["cloud-device-a2_shared"]
         let removed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !originalRow.exists }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [removed], timeout: 8), .completed)
@@ -211,27 +209,27 @@ final class CloudBrowsingUITests: XCTestCase {
         XCTAssertTrue(device.waitForExistence(timeout: 15)); device.tap()
         XCTAssertTrue(app.images["cloud-preview-image"].waitForExistence(timeout: 10))
         try await fault("change-device")
-        app.buttons["cloud-reload-preview"].firstMatch.tap()
-        XCTAssertTrue(app.staticTexts["Studio A Display updated"].waitForExistence(timeout: 10))
+        app.scrollViews["cloud-resource-detail"].swipeDown()
+        XCTAssertTrue(app.navigationBars.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Studio A Display updated")).firstMatch.waitForExistence(timeout: 10))
         XCTAssertTrue(app.images["cloud-preview-image"].waitForExistence(timeout: 10))
         capture(app, "cloud-injected-device-version-loaded")
-        app.navigationBars.buttons["Displays"].firstMatch.tap()
+        app.navigationBars.buttons.firstMatch.tap()
         app.tabBars.buttons["Dashboards"].tap()
         let page = app.buttons["cloud-page-a2_page_shared"]
         XCTAssertTrue(page.waitForExistence(timeout: 5)); page.tap()
         XCTAssertTrue(app.images["cloud-preview-image"].waitForExistence(timeout: 10))
         try await fault("change-page")
-        app.buttons["cloud-reload-preview"].firstMatch.tap()
-        XCTAssertTrue(app.staticTexts["Morning Board A updated"].waitForExistence(timeout: 10))
+        app.scrollViews["cloud-resource-detail"].swipeDown()
+        XCTAssertTrue(app.navigationBars.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Morning Board A updated")).firstMatch.waitForExistence(timeout: 10))
         XCTAssertTrue(app.images["cloud-preview-image"].waitForExistence(timeout: 10))
         capture(app, "cloud-injected-page-version-loaded")
         try await fault("asset404")
-        app.buttons["cloud-reload-preview"].firstMatch.tap()
+        app.scrollViews["cloud-resource-detail"].swipeDown()
         XCTAssertTrue(app.staticTexts["No Preview Yet"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.images["cloud-preview-image"].exists)
         capture(app, "cloud-injected-404-cleared-old-image")
         try await fault("delete-page")
-        app.buttons["cloud-reload-preview"].firstMatch.tap()
+        app.scrollViews["cloud-resource-detail"].swipeDown()
         let removed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             !page.exists && app.buttons["cloud-page-a2_page_no_preview"].exists
                 && !app.images["cloud-preview-image"].exists
@@ -243,7 +241,7 @@ final class CloudBrowsingUITests: XCTestCase {
         XCTAssertTrue(device.waitForExistence(timeout: 5)); device.tap()
         XCTAssertTrue(app.images["cloud-preview-image"].waitForExistence(timeout: 10))
         try await fault("status", status: 403)
-        app.buttons["cloud-reload-preview"].firstMatch.tap()
+        app.scrollViews["cloud-resource-detail"].swipeDown()
         XCTAssertTrue(app.descendants(matching: .any)["cloud-read-problem"].firstMatch.waitForExistence(timeout: 10))
         XCTAssertFalse(app.images["cloud-preview-image"].exists)
         XCTAssertFalse(device.exists)
@@ -259,7 +257,7 @@ final class CloudBrowsingUITests: XCTestCase {
     func testRealCloudLoginAndExistingPreviewHasNativeCloudSend() {
         let app = launch()
         authorize(app)
-        let tenant = app.staticTexts["cloud-current-tenant"].firstMatch
+        let tenant = app.descendants(matching: .any)["cloud-current-tenant"].firstMatch
         XCTAssertTrue(tenant.waitForExistence(timeout: 20))
         XCTAssertTrue(app.buttons["root-send-action"].exists)
         capture(app, "cloud-devices")
@@ -283,9 +281,14 @@ final class CloudBrowsingUITests: XCTestCase {
         XCTAssertTrue(app.otherElements["cloud-no-preview"].waitForExistence(timeout: 10)
             || app.staticTexts["No Preview Yet"].exists)
         capture(app, "cloud-no-frame")
-        app.navigationBars.buttons["Displays"].firstMatch.tap()
+        app.navigationBars.buttons.firstMatch.tap()
         app.tabBars.buttons["Dashboards"].tap()
         let page = app.buttons["cloud-page-a2_page_no_preview"]
+        if !page.exists {
+            let other = app.buttons["cloud-dashboard-section-other"]
+            reveal(other, app: app)
+            other.tap()
+        }
         XCTAssertTrue(page.waitForExistence(timeout: 5)); page.tap()
         XCTAssertTrue(app.staticTexts["No Preview Yet"].waitForExistence(timeout: 10))
         capture(app, "cloud-no-thumbnail")
@@ -297,16 +300,22 @@ final class CloudBrowsingUITests: XCTestCase {
         chooseConnection(app)
         try await selectBrowserAccount("owner_b")
         authorize(app, tenant: "Studio B (owner)")
-        XCTAssertTrue(app.staticTexts["Studio B"].waitForExistence(timeout: 15))
-        XCTAssertFalse(app.staticTexts["Studio A Display"].exists)
+        let current = app.descendants(matching: .any)["cloud-current-tenant"].firstMatch
+        let switched = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            current.label.contains("Studio B") == true
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [switched], timeout: 15), .completed)
+        XCTAssertFalse(app.buttons["cloud-device-a2_shared"].label.contains("Studio A Display"))
         app.buttons["cloud-device-a2_shared"].tap()
         XCTAssertTrue(app.images["cloud-preview-image"].waitForExistence(timeout: 10))
         capture(app, "cloud-account-b-frame")
         chooseConnection(app)
         let savedA = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'saved-connection-' AND label CONTAINS 'Studio A'")).firstMatch
         XCTAssertTrue(savedA.waitForExistence(timeout: 5)); reveal(savedA, app: app); savedA.tap()
-        XCTAssertTrue(app.staticTexts["Studio A Display"].waitForExistence(timeout: 15))
-        XCTAssertFalse(app.staticTexts["Studio B Display"].exists)
+        let returned = app.buttons["cloud-device-a2_shared"]
+        XCTAssertTrue(returned.waitForExistence(timeout: 15))
+        XCTAssertTrue(returned.label.contains("Studio A Display"))
+        XCTAssertFalse(returned.label.contains("Studio B Display"))
         capture(app, "cloud-returned-account-a")
         try await selectBrowserAccount("owner_a")
     }
@@ -543,7 +552,7 @@ final class CloudBrowsingUITests: XCTestCase {
         XCTAssertTrue(device.waitForExistence(timeout: 15)); device.tap()
         XCTAssertTrue(app.images["cloud-preview-image"].waitForExistence(timeout: 10))
         capture(app, "review-native-cloud-frame")
-        app.navigationBars.buttons["Displays"].firstMatch.tap()
+        app.navigationBars.buttons.firstMatch.tap()
         for _ in 0..<2 {
             app.tabBars.buttons["Dashboards"].tap()
             XCTAssertTrue(app.buttons["cloud-page-a2_page_shared"].waitForExistence(timeout: 5))
@@ -554,6 +563,7 @@ final class CloudBrowsingUITests: XCTestCase {
         app.buttons["cloud-page-a2_page_shared"].tap()
         XCTAssertTrue(app.images["cloud-preview-image"].waitForExistence(timeout: 10))
         capture(app, "review-native-cloud-dashboard")
+        app.navigationBars.buttons["BackButton"].firstMatch.tap()
         app.buttons["root-settings"].firstMatch.tap()
         let account = app.buttons["cloud-account-settings"]
         XCTAssertTrue(account.waitForExistence(timeout: 5))

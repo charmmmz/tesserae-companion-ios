@@ -363,67 +363,16 @@ struct DashboardsView: View {
             section.id
         )
 
-        return Button {
+        return DashboardSectionHeader(
+            title: sectionTitle(section),
+            subtitle: sectionSubtitle(section),
+            count: section.dashboards.count,
+            isCollapsed: isCollapsed,
+            canCollapse: searchQuery.isEmpty,
+            icon: sectionIcon(section)
+        ) {
             toggleSection(section)
-        } label: {
-            HStack(spacing: 10) {
-                sectionIcon(section)
-                    .foregroundStyle(TesseraeTheme.accent)
-                    .frame(width: 34, height: 34)
-                    .background(
-                        TesseraeTheme.accent.opacity(0.11),
-                        in: RoundedRectangle(
-                            cornerRadius: 10,
-                            style: .continuous
-                        )
-                    )
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(sectionTitle(section))
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-
-                    if let subtitle = sectionSubtitle(section) {
-                        Text(subtitle)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Spacer()
-
-                Text(section.dashboards.count, format: .number)
-                    .font(.caption.monospacedDigit().weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        Color.primary.opacity(0.055),
-                        in: Capsule()
-                    )
-
-                Image(systemName: "chevron.down")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.tertiary)
-                    .rotationEffect(
-                        .degrees(isCollapsed ? -90 : 0)
-                    )
-                    .frame(width: 16)
-            }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 2)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityLabel(sectionTitle(section))
-        .accessibilityValue(isCollapsed ? "Collapsed" : "Expanded")
-        .accessibilityHint(
-            searchQuery.isEmpty
-                ? (isCollapsed ? "Expands this group." : "Collapses this group.")
-                : ""
-        )
-        .disabled(!searchQuery.isEmpty)
         .accessibilityIdentifier("dashboard-section-toggle-\(section.id)")
     }
 
@@ -601,15 +550,15 @@ struct DashboardsView: View {
             spacing: layoutMode == .cards && isExpanded ? 14 : 0
         ) {
             if layoutMode == .cards {
-                HStack(alignment: .center, spacing: 12) {
+                DashboardCardRow {
                     dashboardIdentityIcon(dashboard)
-
+                } details: {
                     dashboardCardDetails(
                         dashboard,
                         occurrenceID: occurrenceID,
                         pushContext: pushContext
                     )
-
+                } preview: {
                     dashboardPreview(
                         dashboard,
                         occurrenceID: occurrenceID,
@@ -1545,4 +1494,93 @@ func dashboardWebURL(_ webURL: String?, relativeTo baseURL: URL) -> URL? {
           let host = url.host, !host.isEmpty
     else { return nil }
     return url
+}
+
+
+struct DashboardCardRow<Icon: View, Details: View, Preview: View>: View {
+    @ViewBuilder let icon: Icon
+    @ViewBuilder let details: Details
+    @ViewBuilder let preview: Preview
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            icon
+            details
+            preview
+        }
+    }
+}
+
+struct DashboardSectionHeader<Icon: View>: View {
+    let title: String
+    let subtitle: String?
+    let count: Int
+    let isCollapsed: Bool
+    let canCollapse: Bool
+    var minimumHeight: CGFloat? = nil
+    let icon: Icon
+    let toggle: () -> Void
+
+    var body: some View {
+        Button(action: toggle) {
+            HStack(spacing: 10) {
+                icon
+                    .foregroundStyle(TesseraeTheme.accent)
+                    .frame(width: 34, height: 34)
+                    .background(
+                        TesseraeTheme.accent.opacity(0.11),
+                        in: RoundedRectangle(
+                            cornerRadius: 10,
+                            style: .continuous
+                        )
+                    )
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+
+                    if let subtitle = subtitle {
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Spacer()
+
+                Text(count, format: .number)
+                    .font(.caption.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Color.primary.opacity(0.055),
+                        in: Capsule()
+                    )
+
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.tertiary)
+                    .rotationEffect(
+                        .degrees(isCollapsed ? -90 : 0)
+                    )
+                    .frame(width: 16)
+            }
+            .frame(minHeight: minimumHeight)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel(title)
+        .accessibilityValue(isCollapsed ? "Collapsed" : "Expanded")
+        .accessibilityHint(
+            canCollapse
+                ? (isCollapsed ? "Expands this group." : "Collapses this group.")
+                : ""
+        )
+        .disabled(!canCollapse)
+    }
 }

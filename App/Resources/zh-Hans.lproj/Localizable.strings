@@ -1344,3 +1344,20 @@
 "Cloud registration failed." = "云端注册失败。";
 "Cloud registration could not be confirmed. Check Displays before trying again." = "无法确认云端注册。请先查看「屏幕」再重试。";
 "Unable to Update Known Networks" = "无法更新已知网络";
+
+"Assigned to" = "已分配给";
+"Check this refresh" = "请查看刷新结果";
+"Clear Search" = "清除搜索";
+"Collapses this group." = "收起此分组。";
+"Dashboard Details" = "仪表盘详情";
+"Expands this group." = "展开此分组。";
+"Open in Cloud" = "在云端打开";
+"Other Dashboards" = "其他仪表盘";
+"Prepares a fresh image for the display’s current dashboard." = "为这台显示屏当前的仪表盘准备新画面。";
+"Preview for %@" = "%@ 的预览";
+"Preview unavailable for %@" = "无法预览 %@";
+"Ready for next wake" = "已就绪，等待屏幕唤醒";
+"Screen Preview" = "屏幕预览";
+"Tesserae Cloud, %@" = "Tesserae 云端，%@";
+"Type" = "类型";
+"View" = "查看";
