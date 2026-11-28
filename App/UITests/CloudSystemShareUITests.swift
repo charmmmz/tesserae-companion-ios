@@ -33,6 +33,13 @@ import XCTest
         let (_, response) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:8879/select?account=\(account)")!)
         XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
         let signIn = app.buttons["cloud-signin"]
+        if !signIn.exists {
+            let cloud = app.segmentedControls["connection-type"].buttons
+                .matching(NSPredicate(format: "label IN %@", ["Cloud", "云端"])).firstMatch
+            XCTAssertTrue(cloud.waitForExistence(timeout: 10))
+            reveal(cloud, in: app)
+            if !cloud.isSelected { cloud.tap() }
+        }
         XCTAssertTrue(signIn.waitForExistence(timeout: 15)); reveal(signIn, in: app); signIn.tap()
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         let consent = springboard.buttons.matching(NSPredicate(format: "label IN %@", ["Continue", "继续"])).firstMatch
@@ -223,12 +230,8 @@ import XCTest
         let app = launch()
         try await authorize(app)
         let identifier = try XCTUnwrap(ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_PENDING_ID"])
-        let results = app.buttons["cloud-send-results"]
-        if !results.exists {
-            app.buttons["root-settings"].tap()
-            let entry = app.buttons["Send Results"]
-            XCTAssertTrue(entry.waitForExistence(timeout: 5)); reveal(entry, in: app); entry.tap()
-        } else { results.tap() }
+        let results = app.tabBars.buttons["Activity"]
+        XCTAssertTrue(results.waitForExistence(timeout: 8)); results.tap()
         let row = app.buttons["cloud-pending-" + identifier]
         XCTAssertTrue(row.waitForExistence(timeout: 15)); reveal(row, in: app); row.tap()
         let review = app.buttons["cloud-pending-review"]
@@ -241,27 +244,27 @@ import XCTest
         XCTAssertTrue(send.waitForExistence(timeout: 10)); XCTAssertTrue(send.isEnabled)
         capture(app, "Review Existing Photo With Current Geometry")
         send.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["share-cloud-outcome"].firstMatch.waitForExistence(timeout: 35))
+        XCTAssertTrue(app.descendants(matching: .any)["cloud-result-target-a4_land"].firstMatch.waitForExistence(timeout: 35))
         capture(app, "Explicit Review Durable Completion")
-        XCTAssertTrue(app.staticTexts["Frame Generated"].exists)
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Ready for next wake")).firstMatch.exists)
     }
     func testExplicitReviewResultReadOnly() async throws {
         let app = launch()
         try await authorize(app)
         let identifier = try XCTUnwrap(ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_RESULT_ID"])
-        app.buttons["cloud-send-results"].tap()
+        app.tabBars.buttons["Activity"].tap()
         let result = app.buttons["cloud-result-" + identifier]
         XCTAssertTrue(result.waitForExistence(timeout: 15)); reveal(result, in: app); result.tap()
-        let target = app.buttons["cloud-result-target-a4_land"]
+        let target = app.descendants(matching: .any)["cloud-result-target-a4_land"]
         XCTAssertTrue(target.waitForExistence(timeout: 15)); reveal(target, in: app)
-        XCTAssertTrue(target.label.contains("Frame Generated"))
+        XCTAssertTrue(target.label.contains("Ready for next wake"))
         capture(app, "Reviewed Photo Result Restored Without Sending")
     }
     func testPendingInputExpiresWhileDetailOrReviewIsOpen() async throws {
         let app = launch()
         try await authorize(app)
         let identifier = try XCTUnwrap(ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_PENDING_ID"])
-        app.buttons["cloud-send-results"].tap()
+        app.tabBars.buttons["Activity"].tap()
         let row = app.buttons["cloud-pending-" + identifier]
         XCTAssertTrue(row.waitForExistence(timeout: 15)); reveal(row, in: app); row.tap()
         let image = app.images["cloud-pending-preview"]
@@ -290,15 +293,15 @@ import XCTest
         let app = launch()
         try await authorize(app)
         let identifier = try XCTUnwrap(ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_PENDING_ID"])
-        app.buttons["cloud-send-results"].tap()
+        app.tabBars.buttons["Activity"].tap()
         let row = app.buttons["cloud-pending-" + identifier]
         XCTAssertTrue(row.waitForExistence(timeout: 15)); reveal(row, in: app); row.tap()
         XCTAssertTrue(app.images["cloud-pending-preview"].waitForExistence(timeout: 15))
         let next = app.buttons["cloud-pending-continue"]
         reveal(next, in: app); capture(app, "Explicit Continue Before Acceptance"); next.tap()
-        let result = app.buttons["cloud-result-target-a4_land"]
+        let result = app.descendants(matching: .any)["cloud-result-target-a4_land"]
         XCTAssertTrue(result.waitForExistence(timeout: 35)); reveal(result, in: app)
-        XCTAssertTrue(result.label.contains("Frame Generated")); XCTAssertTrue(result.isHittable)
+        XCTAssertTrue(result.label.contains("Ready for next wake")); XCTAssertTrue(result.isHittable)
         XCTAssertFalse(app.buttons["cloud-pending-continue"].exists)
         capture(app, "Accepted Result Visible After Pending Sheet Dismissal")
     }
@@ -371,7 +374,7 @@ import XCTest
         let app = launch()
         try await authorize(app)
         let identifier = try XCTUnwrap(ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_PENDING_ID"])
-        app.buttons["cloud-send-results"].tap()
+        app.tabBars.buttons["Activity"].tap()
         let row = app.buttons["cloud-pending-" + identifier]
         XCTAssertTrue(row.waitForExistence(timeout: 15)); reveal(row, in: app); row.tap()
         let review = app.buttons["cloud-pending-review"]

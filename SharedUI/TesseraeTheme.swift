@@ -524,6 +524,11 @@ final class TesseraeMessageCenter {
         scheduleCurrentDismissal()
     }
 
+    func dismissMessages(startingWith prefix: String) {
+        entries.removeAll { $0.message.id.hasPrefix(prefix) }
+        scheduleCurrentDismissal()
+    }
+
     func dismissAll() {
         entries = []
         scheduleCurrentDismissal()

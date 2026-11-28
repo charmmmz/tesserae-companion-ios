@@ -27,7 +27,6 @@ struct CloudResourceList: View {
     let isDevice: Bool
     let isActive: Bool
     let showResult: (UUID) -> Void
-    @Environment(CompanionPresentation.self) private var presentation
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var selectedID: String?
@@ -71,13 +70,7 @@ struct CloudResourceList: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 TesseraeRootToolbar(showsGlobalActions: horizontalSizeClass == .compact || selectedID == nil) {
-                    if horizontalSizeClass == .compact || selectedID == nil {
-                        Button("Send Results", systemImage: "clock") {
-                            presentation.cloudResultID = nil
-                            presentation.sheet = .cloudResults
-                        }
-                        .accessibilityIdentifier("cloud-send-results")
-                    }
+                    EmptyView()
                 }
             }
             .tesseraeRootPageChrome()

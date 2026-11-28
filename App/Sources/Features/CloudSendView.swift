@@ -12,7 +12,7 @@ struct CloudSendSheet: View {
     let model: CloudBrowseModel
     let context: CloudPresentationContext
     var recovery: CloudPendingReview? = nil
-    var onRecoveryAccepted: ((UUID) -> Void)? = nil
+    let onAccepted: (UUID) -> Void
     @Environment(ConnectionHost.self) private var host
     @Environment(CompanionPresentation.self) private var presentation
     @State private var media = MediaFrameSession()
@@ -296,17 +296,14 @@ struct CloudSendSheet: View {
                     let result = try await host.replaceCloudPending(recovery, media: still, selectedIDs: selected,
                         fit: fit, framings: framings, decision: decision, context: context)
                     host.withCurrentCloudPresentation(context) {
-                        if case .finished(let batch) = result, let onRecoveryAccepted { onRecoveryAccepted(batch.id) }
+                        if case .finished(let batch) = result { onAccepted(batch.id) }
                         else if !reviewHasExpired { recoveryOutcome = result }
                     }
                     return
                 }
                 let id = try await host.submitCloudPhoto(media: still, selectedIDs: selected, fit: fit,
                     framings: framings, decision: decision, context: context)
-                host.withCurrentCloudPresentation(context) {
-                    presentation.cloudResultID = id
-                    presentation.sheet = .cloudResults
-                }
+                host.withCurrentCloudPresentation(context) { onAccepted(id) }
             } catch {
                 guard !reviewHasExpired else { return }
                 self.error = error.localizedDescription

@@ -116,11 +116,16 @@ import XCTest
         XCTAssertEqual(zoom.label, portraitZoom)
         capture(app, "A3-portrait-crop-preserved-after-switch")
         submit.tap()
-        XCTAssertTrue(app.buttons["cloud-result-target-a3_land"].waitForExistence(timeout: 15))
-        reveal(app.buttons["cloud-result-target-a3_portrait"], in: app)
-        XCTAssertTrue(app.buttons["cloud-result-target-a3_portrait"].exists)
-        let generatedLabel = ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_LANGUAGE"] == "zh" ? "画面已生成" : "Frame Generated"
-        let portraitResult = app.buttons["cloud-result-target-a3_portrait"]
+        XCTAssertTrue(app.descendants(matching: .any)["cloud-send-ready"].firstMatch.waitForExistence(timeout: 20))
+        XCTAssertTrue(app.buttons["cloud-device-a3_land"].exists)
+        XCTAssertFalse(app.navigationBars["Photo Details"].exists)
+        capture(app, "cloud-send-ready-feedback")
+        openLatestResult(app)
+        XCTAssertTrue(app.descendants(matching: .any)["cloud-result-target-a3_land"].waitForExistence(timeout: 15))
+        reveal(app.descendants(matching: .any)["cloud-result-target-a3_portrait"], in: app)
+        XCTAssertTrue(app.descendants(matching: .any)["cloud-result-target-a3_portrait"].exists)
+        let generatedLabel = ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_LANGUAGE"] == "zh" ? "已就绪，等待屏幕唤醒" : "Ready for next wake"
+        let portraitResult = app.descendants(matching: .any)["cloud-result-target-a3_portrait"]
         let generated = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in portraitResult.label.contains(generatedLabel) }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [generated], timeout: 20), .completed)
         capture(app, "A3-generated-results")
@@ -129,10 +134,10 @@ import XCTest
         XCTAssertTrue(previewPicker.waitForExistence(timeout: 5))
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["cloud-device-a3_land"].waitForExistence(timeout: 15))
-        app.buttons["cloud-send-results"].firstMatch.tap()
+        app.tabBars.buttons["Activity"].tap()
         let result = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'cloud-result-'")).firstMatch
         XCTAssertTrue(result.waitForExistence(timeout: 8)); result.tap()
-        XCTAssertTrue(app.buttons["cloud-result-target-a3_land"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.descendants(matching: .any)["cloud-result-target-a3_land"].waitForExistence(timeout: 8))
         capture(app, "A3-restored-result-no-resend")
     }
     func testRestoreAcceptedResultWithoutSending() throws {
@@ -140,10 +145,10 @@ import XCTest
             "Provide the namespace of an already accepted real Cloud send.")
         let app = launch()
         XCTAssertTrue(app.buttons["cloud-device-a3_land"].waitForExistence(timeout: 15))
-        app.buttons["cloud-send-results"].firstMatch.tap()
+        app.tabBars.buttons["Activity"].tap()
         let entry = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'cloud-result-'")).firstMatch
         XCTAssertTrue(entry.waitForExistence(timeout: 8)); entry.tap()
-        let land = app.buttons["cloud-result-target-a3_land"], portrait = app.buttons["cloud-result-target-a3_portrait"]
+        let land = app.descendants(matching: .any)["cloud-result-target-a3_land"], portrait = app.descendants(matching: .any)["cloud-result-target-a3_portrait"]
         reveal(land, in: app); XCTAssertTrue(land.exists)
         reveal(portrait, in: app); XCTAssertTrue(portrait.exists)
         capture(app, "A3-durable-per-device-generated-results")
@@ -153,6 +158,7 @@ import XCTest
         app.buttons["Landscape A"].tap()
         XCTAssertTrue(preview.label.contains("Landscape A"))
         capture(app, "A3-frozen-landscape-result-preview")
+        selectResendTargets(app)
         reveal(land, in: app); land.tap()
         XCTAssertTrue(land.isSelected)
         reveal(preview, in: app); preview.buttons.firstMatch.tap(); app.buttons["Portrait A"].tap()
@@ -162,10 +168,10 @@ import XCTest
         capture(app, "A3-preview-switch-independent-of-resend-selection")
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["cloud-device-a3_land"].waitForExistence(timeout: 15))
-        app.buttons["cloud-send-results"].firstMatch.tap()
+        app.tabBars.buttons["Activity"].tap()
         let restored = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'cloud-result-'")).firstMatch
         XCTAssertTrue(restored.waitForExistence(timeout: 8)); restored.tap()
-        reveal(app.buttons["cloud-result-target-a3_land"], in: app)
+        reveal(app.descendants(matching: .any)["cloud-result-target-a3_land"], in: app)
         capture(app, "A3-restarted-durable-result-without-replay")
     }
 
@@ -199,8 +205,11 @@ import XCTest
         let refresh = app.buttons["cloud-refresh-current"]
         XCTAssertTrue(refresh.waitForExistence(timeout: 10)); refresh.tap()
         XCTAssertTrue(app.descendants(matching: .any)["cloud-refresh-ready"].firstMatch.waitForExistence(timeout: 20))
-        XCTAssertFalse(app.navigationBars["Send Result"].exists)
+        XCTAssertFalse(app.navigationBars["Refresh Details"].exists)
         capture(app, "cloud-display-refresh-confirmation")
+        openLatestResult(app)
+        assertOutcome("Ready for next wake", device: "a3_land", in: app)
+        capture(app, "cloud-refresh-activity-detail")
     }
 
     private func prepareMarker(_ app: XCUIApplication, targets: Set<String>) {
@@ -220,7 +229,7 @@ import XCTest
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 15), .completed)
     }
     private func assertOutcome(_ title: String, device: String, in app: XCUIApplication) {
-        let result = app.buttons["cloud-result-target-\(device)"]
+        let result = app.descendants(matching: .any)["cloud-result-target-\(device)"]
         reveal(result, in: app)
         let finished = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in result.label.contains(title) }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [finished], timeout: 20), .completed)
@@ -230,11 +239,14 @@ import XCTest
         prepareMarker(app, targets: ["a3_land", "a3_native", "a3_large"])
         capture(app, "A3-partial-three-targets-before-submit")
         app.buttons["send-submit"].tap()
-        assertOutcome("Frame Generated", device: "a3_land", in: app)
-        assertOutcome("Not Sent", device: "a3_large", in: app)
-        assertOutcome("Outcome Unknown", device: "a3_native", in: app)
-        XCTAssertFalse(app.buttons["cloud-result-target-a3_land"].isSelected)
-        XCTAssertTrue(app.buttons["cloud-result-target-a3_native"].isSelected)
+        openAttentionResult(app)
+        assertOutcome("Ready for next wake", device: "a3_land", in: app)
+        assertOutcome("Not sent", device: "a3_large", in: app)
+        assertOutcome("Couldn’t confirm", device: "a3_native", in: app)
+        let retry = app.buttons["cloud-result-retry-a3_large"]
+        XCTAssertTrue(retry.exists)
+        XCTAssertGreaterThanOrEqual(retry.frame.height, 44)
+        XCTAssertFalse(app.buttons["cloud-result-retry-a3_native"].exists)
         capture(app, "A3-real-partial-generated-unknown-unstarted")
     }
 
@@ -243,11 +255,12 @@ import XCTest
             "Provide the namespace of the saved partial send from the local fixture.")
         let app = launch()
         XCTAssertTrue(app.buttons["cloud-device-a3_land"].waitForExistence(timeout: 15))
-        app.buttons["cloud-send-results"].firstMatch.tap()
+        app.tabBars.buttons["Activity"].tap()
         let chinese = ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_LANGUAGE"] == "zh"
-        let expected = chinese ? "1 台已生成, 1 台未发送, 1 台未确认" : "1 generated, 1 not sent, 1 unconfirmed"
-        let summary = app.staticTexts.matching(NSPredicate(
-            format: "identifier BEGINSWITH 'cloud-result-summary-' AND label == %@", expected)).firstMatch
+        let expected = chinese ? ["1 台已就绪", "1 台未发送", "1 台无法确认"] : ["1 ready", "1 not sent", "1 unconfirmed"]
+        let summary = app.descendants(matching: .any).matching(NSPredicate(
+            format: "identifier BEGINSWITH 'cloud-result-summary-' AND label CONTAINS %@ AND label CONTAINS %@ AND label CONTAINS %@",
+            expected[0], expected[1], expected[2])).firstMatch
         if !summary.waitForExistence(timeout: 8) {
             capture(app, "A3-partial-batch-summary-missing")
             XCTFail("Expected the saved partial batch to show all three outcomes in its list row.")
@@ -256,17 +269,52 @@ import XCTest
         capture(app, "A3-partial-batch-summary")
     }
 
+    func testRetryOnlyUnsentDisplayFromActivity() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_RETRY_LATEST_PARTIAL"] == "1",
+            "Requires a saved partial send and the normal fixture allowance restored.")
+        let app = launch()
+        openSavedResult(app)
+        assertOutcome("Not sent", device: "a3_large", in: app)
+        let retry = app.buttons["cloud-result-retry-a3_large"]
+        reveal(retry, in: app)
+        retry.tap()
+        assertOutcome("Ready for next wake", device: "a3_large", in: app)
+        XCTAssertFalse(app.descendants(matching: .any)["cloud-result-target-a3_land"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["cloud-result-target-a3_native"].exists)
+        capture(app, "cloud-retry-only-unsent-display")
+    }
+
     func testStructuredQuotaRefusal() throws {
         let app = launch()
         prepareMarker(app, targets: ["a3_land"])
         app.buttons["send-submit"].tap()
-        assertOutcome("Cloud Plan Limit Reached", device: "a3_land", in: app)
+        openAttentionResult(app)
+        assertOutcome("Your Cloud plan limit was reached.", device: "a3_land", in: app)
         capture(app, "A3-real-quota-refusal")
+    }
+
+    private func openLatestResult(_ app: XCUIApplication) {
+        app.tabBars.buttons["Activity"].tap()
+        let entry = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'cloud-result-'")).firstMatch
+        XCTAssertTrue(entry.waitForExistence(timeout: 10))
+        capture(app, "cloud-activity-cards")
+        entry.tap()
+    }
+
+    private func openAttentionResult(_ app: XCUIApplication) {
+        let feedback = app.descendants(matching: .any)["cloud-send-attention"].firstMatch
+        XCTAssertTrue(feedback.waitForExistence(timeout: 20))
+        app.buttons["View"].firstMatch.tap()
+    }
+
+    private func selectResendTargets(_ app: XCUIApplication) {
+        app.buttons["cloud-result-more"].tap()
+        app.buttons["cloud-result-select-targets"].tap()
     }
 
     private func openSavedResult(_ app: XCUIApplication) {
         XCTAssertTrue(app.buttons["cloud-device-a3_land"].waitForExistence(timeout: 15))
-        app.buttons["cloud-send-results"].firstMatch.tap()
+        app.tabBars.buttons["Activity"].tap()
         let entry: XCUIElement
         if let id = ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_RESULT_ID"] {
             entry = app.buttons["cloud-result-\(id)"]
@@ -274,34 +322,40 @@ import XCTest
         reveal(entry, in: app)
         XCTAssertTrue(entry.exists); entry.tap()
     }
-    func testResponseLossStaysUnknownAfterRestart() throws {
+    func testResponseLossStaysUnknownAfterRestart() async throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_SUBMISSION_PROXY"] == "1")
-        let app = launch(); prepareMarker(app, targets: ["a3_land"])
+        let app = launch()
+        if !app.buttons["cloud-device-a3_land"].waitForExistence(timeout: 4) {
+            try await authorize(app)
+        }
+        prepareMarker(app, targets: ["a3_land"])
         app.buttons["send-submit"].tap()
-        assertOutcome("Outcome Unknown", device: "a3_land", in: app)
+        openAttentionResult(app)
+        assertOutcome("Couldn’t confirm", device: "a3_land", in: app)
         capture(app, "A3-real-response-loss-unknown")
         app.terminate(); app.launch(); openSavedResult(app)
-        assertOutcome("Outcome Unknown", device: "a3_land", in: app)
+        assertOutcome("Couldn’t confirm", device: "a3_land", in: app)
         capture(app, "A3-response-loss-restart-no-replay")
     }
     func testExplicitUnknownResendSelectedTargetOnly() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_RESULT_ID"] != nil)
         let app = launch(); openSavedResult(app)
-        assertOutcome("Outcome Unknown", device: "a3_native", in: app)
-        let land = app.buttons["cloud-result-target-a3_land"]
+        assertOutcome("Couldn’t confirm", device: "a3_native", in: app)
+        selectResendTargets(app)
+        let land = app.descendants(matching: .any)["cloud-result-target-a3_land"]
         XCTAssertFalse(land.isSelected)
-        let large = app.buttons["cloud-result-target-a3_large"]
+        let large = app.descendants(matching: .any)["cloud-result-target-a3_large"]
         if large.isSelected { large.tap() }
-        let native = app.buttons["cloud-result-target-a3_native"]
+        let native = app.descendants(matching: .any)["cloud-result-target-a3_native"]
         XCTAssertTrue(native.isSelected)
         let resend = app.buttons["cloud-result-resend"]; reveal(resend, in: app); resend.tap()
         let confirm = app.buttons["cloud-result-confirm-resend"].firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 5))
         capture(app, "A3-unknown-explicit-duplicate-confirmation")
         confirm.tap()
-        assertOutcome("Frame Generated", device: "a3_native", in: app)
-        XCTAssertFalse(app.buttons["cloud-result-target-a3_land"].exists)
-        XCTAssertFalse(app.buttons["cloud-result-target-a3_large"].exists)
+        assertOutcome("Ready for next wake", device: "a3_native", in: app)
+        XCTAssertFalse(app.descendants(matching: .any)["cloud-result-target-a3_land"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["cloud-result-target-a3_large"].exists)
         capture(app, "A3-manual-resend-only-selected-native")
     }
     func testDeleteSavedPhotoAndResult() throws {
@@ -309,13 +363,15 @@ import XCTest
         let app = launch(); openSavedResult(app)
         let photo = app.images["cloud-submitted-photo"]
         XCTAssertTrue(photo.waitForExistence(timeout: 5))
-        let removePhoto = app.buttons["cloud-result-delete-photo"]; reveal(removePhoto, in: app); removePhoto.tap()
+        app.buttons["cloud-result-more"].tap()
+        app.buttons["cloud-result-delete-photo"].tap()
         let confirmPhoto = app.buttons["cloud-result-confirm-delete-photo"].firstMatch
         XCTAssertTrue(confirmPhoto.waitForExistence(timeout: 5)); confirmPhoto.tap()
         XCTAssertTrue(app.staticTexts["cloud-result-media-expired"].waitForExistence(timeout: 5))
         XCTAssertFalse(photo.exists); XCTAssertFalse(app.buttons["cloud-result-resend"].isEnabled)
         capture(app, "A3-deleted-photo-no-preview-or-resend")
-        let remove = app.buttons["cloud-result-delete-result"]; reveal(remove, in: app); remove.tap()
+        app.buttons["cloud-result-more"].tap()
+        app.buttons["cloud-result-delete-result"].tap()
         let confirm = app.buttons["cloud-result-confirm-delete-result"].firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 5)); confirm.tap()
         let id = ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_RESULT_ID"]!
@@ -332,23 +388,32 @@ import XCTest
     func testSameDeviceIDsAccountSwitchHidesSavedResults() async throws {
         let app = launch()
         XCTAssertTrue(app.buttons["cloud-device-a3_land"].waitForExistence(timeout: 15))
-        if !app.staticTexts["cloud-current-tenant"].firstMatch.label.contains("A3 Studio B") {
+        if !app.descendants(matching: .any)["cloud-current-tenant"].firstMatch.label.contains("A3 Studio B") {
             chooseConnection(app)
-            try await authorize(app, account: "owner_b", tenantName: "A3 Studio B (owner)")
+            let savedB = app.buttons.matching(NSPredicate(format:
+                "identifier BEGINSWITH 'saved-connection-' AND label CONTAINS 'A3 Studio B'")).firstMatch
+            if savedB.exists {
+                reveal(savedB, in: app)
+                savedB.tap()
+            } else {
+                try await authorize(app, account: "owner_b", tenantName: "A3 Studio B (owner)")
+            }
         }
-        let current = app.staticTexts["cloud-current-tenant"].firstMatch
-        let switched = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in current.label.contains("A3 Studio B") }, object: nil)
+        let current = app.descendants(matching: .any)["cloud-current-tenant"].firstMatch
+        let switched = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            current.label.contains("A3 Studio B") == true
+        }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [switched], timeout: 10), .completed)
-        app.buttons["cloud-send-results"].firstMatch.tap()
-        XCTAssertTrue(app.staticTexts["No Cloud Send Results"].waitForExistence(timeout: 8))
+        app.tabBars.buttons["Activity"].tap()
+        XCTAssertTrue(app.staticTexts["No Activity Yet"].waitForExistence(timeout: 8))
         XCTAssertFalse(app.images["cloud-submitted-photo"].exists)
         capture(app, "A3-account-b-cannot-see-a-results")
-        app.buttons["cloud-results-close"].tap(); chooseConnection(app)
+        app.tabBars.buttons["Displays"].tap(); chooseConnection(app)
         let saved = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'saved-connection-' AND label CONTAINS 'A3 Studio A'")).firstMatch
         XCTAssertTrue(saved.waitForExistence(timeout: 5)); reveal(saved, in: app); saved.tap()
         XCTAssertTrue(app.buttons["cloud-device-a3_land"].waitForExistence(timeout: 15))
         openSavedResult(app)
-        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'cloud-result-target-'")).firstMatch.waitForExistence(timeout: 8))
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'cloud-result-target-'")).firstMatch.waitForExistence(timeout: 8))
         capture(app, "A3-return-account-a-original-result")
     }
 
@@ -363,7 +428,7 @@ import XCTest
         confirm.tap()
         try await authorize(app)
         openSavedResult(app)
-        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'cloud-result-target-'")).firstMatch.waitForExistence(timeout: 8))
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'cloud-result-target-'")).firstMatch.waitForExistence(timeout: 8))
         capture(app, "A3-relogin-original-history-without-replay")
     }
     func testExpiredSavedPhotoIsHiddenAndCannotBeResent() throws {
@@ -374,6 +439,8 @@ import XCTest
         XCTAssertTrue(unavailable.exists)
         XCTAssertFalse(app.images["cloud-submitted-photo"].exists)
         XCTAssertFalse(app.buttons["cloud-result-resend"].isEnabled)
+        app.buttons["cloud-result-more"].tap()
+        app.buttons["Storage & Retention"].tap()
         let resultExpiry = app.descendants(matching: .any)["cloud-result-expiry"].firstMatch
         reveal(resultExpiry, in: app); XCTAssertTrue(resultExpiry.exists)
         capture(app, "A3-synthetic-expired-photo-hidden-no-resend")
@@ -393,7 +460,7 @@ import XCTest
     }
     func testExistingResultLocalizedAccessibilityLayout() throws {
         let app = launch(); openSavedResult(app)
-        let first = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'cloud-result-target-'")).firstMatch
+        let first = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'cloud-result-target-'")).firstMatch
         reveal(first, in: app)
         XCTAssertTrue(first.exists)
         capture(app, "A3-result-localized-accessible-statuses")
@@ -412,7 +479,7 @@ import XCTest
         capture(app, "A3-review-frozen-landscape")
         preview.buttons.firstMatch.tap(); app.buttons["Portrait A"].tap()
         capture(app, "A3-review-frozen-portrait")
-        app.navigationBars.buttons.firstMatch.tap(); app.buttons["cloud-results-close"].tap()
+        app.navigationBars.buttons.firstMatch.tap(); app.tabBars.buttons["Displays"].tap()
         prepareMarker(app, targets: ["a3_land", "a3_portrait"])
         let picker = app.buttons["send-preview-display-picker"]
         reveal(picker, in: app); picker.tap(); app.buttons["send-preview-display-a3_portrait"].tap()
@@ -445,8 +512,8 @@ import XCTest
         let app = launch(); openSavedResult(app)
         XCTAssertTrue(app.images["cloud-submitted-photo"].waitForExistence(timeout: 5))
         try await fixtureControl("suspend")
-        app.navigationBars.buttons.firstMatch.tap(); app.buttons["cloud-results-close"].tap()
-        app.buttons["cloud-refresh-list"].firstMatch.tap()
+        app.navigationBars.buttons.firstMatch.tap(); app.tabBars.buttons["Displays"].tap()
+        app.scrollViews["cloud-resource-list"].swipeDown()
         let problem = app.descendants(matching: .any)["cloud-read-problem"].firstMatch
         XCTAssertTrue(problem.waitForExistence(timeout: 15))
         XCTAssertFalse(app.buttons["cloud-device-a3_land"].exists)
@@ -454,7 +521,7 @@ import XCTest
         XCTAssertFalse(send.exists && send.isEnabled)
         capture(app, "A3-real-tenant-read-restriction-hides-private-state")
         try await fixtureControl("restore")
-        app.buttons["cloud-refresh-list"].firstMatch.tap()
+        app.scrollViews["cloud-resource-list"].swipeDown()
         XCTAssertTrue(app.buttons["cloud-device-a3_land"].waitForExistence(timeout: 15))
         let usable = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in send.exists && send.isEnabled }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [usable], timeout: 10), .completed)
@@ -468,7 +535,7 @@ import XCTest
         let app = launch()
         let started = try XCTUnwrap(launchStarted), returned = try XCTUnwrap(launchReturned)
         openSavedResult(app)
-        assertOutcome("Outcome Unknown", device: "a3_land", in: app)
+        assertOutcome("Couldn’t confirm", device: "a3_land", in: app)
         let finished = ContinuousClock.now
         func seconds(_ from: ContinuousClock.Instant) -> Double {
             let duration = from.duration(to: finished).components

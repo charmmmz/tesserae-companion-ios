@@ -156,15 +156,14 @@ private actor SubmissionLifecycleHTTP: TesseraeHTTPTransporting {
         let presentation = CompanionPresentation()
         await fixture.host.select(fixture.b.connectionID)
         presentation.sheet = .settings
-        let oldID = UUID()
         let shown = fixture.host.withCurrentCloudPresentation(oldContext) {
-            presentation.cloudResultID = oldID; presentation.sheet = .cloudResults
+            presentation.sheet = nil
         }
         #expect(!shown)
         #expect(presentation.sheet == .settings)
-        #expect(presentation.cloudResultID == nil)
         let current = try #require(fixture.host.cloudPresentationContext)
-        #expect(fixture.host.withCurrentCloudPresentation(current) { presentation.cloudResultID = UUID() })
+        #expect(fixture.host.withCurrentCloudPresentation(current) { presentation.sheet = nil })
+        #expect(presentation.sheet == nil)
     }
 
     @Test func queuedOldRestrictionCannotStopNewCloudContext() async throws {

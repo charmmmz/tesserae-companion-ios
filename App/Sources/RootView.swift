@@ -200,7 +200,6 @@ struct RootView: View {
         }
         .onChange(of: connectionHost.cloudContextRevision) { _, _ in
             presentation.sheet = nil
-            presentation.cloudResultID = nil
             presentation.isSendComposerPresented = false
         }
         .onChange(of: connectionMessageRevision) { _, _ in

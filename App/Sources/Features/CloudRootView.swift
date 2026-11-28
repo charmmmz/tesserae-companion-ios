@@ -2,24 +2,36 @@ import SwiftUI
 import TesseraeKit
 
 struct CloudRootView: View {
-    private enum Tab: Hashable { case displays, dashboards }
+    private enum Tab: Hashable { case displays, dashboards, activity }
+
     let model: CloudBrowseModel
     @Environment(CompanionPresentation.self) private var presentation
     @Environment(ConnectionHost.self) private var host
+    @Environment(TesseraeMessageCenter.self) private var messageCenter
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var tab: Tab = .displays
+    @State private var activityPath: [UUID] = []
+    @State private var feedbackScope = UUID()
+    @State private var feedbackTasks: [UUID: Task<Void, Never>] = [:]
+
+    private var context: CloudPresentationContext? {
+        host.cloud === model && host.canUseCloudSubmissions ? host.cloudPresentationContext : nil
+    }
 
     var body: some View {
         @Bindable var presentation = presentation
         TabView(selection: $tab) {
             CloudResourceList(model: model, isDevice: true, isActive: tab == .displays && presentation.sheet == nil,
-                showResult: showResult)
+                showResult: showActivity)
                 .tabItem { Label("Displays", systemImage: "display").accessibilityIdentifier("cloud-displays-tab") }
                 .tag(Tab.displays)
             CloudResourceList(model: model, isDevice: false, isActive: tab == .dashboards && presentation.sheet == nil,
-                showResult: showResult)
+                showResult: showActivity)
                 .tabItem { Label("Dashboards", systemImage: "rectangle.stack").accessibilityIdentifier("cloud-pages-tab") }
                 .tag(Tab.dashboards)
+            activity
+                .tabItem { Label("Activity", systemImage: "clock.arrow.circlepath").accessibilityIdentifier("cloud-activity-tab") }
+                .tag(Tab.activity)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if horizontalSizeClass != .compact && canSend { TesseraeFloatingSendAction() }
@@ -27,33 +39,103 @@ struct CloudRootView: View {
         .environment(\.tesseraePageSendEnabled, horizontalSizeClass == .compact && canSend)
         .sheet(item: $presentation.sheet) { sheet in
             switch sheet {
-            case .settings: SettingsView()
+            case .settings:
+                SettingsView()
             case .send:
-                if let context = host.cloudPresentationContext, host.cloud === model {
-                    CloudSendSheet(model: model, context: context)
+                if let context {
+                    CloudSendSheet(model: model, context: context) { id in
+                        sendAccepted(id, context: context)
+                    }
                 }
-            case .cloudResults:
-                if let context = host.cloudPresentationContext, host.cloud === model {
-                    CloudSubmissionResultsSheet(context: context, initialID: presentation.cloudResultID)
-                }
-            case .uploads: EmptyView()
+            case .uploads:
+                EmptyView()
             }
         }
         .onChange(of: model.needsSignIn || model.isRestricted) { _, _ in
             Task { await host.cloudReadAccessChanged() }
         }
+        .onChange(of: context) { _, _ in resetActivityPresentation() }
+        .onDisappear(perform: resetActivityPresentation)
         .task { if model.snapshot == nil { await model.refresh() } }
     }
 
-    private func showResult(_ id: UUID) {
-        guard host.cloud === model, host.cloudPresentationContext != nil else { return }
-        presentation.cloudResultID = id
-        presentation.sheet = .cloudResults
+    @ViewBuilder private var activity: some View {
+        if let context {
+            CloudSubmissionActivity(context: context, tenant: model.snapshot?.account.tenant.name,
+                isActive: tab == .activity && presentation.sheet == nil, path: $activityPath)
+                .id(context)
+        } else {
+            NavigationStack {
+                ContentUnavailableView("Activity Unavailable", systemImage: "clock",
+                    description: Text(model.problem ?? String(localized: "Connect to Tesserae Cloud to see your activity.")))
+                    .tesseraeScreenBackground()
+                    .toolbar { TesseraeRootToolbar { EmptyView() } }
+                    .navigationTitle("Activity")
+            }
+        }
     }
 
     private var canSend: Bool {
-        host.canUseCloudSubmissions && !model.devices.isEmpty
+        context != nil && !model.devices.isEmpty
             && model.snapshot?.account.auth.scopes.contains("app:send") == true
+    }
+
+    private var feedbackPrefix: String { "cloud-send-\(feedbackScope.uuidString)-" }
+
+    private func showActivity(_ id: UUID) {
+        guard context != nil else { return }
+        activityPath = [id]
+        tab = .activity
+    }
+
+    private func resetActivityPresentation() {
+        feedbackTasks.values.forEach { $0.cancel() }
+        feedbackTasks.removeAll()
+        messageCenter.dismissMessages(startingWith: feedbackPrefix)
+        activityPath = []
+    }
+
+    private func sendAccepted(_ id: UUID, context acceptedContext: CloudPresentationContext) {
+        guard context == acceptedContext else { return }
+        presentation.sheet = nil
+        guard feedbackTasks[id] == nil else { return }
+        let messageID = feedbackPrefix + id.uuidString
+        messageCenter.post(.init(id: messageID, text: String(localized: "Sending…"),
+            kind: .progress(fraction: nil), lifetime: .persistent, survivesPresentationChange: true,
+            accessibilityIdentifier: "cloud-send-progress"))
+        feedbackTasks[id] = Task {
+            defer { if !Task.isCancelled { feedbackTasks[id] = nil } }
+            do {
+                let batch = try await host.waitForCloudResult(id, context: acceptedContext)
+                guard !Task.isCancelled, context == acceptedContext else { return }
+                let ready = batch.results.filter { $0.outcome.isCleanGenerated }.count
+                if ready == batch.targets.count, let first = batch.targets.first {
+                    let text = ready == 1 ? String(localized: "Photo ready for \(first.name)")
+                        : String(localized: "Photo ready for \(ready) displays")
+                    messageCenter.post(.init(id: messageID, text: text, kind: .success,
+                        lifetime: .automatic(seconds: 4), survivesPresentationChange: true,
+                        accessibilityIdentifier: "cloud-send-ready"))
+                } else {
+                    let text = ready == 0 ? String(localized: "Check this send")
+                        : String(localized: "\(ready) of \(batch.targets.count) displays ready")
+                    postResultLink(id, messageID: messageID, text: text, context: acceptedContext)
+                }
+            } catch {
+                guard !Task.isCancelled, context == acceptedContext else { return }
+                postResultLink(id, messageID: messageID, text: String(localized: "Check this send"), context: acceptedContext)
+            }
+        }
+    }
+
+    private func postResultLink(_ id: UUID, messageID: String, text: String, context acceptedContext: CloudPresentationContext) {
+        messageCenter.post(.init(id: messageID, text: text, kind: .warning,
+            lifetime: .automatic(seconds: 8), survivesPresentationChange: true, priority: .high,
+            accessibilityIdentifier: "cloud-send-attention",
+            action: .init(title: String(localized: "View")) {
+                guard context == acceptedContext else { return }
+                showActivity(id)
+                messageCenter.dismiss(id: messageID)
+            }))
     }
 }
 
