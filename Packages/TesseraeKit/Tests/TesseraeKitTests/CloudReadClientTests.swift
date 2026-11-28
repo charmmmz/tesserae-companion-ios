@@ -143,6 +143,51 @@ private actor CloudReadFixture: TesseraeHTTPTransporting {
         #expect(requests.allSatisfy { $0.httpMethod == "GET" && $0.cachePolicy == .reloadIgnoringLocalCacheData })
     }
 
+    @Test func upcomingUsesTheSelectedDisplayAndFetchesTheExactStagedRevision() async throws {
+        let body = Data("""
+        {"upcoming":{"dashboard":{"id":"weather","name":"Weather"},"estimated_switch_at":1793769900,
+          "preview":{"revision":"next+1&2","rendered_at":1793769800,"url":"https://elsewhere.invalid/image"}}}
+        """.utf8)
+        let (client, http) = try await fixture(.init(data: body, statusCode: 200))
+        let upcoming = try #require(await client.deviceUpcoming(id: "panel A"))
+        let staged = try #require(upcoming.preview)
+        #expect(upcoming.dashboard.id == "weather")
+        #expect(upcoming.dashboard.name == "Weather")
+        #expect(upcoming.estimatedSwitchAt == Date(timeIntervalSince1970: 1793769900))
+        #expect(staged.renderedAt == Date(timeIntervalSince1970: 1793769800))
+
+        let png = Data([137, 80, 78, 71, 13, 10, 26, 10])
+        await http.set(.init(data: png, statusCode: 200))
+        #expect(try await client.nextDevicePreview(id: "panel A", revision: staged.revision) == png)
+        await http.set(.init(data: Data(), statusCode: 404))
+        #expect(try await client.nextDevicePreview(id: "panel A", revision: staged.revision) == nil)
+
+        let requests = await http.requests
+        #expect(requests.map { $0.url?.path } == [
+            "/api/t/devices/panel A/upcoming", "/api/t/devices/panel A/next-frame.png", "/api/t/devices/panel A/next-frame.png"
+        ])
+        #expect(requests.allSatisfy {
+            $0.httpMethod == "GET" && $0.url?.host == "localhost" && $0.cachePolicy == .reloadIgnoringLocalCacheData
+                && $0.value(forHTTPHeaderField: "Authorization")?.hasPrefix("Bearer ") == true
+        })
+        let imageURL = try #require(requests.last?.url)
+        #expect(URLComponents(url: imageURL, resolvingAgainstBaseURL: false)?.queryItems ==
+            [URLQueryItem(name: "revision", value: "next+1&2")])
+    }
+
+    @Test func upcomingWithoutAnEstimateOrFrameIsDistinctFromNoUpcomingDashboard() async throws {
+        let body = Data("""
+        {"upcoming":{"dashboard":{"id":"weather","name":"Weather"},"estimated_switch_at":null,"preview":null}}
+        """.utf8)
+        let (client, http) = try await fixture(.init(data: body, statusCode: 200))
+        let upcoming = try #require(await client.deviceUpcoming(id: "display"))
+        #expect(upcoming.dashboard.name == "Weather")
+        #expect(upcoming.estimatedSwitchAt == nil)
+        #expect(upcoming.preview == nil)
+        await http.set(.init(data: Data(#"{"upcoming":null}"#.utf8), statusCode: 200))
+        #expect(try await client.deviceUpcoming(id: "display") == nil)
+    }
+
     @Test func nonImageSuccessIsRejected() async throws {
         let (client, _) = try await fixture(TesseraeHTTPResponse(data: Data("<html>login</html>".utf8), statusCode: 200))
         await #expect(throws: CloudReadError.invalidResponse) { try await client.pagePreview(id: "a") }

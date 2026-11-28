@@ -121,6 +121,18 @@ public struct CloudReadClient: Sendable {
         try await preview(["devices", id, "frame.png"])
     }
 
+    public func deviceUpcoming(id: String) async throws -> CloudDisplayUpcoming? {
+        struct Response: Decodable { let upcoming: CloudDisplayUpcoming? }
+        let result: Response = try await read(["devices", id, "upcoming"])
+        return result.upcoming
+    }
+
+    public func nextDevicePreview(id: String, revision: String) async throws -> Data? {
+        guard !revision.isEmpty else { throw CloudReadError.invalidResponse }
+        return try await preview(["devices", id, "next-frame.png"],
+            query: [URLQueryItem(name: "revision", value: revision)])
+    }
+
     public func pagePreview(id: String) async throws -> Data? {
         try await preview(["pages", id, "thumb.png"])
     }
@@ -147,8 +159,8 @@ public struct CloudReadClient: Sendable {
         } catch { throw CloudReadError.invalidResponse }
     }
 
-    private func preview(_ components: [String]) async throws -> Data? {
-        let response = try await get(components, accept: "image/png")
+    private func preview(_ components: [String], query: [URLQueryItem] = []) async throws -> Data? {
+        let response = try await get(components, accept: "image/png", query: query)
         if response.statusCode == 404 { return nil }
         try requireSuccess(response)
         guard response.data.starts(with: [137, 80, 78, 71, 13, 10, 26, 10]) else {
@@ -157,12 +169,12 @@ public struct CloudReadClient: Sendable {
         return response.data
     }
 
-    private func get(_ components: [String], accept: String) async throws -> TesseraeHTTPResponse {
+    private func get(_ components: [String], accept: String, query: [URLQueryItem] = []) async throws -> TesseraeHTTPResponse {
         guard components.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }) else {
             throw CloudReadError.invalidResponse
         }
         let url = components.reduce(issuer.appending(path: "api/t")) { $0.appending(component: $1) }
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: query.isEmpty ? url : url.appending(queryItems: query))
         request.httpMethod = "GET"
         request.setValue(accept, forHTTPHeaderField: "Accept")
         return try await transport.send(request, timeout: timeout, authorizationTimeout: min(10, timeout))

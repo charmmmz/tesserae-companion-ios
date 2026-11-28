@@ -122,6 +122,30 @@ public struct CloudDevice: Decodable, Sendable, Identifiable {
     }
 }
 
+public struct CloudDisplayUpcoming: Decodable, Sendable {
+    public struct Dashboard: Decodable, Sendable {
+        public let id: String
+        public let name: String
+    }
+
+    public struct Preview: Decodable, Sendable {
+        public let revision: String
+        public let renderedAt: Date
+
+        enum CodingKeys: String, CodingKey {
+            case revision, renderedAt = "rendered_at"
+        }
+    }
+
+    public let dashboard: Dashboard
+    public let estimatedSwitchAt: Date?
+    public let preview: Preview?
+
+    enum CodingKeys: String, CodingKey {
+        case dashboard, estimatedSwitchAt = "estimated_switch_at", preview
+    }
+}
+
 public struct CloudPage: Decodable, Sendable, Identifiable {
     public let id: String
     public let name: String

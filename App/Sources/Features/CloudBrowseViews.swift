@@ -84,7 +84,7 @@ struct CloudResourceList: View {
         } detail: {
             NavigationStack {
                 if let selectedID {
-                    CloudResourceDetail(model: model, id: selectedID, isDevice: isDevice, showResult: showResult,
+                    CloudResourceDetail(model: model, id: selectedID, isDevice: isDevice, isActive: isActive, showResult: showResult,
                         pushDashboard: canPushDashboard ? { page in beginPush(page) } : nil)
                         .id(selectedID)
                 } else {
@@ -456,20 +456,35 @@ private struct CloudResourceDetail: View {
     let model: CloudBrowseModel
     let id: String
     let isDevice: Bool
+    let isActive: Bool
     let showResult: (UUID) -> Void
     let pushDashboard: ((CloudPage) -> Void)?
     @Environment(ConnectionHost.self) private var host
     @Environment(NearbyDeviceManager.self) private var nearby
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.tesseraePageSendEnabled) private var pageSendEnabled
+    @Environment(\.scenePhase) private var scenePhase
     @State private var refreshDecision = UUID()
     @State private var refreshObservation: UUID?
     @State private var refreshTask: Task<Void, Never>?
     @State private var refreshFeedback: RefreshFeedback?
     @State private var retriedAfterRateLimit = false
+    @State private var upcoming: CloudDisplayUpcoming?
+    @State private var stagedPreview: Data?
+    @State private var upcomingError: String?
+    @State private var upcomingReload = 0
 
     private enum RefreshFeedback: Equatable {
         case ready, attention(UUID), failed(String)
+    }
+
+    private struct UpcomingLoad: Equatable {
+        let pageID: String?
+        let lineupID: String?
+        let pausedAt: Date?
+        let lastSeenAt: Date?
+        let previewVersion: String?
+        let reload: Int
     }
 
     private var key: String { CloudBrowseModel.key(id, isDevice) }
@@ -487,6 +502,12 @@ private struct CloudResourceDetail: View {
     private var exists: Bool { device != nil || page != nil }
     private var canRefresh: Bool {
         device?.pageID != nil && model.snapshot?.account.auth.scopes.contains("app:refresh") == true
+    }
+    private var upcomingLoad: UpcomingLoad? {
+        guard isActive, scenePhase == .active, host.cloud === model, model.verifiedDetails.contains(key),
+              let device, bluetooth?.isBluetooth != true else { return nil }
+        return UpcomingLoad(pageID: device.pageID, lineupID: device.lineupID, pausedAt: device.pausedAt,
+            lastSeenAt: device.lastSeenAt, previewVersion: model.previewVersion(id: id, isDevice: true), reload: upcomingReload)
     }
 
     var body: some View {
@@ -521,6 +542,15 @@ private struct CloudResourceDetail: View {
         .task(id: model.previewVersion(id: id, isDevice: isDevice)) {
             await model.openDetail(id: id, isDevice: isDevice)
         }
+        .task(id: upcomingLoad) {
+            guard let load = upcomingLoad else { return }
+            await loadUpcoming(load)
+            guard upcomingLoad == load, let delay = upcoming?.estimatedSwitchAt?.timeIntervalSinceNow, delay > 1 else { return }
+            do {
+                try await Task.sleep(for: .seconds(delay + 1))
+                await loadUpcoming(load)
+            } catch {}
+        }
         .task(id: previewRetryDate) {
             guard let date = previewRetryDate, !retriedAfterRateLimit else { return }
             do {
@@ -552,7 +582,8 @@ private struct CloudResourceDetail: View {
         ScrollView {
             VStack(spacing: 14) {
                 if let device, let bluetooth, model.verifiedDetails.contains(key) {
-                    displayPreviewCard
+                    displayPreviewCard(device)
+                    if !bluetooth.isBluetooth { nextInLine }
                     connectionCard(device, bluetooth: bluetooth)
                     deviceDetails(device, firmwareVersion: bluetooth.firmwareVersion)
                 } else {
@@ -604,38 +635,77 @@ private struct CloudResourceDetail: View {
         }
     }
 
-    private var displayPreviewCard: some View {
+    private func displayPreviewCard(_ device: CloudDevice) -> some View {
         DisplayPreviewCard {
-            ViewThatFits(in: .horizontal) {
-                HStack {
-                    previewTitle
-                    Spacer(minLength: 8)
-                    refreshButton
+            if let stagedPreview, upcoming?.preview != nil,
+               bluetooth?.isBluetooth != true, bluetooth?.usesLocalPreview != true {
+                DisplayScreenCarousel(displayID: id, currentTitle: previewTitleText,
+                    panelAspectRatio: panelAspectRatio(device), hasNext: true, nextRenderedAt: nil) {
+                    displayPreviewHeader
+                } current: {
+                    preview
+                } next: {
+                    PreviewArtwork(state: PreviewImageState(data: stagedPreview, eTag: nil, phase: .ready),
+                        placeholderSystemName: "display", placeholderLabel: String(localized: "Preview Unavailable"),
+                        imageLabel: String(localized: "Next device preview for \(device.name)"),
+                        accessibilityIdentifier: "display-detail-pending-preview-\(id)", cachesDecodedImage: false)
                 }
-                VStack(alignment: .leading, spacing: 0) {
-                    previewTitle
-                    refreshButton
-                }
-            }
-            if let device, let localPreview = bluetooth?.preview {
-                PreviewArtwork(state: localPreview, placeholderSystemName: "display",
-                               placeholderLabel: "Preview Unavailable", imageLabel: "Last Bluetooth Send",
-                               accessibilityIdentifier: "cloud-bluetooth-preview", cachesDecodedImage: false)
-                    .aspectRatio(CGFloat(max(1, device.panel.width)) / CGFloat(max(1, device.panel.height)),
-                                 contentMode: .fit)
-                    .frame(maxHeight: 380)
             } else {
-                preview
+                displayPreviewHeader
+                if let localPreview = bluetooth?.preview {
+                    PreviewArtwork(state: localPreview, placeholderSystemName: "display",
+                        placeholderLabel: "Preview Unavailable", imageLabel: "Last Bluetooth Send",
+                        accessibilityIdentifier: "cloud-bluetooth-preview", cachesDecodedImage: false)
+                        .aspectRatio(panelAspectRatio(device), contentMode: .fit)
+                        .frame(maxHeight: 380)
+                } else {
+                    preview
+                }
             }
             refreshMessage
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var previewTitle: some View {
-        Label(bluetooth?.usesLocalPreview == true ? String(localized: "Last Bluetooth Send") : String(localized: "Screen Preview"),
-              systemImage: "display")
-            .font(.headline)
+    private func panelAspectRatio(_ device: CloudDevice) -> CGFloat {
+        CGFloat(max(1, device.panel.width)) / CGFloat(max(1, device.panel.height))
+    }
+
+    private var previewTitleText: String {
+        bluetooth?.usesLocalPreview == true ? String(localized: "Last Bluetooth Send") : String(localized: "Screen Preview")
+    }
+
+    private var displayPreviewHeader: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack {
+                Label(previewTitleText, systemImage: "display").font(.headline)
+                Spacer(minLength: 8)
+                refreshButton
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                Label(previewTitleText, systemImage: "display").font(.headline)
+                refreshButton
+            }
+        }
+    }
+
+    @ViewBuilder private var nextInLine: some View {
+        if let upcoming {
+            DisplayNextInLineCard(displayID: id) {
+                DisplayNextUpdateContent(name: upcoming.dashboard.name, scheduledAt: upcoming.estimatedSwitchAt,
+                    effect: .changeScreen, certainty: upcoming.estimatedSwitchAt == nil ? nil : .estimated)
+            }
+        } else if let upcomingError {
+            DisplayNextInLineCard(displayID: id) {
+                HStack(spacing: 12) {
+                    Text(upcomingError).font(.subheadline).foregroundStyle(.secondary)
+                    Spacer(minLength: 8)
+                    Button("Retry") { upcomingReload += 1 }
+                        .frame(minHeight: 44)
+                        .buttonStyle(.bordered)
+                }
+            }
+        }
     }
 
     @ViewBuilder private var refreshButton: some View {
@@ -753,6 +823,50 @@ private struct CloudResourceDetail: View {
 
     private func reloadPreview() async {
         await model.openDetail(id: id, isDevice: isDevice, reuseCached: false)
+        if isDevice { upcomingReload += 1 }
+    }
+
+    private func loadUpcoming(_ load: UpcomingLoad) async {
+        guard upcomingLoad == load, !Task.isCancelled else { return }
+        let value: CloudDisplayUpcoming?
+        do {
+            value = try await model.client.deviceUpcoming(id: id)
+        } catch CloudReadError.notFound {
+            value = nil
+        } catch {
+            guard upcomingLoad == load, !Task.isCancelled else { return }
+            upcoming = nil
+            stagedPreview = nil
+            upcomingError = CloudBrowseModel.message(error)
+            reportUpcomingAuthorizationError(error)
+            return
+        }
+        guard upcomingLoad == load, !Task.isCancelled else { return }
+        let previousRevision = upcoming?.preview?.revision
+        upcoming = value
+        upcomingError = nil
+        if previousRevision != value?.preview?.revision { stagedPreview = nil }
+        guard let revision = value?.preview?.revision else { return }
+
+        do {
+            let data = try await model.client.nextDevicePreview(id: id, revision: revision)
+            guard upcomingLoad == load, !Task.isCancelled else { return }
+            stagedPreview = data.flatMap { UIImage(data: $0) == nil ? nil : $0 }
+        } catch {
+            guard upcomingLoad == load, !Task.isCancelled else { return }
+            stagedPreview = nil
+            reportUpcomingAuthorizationError(error)
+        }
+    }
+
+    private func reportUpcomingAuthorizationError(_ error: Error) {
+        switch error {
+        case CloudReadError.unauthorized, CloudReadError.forbidden,
+             ConnectionError.authorizationRequired, ConnectionError.accessRestricted,
+             ConnectionError.signedOut, ConnectionError.rotationOutcomeUnknown, ConnectionError.sessionChanged:
+            model.reportReadAuthorizationError(error)
+        default: break
+        }
     }
 
     private func rateLimitedPreview(until: Date?) -> some View {

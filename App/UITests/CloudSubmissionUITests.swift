@@ -210,8 +210,6 @@ import XCTest
         app.navigationBars.buttons.firstMatch.tap()
         app.tabBars.buttons["Displays"].tap()
         app.buttons["cloud-device-a3_land"].tap()
-        XCTAssertFalse(app.staticTexts["Next in Line"].exists)
-        XCTAssertFalse(app.staticTexts["Next Screen"].exists)
         capture(app, "cloud-display-screen-preview")
         let refresh = app.buttons["cloud-refresh-current"]
         XCTAssertTrue(refresh.waitForExistence(timeout: 10)); refresh.tap()
@@ -221,6 +219,57 @@ import XCTest
         openLatestResult(app)
         assertOutcome("Ready for next wake", device: "a3_land", in: app)
         capture(app, "cloud-refresh-activity-detail")
+    }
+
+    func testCloudDisplayUpcomingReusesTheTimelineAndPreviewCarousel() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_UPCOMING"] == "1",
+            "Requires a Cloud fixture with a scheduled staged frame, an undated reassignment and an unassigned display.")
+        let app = launch()
+        try await authorize(app)
+        let landscape = app.buttons["cloud-device-a3_land"]
+        landscape.tap()
+        let scheduledDashboard = app.staticTexts["Landscape large board A"].firstMatch
+        if !scheduledDashboard.waitForExistence(timeout: 10) {
+            capture(app, "cloud-upcoming-detail-unexpected-state")
+            return XCTFail("The upcoming Dashboard should appear on the display detail.")
+        }
+        XCTAssertTrue(app.staticTexts["Next in Line"].exists)
+        XCTAssertTrue(app.staticTexts["Estimated"].exists)
+        let current = app.buttons["Screen Preview"]
+        let next = app.buttons["Next Screen"]
+        XCTAssertTrue(next.waitForExistence(timeout: 10))
+        XCTAssertTrue(current.isSelected)
+        XCTAssertGreaterThanOrEqual(next.frame.height, 44 - 0.01)
+        capture(app, "cloud-next-in-line-and-current-screen")
+        next.tap()
+        let selectedNext = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isSelected == true"), object: next)
+        XCTAssertEqual(XCTWaiter.wait(for: [selectedNext], timeout: 4), .completed)
+        let staged = app.descendants(matching: .any)["display-detail-pending-preview-a3_land"].firstMatch
+        XCTAssertTrue(staged.isHittable)
+        XCTAssertTrue(staged.label.hasPrefix("Next device preview"))
+        XCTAssertFalse(app.staticTexts["Rendered"].exists)
+        capture(app, "cloud-next-screen")
+        app.descendants(matching: .any)["display-screen-carousel-a3_land"].firstMatch.swipeRight()
+        let selectedCurrent = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isSelected == true"), object: current)
+        XCTAssertEqual(XCTWaiter.wait(for: [selectedCurrent], timeout: 4), .completed)
+
+        app.navigationBars.buttons.firstMatch.tap()
+        let native = app.buttons["cloud-device-a3_native"]
+        reveal(native, in: app)
+        native.tap()
+        XCTAssertTrue(app.staticTexts["Portrait board A"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["Next in Line"].exists)
+        XCTAssertFalse(app.staticTexts["Estimated"].exists)
+        XCTAssertFalse(app.buttons["Next Screen"].exists)
+        capture(app, "cloud-next-in-line-without-preview")
+
+        app.navigationBars.buttons.firstMatch.tap()
+        let unassigned = app.buttons["cloud-device-a3_unbound"]
+        reveal(unassigned, in: app)
+        unassigned.tap()
+        XCTAssertTrue(app.staticTexts["Connection & Power"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.staticTexts["Next in Line"].exists)
+        XCTAssertFalse(app.buttons["Next Screen"].exists)
     }
 
     func testPushCloudDashboardFromListAndDetail() async throws {
