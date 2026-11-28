@@ -135,7 +135,8 @@ final class ConnectionHost {
             let attempt = try PendingCloudLogin(
                 issuer: issuer, browserEntry: entry,
                 requestsAppleAccountLink: supportedScopes.contains(CloudTokenResponse.appleAccountLinkScope),
-                requestsDevicePairing: supportedScopes.contains(CloudTokenResponse.devicePairingScope)
+                requestsDevicePairing: supportedScopes.contains(CloudTokenResponse.devicePairingScope),
+                requestsDashboardPush: supportedScopes.contains(CloudTokenResponse.dashboardPushScope)
             )
             let url = switch entry {
             case .email: AppConfiguration.cloudBrowserURL(attempt.authorizationURL)
@@ -559,6 +560,15 @@ final class ConnectionHost {
             return try await acceptCloud(prepared, context: context, model: model, service: service)
         } catch { await handleCloudReadError(error, model: model); throw error }
     }
+    func pushCloudDashboard(pageID: String, deviceIDs: Set<String>, decision: UUID,
+                            context: CloudPresentationContext) async throws -> UUID {
+        let (model, service) = try cloudAccess(context)
+        do {
+            let prepared = try await service.prepareDashboard(decision: decision, pageID: pageID, deviceIDs: deviceIDs)
+            return try await acceptCloud(prepared, context: context, model: model, service: service)
+        } catch { await handleCloudReadError(error, model: model); throw error }
+    }
+
     func refreshCloudCurrentPage(_ deviceID: String, decision: UUID,
                                  context: CloudPresentationContext) async throws -> UUID {
         let (model, service) = try cloudAccess(context)

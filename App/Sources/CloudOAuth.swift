@@ -37,6 +37,7 @@ struct PendingCloudLogin: Codable, Sendable {
     let browserEntry: BrowserEntry?
     let requestsAppleAccountLink: Bool?
     let requestsDevicePairing: Bool?
+    let requestsDashboardPush: Bool?
     var consumed = false
     var appleStage: AppleStage?
     static let callbackScheme = "com.charmmmz.tesseraecompanion"
@@ -45,13 +46,14 @@ struct PendingCloudLogin: Codable, Sendable {
     static let scopes = "app:read app:send app:refresh"
 
     init(issuer: URL, now: Date = Date(), browserEntry: BrowserEntry? = nil, appleStage: AppleStage? = nil,
-         requestsAppleAccountLink: Bool = false, requestsDevicePairing: Bool = false) throws {
+         requestsAppleAccountLink: Bool = false, requestsDevicePairing: Bool = false, requestsDashboardPush: Bool = false) throws {
         id = UUID(); self.issuer = issuer; createdAt = now
         state = try Self.random(); verifier = try Self.random()
         self.browserEntry = browserEntry
         self.appleStage = appleStage
         self.requestsAppleAccountLink = requestsAppleAccountLink ? true : nil
         self.requestsDevicePairing = requestsDevicePairing ? true : nil
+        self.requestsDashboardPush = requestsDashboardPush ? true : nil
     }
 
     var acceptsCallback: Bool { appleStage != .provingIdentity }
@@ -64,6 +66,7 @@ struct PendingCloudLogin: Codable, Sendable {
         var scopes = [Self.scopes]
         if requestsAppleAccountLink == true { scopes.append(CloudTokenResponse.appleAccountLinkScope) }
         if requestsDevicePairing == true { scopes.append(CloudTokenResponse.devicePairingScope) }
+        if requestsDashboardPush == true { scopes.append(CloudTokenResponse.dashboardPushScope) }
         components.queryItems = [
             URLQueryItem(name: "response_type", value: "code"),
             URLQueryItem(name: "client_id", value: Self.clientID),
@@ -191,7 +194,13 @@ struct CloudOAuthClient: Sendable {
         self.transport = transport ?? URLSessionTesseraeTransport.cloud(resourceTimeout: Self.requestTimeout)
     }
     func supportedAppScopes(issuer: URL) async -> Set<String> {
-        guard Self.supportsAppleSignIn(issuer: issuer), let expectedIssuer = try? ConnectionIdentity.canonicalService(issuer) else { return [] }
+        guard let expectedIssuer = try? ConnectionIdentity.canonicalService(issuer) else { return [] }
+        #if DEBUG
+        let isLocalFixture = expectedIssuer.scheme == "http" && expectedIssuer.host == "127.0.0.1"
+        #else
+        let isLocalFixture = false
+        #endif
+        guard Self.supportsAppleSignIn(issuer: issuer) || isLocalFixture else { return [] }
         struct Discovery: Decodable { let issuer: URL; let scopes_supported: [String] }
         let request = URLRequest(url: issuer.appending(path: ".well-known/oauth-authorization-server"),
                                  cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 2)

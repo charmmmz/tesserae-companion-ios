@@ -22,11 +22,11 @@ struct CloudRootView: View {
         @Bindable var presentation = presentation
         TabView(selection: $tab) {
             CloudResourceList(model: model, isDevice: true, isActive: tab == .displays && presentation.sheet == nil,
-                showResult: showActivity)
+                showResult: showActivity, onDashboardAccepted: sendAccepted)
                 .tabItem { Label("Displays", systemImage: "display").accessibilityIdentifier("cloud-displays-tab") }
                 .tag(Tab.displays)
             CloudResourceList(model: model, isDevice: false, isActive: tab == .dashboards && presentation.sheet == nil,
-                showResult: showActivity)
+                showResult: showActivity, onDashboardAccepted: sendAccepted)
                 .tabItem { Label("Dashboards", systemImage: "rectangle.stack").accessibilityIdentifier("cloud-pages-tab") }
                 .tag(Tab.dashboards)
             activity
@@ -110,8 +110,14 @@ struct CloudRootView: View {
                 guard !Task.isCancelled, context == acceptedContext else { return }
                 let ready = batch.results.filter { $0.outcome.isCleanGenerated }.count
                 if ready == batch.targets.count, let first = batch.targets.first {
-                    let text = ready == 1 ? String(localized: "Photo ready for \(first.name)")
-                        : String(localized: "Photo ready for \(ready) displays")
+                    let text: String
+                    if let dashboard = batch.dashboard {
+                        text = ready == 1 ? String(localized: "\(dashboard.name) ready for \(first.name)")
+                            : String(localized: "\(dashboard.name) ready for \(ready) displays")
+                    } else {
+                        text = ready == 1 ? String(localized: "Photo ready for \(first.name)")
+                            : String(localized: "Photo ready for \(ready) displays")
+                    }
                     messageCenter.post(.init(id: messageID, text: text, kind: .success,
                         lifetime: .automatic(seconds: 4), survivesPresentationChange: true,
                         accessibilityIdentifier: "cloud-send-ready"))

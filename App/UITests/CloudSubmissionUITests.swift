@@ -3,6 +3,7 @@ import XCTest
 @MainActor final class CloudSubmissionUITests: XCTestCase {
     private var launchStarted: ContinuousClock.Instant?
     private var launchReturned: ContinuousClock.Instant?
+    private let browserEntry = ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_BROWSER_ENTRY"] ?? "http://127.0.0.1:8879/begin"
     override func setUpWithError() throws {
         continueAfterFailure = false
         try XCTSkipUnless(ProcessInfo.processInfo.environment["TESSERAE_RUN_CLOUD_SUBMISSION_UI"] == "1",
@@ -10,8 +11,8 @@ import XCTest
     }
     private func launch() -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchEnvironment["TESSERAE_CLOUD_ISSUER"] = "http://127.0.0.1:8877"
-        app.launchEnvironment["TESSERAE_CLOUD_BROWSER_ENTRY"] = "http://127.0.0.1:8879/begin"
+        app.launchEnvironment["TESSERAE_CLOUD_ISSUER"] = ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_ISSUER"] ?? "http://127.0.0.1:8877"
+        app.launchEnvironment["TESSERAE_CLOUD_BROWSER_ENTRY"] = browserEntry
         let namespace = ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_EXISTING_NAMESPACE"] ?? UUID().uuidString
         app.launchEnvironment["TESSERAE_CLOUD_TEST_NAMESPACE"] = namespace
         print("A3_UI_NAMESPACE \(namespace)")
@@ -29,7 +30,8 @@ import XCTest
         return app
     }
     private func authorize(_ app: XCUIApplication, account: String = "owner_a", tenantName: String = "A3 Studio A (owner)") async throws {
-        let (_, response) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:8879/select?account=\(account)")!)
+        let selector = try XCTUnwrap(URLComponents(string: browserEntry)?.url?.deletingLastPathComponent().appending(path: "select").appending(queryItems: [URLQueryItem(name: "account", value: account)]))
+        let (_, response) = try await URLSession.shared.data(from: selector)
         XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
         let cancel = app.buttons["cloud-signin-cancel"]
         if cancel.exists && cancel.isHittable { cancel.tap() }
@@ -218,6 +220,53 @@ import XCTest
         openLatestResult(app)
         assertOutcome("Ready for next wake", device: "a3_land", in: app)
         capture(app, "cloud-refresh-activity-detail")
+    }
+
+    func testPushCloudDashboardFromListAndDetail() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["TESSERAE_CLOUD_UI_DASHBOARD_PUSH"] == "1",
+            "Requires a Cloud fixture offering dashboard push authorization.")
+        let app = launch()
+        try await authorize(app)
+        app.tabBars.buttons["Dashboards"].tap()
+        let listPush = app.buttons.matching(identifier: "cloud-dashboard-push-a3_page_portrait").firstMatch
+        reveal(listPush, in: app)
+        listPush.tap()
+        let submit = app.buttons["cloud-dashboard-submit"]
+        XCTAssertTrue(submit.waitForExistence(timeout: 8))
+        let portrait = app.switches["cloud-dashboard-target-a3_portrait"]
+        let other = app.switches["cloud-dashboard-target-a3_unbound"]
+        reveal(portrait, in: app)
+        if portrait.value as? String == "1" {
+            portrait.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        }
+        XCTAssertEqual(portrait.value as? String, "0")
+        reveal(other, in: app)
+        if other.value as? String != "1" {
+            other.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        }
+        XCTAssertEqual(other.value as? String, "1")
+        capture(app, "cloud-dashboard-target-selection")
+        submit.tap()
+        let feedback = app.descendants(matching: .any)["cloud-send-ready"].firstMatch
+        XCTAssertTrue(feedback.waitForExistence(timeout: 20))
+        XCTAssertTrue(feedback.label.contains("Portrait board A"))
+        XCTAssertTrue(feedback.label.contains("No assigned page A"))
+        openLatestResult(app)
+        assertOutcome("Ready for next wake", device: "a3_unbound", in: app)
+        XCTAssertFalse(app.descendants(matching: .any)["cloud-result-target-a3_portrait"].exists)
+        capture(app, "cloud-dashboard-push-activity")
+
+        app.tabBars.buttons["Dashboards"].tap()
+        let page = app.buttons.matching(identifier: "cloud-page-a3_page_portrait").firstMatch
+        reveal(page, in: app)
+        page.tap()
+        let detailPush = app.buttons["cloud-dashboard-detail-push"]
+        XCTAssertTrue(detailPush.waitForExistence(timeout: 10))
+        capture(app, "cloud-dashboard-detail-push")
+        detailPush.tap()
+        XCTAssertTrue(submit.waitForExistence(timeout: 8))
+        app.navigationBars.buttons["Cancel"].tap()
+        XCTAssertTrue(detailPush.waitForExistence(timeout: 5))
     }
 
     private func prepareMarker(_ app: XCUIApplication, targets: Set<String>) {

@@ -2,6 +2,7 @@ import Foundation
 
 public struct CloudTokenResponse: Codable, Sendable, CustomStringConvertible, CustomDebugStringConvertible {
     public static let devicePairingScope = "app:device:pair"
+    public static let dashboardPushScope = "app:dashboard:push"
     public static let appleAccountLinkScope = "app:apple:link"
     public struct User: Codable, Hashable, Sendable { public let id: String; public let email: String }
     public struct Tenant: Codable, Hashable, Sendable { public let id: String; public let name: String }
@@ -31,7 +32,7 @@ public struct CloudTokenResponse: Codable, Sendable, CustomStringConvertible, Cu
               expiresIn.isFinite, expiresIn > 0, refreshExpiresIn.isFinite, refreshExpiresIn > 0,
               !grantID.isEmpty, generation >= 0, !user.id.isEmpty, !tenant.id.isEmpty,
               resource == issuer.appending(path: "api/t").absoluteString,
-              !scopes.isEmpty, scopes.isSubset(of: ["app:read", "app:send", "app:refresh", Self.appleAccountLinkScope, Self.devicePairingScope]) else {
+              !scopes.isEmpty, scopes.isSubset(of: ["app:read", "app:send", "app:refresh", Self.appleAccountLinkScope, Self.devicePairingScope, Self.dashboardPushScope]) else {
             throw ConnectionError.invalidTokenResponse
         }
     }

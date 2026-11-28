@@ -26,11 +26,22 @@ struct CloudSubmissionClient: Sendable {
             request.httpBody = body
             request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         } else {
-            guard batch.kind == .currentPage, task.targetIDs.count == 1,
-                  let id = task.targetIDs.first, !id.isEmpty, id != ".", id != ".." else {
+            guard task.targetIDs.count == 1, let id = task.targetIDs.first,
+                  !id.isEmpty, id != ".", id != ".." else {
                 throw CloudSubmissionError.invalidPreparation
             }
-            request = URLRequest(url: base.appending(component: "devices").appending(component: id).appending(component: "render"))
+            let device = base.appending(component: "devices").appending(component: id)
+            switch batch.kind {
+            case .photo:
+                throw CloudSubmissionError.invalidPreparation
+            case .currentPage:
+                request = URLRequest(url: device.appending(component: "render"))
+            case .dashboard:
+                guard let dashboard = batch.dashboard else { throw CloudSubmissionError.invalidPreparation }
+                request = URLRequest(url: device.appending(component: "push-dashboard"))
+                request.httpBody = try JSONEncoder().encode(["page_id": dashboard.id])
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            }
         }
         request.httpMethod = "POST"
         request.timeoutInterval = writeTimeout
@@ -38,12 +49,12 @@ struct CloudSubmissionClient: Sendable {
         return request
     }
 
-    func send(_ request: URLRequest, task: CloudSubmissionTask) async throws -> [CloudTargetResult] {
+    func send(_ request: URLRequest, task: CloudSubmissionTask, expectedPageID: String? = nil) async throws -> [CloudTargetResult] {
         let response = try await transport.send(request, timeout: writeTimeout, authorizationTimeout: 10)
-        return Self.parse(response, targetIDs: task.targetIDs, isPhoto: task.raster != nil)
+        return Self.parse(response, targetIDs: task.targetIDs, isPhoto: task.raster != nil, expectedPageID: expectedPageID)
     }
 
-    static func parse(_ response: TesseraeHTTPResponse, targetIDs: [String], isPhoto: Bool) -> [CloudTargetResult] {
+    static func parse(_ response: TesseraeHTTPResponse, targetIDs: [String], isPhoto: Bool, expectedPageID: String? = nil) -> [CloudTargetResult] {
         func unknown(_ id: String, _ message: String = "The service did not confirm this display's result.") -> CloudTargetResult {
             .init(id: id, outcome: .unknown(.invalidResponse, message: message))
         }
@@ -68,6 +79,7 @@ struct CloudSubmissionClient: Sendable {
             case 400, 413, 415:
                 if bodyStatus == response.statusCode && error != nil { refusal = isPhoto ? .invalidImage : .noFrame }
             case 404 where bodyStatus == 404 && error != nil: refusal = .missingTarget
+            case 409 where expectedPageID != nil && reason == "push_in_progress": refusal = .unavailable
             case 402 where bodyStatus == 402 && error != nil && json?["limit"] is String: refusal = .quota
             case 429 where bodyStatus == 429 && error != nil: refusal = .rateLimited
             case 503 where bodyStatus == 503 && error != nil && retry == 20: refusal = .unavailable
@@ -84,6 +96,9 @@ struct CloudSubmissionClient: Sendable {
         if !isPhoto {
             guard targetIDs.count == 1, let frame = json["frame"] as? [String: Any], let evidence = frameEvidence(frame) else {
                 return targetIDs.map { .init(id: $0, outcome: .unknown(.noFrame, message: "No new frame was confirmed.")) }
+            }
+            if let expectedPageID, evidence.pageID != expectedPageID {
+                return targetIDs.map { unknown($0) }
             }
             return [.init(id: targetIDs[0], outcome: .generated(evidence, warnings: []))]
         }

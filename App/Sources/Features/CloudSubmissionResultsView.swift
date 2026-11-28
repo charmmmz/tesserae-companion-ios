@@ -160,12 +160,13 @@ struct CloudSubmissionActivity: View {
         return HStack(spacing: 12) {
             CloudActivityThumbnail(batch: batch, context: context)
             VStack(alignment: .leading, spacing: 5) {
-                Text(batch.kind == .photo ? String(localized: "Photo to \(names)")
-                    : String(localized: "Refresh for \(names)"))
+                Text(batch.dashboard.map { String(localized: "\($0.name) to \(names)") }
+                    ?? (batch.kind == .photo ? String(localized: "Photo to \(names)")
+                        : String(localized: "Refresh for \(names)")))
                     .font(.headline)
                     .fixedSize(horizontal: false, vertical: true)
                 Label(
-                    batch.isActive ? (batch.kind == .photo ? String(localized: "Sending…") : String(localized: "Refreshing…"))
+                    batch.isActive ? (batch.kind == .currentPage ? String(localized: "Refreshing…") : String(localized: "Sending…"))
                     : CloudBatchStatus.isReady(batch) ? String(localized: "Ready for next wake")
                     : statuses.joined(separator: dynamicTypeSize.isAccessibilitySize ? "\n" : " · "),
                     systemImage: batch.isActive ? "clock" : CloudBatchStatus.isReady(batch) ? "checkmark.circle" : "exclamationmark.circle"
@@ -201,7 +202,7 @@ private struct CloudActivityThumbnail: View {
             if let image, taskID != nil {
                 Image(uiImage: image).resizable().scaledToFill()
             } else {
-                Image(systemName: batch.kind == .photo ? "photo" : "arrow.clockwise")
+                Image(systemName: batch.kind == .dashboard ? "rectangle.stack" : batch.kind == .photo ? "photo" : "arrow.clockwise")
                     .foregroundStyle(TesseraeTheme.accent)
             }
         }
@@ -274,7 +275,8 @@ private struct CloudSubmissionResultView: View {
         }
         .tesseraeScreenBackground()
         .tesseraeMessageCenter()
-        .navigationTitle(batch?.kind == .currentPage ? String(localized: "Refresh Details") : String(localized: "Photo Details"))
+        .navigationTitle(batch?.dashboard?.name
+            ?? (batch?.kind == .currentPage ? String(localized: "Refresh Details") : String(localized: "Photo Details")))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             TesseraeToolbarActions {
@@ -347,7 +349,7 @@ private struct CloudSubmissionResultView: View {
                 }
             }
             if batch.isActive {
-                ProgressView(batch.kind == .photo ? String(localized: "Sending…") : String(localized: "Refreshing…"))
+                ProgressView(batch.kind == .currentPage ? String(localized: "Refreshing…") : String(localized: "Sending…"))
                     .accessibilityIdentifier("cloud-result-sending")
             } else {
                 Text(summary(batch)).font(.title2.weight(.semibold))
@@ -366,7 +368,7 @@ private struct CloudSubmissionResultView: View {
         let ready = CloudBatchStatus.readyCount(batch)
         if CloudBatchStatus.isReady(batch) { return String(localized: "Ready for next wake") }
         if ready == 0 {
-            return batch.kind == .photo ? String(localized: "Check this send") : String(localized: "Check this refresh")
+            return batch.kind == .currentPage ? String(localized: "Check this refresh") : String(localized: "Check this send")
         }
         return String(localized: "\(ready) of \(batch.targets.count) displays ready")
     }
@@ -425,7 +427,7 @@ private struct CloudSubmissionResultView: View {
                 }
             }
             if selectsTargets {
-                Button(batch.kind == .photo ? String(localized: "Send Selected Again") : String(localized: "Refresh Selected Again")) {
+                Button(batch.kind == .currentPage ? String(localized: "Refresh Selected Again") : String(localized: "Send Selected Again")) {
                     requestResend(selectedIDs)
                 }
                 .frame(minHeight: 44)
@@ -498,7 +500,7 @@ private struct CloudSubmissionResultView: View {
 
     private func canResend(_ batch: CloudSubmissionBatch) -> Bool {
         !batch.isActive && !isResending && !mediaHidden && !mediaUnavailable(batch)
-            && host.cloud?.snapshot?.account.auth.scopes.contains(batch.kind == .photo ? "app:send" : "app:refresh") == true
+            && host.cloud?.snapshot?.account.auth.scopes.contains(batch.kind.requiredScope) == true
     }
 
     private func canRetry(_ value: CloudTargetOutcome?) -> Bool {
@@ -522,7 +524,7 @@ private struct CloudSubmissionResultView: View {
 
     private func moreMenu(_ batch: CloudSubmissionBatch) -> some View {
         Menu {
-            Button(batch.kind == .photo ? "Send Again…" : "Refresh Again…", systemImage: "arrow.clockwise") {
+            Button(batch.kind == .currentPage ? "Refresh Again…" : "Send Again…", systemImage: "arrow.clockwise") {
                 selectedIDs = Set(batch.results.filter {
                     if case .generated = $0.outcome { false } else { true }
                 }.map(\.id))

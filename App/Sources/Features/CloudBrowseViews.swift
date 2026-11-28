@@ -27,11 +27,14 @@ struct CloudResourceList: View {
     let isDevice: Bool
     let isActive: Bool
     let showResult: (UUID) -> Void
+    let onDashboardAccepted: (UUID, CloudPresentationContext) -> Void
+    @Environment(ConnectionHost.self) private var host
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var selectedID: String?
     @State private var preferredColumn: NavigationSplitViewColumn = .sidebar
     @State private var connectionsPresented = false
+    @State private var pushTarget: CloudDashboardPushTarget?
     @State private var query = ""
     @FocusState private var searchFocused: Bool
     @State private var collapsedSections: Set<String> = ["other"]
@@ -40,6 +43,10 @@ struct CloudResourceList: View {
     private var icon: String { isDevice ? "display" : "rectangle.stack" }
     private var ids: [String] { isDevice ? model.devices.map(\.id) : model.pages.map(\.id) }
     private var searchTerm: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var canPushDashboard: Bool {
+        host.cloud === model && host.canUseCloudSubmissions && !model.devices.isEmpty
+            && model.snapshot?.account.auth.scopes.contains(CloudTokenResponse.dashboardPushScope) == true
+    }
 
     var body: some View {
         NavigationSplitView(preferredCompactColumn: $preferredColumn) {
@@ -77,7 +84,8 @@ struct CloudResourceList: View {
         } detail: {
             NavigationStack {
                 if let selectedID {
-                    CloudResourceDetail(model: model, id: selectedID, isDevice: isDevice, showResult: showResult)
+                    CloudResourceDetail(model: model, id: selectedID, isDevice: isDevice, showResult: showResult,
+                        pushDashboard: canPushDashboard ? { page in beginPush(page) } : nil)
                         .id(selectedID)
                 } else {
                     ContentUnavailableView("Select an Item", systemImage: icon)
@@ -96,6 +104,20 @@ struct CloudResourceList: View {
             if !active { searchFocused = false }
         }
         .sheet(isPresented: $connectionsPresented) { OnboardingView(isChoosingServer: true) }
+        .sheet(item: $pushTarget) { target in
+            CloudDashboardPushSheet(model: model, target: target) { id in
+                pushTarget = nil
+                onDashboardAccepted(id, target.context)
+            }
+        }
+    }
+
+    private func beginPush(_ page: CloudPage, preferredDeviceID: String? = nil) {
+        guard canPushDashboard, let context = host.cloudPresentationContext else { return }
+        searchFocused = false
+        let assigned = model.devices.filter { $0.pageID == page.id || $0.id == page.deviceID }.map(\.id)
+        pushTarget = .init(page: page, context: context,
+            deviceIDs: preferredDeviceID.map { Set([$0]) } ?? Set(assigned))
     }
 
     private var displays: some View {
@@ -149,6 +171,7 @@ struct CloudResourceList: View {
         let title: String
         let symbol: String
         let pages: [CloudPage]
+        var deviceID: String? = nil
     }
 
     private var sections: [PageSection] {
@@ -160,7 +183,7 @@ struct CloudResourceList: View {
             guard !matching.isEmpty else { return nil }
             return PageSection(id: "display-\(device.id)", title: device.name,
                 symbol: device.panel.height > device.panel.width ? "rectangle.portrait.inset.filled" : "display",
-                pages: matching)
+                pages: matching, deviceID: device.id)
         }
         let assigned = Set(model.devices.compactMap(\.pageID))
         let other = pages.filter { !assigned.contains($0.id) }
@@ -188,15 +211,9 @@ struct CloudResourceList: View {
                     Section {
                         if !collapsed {
                             ForEach(section.pages) { page in
-                                Button {
-                                    open(page.id)
-                                } label: {
-                                    CloudDashboardCard(model: model, page: page, loadsPreview: loadsPreviews)
-                                        .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityElement(children: .combine)
-                                .accessibilityIdentifier("cloud-page-\(page.id)")
+                                CloudDashboardCard(model: model, page: page, loadsPreview: loadsPreviews,
+                                    open: { open(page.id) },
+                                    push: canPushDashboard ? { beginPush(page, preferredDeviceID: section.deviceID) } : nil)
                             }
                         }
                     } header: {
@@ -303,22 +320,24 @@ private struct CloudDashboardCard: View {
     let model: CloudBrowseModel
     let page: CloudPage
     let loadsPreview: Bool
+    let open: () -> Void
+    let push: (() -> Void)?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         if dynamicTypeSize.isAccessibilitySize {
             VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 12) { icon; title }
-                preview
+                HStack(spacing: 12) { icon; details }
+                previewButton
             }
             .tesseraeCard()
         } else {
             DashboardCardRow {
                 icon
             } details: {
-                title
+                details
             } preview: {
-                preview
+                previewButton
             }
             .tesseraeCard()
         }
@@ -330,6 +349,39 @@ private struct CloudDashboardCard: View {
             .foregroundStyle(TesseraeTheme.accent)
             .frame(width: 36, height: 36)
             .background(TesseraeTheme.accent.opacity(0.09), in: RoundedRectangle(cornerRadius: 10))
+            .accessibilityHidden(true)
+    }
+
+    private var details: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Button(action: open) { title.contentShape(Rectangle()) }
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("cloud-page-\(page.id)")
+            if let push {
+                Button(action: push) {
+                    Label("Push", systemImage: "paperplane.fill")
+                        .labelStyle(.titleAndIcon)
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 11)
+                        .frame(minHeight: 44)
+                        .background {
+                            Capsule().fill(TesseraeTheme.accentFill)
+                                .frame(height: 26)
+                        }
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.white)
+                .accessibilityLabel(Text("Push \(page.name)"))
+                .accessibilityIdentifier("cloud-dashboard-push-\(page.id)")
+            }
+        }
+    }
+
+    private var previewButton: some View {
+        Button(action: open) { preview.contentShape(Rectangle()) }
+            .buttonStyle(.plain)
             .accessibilityHidden(true)
     }
 
@@ -406,6 +458,7 @@ private struct CloudResourceDetail: View {
     let id: String
     let isDevice: Bool
     let showResult: (UUID) -> Void
+    let pushDashboard: ((CloudPage) -> Void)?
     @Environment(ConnectionHost.self) private var host
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.tesseraePageSendEnabled) private var pageSendEnabled
@@ -517,7 +570,17 @@ private struct CloudResourceDetail: View {
                     DashboardDetailPreview {
                         preview
                     } action: {
-                        EmptyView()
+                        if let pushDashboard {
+                            Button { pushDashboard(page) } label: {
+                                Label("Push", systemImage: "paperplane.fill")
+                                    .tesseraeIconActionLabel()
+                                    .background(.regularMaterial, in: Circle())
+                                    .shadow(color: .black.opacity(0.12), radius: 3, y: 2)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("cloud-dashboard-detail-push")
+                            .padding(10)
+                        }
                     }
                 }
                 dashboardDetails(page)
@@ -758,6 +821,110 @@ private struct CloudResourceDetail: View {
             rateLimitedPreview(until: until)
         default:
             ProgressView("Loading Preview…").frame(maxWidth: .infinity, minHeight: 180)
+        }
+    }
+}
+
+
+private struct CloudDashboardPushTarget: Identifiable {
+    let id = UUID()
+    let page: CloudPage
+    let context: CloudPresentationContext
+    let deviceIDs: Set<String>
+}
+
+private struct CloudDashboardPushSheet: View {
+    let model: CloudBrowseModel
+    let target: CloudDashboardPushTarget
+    let onAccepted: (UUID) -> Void
+    @Environment(ConnectionHost.self) private var host
+    @Environment(\.dismiss) private var dismiss
+    @State private var selected: Set<String> = []
+    @State private var decision = UUID()
+    @State private var isSubmitting = false
+    @State private var error: String?
+
+    private var devices: [CloudDevice] {
+        model.devices.filter { $0.panel.compositionGeometry != nil }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    CloudCardPreview(model: model, id: target.page.id, isDevice: false, loadsPreview: true,
+                        title: target.page.name, symbol: "rectangle.stack", detail: nil)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 180)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                    Text(target.page.name).font(.headline)
+                }
+                Section {
+                    ForEach(devices) { device in
+                        Toggle(device.name, isOn: Binding(get: { selected.contains(device.id) }, set: { on in
+                            if on { selected.insert(device.id) } else { selected.remove(device.id) }
+                            decision = UUID()
+                        }))
+                        .disabled(isSubmitting)
+                        .accessibilityIdentifier("cloud-dashboard-target-\(device.id)")
+                    }
+                } header: {
+                    Text("Displays")
+                } footer: {
+                    Text("This assigns the Dashboard to the selected displays. They can collect the new frame on their next wake.")
+                }
+                if let error {
+                    Section { Text(error).foregroundStyle(TesseraeTheme.danger) }
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .tesseraeScreenBackground()
+            .navigationTitle("Push Dashboard")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", systemImage: "xmark") { dismiss() }
+                        .labelStyle(.iconOnly)
+                        .disabled(isSubmitting)
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                Button(action: submit) {
+                    Group {
+                        if isSubmitting { ProgressView().accessibilityLabel("Sending…") }
+                        else { Label("Push Dashboard", systemImage: "paperplane.fill") }
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(selected.isEmpty || isSubmitting || host.cloudPresentationContext != target.context)
+                .accessibilityIdentifier("cloud-dashboard-submit")
+                .padding()
+                .background(.bar)
+            }
+        }
+        .onAppear { selected = target.deviceIDs.intersection(devices.map(\.id)) }
+        .interactiveDismissDisabled(isSubmitting)
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func submit() {
+        guard !isSubmitting, !selected.isEmpty, host.cloudPresentationContext == target.context else { return }
+        isSubmitting = true
+        error = nil
+        let deviceIDs = selected
+        let decision = decision
+        Task {
+            defer { isSubmitting = false }
+            do {
+                let id = try await host.pushCloudDashboard(pageID: target.page.id, deviceIDs: deviceIDs,
+                    decision: decision, context: target.context)
+                host.withCurrentCloudPresentation(target.context) { onAccepted(id) }
+            } catch {
+                host.withCurrentCloudPresentation(target.context) { self.error = error.localizedDescription }
+            }
         }
     }
 }

@@ -111,7 +111,22 @@ public enum CloudSubmissionExecution: Codable, Sendable {
     case finished
 }
 
-public enum CloudSubmissionKind: String, Codable, Sendable { case photo, currentPage }
+public enum CloudSubmissionKind: String, Codable, Sendable {
+    case photo, currentPage, dashboard
+
+    public var requiredScope: String {
+        switch self {
+        case .photo: "app:send"
+        case .currentPage: "app:refresh"
+        case .dashboard: CloudTokenResponse.dashboardPushScope
+        }
+    }
+}
+
+public struct CloudDashboardPush: Codable, Sendable {
+    public let id: String
+    public let name: String
+}
 
 public struct CloudSubmissionBatch: Codable, Sendable, Identifiable {
     public let id: UUID
@@ -131,6 +146,7 @@ public struct CloudSubmissionBatch: Codable, Sendable, Identifiable {
     let fingerprint: String
     var resendReservation: UUID?
     var inputFingerprint: String? = nil
+    public internal(set) var dashboard: CloudDashboardPush? = nil
 
     public var results: [CloudTargetResult] {
         tasks.flatMap { task -> [CloudTargetResult] in
@@ -158,7 +174,7 @@ public struct CloudResendSelection: Sendable {
 public enum CloudSubmissionError: Error, LocalizedError, Equatable, Sendable {
     case invalidPreparation, decisionConflict, decisionClosed, missingResult, resultChanged
     case alreadyRunning, mediaUnavailable, changedGeometry, duplicateConfirmationRequired
-    case interrupted, storageUnavailable
+    case interrupted, storageUnavailable, dashboardUnavailable
 
     public var errorDescription: String? {
         switch self {
@@ -171,6 +187,7 @@ public enum CloudSubmissionError: Error, LocalizedError, Equatable, Sendable {
         case .mediaUnavailable: String(localized: "This photo was deleted or expired. Choose a photo to create a new send.")
         case .changedGeometry: String(localized: "The display changed. Review its preview before sending.")
         case .duplicateConfirmationRequired: String(localized: "Some displays may already have received this photo. Confirm before sending again.")
+        case .dashboardUnavailable: String(localized: "This Dashboard is no longer available.")
         case .interrupted: String(localized: "This send was interrupted. Check its results before sending again.")
         case .storageUnavailable: String(localized: "The send result could not be saved. Check the displays before sending again.")
         }

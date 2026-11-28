@@ -68,11 +68,13 @@ struct CloudSubmissionStore: Sendable {
 
     func stage(decision: UUID, fence: ConnectionFence, kind: CloudSubmissionKind,
                targets: [CloudSubmissionTarget], outputs: [CloudPhotoOutput], now: Date,
-               input: CloudOwnedInput? = nil) throws -> CloudStagedBatch {
+               input: CloudOwnedInput? = nil, dashboard: CloudDashboardPush? = nil) throws -> CloudStagedBatch {
         guard fence.connectionID == identity.id, !targets.isEmpty,
               Set(targets.map(\.id)).count == targets.count,
               targets.allSatisfy({ !$0.id.isEmpty && !$0.id.contains(",") }),
-              kind == .photo || (targets.count == 1 && outputs.isEmpty) else {
+              (kind == .dashboard) == (dashboard != nil),
+              dashboard.map({ !$0.id.isEmpty && input == nil }) ?? true,
+              kind == .photo || (outputs.isEmpty && (kind == .dashboard || targets.count == 1)) else {
             throw CloudSubmissionError.invalidPreparation
         }
         let ids = outputs.flatMap(\.targetIDs)
@@ -83,7 +85,7 @@ struct CloudSubmissionStore: Sendable {
                           && output.targetIDs.allSatisfy { id in targets.first { $0.id == id }?.geometry == output.geometry }
                   }) else { throw CloudSubmissionError.invalidPreparation }
         }
-        let fingerprint = try fingerprint(kind: kind, targets: targets, outputs: outputs, parent: nil)
+        let fingerprint = try fingerprint(kind: kind, targets: targets, outputs: outputs, parent: nil, dashboardID: dashboard?.id)
         if input == nil, let existing = try existing(decision, fingerprint: fingerprint, now: now) {
             return .init(batch: existing, owner: nil, expectedSourceRevision: nil, confirmsDuplicates: false)
         }
@@ -107,13 +109,14 @@ struct CloudSubmissionStore: Sendable {
                                   digest: digest(output.data)), state: .prepared)
             }
         } else {
-            tasks = [.init(id: UUID(), targetIDs: targets.map(\.id), raster: nil, state: .prepared)]
+            tasks = targets.map { .init(id: UUID(), targetIDs: [$0.id], raster: nil, state: .prepared) }
         }
         var batch = CloudSubmissionBatch(id: decision, identity: identity, fence: fence, kind: kind,
             parentID: nil, sourceRevision: nil, confirmedPossibleDuplicates: false, createdAt: now, resultsExpireAt: now.addingTimeInterval(30 * 86_400),
             mediaExpiresAt: kind == .photo ? min(now.addingTimeInterval(7 * 86_400), input?.input.expiresAt ?? .distantFuture) : nil,
             targets: targets, tasks: tasks, execution: .active(UUID()), revision: 0, fingerprint: fingerprint)
         batch.inputFingerprint = input?.input.fingerprint
+        batch.dashboard = dashboard
         return .init(batch: batch, owner: owner, expectedSourceRevision: nil, confirmsDuplicates: false,
                      inputRevision: input?.input.revision)
     }
@@ -146,7 +149,7 @@ struct CloudSubmissionStore: Sendable {
             return .init(data: try media(source, raster: raster, now: now), format: raster.format,
                          geometry: raster.geometry, targetIDs: ids)
         }
-        let fingerprint = try fingerprint(kind: source.kind, targets: targets, outputs: originalOutputs, parent: sourceID)
+        let fingerprint = try fingerprint(kind: source.kind, targets: targets, outputs: originalOutputs, parent: sourceID, dashboardID: source.dashboard?.id)
         if let existing = try existing(decision, fingerprint: fingerprint, now: now) {
             return .init(batch: existing, owner: nil, expectedSourceRevision: expectedRevision,
                          confirmsDuplicates: selection.confirmsPossibleDuplicates)
@@ -165,11 +168,12 @@ struct CloudSubmissionStore: Sendable {
         } else {
             tasks = targets.map { .init(id: UUID(), targetIDs: [$0.id], raster: nil, state: .prepared) }
         }
-        let batch = CloudSubmissionBatch(id: decision, identity: identity, fence: fence, kind: source.kind,
+        var batch = CloudSubmissionBatch(id: decision, identity: identity, fence: fence, kind: source.kind,
             parentID: sourceID, sourceRevision: expectedRevision,
             confirmedPossibleDuplicates: selection.confirmsPossibleDuplicates, createdAt: now, resultsExpireAt: now.addingTimeInterval(30 * 86_400),
             mediaExpiresAt: source.mediaExpiresAt, targets: targets, tasks: tasks,
             execution: .active(UUID()), revision: 0, fingerprint: fingerprint)
+        batch.dashboard = source.dashboard
         return .init(batch: batch, owner: owner, expectedSourceRevision: expectedRevision,
                      confirmsDuplicates: selection.confirmsPossibleDuplicates)
     }
@@ -615,7 +619,7 @@ struct CloudSubmissionStore: Sendable {
     }
 
     private func fingerprint(kind: CloudSubmissionKind, targets: [CloudSubmissionTarget],
-                             outputs: [CloudPhotoOutput], parent: UUID?) throws -> String {
+                             outputs: [CloudPhotoOutput], parent: UUID?, dashboardID: String?) throws -> String {
         struct Content: Encodable {
             let kind: CloudSubmissionKind
             let targets: [CloudSubmissionTarget]
@@ -623,10 +627,11 @@ struct CloudSubmissionStore: Sendable {
             let groups: [[String]]
             let formats: [CloudRasterFormat]
             let parent: UUID?
+            let dashboardID: String?
         }
         return digest(try ConnectionCoding.encoder().encode(Content(kind: kind, targets: targets,
             hashes: outputs.map { digest($0.data) }, groups: outputs.map(\.targetIDs),
-            formats: outputs.map(\.format), parent: parent)))
+            formats: outputs.map(\.format), parent: parent, dashboardID: dashboardID)))
     }
 
     private func digest(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }

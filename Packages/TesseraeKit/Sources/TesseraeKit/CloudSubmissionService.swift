@@ -47,13 +47,28 @@ public actor CloudSubmissionService {
             kind: .currentPage, targets: [target], outputs: [], now: clock()))
     }
 
+    public func prepareDashboard(decision: UUID, pageID: String, deviceIDs: Set<String>) async throws -> PreparedCloudSubmission {
+        let snapshot = try await bootstrap(scope: CloudSubmissionKind.dashboard.requiredScope)
+        guard let page = snapshot.pages.first(where: { $0.id == pageID }) else {
+            throw CloudSubmissionError.dashboardUnavailable
+        }
+        guard !deviceIDs.isEmpty else { throw CloudSubmissionError.invalidPreparation }
+        let targets: [CloudSubmissionTarget] = try deviceIDs.sorted().map { id in
+            guard let device = snapshot.devices.first(where: { $0.id == id }),
+                  let geometry = device.panel.compositionGeometry else { throw CloudSubmissionError.changedGeometry }
+            return .init(id: device.id, name: device.name, geometry: geometry)
+        }
+        return .init(serviceID: serviceID, staged: try store.stage(decision: decision, fence: fence,
+            kind: .dashboard, targets: targets, outputs: [], now: clock(), dashboard: .init(id: page.id, name: page.name)))
+    }
+
     public func prepareResend(decision: UUID, sourceID: UUID, expectedRevision: Int,
                               selection: CloudResendSelection) async throws -> PreparedCloudSubmission {
         try await runtime.sessions.validate(fence)
         let staged = try store.stageResend(decision: decision, sourceID: sourceID,
             expectedRevision: expectedRevision, selection: selection, fence: fence, now: clock())
         try await preflight(targets: staged.batch.targets,
-                            scope: staged.batch.kind == .photo ? "app:send" : "app:refresh")
+                            scope: staged.batch.kind.requiredScope, dashboard: staged.batch.dashboard)
         return .init(serviceID: serviceID, staged: staged)
     }
 
@@ -167,8 +182,11 @@ public actor CloudSubmissionService {
         return snapshot
     }
 
-    private func preflight(targets: [CloudSubmissionTarget], scope: String) async throws {
+    private func preflight(targets: [CloudSubmissionTarget], scope: String, dashboard: CloudDashboardPush? = nil) async throws {
         let snapshot = try await bootstrap(scope: scope)
+        if let dashboard, !snapshot.pages.contains(where: { $0.id == dashboard.id }) {
+            throw CloudSubmissionError.dashboardUnavailable
+        }
         guard !targets.isEmpty, Set(targets.map(\.id)).count == targets.count else { throw CloudSubmissionError.invalidPreparation }
         for target in targets {
             guard let device = snapshot.devices.first(where: { $0.id == target.id }),
@@ -207,7 +225,7 @@ public actor CloudSubmissionService {
                 }
                 guard let claim else { return }
                 let sender = try CloudSubmissionClient(transport: transport, writeTimeout: remaining(limit: writeTimeout))
-                let results = try await sender.send(request, task: task)
+                let results = try await sender.send(request, task: task, expectedPageID: batch.dashboard?.id)
                 guard try store.resolve(batchID: batch.id, taskID: task.id, claim: claim, results: results, now: clock()) else { return }
                 let hasUncertainOrRefused = results.contains {
                     switch $0.outcome { case .generated: false; default: true }

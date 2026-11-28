@@ -1398,3 +1398,9 @@
 "Yesterday" = "昨天";
 "Your Cloud plan limit was reached." = "已达到云端套餐上限。";
 "Your account can’t send to this display." = "当前账号无法向此显示屏发送。";
+
+"Push %@" = "推送 %@";
+"%@ to %@" = "将 %@ 推送至 %@";
+"%@ ready for %@" = "%@ 已为 %@ 准备就绪";
+"%@ ready for %lld displays" = "%@ 已为 %lld 台屏幕准备就绪";
+"This assigns the Dashboard to the selected displays. They can collect the new frame on their next wake." = "所选屏幕将改用这个仪表盘，并可在下次唤醒时获取新画面。";
