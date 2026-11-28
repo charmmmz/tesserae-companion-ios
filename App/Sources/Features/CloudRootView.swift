@@ -10,7 +10,7 @@ struct CloudRootView: View {
     @Environment(TesseraeMessageCenter.self) private var messageCenter
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var tab: Tab = .displays
-    @State private var activityPath: [UUID] = []
+    @State private var activityResultToReveal: UUID?
     @State private var feedbackScope = UUID()
     @State private var feedbackTasks: [UUID: Task<Void, Never>] = [:]
 
@@ -62,7 +62,7 @@ struct CloudRootView: View {
     @ViewBuilder private var activity: some View {
         if let context {
             CloudSubmissionActivity(context: context, tenant: model.snapshot?.account.tenant.name,
-                isActive: tab == .activity && presentation.sheet == nil, path: $activityPath)
+                isActive: tab == .activity && presentation.sheet == nil, resultToReveal: $activityResultToReveal)
                 .id(context)
         } else {
             NavigationStack {
@@ -84,7 +84,7 @@ struct CloudRootView: View {
 
     private func showActivity(_ id: UUID) {
         guard context != nil else { return }
-        activityPath = [id]
+        activityResultToReveal = id
         tab = .activity
     }
 
@@ -92,7 +92,7 @@ struct CloudRootView: View {
         feedbackTasks.values.forEach { $0.cancel() }
         feedbackTasks.removeAll()
         messageCenter.dismissMessages(startingWith: feedbackPrefix)
-        activityPath = []
+        activityResultToReveal = nil
     }
 
     private func sendAccepted(_ id: UUID, context acceptedContext: CloudPresentationContext) {

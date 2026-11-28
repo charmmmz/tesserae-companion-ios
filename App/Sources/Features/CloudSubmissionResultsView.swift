@@ -21,203 +21,318 @@ struct CloudSubmissionActivity: View {
     let context: CloudPresentationContext
     let tenant: String?
     let isActive: Bool
-    @Binding var path: [UUID]
+    @Binding var resultToReveal: UUID?
     @Environment(ConnectionHost.self) private var host
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var filter: ActivityFilter = .all
+    @State private var expandedID: UUID?
     @State private var reloadRevision = UUID()
     @State private var history: [CloudSubmissionBatch] = []
     @State private var pending: [CloudPendingInput] = []
     @State private var pendingPresentation = CloudPendingPresentationState()
-    @State private var error: String?
+    @State private var historyError: String?
+    @State private var pendingError: String?
     @State private var didLoadResults = false
+
+    private var error: String? { historyError ?? pendingError }
+
+    private var loadKey: CloudActivityLoadKey {
+        CloudActivityLoadKey(context: context, isVisible: isActive, revision: reloadRevision)
+    }
+
+    private var visibleHistory: [CloudSubmissionBatch] {
+        history.filter { filter.includes(needsAttention: CloudBatchStatus.needsAttention($0)) }
+    }
+
     var body: some View {
-        NavigationStack(path: $path) {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
-                    CloudNavigationTitle(title: String(localized: "Activity"), tenant: tenant)
-                    if let error {
-                        Label(error, systemImage: "exclamationmark.circle")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                            .accessibilityIdentifier("cloud-results-error")
-                    }
-                    if !pending.isEmpty {
-                        Text("Not Sent").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
-                        ForEach(pending) { input in
-                            Button { pendingPresentation.show(input) } label: {
-                                HStack(spacing: 12) {
-                                    Image(systemName: "photo.badge.clock")
-                                        .foregroundStyle(TesseraeTheme.accent)
-                                    VStack(alignment: .leading, spacing: 5) {
-                                        Text(input.kind == .photo ? String(localized: "Photo to review")
-                                            : String(localized: "Refresh to review"))
-                                            .font(.headline)
-                                        Text(input.createdAt.formatted()).font(.caption).foregroundStyle(.secondary)
-                                    }
-                                    Spacer(minLength: 0)
-                                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
-                                }
-                                .frame(minHeight: 44)
-                                .tesseraeCard()
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("cloud-pending-\(input.id.uuidString)")
-                        }
-                    }
-                    let calendar = Calendar.current
-                    let batchesByDay = Dictionary(grouping: history) { calendar.startOfDay(for: $0.createdAt) }
-                    ForEach(batchesByDay.keys.sorted(by: >), id: \.self) { day in
-                        Section {
-                            ForEach(batchesByDay[day] ?? []) { batch in
-                                NavigationLink(value: batch.id) { activityCard(batch) }
-                                    .buttonStyle(.plain)
-                                    .accessibilityIdentifier("cloud-result-\(batch.id.uuidString)")
-                            }
-                        } header: {
-                            historyDay(day, calendar: calendar)
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                                .accessibilityAddTraits(.isHeader)
-                        }
-                    }
-                    if history.isEmpty, pending.isEmpty, error == nil {
-                        if didLoadResults {
-                            ContentUnavailableView("No Activity Yet", systemImage: "clock",
-                                description: Text("Photo sends and display refreshes appear here."))
-                                .accessibilityIdentifier("cloud-no-activity")
-                        } else {
-                            ProgressView("Loading Activity…").frame(maxWidth: .infinity, minHeight: 120)
-                        }
-                    }
+        NavigationStack {
+            ScrollViewReader { scroll in
+                let results = visibleHistory
+                let revealID = resultToReveal.flatMap { id in
+                    isActive && results.contains(where: { $0.id == id }) ? id : nil
                 }
-                .frame(maxWidth: 820)
-                .padding(16)
-                .frame(maxWidth: .infinity)
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 12) {
+                        CloudNavigationTitle(title: String(localized: "Activity"), tenant: tenant)
+                        if let error {
+                            Label(error, systemImage: "exclamationmark.circle")
+                                .font(.subheadline).foregroundStyle(.secondary)
+                                .accessibilityIdentifier("cloud-results-error")
+                        }
+                        ForEach(pending) { input in
+                            pendingCard(input)
+                        }
+                        ForEach(results) { batch in
+                            activityCard(batch)
+                                .id(batch.id)
+                        }
+                        if results.isEmpty, pending.isEmpty {
+                            emptyState
+                        }
+                    }
+                    .frame(maxWidth: 820)
+                    .padding(16)
+                    .frame(maxWidth: .infinity)
+                }
+                .accessibilityIdentifier("cloud-activity-list")
+                .task(id: revealID) {
+                    guard let revealID else { return }
+                    expandedID = revealID
+                    await Task.yield()
+                    guard !Task.isCancelled, resultToReveal == revealID else { return }
+                    scroll.scrollTo(revealID, anchor: .top)
+                    resultToReveal = nil
+                }
             }
             .tesseraeScreenBackground()
             .tesseraeRootPageChrome()
             .navigationBarTitleDisplayMode(.inline)
-            .refreshable { reloadRevision = UUID() }
-            .toolbar { TesseraeRootToolbar { EmptyView() } }
-            .navigationDestination(for: UUID.self) { id in
-                CloudSubmissionResultView(id: id, context: context) { next in path.append(next) }
-            }
+            .refreshable { requestReload() }
+            .toolbar { TesseraeRootToolbar { ActivityFilterMenu(filter: $filter) } }
         }
-        .sheet(item: $pendingPresentation.item, onDismiss: { reloadRevision = UUID() }) { selection in
+        .sheet(item: $pendingPresentation.item, onDismiss: requestReload) { selection in
             CloudPendingInputSheet(input: selection.input, context: context) { id in
-                if let accepted = pendingPresentation.accept(id, from: selection.id) { path.append(accepted) }
+                if let accepted = pendingPresentation.accept(id, from: selection.id) { resultToReveal = accepted }
             }
         }
-        .task(id: HistoryLoadKey(context: context, isVisible: isActive && path.isEmpty, revision: reloadRevision)) {
-            guard isActive, path.isEmpty else { return }
+        .onChange(of: resultToReveal, initial: true) { _, id in
+            if id != nil {
+                filter = .all
+                requestReload()
+            }
+        }
+        .task(id: loadKey) {
+            guard isActive else { return }
             while !Task.isCancelled {
-                do {
-                    let values = try await host.cloudPendingInputs(context: context)
-                    let results = try await host.cloudSubmissionHistory(context: context)
-                    guard !Task.isCancelled else { return }
-                    host.withCurrentCloudPresentation(context) {
-                        pending = values
-                        history = results
-                        didLoadResults = true
-                        error = nil
-                    }
-                } catch {
-                    guard !Task.isCancelled else { return }
-                    history = []
-                    pending = []
-                    self.error = error.localizedDescription
-                    return
-                }
-                let pendingDelay = pending.map { $0.expiresAt.timeIntervalSinceNow }.filter { $0 > 0 }.min()
-                guard let delay = [nextCloudResultUpdate(history), pendingDelay].compactMap({ $0 }).min() else { return }
+                await loadHistory()
+                guard let delay = nextCloudResultUpdate(history) else { return }
                 do { try await Task.sleep(for: .seconds(delay)) } catch { return }
+            }
+        }
+        .task(id: loadKey) {
+            guard isActive else { return }
+            while !Task.isCancelled {
+                await loadPending()
+                guard let deadline = pending.map(\.expiresAt).filter { $0 > Date() }.min() else { return }
+                do { try await Task.sleep(for: .seconds(max(0.05, deadline.timeIntervalSinceNow))) }
+                catch { return }
             }
         }
         .task(id: pendingPresentation.item?.id) {
             guard let selected = pendingPresentation.item else { return }
-            let deadline = selected.input.expiresAt
-            do { if deadline > Date() { try await Task.sleep(for: .seconds(deadline.timeIntervalSinceNow)) } }
+            do { try await Task.sleep(for: .seconds(max(0, selected.input.expiresAt.timeIntervalSinceNow))) }
             catch { return }
-            if pendingPresentation.item?.id == selected.id { pendingPresentation.item = nil; reloadRevision = UUID() }
+            if pendingPresentation.item?.id == selected.id { pendingPresentation.item = nil }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 if let selected = pendingPresentation.item, selected.input.expiresAt <= Date() { pendingPresentation.item = nil }
-                reloadRevision = UUID()
+                requestReload()
             }
         }
     }
-    private func historyDay(_ day: Date, calendar: Calendar) -> Text {
-        if calendar.isDateInToday(day) { return Text("Today") }
-        if calendar.isDateInYesterday(day) { return Text("Yesterday") }
-        return Text(day, format: .dateTime.year().month().day())
+
+    @ViewBuilder private var emptyState: some View {
+        if error == nil {
+            if !didLoadResults {
+                ProgressView("Loading Activity…").frame(maxWidth: .infinity, minHeight: 120)
+            } else if filter == .needsAttention {
+                ContentUnavailableView {
+                    Label("No Matching Activity", systemImage: "line.3.horizontal.decrease.circle")
+                } description: {
+                    Text("No items need attention in the activity loaded so far.")
+                } actions: {
+                    Button("Show All") { filter = .all }
+                        .accessibilityIdentifier("activity-show-all")
+                }
+                .accessibilityIdentifier("activity-attention-empty")
+            } else {
+                ContentUnavailableView("No Activity Yet", systemImage: "clock.arrow.circlepath",
+                    description: Text("Photo sends and display refreshes appear here."))
+                    .accessibilityIdentifier("cloud-no-activity")
+            }
+        }
+    }
+
+    private func requestReload() {
+        reloadRevision = UUID()
+    }
+
+    private func loadHistory() async {
+        let requestedID = resultToReveal
+        do {
+            let results = try await host.cloudSubmissionHistory(context: context)
+            guard !Task.isCancelled else { return }
+            host.withCurrentCloudPresentation(context) {
+                history = results
+                didLoadResults = true
+                historyError = nil
+                if let expandedID, !results.contains(where: { $0.id == expandedID }) {
+                    self.expandedID = nil
+                }
+                if let requestedID, resultToReveal == requestedID, !results.contains(where: { $0.id == requestedID }) {
+                    historyError = CloudSubmissionError.missingResult.localizedDescription
+                    resultToReveal = nil
+                }
+            }
+        } catch {
+            guard !Task.isCancelled else { return }
+            host.withCurrentCloudPresentation(context) {
+                history = []
+                historyError = error.localizedDescription
+            }
+        }
+    }
+
+    private func loadPending() async {
+        do {
+            let inputs = try await host.cloudPendingInputs(context: context)
+            guard !Task.isCancelled else { return }
+            host.withCurrentCloudPresentation(context) {
+                pending = inputs
+                pendingError = nil
+            }
+        } catch {
+            guard !Task.isCancelled else { return }
+            host.withCurrentCloudPresentation(context) {
+                pending = []
+                pendingError = error.localizedDescription
+            }
+        }
+    }
+
+    private func pendingCard(_ input: CloudPendingInput) -> some View {
+        Button {
+            pendingPresentation.show(input)
+        } label: {
+            ActivityCard {
+                ActivityCardRow {
+                    Text(input.kind == .photo ? String(localized: "Photo to review") : String(localized: "Refresh to review"))
+                        .font(.headline)
+                    Text("Not Sent").font(.caption.weight(.semibold)).foregroundStyle(TesseraeTheme.warning)
+                    timestamp(input.createdAt)
+                } artwork: {
+                    Image(systemName: input.kind == .photo ? "photo.badge.clock" : "arrow.clockwise")
+                        .font(.title3)
+                        .foregroundStyle(TesseraeTheme.accent)
+                        .frame(width: 112, height: 70)
+                        .background(TesseraeTheme.surfaceInset, in: RoundedRectangle(cornerRadius: 12))
+                        .frame(width: ActivityCardMetrics.previewSize.width, height: ActivityCardMetrics.previewSize.height)
+                        .accessibilityHidden(true)
+                }
+            } details: {
+                EmptyView()
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("cloud-pending-\(input.id.uuidString)")
     }
 
     private func activityCard(_ batch: CloudSubmissionBatch) -> some View {
-        let names = batch.targets.map(\.name).formatted(.list(type: .and))
-        let statuses = CloudBatchStatus.labels(for: batch)
-        return HStack(spacing: 12) {
-            CloudActivityThumbnail(batch: batch, context: context)
-            VStack(alignment: .leading, spacing: 5) {
-                Text(batch.kind == .photo ? String(localized: "Photo to \(names)")
-                    : String(localized: "Refresh for \(names)"))
-                    .font(.headline)
-                    .fixedSize(horizontal: false, vertical: true)
-                Label(
-                    batch.isActive ? (batch.kind == .photo ? String(localized: "Sending…") : String(localized: "Refreshing…"))
-                    : CloudBatchStatus.isReady(batch) ? String(localized: "Ready for next wake")
-                    : statuses.joined(separator: dynamicTypeSize.isAccessibilitySize ? "\n" : " · "),
-                    systemImage: batch.isActive ? "clock" : CloudBatchStatus.isReady(batch) ? "checkmark.circle" : "exclamationmark.circle"
-                )
-                .font(.subheadline)
-                .foregroundStyle(CloudBatchStatus.isReady(batch) ? TesseraeTheme.success : .secondary)
-                .accessibilityIdentifier("cloud-result-summary-\(batch.id.uuidString)")
-                Text(batch.createdAt, format: .dateTime.hour().minute()).font(.caption).foregroundStyle(.secondary)
+        let isExpanded = expandedID == batch.id
+        let title = batch.kind == .photo ? String(localized: "Shared Photo") : String(localized: "Dashboard Refresh")
+        let summary = CloudBatchStatus.summary(batch)
+        let attention = CloudBatchStatus.needsAttention(batch)
+        let color = attention ? TesseraeTheme.warning : batch.isActive ? TesseraeTheme.info : TesseraeTheme.success
+        return ActivityCard(spacing: 14, hasShadow: true) {
+            ActivityCardRow {
+                Text(title).font(.headline)
+                Text(batch.targets.map(\.name).formatted(.list(type: .and)))
+                    .font(.subheadline).foregroundStyle(.secondary)
+                    .lineLimit(2)
+                Text(summary)
+                    .font(.caption.weight(.semibold)).foregroundStyle(color)
+                    .accessibilityLabel(attention ? CloudBatchStatus.labels(for: batch).joined(separator: ", ") : summary)
+                    .accessibilityIdentifier("cloud-result-summary-\(batch.id.uuidString)")
+                timestamp(batch.createdAt)
+            } artwork: {
+                ActivityDisclosureButton(isExpanded: isExpanded, expandHint: "Expand activity details",
+                                         collapseHint: "Collapse activity details", onToggle: {
+                    expandedID = isExpanded ? nil : batch.id
+                }) {
+                    CloudActivityThumbnail(batch: batch, context: context, isExpanded: isExpanded,
+                                           status: summary, statusColor: color)
+                }
+                .accessibilityLabel(title)
+                .accessibilityIdentifier("cloud-result-\(batch.id.uuidString)")
             }
-            Spacer(minLength: 0)
-            Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+        } details: {
+            if isExpanded {
+                CloudSubmissionResultView(id: batch.id, context: context, isActive: isActive, onChanged: requestReload) {
+                    resultToReveal = $0
+                }
+                .transition(.opacity)
+            }
         }
-        .frame(minHeight: 44)
-        .tesseraeCard()
-        .contentShape(Rectangle())
+    }
+
+    private func timestamp(_ date: Date) -> some View {
+        Text(date, format: .dateTime.month(.abbreviated).day().hour().minute())
+            .font(.caption.monospacedDigit()).foregroundStyle(.tertiary)
     }
 }
 
 private struct CloudActivityThumbnail: View {
     let batch: CloudSubmissionBatch
     let context: CloudPresentationContext
+    let isExpanded: Bool
+    let status: String
+    let statusColor: Color
     @Environment(ConnectionHost.self) private var host
     @State private var image: UIImage?
 
-    private var taskID: UUID? {
+    private var rasterTask: CloudSubmissionTask? {
         guard batch.mediaExpiresAt.map({ $0 > Date() }) == true else { return nil }
-        return batch.tasks.first { $0.raster != nil }?.id
+        return batch.tasks.first { $0.raster != nil }
+    }
+
+    private var artworkSize: CGSize {
+        guard let geometry = rasterTask?.raster?.geometry,
+              geometry.width > 0, geometry.height > 0 else {
+            return CGSize(width: ActivityCardMetrics.previewSize.width, height: 70)
+        }
+        let canvas = ActivityCardMetrics.previewSize
+        let scale = min(canvas.width / CGFloat(geometry.width), canvas.height / CGFloat(geometry.height))
+        return CGSize(width: CGFloat(geometry.width) * scale, height: CGFloat(geometry.height) * scale)
     }
 
     var body: some View {
+        let size = artworkSize
         ZStack {
             TesseraeTheme.surfaceInset
-            if let image, taskID != nil {
-                Image(uiImage: image).resizable().scaledToFill()
+            if let image, rasterTask != nil {
+                Image(uiImage: image).resizable().scaledToFit()
             } else {
                 Image(systemName: batch.kind == .photo ? "photo" : "arrow.clockwise")
-                    .foregroundStyle(TesseraeTheme.accent)
+                    .font(.title3).foregroundStyle(TesseraeTheme.accent)
             }
         }
-        .frame(width: 52, height: 52)
-        .clipShape(RoundedRectangle(cornerRadius: 9))
+        .frame(width: size.width, height: size.height)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(alignment: .topTrailing) {
+            ActivityStatusBadge(label: status, symbol: batch.isActive ? "clock"
+                : CloudBatchStatus.isReady(batch) ? "paperplane.fill" : "exclamationmark.circle.fill", color: statusColor)
+                .padding(5)
+        }
+        .overlay(alignment: .bottomTrailing) {
+            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                .font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                .frame(width: 24, height: 24)
+                .background(.thinMaterial, in: Circle())
+                .padding(5)
+        }
+        .frame(width: ActivityCardMetrics.previewSize.width, height: ActivityCardMetrics.previewSize.height)
         .accessibilityHidden(true)
-        .task(id: taskID) {
+        .task(id: rasterTask?.id) {
             image = nil
-            guard let taskID else { return }
-            guard let data = try? await host.cloudSubmissionPreview(batch.id, taskID: taskID, context: context),
-                  !Task.isCancelled, taskID == self.taskID,
+            guard let taskID = rasterTask?.id,
+                  let data = try? await host.cloudSubmissionPreview(batch.id, taskID: taskID, context: context),
+                  !Task.isCancelled, taskID == rasterTask?.id,
                   let source = CGImageSourceCreateWithData(data as CFData, nil),
                   let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
                       kCGImageSourceCreateThumbnailFromImageAlways: true,
                       kCGImageSourceCreateThumbnailWithTransform: true,
-                      kCGImageSourceThumbnailMaxPixelSize: 156,
+                      kCGImageSourceThumbnailMaxPixelSize: 354,
                   ] as CFDictionary) else { return }
             host.withCurrentCloudPresentation(context) { image = UIImage(cgImage: thumbnail) }
         }
@@ -228,10 +343,12 @@ private struct CloudActivityThumbnail: View {
 private struct CloudSubmissionResultView: View {
     let id: UUID
     let context: CloudPresentationContext
+    let isActive: Bool
+    let onChanged: () -> Void
     let onResent: (UUID) -> Void
     @Environment(ConnectionHost.self) private var host
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var reloadRevision = UUID()
     @State private var previewTaskID: UUID?
     @State private var batch: CloudSubmissionBatch?
@@ -251,40 +368,28 @@ private struct CloudSubmissionResultView: View {
     @State private var decisionTargets: Set<String> = []
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 14) {
-                if let batch {
-                    summaryCard(batch)
-                    displaysCard(batch)
-                } else if let error {
-                    ContentUnavailableView("Activity Unavailable", systemImage: "clock.badge.exclamationmark",
-                        description: Text(error))
-                        .accessibilityIdentifier("cloud-result-unavailable")
-                } else {
-                    ProgressView("Loading Activity…").frame(maxWidth: .infinity, minHeight: 120)
-                }
-                if let message = actionError ?? error {
-                    Text(message).foregroundStyle(TesseraeTheme.danger)
-                        .accessibilityIdentifier("cloud-result-error")
-                }
+        VStack(alignment: .leading, spacing: 12) {
+            if let batch {
+                photoPreview(batch)
+                displays(batch)
+            } else if let error {
+                Label(error, systemImage: "exclamationmark.circle")
+                    .font(.footnote).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("cloud-result-unavailable")
+            } else {
+                ProgressView("Loading Activity…").frame(maxWidth: .infinity, minHeight: 60)
             }
-            .frame(maxWidth: 820)
-            .padding(16)
-            .frame(maxWidth: .infinity)
-        }
-        .tesseraeScreenBackground()
-        .tesseraeMessageCenter()
-        .navigationTitle(batch?.kind == .currentPage ? String(localized: "Refresh Details") : String(localized: "Photo Details"))
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            TesseraeToolbarActions {
-                if let batch { moreMenu(batch) }
+            if let actionError {
+                Text(actionError).font(.footnote).foregroundStyle(TesseraeTheme.danger)
+                    .accessibilityIdentifier("cloud-result-error")
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .sheet(isPresented: $showStorage) {
             if let batch { storageDetails(batch) }
         }
-        .task(id: ResultLoadKey(context: context, revision: reloadRevision)) {
+        .task(id: CloudActivityLoadKey(context: context, isVisible: isActive, revision: reloadRevision)) {
+            guard isActive else { return }
             while !Task.isCancelled {
                 await reload()
                 guard let batch, let delay = nextCloudResultUpdate([batch]) else { return }
@@ -302,11 +407,6 @@ private struct CloudSubmissionResultView: View {
             } catch { if previewKey == requestKey { previewData = nil } }
         }
         .onChange(of: scenePhase) { _, phase in if phase == .active { reloadRevision = UUID() } }
-        .refreshable {
-            actionError = nil
-            await reload()
-            if let batch, !mediaUnavailable(batch) { mediaHidden = false }
-        }
         .confirmationDialog("Some Displays May Already Have Received This", isPresented: $confirmResend,
                             titleVisibility: .visible) {
             Button("Send Selected Again") { resend(targetIDs: confirmationIDs, confirmsDuplicates: true) }
@@ -324,54 +424,32 @@ private struct CloudSubmissionResultView: View {
         } message: { Text("This removes the photo and result from this device. It cannot undo a request already received by Cloud.") }
     }
 
-    private func summaryCard(_ batch: CloudSubmissionBatch) -> some View {
-        DisplayPreviewCard {
-            if let previewData, let image = UIImage(data: previewData) {
-                Image(uiImage: image).resizable().scaledToFit()
-                    .frame(maxWidth: .infinity)
-                    .frame(maxHeight: 260)
-                    .clipShape(RoundedRectangle(cornerRadius: 9))
-                    .accessibilityLabel("Submitted Photo")
-                    .accessibilityIdentifier("cloud-submitted-photo")
-                if batch.initialUploadCount > 1 {
-                    Menu {
-                        ForEach(batch.tasks.filter { $0.raster != nil }) { task in
-                            Button(previewNames(batch, task: task)) { previewTaskID = task.id }
-                                .accessibilityIdentifier("cloud-result-preview-\(task.id.uuidString)")
-                        }
-                    } label: {
-                        Label(previewNames(batch, task: previewTask(batch)), systemImage: "rectangle.on.rectangle")
-                            .frame(minHeight: 44)
+    @ViewBuilder private func photoPreview(_ batch: CloudSubmissionBatch) -> some View {
+        if let previewData, let image = UIImage(data: previewData) {
+            ActivityExpandedPhoto(image: image, maximumHeight: 150)
+                .accessibilityLabel("Submitted Photo")
+                .accessibilityIdentifier("cloud-submitted-photo")
+            if batch.initialUploadCount > 1 {
+                Menu {
+                    ForEach(batch.tasks.filter { $0.raster != nil }) { task in
+                        Button(previewNames(batch, task: task)) { previewTaskID = task.id }
+                            .accessibilityIdentifier("cloud-result-preview-\(task.id.uuidString)")
                     }
-                    .accessibilityIdentifier("cloud-result-preview-picker")
+                } label: {
+                    Label(previewNames(batch, task: previewTask(batch)), systemImage: "rectangle.on.rectangle")
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                        .frame(minHeight: 44)
                 }
+                .accessibilityIdentifier("cloud-result-preview-picker")
             }
-            if batch.isActive {
-                ProgressView(batch.kind == .photo ? String(localized: "Sending…") : String(localized: "Refreshing…"))
-                    .accessibilityIdentifier("cloud-result-sending")
-            } else {
-                Text(summary(batch)).font(.title2.weight(.semibold))
-            }
-            Text(batch.createdAt.formatted()).font(.subheadline).foregroundStyle(.secondary)
-            if mediaUnavailable(batch) {
-                Text("The saved photo is no longer available.")
-                    .font(.footnote).foregroundStyle(.secondary)
-                    .accessibilityIdentifier("cloud-result-media-expired")
-            }
+        } else if mediaUnavailable(batch) {
+            Text("The saved photo is no longer available.")
+                .font(.footnote).foregroundStyle(.secondary)
+                .accessibilityIdentifier("cloud-result-media-expired")
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func summary(_ batch: CloudSubmissionBatch) -> String {
-        let ready = CloudBatchStatus.readyCount(batch)
-        if CloudBatchStatus.isReady(batch) { return String(localized: "Ready for next wake") }
-        if ready == 0 {
-            return batch.kind == .photo ? String(localized: "Check this send") : String(localized: "Check this refresh")
-        }
-        return String(localized: "\(ready) of \(batch.targets.count) displays ready")
-    }
-
-    private func displaysCard(_ batch: CloudSubmissionBatch) -> some View {
+    private func displays(_ batch: CloudSubmissionBatch) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text(selectsTargets ? String(localized: "Select Displays") : String(localized: "Displays")).font(.headline)
@@ -379,6 +457,8 @@ private struct CloudSubmissionResultView: View {
                 if selectsTargets {
                     Button("Cancel") { selectsTargets = false }
                         .frame(minHeight: 44)
+                } else {
+                    moreMenu(batch)
                 }
             }
 
@@ -413,12 +493,16 @@ private struct CloudSubmissionResultView: View {
                             Button {
                                 requestResend([target.id])
                             } label: {
-                                Text("Try Again")
-                                    .font(.subheadline.weight(.semibold))
-                                    .frame(minWidth: 44, minHeight: 44)
+                                Label("Try again for \(target.name)", systemImage: "arrow.clockwise")
+                                    .labelStyle(.iconOnly)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(TesseraeTheme.accent)
+                                    .frame(width: 32, height: 32)
+                                    .background(TesseraeTheme.accent.opacity(0.08), in: Circle())
+                                    .frame(width: 44, height: 44)
                                     .contentShape(Rectangle())
                             }
-                            .accessibilityLabel("Try again for \(target.name)")
+                            .buttonStyle(.plain)
                             .accessibilityIdentifier("cloud-result-retry-\(target.id)")
                         }
                     }
@@ -433,67 +517,23 @@ private struct CloudSubmissionResultView: View {
                 .accessibilityIdentifier("cloud-result-resend")
             }
         }
-        .tesseraeCard()
     }
 
     private func targetStatus(_ target: CloudSubmissionTarget, value: CloudTargetOutcome?, isActive: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(target.name).font(.headline)
-            outcome(value, isActive: isActive)
+        let status = CloudDisplayActivityStatus(outcome: value, isActive: isActive)
+        return HStack(spacing: 8) {
+            Image(systemName: status.symbol)
+                .font(.subheadline)
+                .foregroundStyle(status.color)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(target.name).font(.subheadline.weight(.semibold))
+                Text(status.label).font(.footnote.weight(.medium)).foregroundStyle(status.color)
+            }
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+            .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-    }
-
-    @ViewBuilder private func outcome(_ value: CloudTargetOutcome?, isActive: Bool) -> some View {
-        switch value {
-        case .generated(_, let warnings):
-            Label(warnings.isEmpty ? String(localized: "Ready for next wake") : String(localized: "Ready with a note"),
-                systemImage: warnings.isEmpty ? "checkmark.circle" : "exclamationmark.circle")
-                .font(.subheadline)
-                .foregroundStyle(warnings.isEmpty ? TesseraeTheme.success : TesseraeTheme.warning)
-            ForEach(Array(Set(warnings)).sorted(), id: \.self) { warning in
-                Text(warning).font(.caption).foregroundStyle(.secondary)
-            }
-        case .refused(let problem, let message, let retry):
-            Label("Not sent", systemImage: "exclamationmark.circle")
-                .font(.subheadline).foregroundStyle(TesseraeTheme.warning)
-            Text(refusalMessage(problem, fallback: message)).font(.caption).foregroundStyle(.secondary)
-            if let retry, retry > 0 {
-                Text("Wait \(retry.rounded(.up).formatted(.number.precision(.fractionLength(0)))) seconds before trying again.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-        case .unknown:
-            unconfirmed
-        case .notAttempted:
-            Label("Not sent", systemImage: "pause.circle").font(.subheadline).foregroundStyle(.secondary)
-        case nil:
-            if isActive {
-                Label("Sending…", systemImage: "hourglass").font(.subheadline).foregroundStyle(.secondary)
-            } else {
-                unconfirmed
-            }
-        }
-    }
-
-    private var unconfirmed: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Label("Couldn’t confirm", systemImage: "questionmark.circle")
-                .font(.subheadline).foregroundStyle(TesseraeTheme.warning)
-            Text("Check the display before sending again.").font(.caption).foregroundStyle(.secondary)
-        }
-    }
-
-    private func refusalMessage(_ problem: CloudSubmissionProblem, fallback: String) -> String {
-        switch problem {
-        case .authorization: String(localized: "Sign in to Cloud again.")
-        case .permission: String(localized: "Your account can’t send to this display.")
-        case .membershipRemoved, .tenantUnavailable, .resourceMismatch: String(localized: "This Cloud workspace is unavailable.")
-        case .quota: String(localized: "Your Cloud plan limit was reached.")
-        case .rateLimited: String(localized: "Cloud is busy. Try again later.")
-        case .unavailable: String(localized: "Cloud is temporarily unavailable.")
-        case .noFrame: String(localized: "Assign a dashboard to this display in Cloud.")
-        default: fallback
-        }
     }
 
     private func canResend(_ batch: CloudSubmissionBatch) -> Bool {
@@ -540,7 +580,9 @@ private struct CloudSubmissionResultView: View {
                 .accessibilityIdentifier("cloud-result-delete-result")
         } label: {
             Label("More", systemImage: "ellipsis")
+                .tesseraeIconActionLabel()
         }
+        .menuStyle(.button)
         .accessibilityIdentifier("cloud-result-more")
     }
 
@@ -576,6 +618,7 @@ private struct CloudSubmissionResultView: View {
             error = nil
             if mediaUnavailable(value) { previewData = nil }
         } catch {
+            guard !Task.isCancelled else { return }
             batch = nil; previewData = nil; self.error = error.localizedDescription
         }
     }
@@ -597,7 +640,11 @@ private struct CloudSubmissionResultView: View {
                     selectsTargets = false
                     onResent(next)
                 }
-            } catch { actionError = error.localizedDescription; await reload() }
+            } catch {
+                actionError = error.localizedDescription
+                await reload()
+                onChanged()
+            }
         }
     }
     private func delete(mediaOnly: Bool) {
@@ -610,11 +657,13 @@ private struct CloudSubmissionResultView: View {
                 if mediaOnly { try await host.deleteCloudMedia(id, context: context) }
                 else {
                     try await host.deleteCloudResult(id, context: context)
-                    host.withCurrentCloudPresentation(context) { dismiss() }
                 }
-            } catch { actionError = error.localizedDescription }
-            await reload()
-            reloadRevision = UUID()
+            } catch {
+                actionError = error.localizedDescription
+                mediaHidden = false
+            }
+            host.withCurrentCloudPresentation(context, onChanged)
+            if mediaOnly || actionError != nil { reloadRevision = UUID() }
         }
     }
     private func previewTask(_ batch: CloudSubmissionBatch) -> CloudSubmissionTask? {
@@ -630,6 +679,36 @@ private struct CloudSubmissionResultView: View {
     }
 }
 
+private struct CloudDisplayActivityStatus {
+    let label: String
+    let symbol: String
+    let color: Color
+
+    init(outcome: CloudTargetOutcome?, isActive: Bool) {
+        switch outcome {
+        case .generated(_, let warnings) where warnings.isEmpty:
+            (label, symbol, color) = (String(localized: "Ready for next wake"), "checkmark.circle.fill", TesseraeTheme.success)
+        case .generated:
+            (label, symbol, color) = (String(localized: "Ready with a note"), "exclamationmark.circle.fill", TesseraeTheme.warning)
+        case .refused(let problem, _, _):
+            let reason: String
+            switch problem {
+            case .authorization: reason = String(localized: "Sign in to Cloud again.")
+            case .quota: reason = String(localized: "Your Cloud plan limit was reached.")
+            case .rateLimited: reason = String(localized: "Try again later")
+            default: reason = String(localized: "Not sent")
+            }
+            (label, symbol, color) = (reason, "exclamationmark.circle.fill", TesseraeTheme.warning)
+        case .notAttempted:
+            (label, symbol, color) = (String(localized: "Not sent"), "exclamationmark.circle.fill", TesseraeTheme.warning)
+        case nil where isActive:
+            (label, symbol, color) = (String(localized: "Sending…"), "clock", .secondary)
+        case .unknown, nil:
+            (label, symbol, color) = (String(localized: "Couldn’t confirm"), "questionmark.circle.fill", TesseraeTheme.warning)
+        }
+    }
+}
+
 private enum CloudBatchStatus: CaseIterable {
     case generated, generatedWithWarnings, notSent, unconfirmed, waiting
 
@@ -639,6 +718,20 @@ private enum CloudBatchStatus: CaseIterable {
 
     static func isReady(_ batch: CloudSubmissionBatch) -> Bool {
         !batch.isActive && !batch.targets.isEmpty && readyCount(batch) == batch.targets.count
+    }
+
+    static func needsAttention(_ batch: CloudSubmissionBatch) -> Bool {
+        batch.results.contains { !$0.outcome.isCleanGenerated } || (!batch.isActive && !isReady(batch))
+    }
+
+    static func summary(_ batch: CloudSubmissionBatch) -> String {
+        if batch.isActive {
+            return batch.kind == .photo ? String(localized: "Sending…") : String(localized: "Refreshing…")
+        }
+        if isReady(batch) { return String(localized: "Ready for next wake") }
+        let ready = readyCount(batch)
+        return ready > 0 ? String(localized: "\(ready) of \(batch.targets.count) displays ready")
+            : labels(for: batch).joined(separator: " · ")
     }
 
     static func labels(for batch: CloudSubmissionBatch) -> [String] {
@@ -670,13 +763,9 @@ private enum CloudBatchStatus: CaseIterable {
     }
 }
 
-private struct HistoryLoadKey: Hashable {
+private struct CloudActivityLoadKey: Hashable {
     let context: CloudPresentationContext
     let isVisible: Bool
-    let revision: UUID
-}
-private struct ResultLoadKey: Hashable {
-    let context: CloudPresentationContext
     let revision: UUID
 }
 private func nextCloudResultUpdate(_ batches: [CloudSubmissionBatch]) -> TimeInterval? {

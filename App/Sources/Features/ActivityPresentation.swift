@@ -193,7 +193,11 @@ enum ActivityFilter: Hashable, Sendable {
     }
 
     func includes(_ presentation: ActivityStatusPresentation) -> Bool {
-        self == .all || presentation.needsAttention
+        includes(needsAttention: presentation.needsAttention)
+    }
+
+    func includes(needsAttention: Bool) -> Bool {
+        self == .all || needsAttention
     }
 
     func includesQueuedImage(_ request: SharedImageRequest, isActive: Bool) -> Bool {

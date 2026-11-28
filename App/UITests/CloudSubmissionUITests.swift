@@ -73,6 +73,7 @@ import XCTest
             let start = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: above ? 0.25 : 0.8))
             start.press(forDuration: 0.05, thenDragTo: surface.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: above ? 0.8 : 0.25)))
         }
+        if !element.isHittable { capture(app, "cloud-missing-activity-element") }
         XCTAssertTrue(element.isHittable)
     }
     private func capture(_ app: XCUIApplication, _ name: String) {
@@ -245,8 +246,12 @@ import XCTest
         assertOutcome("Couldn’t confirm", device: "a3_native", in: app)
         let retry = app.buttons["cloud-result-retry-a3_large"]
         XCTAssertTrue(retry.exists)
+        XCTAssertEqual(retry.label, "Try again for Landscape large A")
         XCTAssertGreaterThanOrEqual(retry.frame.height, 44)
+        XCTAssertGreaterThanOrEqual(retry.frame.width, 44)
         XCTAssertFalse(app.buttons["cloud-result-retry-a3_native"].exists)
+        XCTAssertFalse(app.staticTexts["Check the display before sending again."].exists)
+        XCTAssertTrue(app.scrollViews["cloud-activity-list"].exists)
         capture(app, "A3-real-partial-generated-unknown-unstarted")
     }
 
@@ -266,7 +271,36 @@ import XCTest
             XCTFail("Expected the saved partial batch to show all three outcomes in its list row.")
             return
         }
+        let cardID = summary.identifier.replacingOccurrences(of: "cloud-result-summary-", with: "cloud-result-")
+        let card = app.buttons[cardID]
+        let completed = app.staticTexts.matching(NSPredicate(
+            format: "identifier BEGINSWITH 'cloud-result-summary-' AND label == %@",
+            chinese ? "已就绪，等待屏幕唤醒" : "Ready for next wake"
+        )).firstMatch
+        let completedID = completed.exists ? completed.identifier : nil
+        let filter = app.buttons["activity-filter"]
+        filter.tap()
+        app.buttons.matching(NSPredicate(format: "identifier == %@ OR label == %@",
+            "activity-filter-needs-attention", chinese ? "需要处理" : "Needs Attention")).firstMatch.tap()
+        XCTAssertTrue(summary.exists)
+        if let completedID {
+            XCTAssertFalse(app.staticTexts[completedID].exists)
+        }
+        reveal(card, in: app)
+        card.tap()
+        let target = app.descendants(matching: .any)["cloud-result-target-a3_large"]
+        XCTAssertTrue(target.waitForExistence(timeout: 8))
+        XCTAssertEqual(card.value as? String, chinese ? "已展开" : "Expanded")
         capture(app, "A3-partial-batch-summary")
+        reveal(card, in: app)
+        card.tap()
+        XCTAssertFalse(target.exists)
+        filter.tap()
+        app.buttons.matching(NSPredicate(format: "identifier == %@ OR label == %@",
+            "activity-filter-all", chinese ? "全部" : "All")).firstMatch.tap()
+        if let completedID {
+            XCTAssertTrue(app.staticTexts[completedID].waitForExistence(timeout: 5))
+        }
     }
 
     func testRetryOnlyUnsentDisplayFromActivity() throws {
@@ -279,6 +313,7 @@ import XCTest
         reveal(retry, in: app)
         retry.tap()
         assertOutcome("Ready for next wake", device: "a3_large", in: app)
+        XCTAssertTrue(app.scrollViews["cloud-activity-list"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["cloud-result-target-a3_land"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["cloud-result-target-a3_native"].exists)
         capture(app, "cloud-retry-only-unsent-display")
