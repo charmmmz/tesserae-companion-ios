@@ -180,7 +180,6 @@
 "Expanded sent photo preview" = "已展开的发送照片预览";
 "Instance" = "实例";
 "Name" = "名称";
-"General" = "常规";
 "Version" = "版本";
 "API mode" = "API 模式";
 "Live Companion API" = "实时 Companion API";
@@ -707,6 +706,7 @@
 "This action referred to content that has been replaced." = "此次操作对应的内容已被替代。";
 "The server did not allow this action." = "服务器未允许此次操作。";
 "The server reported an unrecognized status." = "服务器返回了暂不识别的状态。";
+"All" = "全部";
 "Needs Attention" = "需要处理";
 "Activity Filter" = "筛选动态";
 "Filter Activity" = "筛选动态";
@@ -1398,7 +1398,11 @@
 "Yesterday" = "昨天";
 "Your Cloud plan limit was reached." = "已达到云端套餐上限。";
 "Your account can’t send to this display." = "当前账号无法向此显示屏发送。";
-
+"Shared Photo" = "共享照片";
+"Dashboard Refresh" = "刷新仪表盘";
+"Expand activity details" = "展开活动详情";
+"Collapse activity details" = "收起活动详情";
+"Try again later" = "请稍后重试";
 "Push %@" = "推送 %@";
 "%@ to %@" = "将 %@ 推送至 %@";
 "%@ ready for %@" = "%@ 已为 %@ 准备就绪";
