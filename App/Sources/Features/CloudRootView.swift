@@ -445,19 +445,40 @@ struct CloudAccountSettings: View {
             }
             .accessibilityIdentifier("cloud-apple-linked")
         } else if appleLink.isLinked == false {
-            Button("Link Apple account", systemImage: "apple.logo") {
+            Button {
                 Task { await appleLink.link(model.client, isCurrent: appleLinkValidity(context)) }
+            } label: {
+                HStack {
+                    Label("Link Apple account", systemImage: "apple.logo")
+                    if appleLink.isBusy {
+                        Spacer()
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(.secondary)
+                            .accessibilityHidden(true)
+                    }
+                }
             }
             .disabled(appleLink.isBusy || signingOut || host.isSwitching || host.isSigningIn)
+            .accessibilityValue(appleLink.isBusy ? Text("Linking Apple account…") : Text(""))
             .accessibilityIdentifier("cloud-apple-link")
+        } else if appleLink.isBusy {
+            LabeledContent {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(.secondary)
+                    .accessibilityHidden(true)
+            } label: {
+                Label("Apple", systemImage: "apple.logo")
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Checking Apple account…")
+            .accessibilityIdentifier("cloud-apple-checking")
         } else if appleLink.problem != nil {
             Button("Check Apple account status", systemImage: "arrow.clockwise") {
                 Task { await appleLink.check(model.client, isCurrent: appleLinkValidity(context)) }
             }
             .disabled(appleLink.isBusy)
-        }
-        if appleLink.isBusy {
-            ProgressView("Checking Apple account…")
         }
         if let problem = appleLink.problem {
             Text(problem).font(.footnote).foregroundStyle(.secondary)
