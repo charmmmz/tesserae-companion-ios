@@ -8,6 +8,26 @@ import TesseraeKit
 struct BluetoothDisplayStoreTests {
     private let start = Date(timeIntervalSince1970: 1_700_000_000)
 
+    @Test func legacyConnectionKeepsAcknowledgedBluetoothModeAfterMigration() throws {
+        let directory = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appending(path: "records.plist")
+        let store = BluetoothDisplayStore(fileURL: file)
+        store.activeServerID = "legacy"
+        store.observe(deviceID: "panel", name: "Desk", mode: .bluetooth, batteryMillivolts: nil, at: start)
+        let report = try #require(store.pendingModeReports(displayIDs: ["panel"], serverID: "legacy").first)
+        store.markModeReported(report, serverID: "legacy")
+
+        let upgradingStore = BluetoothDisplayStore(fileURL: file)
+        upgradingStore.migrateServer(from: "legacy", to: "connection")
+        upgradingStore.migrateServer(from: "legacy", to: "connection")
+
+        let restored = BluetoothDisplayStore(fileURL: file)
+        #expect(restored.record(for: "panel", serverID: "connection")?.mode == .bluetooth)
+        #expect(restored.pendingModeReports(displayIDs: ["panel"], serverID: "connection").isEmpty)
+        #expect(restored.record(for: "panel", serverID: "legacy") == nil)
+    }
+
     @Test func statusReadingsSurviveRestartAndUpgradeAnAcknowledgedMode() throws {
         let directory = URL.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -450,6 +470,44 @@ struct BluetoothDisplayStoreTests {
         }
         ambiguous.observeMACMatches(["f8:5b:1b:4f:e8:44": "red"], serverID: "home")
         #expect(ambiguous.record(for: "red", serverID: "home") == nil)
+    }
+
+    @Test func cloudLookupUsesTheSameSavedBluetoothPresentationAndKeepsOtherMatches() throws {
+        let file = URL.temporaryDirectory.appending(path: UUID().uuidString + ".plist")
+        defer { try? FileManager.default.removeItem(at: file) }
+        let store = BluetoothDisplayStore(fileURL: file)
+        let firstMAC = "02:01:02:03:04:05"
+        let secondMAC = "02:01:02:03:04:06"
+        store.observe(deviceID: "nearby-picpak", name: "Kitchen", mode: .bluetooth,
+                      batteryMillivolts: nil, batteryPercent: 84, hardwareMAC: firstMAC, at: start)
+        store.observe(deviceID: "nearby-reterminal", name: "Desk", mode: .bluetooth,
+                      batteryMillivolts: nil, hardwareMAC: secondMAC, at: start)
+        let issuer = try #require(URL(string: "https://cloud.example.invalid"))
+        let cloud = ConnectionIdentity.cloud(issuer: issuer, userID: "person", tenantID: "home").id
+        let other = ConnectionIdentity.cloud(issuer: issuer, userID: "person", tenantID: "office").id
+        let ids: Set<String> = ["kitchen", "desk"]
+        store.observeMACMatches([firstMAC: "kitchen"], serverID: cloud.rawValue,
+                                currentDisplayIDs: ids, queriedMACs: [firstMAC])
+        store.observeMACMatches([secondMAC: "desk"], serverID: cloud.rawValue,
+                                currentDisplayIDs: ids, queriedMACs: [secondMAC])
+
+        let display = try JSONDecoder().decode(CloudDevice.self, from: Data("""
+        {"id":"kitchen","name":"Kitchen","kind":"picpak","panel":{"w":800,"h":480},
+         "format":"bin","dither":"none","sleep_interval_s":60,"battery_pct":53}
+        """.utf8))
+        let restored = BluetoothDisplayStore(fileURL: file)
+        #expect(restored.presentation(for: display, connectionID: cloud).isBluetooth)
+        #expect(restored.presentation(for: display, connectionID: cloud).batteryText == "84%")
+        #expect(restored.presentation(for: display, connectionID: other).batteryText == "53%")
+        #expect(!restored.presentation(for: display, connectionID: other).isBluetooth)
+        #expect(restored.record(for: "desk", serverID: cloud.rawValue)?.id == "nearby-reterminal")
+
+        restored.observeMACMatches([:], serverID: cloud.rawValue,
+                                   currentDisplayIDs: ids, queriedMACs: [secondMAC])
+        #expect(restored.record(for: "desk", serverID: cloud.rawValue) == nil)
+        #expect(restored.presentation(for: display, connectionID: cloud).isBluetooth)
+        restored.observeMACMatches([:], serverID: cloud.rawValue, currentDisplayIDs: [], queriedMACs: [])
+        #expect(restored.record(for: "kitchen", serverID: cloud.rawValue) == nil)
     }
 
     @Test func shortMACSuffixCannotAutomaticallyAssociate() {

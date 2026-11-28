@@ -273,9 +273,12 @@ remain visible in the capsule.
 
 Every page uses `TesseraeToolbarActions` from `App/Sources/DesignSystem` for its
 trailing actions. `TesseraeRootToolbar` composes it with Settings.
-Compact root pages use `.tesseraeRootPageChrome()` for message lifetime/spacing
-and the independent Send button in the bottom safe area. App-level message
-presentation belongs to `.tesseraeWindowMessageOverlay(center:)`.
+Each tab container uses `.tesseraeTabSendChrome()` for one floating Send button.
+The selected tab's `.tesseraeTabSendViewport(isSelected:)` reports the bottom
+edge above the tab bar and reserves space for the action. Pushing or popping a
+page leaves the button in place. Sheets and full-screen covers appear above it.
+Pages use `.tesseraeMessageCenter()` for message lifetime and spacing. The window
+presents messages through `.tesseraeWindowMessageOverlay(center:)`.
 The component owns the single native capsule, icon-only labels, 44 × 44-point
 targets, 4-point spacing, symbol sizing, accent tint, and muted disabled state.
 Feature views supply action semantics and availability; they do not override
@@ -532,6 +535,7 @@ and Share Extension use the same light and dark appearances. The app's
 | Information / progress | `#2B4E9B` | `#7C9BE0` |
 
 Ordinary screens, sheets and nested settings use the adaptive paper background.
+The welcome screen adds a fine grid to that same background in both appearances.
 Forms and Lists hide their system scroll background and apply
 `tesseraeScreenBackground()`, including navigation destinations and selection
 pages. Native grouped rows keep their semantic fills; custom icon-picker tiles
@@ -579,8 +583,7 @@ references and are not bundled in the app.
 - Displays home cards show battery and connection type, using a Wi-Fi or
   Bluetooth icon with its label. Signal values belong to device details;
   VoiceOver connection content reports the same type as the visible card.
-- Warm paper background with warm light or charcoal cards, without the
-  previous ambient glow or decorative grid.
+- Warm paper background with warm light or charcoal cards.
 - Restrained 10–16 pt radii; pills only for compact states.
 - Soft paper-like elevation, not glass-heavy layers.
 - Brick-red actions and selection; independent semantic status colours.

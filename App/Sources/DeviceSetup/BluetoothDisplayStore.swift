@@ -100,6 +100,24 @@ final class BluetoothDisplayStore {
 
     var records: [BluetoothDisplayRecord] { snapshot.records.values.sorted { $0.id < $1.id } }
 
+    func migrateServer(from legacyID: String, to connectionID: String) {
+        guard !isReadOnly, legacyID != connectionID else { return }
+        if snapshot.links[connectionID] == nil { snapshot.links[connectionID] = snapshot.links[legacyID] }
+        if snapshot.servers[connectionID] == nil { snapshot.servers[connectionID] = snapshot.servers[legacyID] }
+        if snapshot.reportedModes?[connectionID] == nil, let legacyReports = snapshot.reportedModes?[legacyID] {
+            snapshot.reportedModes?[connectionID] = legacyReports
+        }
+        snapshot.links.removeValue(forKey: legacyID)
+        snapshot.servers.removeValue(forKey: legacyID)
+        snapshot.reportedModes?.removeValue(forKey: legacyID)
+        for id in snapshot.records.keys where snapshot.records[id]?.observedServerIDs.contains(legacyID) == true {
+            snapshot.records[id]?.observedServerIDs.remove(legacyID)
+            snapshot.records[id]?.observedServerIDs.insert(connectionID)
+        }
+        if activeServerID == legacyID { activeServerID = connectionID }
+        persist()
+    }
+
     /// The durable local records are the outbox. Only resolved identities can be reported.
     func pendingModeReports(displayIDs: [String], serverID: String?, includeStatus: Bool = false) -> [BluetoothModeReport] {
         guard !isReadOnly, hasPersistedSnapshot, let serverID else { return [] }
@@ -340,18 +358,46 @@ final class BluetoothDisplayStore {
         Array(Set(records.compactMap { hardwareMAC(for: $0) })).sorted()
     }
 
-    /// Matching IDs contain no new hardware identity: each MAC came from our BLE records.
-    func observeMACMatches(_ matches: [String: String], serverID: String) {
-        var entries = snapshot.servers[serverID] ?? [:]
-        for id in entries.keys { entries[id]?.associationMAC = nil }
-        let known = Set(knownHardwareMACs)
-        let grouped = Dictionary(grouping: matches.filter { known.contains($0.key) }, by: { $0.value })
-        for (id, candidates) in grouped where candidates.count == 1 && entries[id] != nil {
-            entries[id]?.associationMAC = candidates.first?.key
+    static func resolveMACMatches(
+        _ macs: [String],
+        lookup: (String) async throws -> String?
+    ) async throws -> [String: String] {
+        var matches: [String: String] = [:]
+        for mac in macs {
+            try Task.checkCancellation()
+            matches[mac] = try await lookup(mac)
         }
-        snapshot.servers[serverID] = entries
-        discardConflictingLinks()
-        persist()
+        try Task.checkCancellation()
+        return matches
+    }
+
+    /// Matching IDs contain no new hardware identity: each MAC came from our BLE records.
+    func observeMACMatches(
+        _ matches: [String: String],
+        serverID: String,
+        currentDisplayIDs: Set<String>? = nil,
+        queriedMACs: Set<String>? = nil
+    ) {
+        var entries = snapshot.servers[serverID] ?? [:]
+        if let currentDisplayIDs {
+            entries = entries.filter { currentDisplayIDs.contains($0.key) }
+        }
+        for id in entries.keys {
+            guard let previousMAC = entries[id]?.associationMAC,
+                  queriedMACs?.contains(previousMAC) != false else { continue }
+            entries[id]?.associationMAC = nil
+        }
+        let known = Set(knownHardwareMACs)
+        let verified = matches.filter { known.contains($0.key) && queriedMACs?.contains($0.key) != false }
+        let grouped = Dictionary(grouping: verified, by: { $0.value })
+        for (id, candidates) in grouped where candidates.count == 1 {
+            guard currentDisplayIDs?.contains(id) ?? (entries[id] != nil) else { continue }
+            entries[id, default: DisplayServerRecord()].associationMAC = candidates.first?.key
+        }
+        let changed = entries != (snapshot.servers[serverID] ?? [:])
+        if changed { snapshot.servers[serverID] = entries }
+        let linksChanged = discardConflictingLinks()
+        if changed || linksChanged || storageError != nil { persist() }
     }
 
     func observeServer(displays: [DisplaySummary], previews: [String: PreviewImageState], serverID: String?, at date: Date = Date()) {
@@ -423,12 +469,25 @@ final class BluetoothDisplayStore {
     }
 
     func presentation(for display: DisplaySummary, serverID: String?) -> DisplayBluetoothPresentation {
-        let record = record(for: display.id, serverID: serverID)
-        let server = serverRecord(displayID: display.id, serverID: serverID)
+        presentation(displayID: display.id, serverID: serverID, batteryPercent: display.batteryPercent,
+                     firmwareVersion: display.firmwareVersion, lastSeenAt: display.lastSeenAt)
+    }
+
+    func presentation(for device: CloudDevice, connectionID: ConnectionID) -> DisplayBluetoothPresentation {
+        let percent = device.batteryPercent.flatMap { (0...100).contains($0) ? Int($0.rounded()) : nil }
+        return presentation(displayID: device.id, serverID: connectionID.rawValue, batteryPercent: percent,
+                            firmwareVersion: device.firmwareVersion, lastSeenAt: device.lastSeenAt)
+    }
+
+    private func presentation(
+        displayID: String, serverID: String?, batteryPercent: Int?, firmwareVersion: String?, lastSeenAt: Date?
+    ) -> DisplayBluetoothPresentation {
+        let record = record(for: displayID, serverID: serverID)
+        let server = serverRecord(displayID: displayID, serverID: serverID)
         return DisplayBluetoothPresentation(record: record, server: server,
-            fallbackPercent: display.batteryPercent, fallbackFirmwareVersion: display.firmwareVersion,
-            fallbackLastSeenAt: display.lastSeenAt,
-            usesLocalPreview: showsBluetoothPreview(record, displayID: display.id, serverID: serverID))
+            fallbackPercent: batteryPercent, fallbackFirmwareVersion: firmwareVersion,
+            fallbackLastSeenAt: lastSeenAt,
+            usesLocalPreview: showsBluetoothPreview(record, displayID: displayID, serverID: serverID))
     }
 
     private func persist() {
@@ -473,6 +532,7 @@ struct DisplayBluetoothPresentation {
     var batteryText: String {
         latestBattery.map { "\($0.percent)%" } ?? "—"
     }
+    var hasBatteryReading: Bool { latestBattery != nil }
     var batterySymbolName: String {
         guard let battery = latestBattery else { return "questionmark.circle" }
         let level = Int((Double(battery.percent) / 25).rounded()) * 25

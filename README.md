@@ -34,7 +34,7 @@ Tesserae Companion connects directly to your own Tesserae server, with a built-i
   <tr>
     <td align="center"><a href="docs/images/readme/displays-battery-levels.png"><img src="docs/images/readme/displays-battery-levels.png" width="220" alt="Displays overview with hardware, battery, connection type and the server-matched Lineups icon"></a></td>
     <td align="center"><a href="docs/images/readme/dashboards-floating-send.png"><img src="docs/images/readme/dashboards-floating-send.png" width="220" alt="Saved Dashboards grouped by display with preview and push actions"></a></td>
-    <td align="center"><a href="docs/images/readme/dashboard-settings-actions.png"><img src="docs/images/readme/dashboard-settings-actions.png" width="220" alt="Native Dashboard settings with paper background, shared actions, preview, and configuration controls"></a></td>
+    <td align="center"><a href="docs/images/readme/dashboard-settings-floating-send.png"><img src="docs/images/readme/dashboard-settings-floating-send.png" width="220" alt="Native Dashboard settings with paper background, shared actions, preview, and configuration controls"></a></td>
     <td align="center"><a href="docs/images/readme/lineup-editor-actions.png"><img src="docs/images/readme/lineup-editor-actions.png" width="220" alt="Native Lineup editor with consistent icon actions, a target display, and selected Dashboards"></a></td>
   </tr>
   <tr>
@@ -44,7 +44,7 @@ Tesserae Companion connects directly to your own Tesserae server, with a built-i
     <td align="center"><sub><strong>Lineups</strong><br>Choose targets and playback</sub></td>
   </tr>
   <tr>
-    <td align="center"><a href="docs/images/readme/gallery-folder-actions.png"><img src="docs/images/readme/gallery-folder-actions.png" width="220" alt="Photo Library showing a square grid of sample images and shared folder action capsule"></a></td>
+    <td align="center"><a href="docs/images/readme/gallery-folder-floating-send.png"><img src="docs/images/readme/gallery-folder-floating-send.png" width="220" alt="Photo Library showing a square grid of sample images, folder actions, and the floating Send button"></a></td>
     <td align="center"><a href="docs/images/readme/send-photo-compact-fit-toggle.png"><img src="docs/images/readme/send-photo-compact-fit-toggle.png" width="220" alt="Photo composer with a compact one-tap fit button, compact display choices and the upper-right Send action"></a></td>
     <td align="center"><a href="docs/images/readme/activity-floating-send.png"><img src="docs/images/readme/activity-floating-send.png" width="220" alt="Activity showing recent content and send outcomes"></a></td>
     <td align="center"><a href="docs/images/readme/bluetooth-maintenance.png"><img src="docs/images/readme/bluetooth-maintenance.png" width="220" alt="Authenticated Bluetooth maintenance for a supported PicPak display"></a></td>
@@ -62,7 +62,7 @@ Tesserae Companion connects directly to your own Tesserae server, with a built-i
 
 <table>
   <tr>
-    <td align="center"><a href="docs/images/readme/dashboard-components.png"><img src="docs/images/readme/dashboard-components.png" width="220" alt="Dashboard widget settings grouped into selections, text, and numbers"></a></td>
+    <td align="center"><a href="docs/images/readme/dashboard-components-floating-send.png"><img src="docs/images/readme/dashboard-components-floating-send.png" width="220" alt="Dashboard widget settings grouped into selections, text, and numbers"></a></td>
     <td align="center"><a href="docs/images/readme/lineup-selection-actions.png"><img src="docs/images/readme/lineup-selection-actions.png" width="220" alt="Lineup Dashboard selection with shared Done action and two saved Dashboards in playback order"></a></td>
     <td align="center"><a href="docs/images/readme/offline-album.png"><img src="docs/images/readme/offline-album.png" width="220" alt="Offline Album review with a photo summary and display readiness checks"></a></td>
     <td align="center"><a href="docs/images/readme/gallery-upload-details.png"><img src="docs/images/readme/gallery-upload-details.png" width="220" alt="Photo upload details grouped by Gallery folder"></a></td>
@@ -74,7 +74,7 @@ Tesserae Companion connects directly to your own Tesserae server, with a built-i
     <td align="center"><sub><strong>Uploads</strong><br>Follow individual photos</sub></td>
   </tr>
   <tr>
-    <td colspan="2" align="center"><a href="docs/images/readme/dashboard-choices.png"><img src="docs/images/readme/dashboard-choices.png" width="220" alt="Dashboard choices with ordered selections and a shared Refresh and Done capsule"></a></td>
+    <td colspan="2" align="center"><a href="docs/images/readme/dashboard-choices-floating-send.png"><img src="docs/images/readme/dashboard-choices-floating-send.png" width="220" alt="Dashboard choices with ordered selections and a shared Refresh and Done capsule"></a></td>
     <td colspan="2" align="center"><a href="docs/images/readme/lineup-duration.png"><img src="docs/images/readme/lineup-duration.png" width="220" alt="Lineup duration picker with consistent Done action and dark paper background"></a></td>
   </tr>
   <tr>
@@ -158,15 +158,50 @@ requires compatible opt-in firmware and hardware acceptance. See the
 
 1. Install [TestFlight](https://apps.apple.com/app/testflight/id899247664) and
    [join the beta](https://testflight.apple.com/join/gjQar3TK).
-2. Explore **Demo Mode**, or discover your Tesserae server on the local network.
-   You can also enter its address manually.
+2. Choose **Self-Hosted** to find a server on the local network or enter its
+   address. **Nearby Devices** and **Demo Mode** are at the bottom of the
+   welcome screen.
 3. Pair using the Companion pairing code shown by Tesserae.
 4. Grant optional editing or personal-data permissions only for the features
    you want to use.
 
-Requires **iOS / iPadOS 18 or later** and a Tesserae server exposing the scoped
-`/api/app/v1` Companion API. The app connects directly to your server; there is
-no separate Companion cloud account. English and Simplified Chinese are included.
+Requires **iOS / iPadOS 18 or later**. Self-hosted connections use a Tesserae
+server exposing the scoped `/api/app/v1` Companion API and do not require a
+Cloud account. English and Simplified Chinese are included.
+
+### Tesserae Cloud (in development)
+
+Development builds offer **Continue with Email** on the **Cloud** tab. The
+internal Apple sign-in beta also offers **Continue with Apple** for existing Cloud
+accounts. If Apple hides the address or it doesn't match, verify your Cloud email
+with a code. The system browser handles workspace approval. Switch between
+saved Cloud and self-hosted connections from **Settings → Choose Connection**.
+
+Cloud browsing shows displays, dashboards and their existing previews. Missing
+previews remain placeholders; browsing does not request renders. Device setup
+opens the Cloud website. Native photo sending reuses the screen preview and
+Fit/Fill framing controls, keeps a result for each display, and supports explicit
+selected resend. **Reload Preview** reads the saved preview. **Regenerate Display
+Frame** uses the device's existing dashboard binding to generate a new frame.
+Generated frames are available for the next display wake; the App does not claim
+that the physical screen has updated. Photos sharing and Send Image in Shortcuts
+can use fixed Cloud displays without opening the App first. A separate shortcut
+refreshes the current page. Retained items appear in Send Results for explicit
+review and Continue; they never resume automatically. Cloud editing remains on
+the website.
+
+This integration requires Cloud's native authorization endpoints. Local
+integration is tested separately from deployment, real email delivery and
+signed-device acceptance. The current TestFlight release may not include it.
+
+Cloud UI tests require an explicitly prepared local C1 fixture, browser bridge
+and fault server. Enable them with the test-runner environment variable
+`TESSERAE_RUN_CLOUD_UI=1`; external-browser tests also read the private handoff
+file named by `TESSERAE_CLOUD_BROWSER_TRACE`. Connection performance tests use
+`TESSERAE_RUN_CONNECTION_PERF=1` and require the baseline simulator bundle.
+Cloud submission UI tests use `TESSERAE_RUN_CLOUD_SUBMISSION_UI=1`, the same owned
+local fixture, and a marker image seeded into the simulator Photos library.
+These suites skip by default without contacting a service.
 
 ### Server and firmware support
 

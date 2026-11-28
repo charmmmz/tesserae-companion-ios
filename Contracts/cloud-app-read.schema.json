@@ -1,0 +1,403 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tesserae-companion.invalid/contracts/cloud-app-read.schema.json",
+  "title": "Tesserae Cloud native read response",
+  "description": "Synthetic client contract. Timestamp numbers are Unix seconds. Unknown response keys are ignored by the client.",
+  "type": "object",
+  "properties": {
+    "me": {
+      "$ref": "#/$defs/account"
+    },
+    "devices": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/device"
+      }
+    },
+    "pages": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/page"
+      }
+    }
+  },
+  "required": [
+    "me",
+    "devices",
+    "pages"
+  ],
+  "$defs": {
+    "account": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "owner",
+            "member"
+          ]
+        },
+        "user": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "email"
+          ]
+        },
+        "tenant": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ]
+        },
+        "issuer": {
+          "type": "string"
+        },
+        "auth": {
+          "type": "object",
+          "properties": {
+            "resource": {
+              "type": "string"
+            },
+            "scopes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "grant_id": {
+              "type": "string"
+            },
+            "generation": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "resource",
+            "scopes",
+            "grant_id",
+            "generation"
+          ]
+        },
+        "features": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "boolean"
+          }
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "usage": {
+          "type": "object",
+          "properties": {
+            "renders_today": {
+              "type": "integer"
+            },
+            "renders_charged_today": {
+              "type": "integer"
+            },
+            "mcp_calls_today": {
+              "type": "integer"
+            },
+            "browser_ms_today": {
+              "type": "integer"
+            },
+            "devices": {
+              "type": "integer"
+            },
+            "pages": {
+              "type": "integer"
+            },
+            "storage_bytes": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "renders_today",
+            "renders_charged_today",
+            "mcp_calls_today",
+            "browser_ms_today",
+            "devices",
+            "pages",
+            "storage_bytes"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "role",
+        "user",
+        "tenant",
+        "issuer",
+        "auth",
+        "features",
+        "limits",
+        "usage"
+      ]
+    },
+    "device": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "fw_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "panel": {
+          "type": "object",
+          "properties": {
+            "w": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "h": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "native_w": {
+              "type": "integer"
+            },
+            "native_h": {
+              "type": "integer"
+            },
+            "gamut": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "w",
+            "h"
+          ]
+        },
+        "format": {
+          "type": "string"
+        },
+        "dither": {
+          "type": "string"
+        },
+        "sleep_interval_s": {
+          "type": "integer"
+        },
+        "page_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lineup_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "paused_at": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "last_seen_at": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "battery_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rssi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "frame": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "digest": {
+                  "type": "string"
+                },
+                "bytes": {
+                  "type": "integer"
+                },
+                "rendered_at": {
+                  "type": "number"
+                },
+                "page_id": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "digest",
+                "bytes",
+                "rendered_at",
+                "page_id"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stale_since": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "next_due_at": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "kind",
+        "fw_version",
+        "panel",
+        "format",
+        "dither",
+        "sleep_interval_s",
+        "page_id",
+        "lineup_id",
+        "paused_at",
+        "last_seen_at",
+        "battery_pct",
+        "rssi",
+        "frame",
+        "stale_since",
+        "next_due_at"
+      ]
+    },
+    "page": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "device_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "updated_at": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "kind",
+        "device_id",
+        "updated_at"
+      ]
+    }
+  }
+}

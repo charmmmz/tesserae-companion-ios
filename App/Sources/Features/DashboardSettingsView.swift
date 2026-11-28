@@ -1,6 +1,30 @@
 import SwiftUI
 import TesseraeKit
 
+struct DashboardDetailForm<Content: View>: View {
+  @ViewBuilder let content: () -> Content
+
+  var body: some View {
+    Form(content: content)
+      .scrollContentBackground(.hidden)
+      .tesseraeScreenBackground()
+  }
+}
+
+struct DashboardDetailPreview<Artwork: View, Action: View>: View {
+  @ViewBuilder let artwork: () -> Artwork
+  @ViewBuilder let action: () -> Action
+
+  var body: some View {
+    artwork()
+      .frame(maxWidth: .infinity)
+      .frame(height: 260)
+      .overlay(alignment: .topTrailing, content: action)
+      .listRowInsets(EdgeInsets())
+      .listRowBackground(Color.clear)
+  }
+}
+
 struct DashboardSettingsView: View {
   @Environment(AppModel.self) private var model
   @Environment(\.dismiss) private var dismiss
@@ -34,7 +58,7 @@ struct DashboardSettingsView: View {
   }
 
   var body: some View {
-    Form {
+    DashboardDetailForm {
       overview
       if isLoading && draft == nil {
         ProgressView().frame(maxWidth: .infinity)
@@ -74,8 +98,6 @@ struct DashboardSettingsView: View {
         }
       }
     }
-    .scrollContentBackground(.hidden)
-    .tesseraeScreenBackground()
     .scrollDismissesKeyboard(.interactively)
     .navigationTitle(dashboard?.name ?? String(localized: "Dashboard Settings"))
     .navigationBarTitleDisplayMode(.inline)
@@ -148,14 +170,13 @@ struct DashboardSettingsView: View {
   private var overview: some View {
     Section {
       if let dashboard {
-        PreviewArtwork(
-          state: model.dashboardPreview(for: dashboard, deviceID: previewDeviceID),
-          placeholderSystemName: "rectangle", placeholderLabel: "Dashboard preview placeholder",
-          imageLabel: "Dashboard preview", accessibilityIdentifier: "dashboard-settings-preview"
-        )
-        .frame(maxWidth: .infinity)
-        .frame(height: 260)
-        .overlay(alignment: .topTrailing) {
+        DashboardDetailPreview {
+          PreviewArtwork(
+            state: model.dashboardPreview(for: dashboard, deviceID: previewDeviceID),
+            placeholderSystemName: "rectangle", placeholderLabel: "Dashboard preview placeholder",
+            imageLabel: "Dashboard preview", accessibilityIdentifier: "dashboard-settings-preview"
+          )
+        } action: {
           Button {
             pushTarget = dashboard
           } label: {
@@ -169,8 +190,6 @@ struct DashboardSettingsView: View {
           .accessibilityIdentifier("dashboard-settings-push")
           .padding(10)
         }
-        .listRowInsets(EdgeInsets())
-        .listRowBackground(Color.clear)
       }
       if saved { Label("Settings saved", systemImage: "checkmark.circle").foregroundStyle(.green) }
     } footer: {

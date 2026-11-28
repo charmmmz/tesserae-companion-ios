@@ -17,6 +17,7 @@ struct NearbyDeviceSetupView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(AppModel.self) private var model
+    @Environment(ConnectionHost.self) private var host
     @Environment(NearbyDeviceManager.self) private var nearby
     @Environment(SetupNetworkStore.self) private var setupNetworks
 
@@ -35,6 +36,10 @@ struct NearbyDeviceSetupView: View {
     @State private var recentEventsExpanded = false
     @State private var selectedDetent: PresentationDetent = .height(360)
     @State private var changingServer = false
+    @State private var cloudContext: CloudPresentationContext?
+    @State private var useDisplayWiFi = false
+    @State private var isLoadingPassword = false
+    @State private var passwordLoad: Task<Void, Never>?
     @State private var useConnectedServer = true
     @State private var serverAddress = ""
     @State private var serverPairingCode = ""
@@ -89,6 +94,7 @@ struct NearbyDeviceSetupView: View {
                             if device.mode == .maintenance && (screen == .wifi || screen == .server) {
                                 Button("Cancel", systemImage: "xmark") {
                                     changingServer = false
+                                    cloudContext = nil
                                     serverPairingCode = ""
                                     screen = .maintenance
                                 }
@@ -150,11 +156,16 @@ struct NearbyDeviceSetupView: View {
         .onChange(of: nearby.connectionState) { _, state in
             switch state {
             case .ready:
-                screen = device.mode == .maintenance ? .maintenance : .wifi
+                if cloudContext == nil {
+                    screen = device.mode == .maintenance ? .maintenance : .wifi
+                }
             case .configured:
                 isSubmitting = false
                 serverPairingCode = ""
                 rememberConfiguredNetwork()
+                if let cloudContext, cloudContext == host.cloudPresentationContext, let cloud = host.cloud {
+                    Task { await cloud.refresh() }
+                }
             case .performingMaintenanceAction:
                 isSubmitting = true
                 screen = .maintenanceAction
@@ -164,6 +175,7 @@ struct NearbyDeviceSetupView: View {
             case .failed(let message):
                 isSubmitting = false
                 screen = .authentication
+                cloudContext = nil
                 localError = message
             default:
                 break
@@ -177,10 +189,22 @@ struct NearbyDeviceSetupView: View {
                 selectedDetent = preferredDetent(for: newScreen)
             }
         }
-        .task(id: model.activeInstance?.id) {
-            if let instanceID = model.activeInstance?.id {
-                setupNetworks.load(instanceID: instanceID)
-            }
+        .onChange(of: nearby.cloudPairingError) { _, message in
+            guard let message, cloudContext != nil else { return }
+            isSubmitting = false
+            localError = message
+        }
+        .onChange(of: host.cloudPresentationContext) { _, context in
+            guard let cloudContext, context != cloudContext else { return }
+            self.cloudContext = nil
+            isSubmitting = false
+            nearby.disconnect()
+            screen = .authentication
+            localError = NearbyDeviceSetupError.serverConnectionChanged.localizedDescription
+        }
+        .task {
+            do { try await setupNetworks.load(aliases: host.setupNetworkAliases) }
+            catch { localError = error.localizedDescription }
         }
     }
 
@@ -209,7 +233,11 @@ struct NearbyDeviceSetupView: View {
                 DisplayHardwareBadge(presentation: hardwarePresentation, fallbackModelName: String(localized: "Nearby Display"))
             }
             Spacer(minLength: 0)
-            if model.activeInstance == nil {
+            if host.cloud != nil && device.mode == .setup {
+                Label("Use the display’s setup hotspot, or enter Maintenance on the display.", systemImage: "wifi")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else if host.cloud == nil && model.activeInstance == nil {
                 Label(
                     device.mode == .setup
                         ? "Connect this app to a Tesserae Server first."
@@ -245,31 +273,54 @@ struct NearbyDeviceSetupView: View {
     }
 
     private var authentication: some View {
-        VStack(spacing: 20) {
+        let scan = Label("Scan Code", systemImage: "camera")
+        let passkey = Label("Enter 6-Digit Code", systemImage: "circle.grid.3x3.fill")
+
+        return VStack(spacing: 20) {
             Spacer()
             Image(systemName: "qrcode.viewfinder")
                 .font(.system(size: 54))
                 .foregroundStyle(.tint)
-            Text("Scan the temporary code shown on the display.")
+            Text("Use the QR code or 6-digit code on the display.")
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .lineLimit(nil)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer()
-            Button("Scan Code", systemImage: "camera") {
-                scannerPresented = true
+            VStack(spacing: 12) {
+                Button {
+                    scannerPresented = true
+                } label: {
+                    verificationLabel(scan, matching: passkey)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(TesseraeTheme.accentFill)
+                .foregroundStyle(.white)
+
+                Button {
+                    screen = .connecting
+                    nearby.connect(to: device, qrCode: nil)
+                } label: {
+                    verificationLabel(passkey, matching: scan)
+                }
+                .buttonStyle(.bordered)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(TesseraeTheme.accentFill)
-            .foregroundStyle(.white)
+            .buttonBorderShape(.capsule)
             .controlSize(.large)
-            Button("Enter 6-Digit Code") {
-                screen = .connecting
-                nearby.connect(to: device, qrCode: nil)
-            }
-            .buttonStyle(.bordered)
         }
         .padding(28)
+    }
+
+    private func verificationLabel(_ label: Label<Text, Image>, matching other: Label<Text, Image>) -> some View {
+        // Match the taller label after wrapping at the current width and Dynamic Type size.
+        ZStack {
+            other.hidden()
+            label
+        }
+        .font(.body.weight(.semibold))
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity)
     }
 
     private var connecting: some View {
@@ -289,7 +340,7 @@ struct NearbyDeviceSetupView: View {
     }
 
     private var wifiSetup: some View {
-        let knownNetworks = model.activeInstance == nil ? [] : setupNetworks.networks
+        let knownNetworks = setupNetworks.networks
         let knownSSIDs = Set(knownNetworks.map(\.ssid))
         let otherNetworks = nearby.networks.filter { !knownSSIDs.contains($0.ssid) }
 
@@ -307,7 +358,18 @@ struct NearbyDeviceSetupView: View {
                 }
             }
 
-            if !knownNetworks.isEmpty {
+            if cloudContext != nil, let ssid = nearby.diagnostics?.ssid {
+                Section {
+                    Toggle("Use Display’s Wi-Fi", isOn: $useDisplayWiFi)
+                        .onChange(of: useDisplayWiFi) { _, useSaved in
+                            if !useSaved { nearby.scanWiFi() }
+                        }
+                } footer: {
+                    Text(ssid)
+                }
+            }
+
+            if !useDisplayWiFi && !knownNetworks.isEmpty {
                 Section {
                     ForEach(knownNetworks) { knownNetwork in
                         Button {
@@ -344,78 +406,94 @@ struct NearbyDeviceSetupView: View {
                 }
             }
 
-            Section {
-                if otherNetworks.isEmpty {
-                    HStack {
-                        ProgressView()
-                        Text(nearby.statusMessage ?? "Scanning…")
-                            .foregroundStyle(.secondary)
-                    }
-                    Button("Scan Again") { nearby.scanWiFi() }
-                } else {
-                    ForEach(otherNetworks) { network in
-                        Button {
-                            selectNetwork(network.ssid)
-                        } label: {
-                            HStack {
-                                Image(systemName: wifiSymbol(for: network.rssi))
-                                Text(network.ssid)
-                                Spacer()
-                                if network.isSecure {
-                                    Image(systemName: "lock.fill")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                if selectedSSID == network.ssid {
-                                    Image(systemName: "checkmark")
-                                        .foregroundStyle(.tint)
+            if !useDisplayWiFi {
+                Section {
+                    if otherNetworks.isEmpty {
+                        HStack {
+                            ProgressView()
+                            Text(nearby.statusMessage ?? "Scanning…")
+                                .foregroundStyle(.secondary)
+                        }
+                        Button("Scan Again") { nearby.scanWiFi() }
+                    } else {
+                        ForEach(otherNetworks) { network in
+                            Button {
+                                selectNetwork(network.ssid)
+                            } label: {
+                                HStack {
+                                    Image(systemName: wifiSymbol(for: network.rssi))
+                                    Text(network.ssid)
+                                    Spacer()
+                                    if network.isSecure {
+                                        Image(systemName: "lock.fill")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    if selectedSSID == network.ssid {
+                                        Image(systemName: "checkmark")
+                                            .foregroundStyle(.tint)
+                                    }
                                 }
                             }
+                            .foregroundStyle(.primary)
                         }
-                        .foregroundStyle(.primary)
                     }
+                    TextField("Other network name", text: $customSSID)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .onChange(of: customSSID) { _, newValue in
+                            guard !newValue.trimmingCharacters(
+                                in: .whitespacesAndNewlines
+                            ).isEmpty else { return }
+                            selectedSSID = ""
+                            passwordLoad?.cancel()
+                            isLoadingPassword = false
+                            password = ""
+                            savePassword = false
+                        }
+                } header: {
+                    Text(knownNetworks.isEmpty ? "Wi-Fi Networks" : "Other Networks")
                 }
-                TextField("Other network name", text: $customSSID)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .onChange(of: customSSID) { _, newValue in
-                        guard !newValue.trimmingCharacters(
-                            in: .whitespacesAndNewlines
-                        ).isEmpty else { return }
-                        selectedSSID = ""
-                        password = ""
-                        savePassword = false
-                    }
-            } header: {
-                Text(knownNetworks.isEmpty ? "Wi-Fi Networks" : "Other Networks")
             }
 
-            if requiresWiFiPassword {
+            if !useDisplayWiFi && requiresWiFiPassword {
                 Section("Password") {
                     SecureField("Wi-Fi password", text: $password)
                         .textContentType(.password)
-                    if model.activeInstance != nil {
-                        Toggle("Save on this device", isOn: $savePassword)
-                    }
+                        .disabled(isLoadingPassword)
+                    Toggle("Save on this device", isOn: $savePassword)
+                        .disabled(isLoadingPassword)
                 }
             }
 
             Section {
-                Button(isSubmitting
-                       ? "Testing Connection…"
-                       : changingServer ? "Change Server"
-                       : isPicPakMaintenance ? "Save Wi-Fi" : "Connect Display") {
-                    submitConfiguration()
-                }
-                .disabled(chosenSSID.isEmpty || isSubmitting || (changingServer && !canContinueServerChange))
+                Button(configurationButtonTitle) { submitConfiguration() }
+                    .disabled(
+                        isSubmitting || (!useDisplayWiFi && (chosenSSID.isEmpty || isLoadingPassword))
+                            || (cloudContext != nil && !useDisplayWiFi && requiresWiFiPassword && password.isEmpty)
+                        || (changingServer && !canContinueServerChange)
+                    )
             } footer: {
-                Text(isPicPakMaintenance
-                     ? "Saved after Wi-Fi connects. Server settings stay unchanged."
-                     : "Saved only after Wi-Fi and server checks pass.")
+                if cloudContext != nil {
+                    Text(nearby.statusMessage ?? String(localized: "The display connects to Wi-Fi, then registers with Tesserae Cloud."))
+                } else {
+                    Text(isPicPakMaintenance
+                         ? "Saved after Wi-Fi connects. Server settings stay unchanged."
+                         : "Saved only after Wi-Fi and server checks pass.")
+                }
             }
         }
         .disabled(isSubmitting)
         .scrollContentBackground(.hidden)
+    }
+
+    private var configurationButtonTitle: LocalizedStringKey {
+        if isSubmitting { return "Connecting…" }
+        if cloudContext != nil, let name = host.cloud?.snapshot?.account.tenant.name {
+            return "Add to \(name)"
+        }
+        if changingServer { return "Change Server" }
+        return isPicPakMaintenance ? "Save Wi-Fi" : "Connect Display"
     }
 
     private var targetServerURL: URL? {
@@ -636,13 +714,47 @@ struct NearbyDeviceSetupView: View {
                 }
             }
 
+            if let cloud = host.cloud, let context = host.cloudPresentationContext,
+               let account = cloud.snapshot?.account, account.role == "owner" {
+                Section("Tesserae Cloud") {
+                    if nearby.deviceInfo?.cloudPairingURL == cloud.client.issuer,
+                       nearby.deviceInfo?.hardwareMAC != nil {
+                        if nearby.screenMode == .bluetooth {
+                            Text("Switch the display to Automatic before adding it to Cloud.")
+                                .foregroundStyle(.secondary)
+                        } else if account.auth.scopes.contains(CloudTokenResponse.devicePairingScope) {
+                            Button("Add to \(account.tenant.name)", systemImage: "icloud.and.arrow.up") {
+                                changingServer = false
+                                cloudContext = context
+                                useDisplayWiFi = nearby.diagnostics?.isWiFiConfigured == true && nearby.diagnostics?.ssid != nil
+                                selectedSSID = ""
+                                customSSID = ""
+                                password = ""
+                                savePassword = false
+                                screen = .wifi
+                                if !useDisplayWiFi { nearby.scanWiFi() }
+                            }
+                            .disabled(nearby.connectionState != .ready || nearby.isSavingScreenMode)
+                            .accessibilityIdentifier("nearby-add-to-cloud")
+                        } else {
+                            Text("Sign in to Cloud again from Choose Connection to allow display pairing.")
+                                .foregroundStyle(.secondary)
+                        }
+                    } else {
+                        Text("Use the display’s setup hotspot to pair with Cloud, or update the display firmware for Bluetooth pairing.")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
             Section("Actions") {
                 Button("Repair or Change Wi-Fi", systemImage: "wifi") {
                     changingServer = false
+                    useDisplayWiFi = false
                     screen = .wifi
                     nearby.scanWiFi()
                 }
-                if !isPicPakMaintenance {
+                if !isPicPakMaintenance && host.cloud == nil {
                     Button("Change Server", systemImage: "server.rack") {
                         changingServer = true
                         useConnectedServer = model.supportsDeviceSetup
@@ -712,10 +824,12 @@ struct NearbyDeviceSetupView: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 68))
                 .foregroundStyle(TesseraeTheme.success)
-            Text(changingServer ? "Server Saved" : isPicPakMaintenance ? "Wi-Fi Saved" : "Display Connected")
+            Text(cloudContext != nil ? "Added to Tesserae Cloud"
+                 : changingServer ? "Server Saved" : isPicPakMaintenance ? "Wi-Fi Saved" : "Display Connected")
                 .font(.title2.bold())
-            Text(changingServer
-                 ? "The display is restarting to register with the new server."
+            Text(cloudContext != nil
+                 ? "The display is restarting. You can find it in Displays."
+                 : changingServer ? "The display is restarting to register with the new server."
                  : isPicPakMaintenance
                  ? "Wi-Fi settings are saved. The display is restarting."
                  : "Wi-Fi and Tesserae are connected. The display is restarting.")
@@ -811,6 +925,20 @@ struct NearbyDeviceSetupView: View {
         isSubmitting = true
         Task {
             do {
+                if let cloudContext {
+                    guard let info = nearby.deviceInfo, let mac = info.hardwareMAC,
+                          info.cloudPairingURL == host.cloud?.client.issuer,
+                          nearby.activeDevice?.id == device.id else {
+                        throw NearbyDeviceSetupError.serverConnectionChanged
+                    }
+                    let code = try await host.createCloudDevicePairing(mac: mac, context: cloudContext)
+                    guard self.cloudContext == cloudContext else { return }
+                    guard nearby.applyCloudPairing(code: code, ssid: useDisplayWiFi ? nil : chosenSSID,
+                                                   password: password, info: info) else {
+                        throw NearbyDeviceSetupError.serverConnectionChanged
+                    }
+                    return
+                }
                 let pairingCode: String
                 let serverURL: URL?
                 if changingServer && !useConnectedServer {
@@ -830,7 +958,7 @@ struct NearbyDeviceSetupView: View {
                         throw NearbyDeviceSetupError.noServer
                     }
                     let pairing = try await model.createFirmwareDevicePairing()
-                    guard model.activeInstance?.id == instance.id,
+                    guard model.activeStorageID == model.storageID(for: instance),
                           model.activeInstance?.baseURL == instance.baseURL,
                           nearby.activeDevice?.id == device.id else {
                         throw NearbyDeviceSetupError.serverConnectionChanged
@@ -881,39 +1009,31 @@ struct NearbyDeviceSetupView: View {
     }
 
     private func loadSavedPassword(for ssid: String) {
-        guard let instanceID = model.activeInstance?.id else { return }
-        Task {
-            if let saved = try? await setupNetworks.savedPassword(
-                instanceID: instanceID,
-                ssid: ssid
-            ) {
-                password = saved
-                savePassword = true
-            } else {
-                password = ""
-                savePassword = false
-            }
+        passwordLoad?.cancel()
+        password = ""
+        savePassword = false
+        isLoadingPassword = true
+        passwordLoad = Task {
+            let saved = try? await setupNetworks.savedPassword(ssid: ssid)
+            guard !Task.isCancelled else { return }
+            password = saved ?? ""
+            savePassword = saved != nil
+            isLoadingPassword = false
         }
     }
 
     private func rememberConfiguredNetwork() {
-        guard let instanceID = model.activeInstance?.id else {
-            password = ""
-            screen = .complete
-            return
-        }
         let configuredSSID = chosenSSID
         let configuredPassword = password
-        let shouldSavePassword = savePassword
+        let shouldSavePassword = savePassword && requiresWiFiPassword
+        password = ""
+        screen = .complete
+        guard !useDisplayWiFi, !configuredSSID.isEmpty else { return }
         Task {
-            try? await setupNetworks.record(
-                instanceID: instanceID,
-                ssid: configuredSSID,
-                password: configuredPassword,
-                savePassword: shouldSavePassword
-            )
-            password = ""
-            screen = .complete
+            do {
+                try await setupNetworks.record(ssid: configuredSSID, password: configuredPassword,
+                                               savePassword: shouldSavePassword)
+            } catch { localError = error.localizedDescription }
         }
     }
 
@@ -974,17 +1094,63 @@ struct TesseraeEInkDisplayArtwork: View {
 }
 
 struct NearbyDisplaysView: View {
+    var fromOnboarding = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(NearbyDeviceManager.self) private var nearby
-    @Environment(AppModel.self) private var model
+    @Environment(ConnectionHost.self) private var host
     @Environment(SetupNetworkStore.self) private var setupNetworks
     @Environment(TesseraeMessageCenter.self) private var messageCenter
     @State private var selectedDevice: NearbyTesseraeDevice?
     @State private var photoConfirmation: TesseraeMessage?
+    @State private var showsMaintenanceGuide = false
+    @State private var networkError: String?
 
     var body: some View {
+        Group {
+            if fromOnboarding {
+                deviceList.listStyle(.plain)
+            } else {
+                deviceList
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .background {
+            if !fromOnboarding {
+                Color.clear.tesseraeScreenBackground()
+            }
+        }
+        .navigationTitle(fromOnboarding ? Text("Nearby Devices") : Text("Nearby Displays"))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarVisibility(.visible, for: .navigationBar)
+        .tesseraeMessageCenter()
+        .onAppear { nearby.startScanning() }
+        .task {
+            do { try await setupNetworks.load(aliases: host.setupNetworkAliases) }
+            catch { networkError = error.localizedDescription }
+        }
+        .alert("Unable to Update Known Networks", isPresented: Binding(
+            get: { networkError != nil }, set: { if !$0 { networkError = nil } }
+        )) {
+            Button("OK", role: .cancel) { networkError = nil }
+        } message: {
+            Text(networkError ?? "")
+        }
+        .sheet(item: Binding(
+            get: { selectedDevice },
+            set: { newDevice in
+                if newDevice == nil, let selectedDevice {
+                    nearby.endSession(for: selectedDevice)
+                }
+                selectedDevice = newDevice
+            }
+        ), onDismiss: showPhotoConfirmation) { device in
+            NearbyDeviceSheet(device: device) { photoConfirmation = $0 }
+        }
+    }
+
+    private var deviceList: some View {
         List {
-            if model.activeInstance != nil, !setupNetworks.networks.isEmpty {
+            if !setupNetworks.networks.isEmpty {
                 Section {
                     ForEach(setupNetworks.networks) { network in
                         HStack(spacing: 12) {
@@ -1011,12 +1177,9 @@ struct NearbyDisplaysView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .swipeActions {
                             Button("Forget", role: .destructive) {
-                                guard let instanceID = model.activeInstance?.id else { return }
                                 Task {
-                                    try? await setupNetworks.remove(
-                                        instanceID: instanceID,
-                                        ssid: network.ssid
-                                    )
+                                    do { try await setupNetworks.remove(ssid: network.ssid) }
+                                    catch { networkError = error.localizedDescription }
                                 }
                             }
                         }
@@ -1028,6 +1191,13 @@ struct NearbyDisplaysView: View {
                 }
             }
             Section {
+                if fromOnboarding {
+                    Text("Find nearby displays over Bluetooth to set them up or service them.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                }
                 if nearby.nearbyDevices.isEmpty {
                     HStack(alignment: .top, spacing: 12) {
                         Image(systemName: "dot.radiowaves.left.and.right")
@@ -1057,6 +1227,7 @@ struct NearbyDisplaysView: View {
                     }
                     .padding(.vertical, 3)
                     .fixedSize(horizontal: false, vertical: true)
+                    .listRowBackground(fromOnboarding ? Color.clear : nil)
                 } else {
                     ForEach(nearby.nearbyDevices) { device in
                         Button {
@@ -1117,65 +1288,66 @@ struct NearbyDisplaysView: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .listRowBackground(fromOnboarding ? Color.clear : nil)
                     }
                 }
             } header: {
-                Text("Displays Nearby")
+                if !fromOnboarding { Text("Displays Nearby") }
             }
 
-            Section {
-                NearbyMaintenanceEntryRow(
-                    title: "Refresh Button",
-                    instruction: "Hold Refresh, then release.",
-                    duration: "3 s"
-                )
-                NearbyMaintenanceEntryRow(
-                    title: "PicPak Button",
-                    instruction: "Hold the button, then release.",
-                    duration: "10 s"
-                )
-                Label {
-                    Text("Release before 20 seconds to avoid reset or setup.")
-                } icon: {
-                    Image(systemName: "exclamationmark.triangle")
-                        .accessibilityHidden(true)
+            if fromOnboarding {
+                DisclosureGroup("Enter Maintenance Mode", isExpanded: $showsMaintenanceGuide) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        maintenanceInstructions
+                        maintenanceNotes.font(.footnote).foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 8)
                 }
-                .font(.footnote)
-                .foregroundStyle(TesseraeTheme.warning)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityElement(children: .combine)
-            } header: {
-                Text("Enter Maintenance Mode")
-            } footer: {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Select the display above, then scan the code on its screen.")
-                    Text("Closes after 5 minutes. To exit sooner, short-press the same button.")
+                .accessibilityIdentifier("nearby-maintenance-guide")
+                .listRowBackground(Color.clear)
+            } else {
+                Section {
+                    maintenanceInstructions
+                } header: {
+                    Text("Enter Maintenance Mode")
+                } footer: {
+                    maintenanceNotes
                 }
-                .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .scrollContentBackground(.hidden)
-        .tesseraeScreenBackground()
-        .navigationTitle("Nearby Displays")
-        .navigationBarTitleDisplayMode(.inline)
-        .tesseraeMessageCenter()
-        .onAppear {
-            nearby.startScanning()
-            if let instanceID = model.activeInstance?.id {
-                setupNetworks.load(instanceID: instanceID)
+    }
+
+    private var maintenanceInstructions: some View {
+        Group {
+            NearbyMaintenanceEntryRow(
+                title: "Refresh Button",
+                instruction: "Hold Refresh, then release.",
+                duration: "3 s"
+            )
+            NearbyMaintenanceEntryRow(
+                title: "PicPak Button",
+                instruction: "Hold the button, then release.",
+                duration: "10 s"
+            )
+            Label {
+                Text("Release before 20 seconds to avoid reset or setup.")
+            } icon: {
+                Image(systemName: "exclamationmark.triangle")
+                    .accessibilityHidden(true)
             }
+            .font(.footnote)
+            .foregroundStyle(TesseraeTheme.warning)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityElement(children: .combine)
         }
-        .sheet(item: Binding(
-            get: { selectedDevice },
-            set: { newDevice in
-                if newDevice == nil, let selectedDevice {
-                    nearby.endSession(for: selectedDevice)
-                }
-                selectedDevice = newDevice
-            }
-        ), onDismiss: showPhotoConfirmation) { device in
-            NearbyDeviceSheet(device: device) { photoConfirmation = $0 }
+    }
+
+    private var maintenanceNotes: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Select the display above, then scan the code on its screen.")
+            Text("Closes after 5 minutes. To exit sooner, short-press the same button.")
         }
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func showPhotoConfirmation() {

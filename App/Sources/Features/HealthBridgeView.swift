@@ -37,7 +37,7 @@ struct HealthBridgeView: View {
         .tesseraeScreenBackground()
         .navigationTitle("Health")
         .navigationBarTitleDisplayMode(.inline)
-        .task(id: appModel.activeInstance?.id) {
+        .task(id: appModel.activeStorageID) {
             await bridgeModel.load(using: appModel)
         }
     }

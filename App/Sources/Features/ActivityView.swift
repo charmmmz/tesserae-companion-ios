@@ -10,7 +10,7 @@ struct ActivityView: View {
     @State private var expandedJobID: String?
     @State private var expandedHistoryID: String?
     @State private var filter: ActivityFilter = .all
-    private let previewCanvasSize = CGSize(width: 112, height: 118)
+    private let previewCanvasSize = ActivityCardMetrics.previewSize
 
     let isActive: Bool
 
@@ -103,25 +103,7 @@ struct ActivityView: View {
         }
         .toolbar {
             TesseraeRootToolbar {
-                Menu {
-                    Picker("Activity Filter", selection: $filter) {
-                        Text("All")
-                            .tag(ActivityFilter.all)
-                            .accessibilityIdentifier("activity-filter-all")
-                        Text("Needs Attention")
-                            .tag(ActivityFilter.needsAttention)
-                            .accessibilityIdentifier("activity-filter-needs-attention")
-                    }
-                } label: {
-                    Label(
-                        "Filter Activity",
-                        systemImage: filter == .all
-                            ? "line.3.horizontal.decrease.circle"
-                            : "line.3.horizontal.decrease.circle.fill"
-                    )
-                }
-                .accessibilityValue(filter.label)
-                .accessibilityIdentifier("activity-filter")
+                ActivityFilterMenu(filter: $filter)
             }
         }
         .tesseraeScreenBackground()
@@ -153,47 +135,44 @@ struct ActivityView: View {
     ) -> some View {
         let isActive = model.activeQueuedLinkRequestIDs.contains(request.id)
 
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center, spacing: 14) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(request.url.host() ?? request.url.absoluteString)
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
+        return ActivityCard {
+            ActivityCardRow {
+                Text(request.url.host() ?? request.url.absoluteString)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
 
-                    Text(model.displayNames(for: request.deviceIDs))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                Text(model.displayNames(for: request.deviceIDs))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
 
-                    HStack(spacing: 6) {
-                        Text(fallbackTitle(request.jobKind))
-                        Text("·")
-                        Text(request.fit.displayName)
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-
-                    Text(isActive ? String(localized: "Retrying…") : queuedLinkStatusLabel(request))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(isActive ? TesseraeTheme.info : queuedLinkStatusColor(request))
-
-                    Text(
-                        request.createdAt,
-                        format: .dateTime
-                            .month(.abbreviated)
-                            .day()
-                            .hour()
-                            .minute()
-                    )
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.tertiary)
+                HStack(spacing: 6) {
+                    Text(fallbackTitle(request.jobKind))
+                    Text("·")
+                    Text(request.fit.displayName)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .font(.caption)
+                .foregroundStyle(.tertiary)
 
+                Text(isActive ? String(localized: "Retrying…") : queuedLinkStatusLabel(request))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(isActive ? TesseraeTheme.info : queuedLinkStatusColor(request))
+
+                Text(
+                    request.createdAt,
+                    format: .dateTime
+                        .month(.abbreviated)
+                        .day()
+                        .hour()
+                        .minute()
+                )
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.tertiary)
+            } artwork: {
                 queuedLinkArtwork(request)
             }
-
+        } details: {
             if let lastError = request.lastError,
                request.status == .failed
             {
@@ -231,8 +210,6 @@ struct ActivityView: View {
             }
             .font(.subheadline.weight(.semibold))
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .tesseraeCard()
         .accessibilityIdentifier("queued-link-card-\(request.id)")
     }
 
@@ -305,56 +282,50 @@ struct ActivityView: View {
         let isExpanded = expandedQueuedImageID == request.id
         let isActive = model.activeQueuedImageRequestIDs.contains(request.id)
 
-        return VStack(alignment: .leading, spacing: 12) {
-            Button {
+        return ActivityCard {
+            ActivityDisclosureButton(isExpanded: isExpanded, expandHint: "Expand photo preview",
+                                     collapseHint: "Collapse photo preview", onToggle: {
                 guard thumbnail != nil else { return }
-                withAnimation(.smooth(duration: 0.28)) {
-                    expandedQueuedImageID = isExpanded ? nil : request.id
-                }
-            } label: {
-                HStack(alignment: .center, spacing: 14) {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("Queued photo")
-                            .font(.headline)
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
+                expandedQueuedImageID = isExpanded ? nil : request.id
+            }) {
+                ActivityCardRow {
+                    Text("Queued photo")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
 
-                        Text(model.displayNames(for: request.deviceIDs))
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
+                    Text(model.displayNames(for: request.deviceIDs))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
 
-                        HStack(spacing: 6) {
-                            Text("File")
-                            Text("·")
-                            Text(request.fit.displayName)
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-
-                        Text(isActive ? String(localized: "Retrying…") : queuedImageStatusLabel(request))
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(isActive ? TesseraeTheme.info : queuedImageStatusColor(request))
-
-                        Text(
-                            request.createdAt,
-                            format: .dateTime
-                                .month(.abbreviated)
-                                .day()
-                                .hour()
-                                .minute()
-                        )
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.tertiary)
+                    HStack(spacing: 6) {
+                        Text("File")
+                        Text("·")
+                        Text(request.fit.displayName)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
 
+                    Text(isActive ? String(localized: "Retrying…") : queuedImageStatusLabel(request))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(isActive ? TesseraeTheme.info : queuedImageStatusColor(request))
+
+                    Text(
+                        request.createdAt,
+                        format: .dateTime
+                            .month(.abbreviated)
+                            .day()
+                            .hour()
+                            .minute()
+                    )
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.tertiary)
+                } artwork: {
                     queuedImageArtwork(request, thumbnail: thumbnail)
                 }
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-
+        } details: {
             if let thumbnail, isExpanded {
                 expandedPhoto(thumbnail)
                     .transition(.opacity)
@@ -397,11 +368,6 @@ struct ActivityView: View {
             }
             .font(.subheadline.weight(.semibold))
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .tesseraeCard()
-        .clipShape(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-        )
         .task(id: request.id) {
             await model.loadQueuedImagePreview(request)
         }
@@ -472,37 +438,23 @@ struct ActivityView: View {
         let thumbnail = model.activityThumbnailData[job.id]
             .flatMap {
                 ActivityPhotoCache.shared.image(
-                    for: "\(model.activeInstance?.id ?? "unknown")-\(job.id)",
+                    for: "\(model.activeStorageID ?? "unknown")-\(job.id)",
                     data: $0
                 )
             }
 
         if let thumbnail {
-            Button {
-                withAnimation(.smooth(duration: 0.28)) {
-                    expandedJobID = expandedJobID == job.id
-                        ? nil
-                        : job.id
-                }
-            } label: {
+            ActivityDisclosureButton(isExpanded: expandedJobID == job.id, expandHint: "Expand photo preview",
+                                     collapseHint: "Collapse photo preview", onToggle: {
+                expandedJobID = expandedJobID == job.id ? nil : job.id
+            }) {
                 activityCardContent(
                     job,
                     thumbnail: thumbnail,
                     isExpanded: expandedJobID == job.id
                 )
             }
-            .buttonStyle(.plain)
             .accessibilityIdentifier("activity-photo-card-\(job.id)")
-            .accessibilityValue(
-                expandedJobID == job.id
-                    ? Text("Expanded")
-                    : Text("Collapsed")
-            )
-            .accessibilityHint(
-                expandedJobID == job.id
-                    ? Text("Collapse photo preview")
-                    : Text("Expand photo preview")
-            )
         } else {
             activityCardContent(
                 job,
@@ -517,71 +469,55 @@ struct ActivityView: View {
         thumbnail: UIImage?,
         isExpanded: Bool
     ) -> some View {
-        VStack(alignment: .leading, spacing: isExpanded ? 14 : 0) {
-            HStack(alignment: .center, spacing: 14) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(job.label ?? fallbackTitle(job.kind))
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
+        ActivityCard(spacing: isExpanded ? 14 : 0, hasShadow: true) {
+            ActivityCardRow {
+                Text(job.label ?? fallbackTitle(job.kind))
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
 
-                    Text(model.displayNames(for: job.targetDeviceIDs))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                Text(model.displayNames(for: job.targetDeviceIDs))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
 
-                    if let sourceLabel = linkSourceLabel(job.kind) {
-                        Label(
-                            sourceLabel,
-                            systemImage: artworkSymbol(job.kind)
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                    }
-
-                    statusSummary(ActivityStatusPresentation(job: job), isExpanded: isExpanded)
-                        .accessibilityIdentifier("activity-summary-\(job.id)")
-
-                    Text(
-                        job.createdAt,
-                        format: .dateTime
-                            .month(.abbreviated)
-                            .day()
-                            .hour()
-                            .minute()
+                if let sourceLabel = linkSourceLabel(job.kind) {
+                    Label(
+                        sourceLabel,
+                        systemImage: artworkSymbol(job.kind)
                     )
-                    .font(.caption.monospacedDigit())
+                    .font(.caption)
                     .foregroundStyle(.tertiary)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
 
+                statusSummary(ActivityStatusPresentation(job: job), isExpanded: isExpanded)
+                    .accessibilityIdentifier("activity-summary-\(job.id)")
+
+                Text(
+                    job.createdAt,
+                    format: .dateTime
+                        .month(.abbreviated)
+                        .day()
+                        .hour()
+                        .minute()
+                )
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.tertiary)
+            } artwork: {
                 jobArtwork(job, thumbnail: thumbnail)
             }
-
+        } details: {
             if let thumbnail, isExpanded {
                 expandedPhoto(thumbnail)
                     .transition(.opacity)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .tesseraeCard()
-        .clipShape(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-        )
-        .shadow(
-            color: .black.opacity(0.05),
-            radius: 9,
-            y: 4
-        )
-        .contentShape(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-        )
     }
 
     private func historyCard(_ item: HistoryItem) -> some View {
         let preview = model.historyPreviews[item.id]?.data.flatMap {
             ActivityPhotoCache.shared.image(
-                for: "\(model.activeInstance?.id ?? "unknown")-history-\(item.id)",
+                for: "\(model.activeStorageID ?? "unknown")-history-\(item.id)",
                 data: $0
             )
         }
@@ -590,94 +526,81 @@ struct ActivityView: View {
             "history-\(item.id)"
         )
 
-        return VStack(alignment: .leading, spacing: isExpanded ? 14 : 0) {
-            HStack(alignment: .center, spacing: 14) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(item.label)
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                    Text(model.displayNames(for: item))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                    statusSummary(ActivityStatusPresentation(history: item), isExpanded: isExpanded)
-                        .accessibilityIdentifier("history-summary-\(item.id)")
-                    HStack(spacing: 6) {
-                        Text(item.source.replacingOccurrences(
-                            of: "_",
-                            with: " "
-                        ).capitalized)
-                        if let fit = item.fit {
-                            Text("·")
-                            Text(fit.displayName)
-                        }
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    Text(
-                        item.createdAt,
-                        format: .dateTime
-                            .month(.abbreviated)
-                            .day()
-                            .hour()
-                            .minute()
-                    )
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.tertiary)
-
-                    if item.resendable {
-                        Button {
-                            Task { await model.resend(item) }
-                        } label: {
-                            HStack(spacing: 5) {
-                                if isResending {
-                                    ProgressView()
-                                        .controlSize(.mini)
-                                } else {
-                                    Image(systemName: "arrow.clockwise")
-                                }
-                                Text("Resend")
-                            }
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.white)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(TesseraeTheme.accentFill)
-                        .foregroundStyle(.white)
-                        .controlSize(.small)
-                        .fixedSize()
-                        .disabled(isResending)
-                        .accessibilityLabel(
-                            isResending ? "Resending…" : "Resend"
-                        )
-                        .accessibilityIdentifier(
-                            "history-resend-\(item.id)"
-                        )
+        return ActivityCard(spacing: isExpanded ? 14 : 0) {
+            ActivityCardRow {
+                Text(item.label)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Text(model.displayNames(for: item))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                statusSummary(ActivityStatusPresentation(history: item), isExpanded: isExpanded)
+                    .accessibilityIdentifier("history-summary-\(item.id)")
+                HStack(spacing: 6) {
+                    Text(item.source.replacingOccurrences(
+                        of: "_",
+                        with: " "
+                    ).capitalized)
+                    if let fit = item.fit {
+                        Text("·")
+                        Text(fit.displayName)
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                Text(
+                    item.createdAt,
+                    format: .dateTime
+                        .month(.abbreviated)
+                        .day()
+                        .hour()
+                        .minute()
+                )
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.tertiary)
 
-                Button {
-                    guard preview != nil else { return }
-                    withAnimation(.smooth(duration: 0.28)) {
-                        expandedHistoryID = isExpanded ? nil : item.id
+                if item.resendable {
+                    Button {
+                        Task { await model.resend(item) }
+                    } label: {
+                        HStack(spacing: 5) {
+                            if isResending {
+                                ProgressView()
+                                    .controlSize(.mini)
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                            }
+                            Text("Resend")
+                        }
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white)
                     }
-                } label: {
+                    .buttonStyle(.borderedProminent)
+                    .tint(TesseraeTheme.accentFill)
+                    .foregroundStyle(.white)
+                    .controlSize(.small)
+                    .fixedSize()
+                    .disabled(isResending)
+                    .accessibilityLabel(
+                        isResending ? "Resending…" : "Resend"
+                    )
+                    .accessibilityIdentifier(
+                        "history-resend-\(item.id)"
+                    )
+                }
+            } artwork: {
+                ActivityDisclosureButton(isExpanded: isExpanded, expandHint: "Expand composition preview",
+                                         collapseHint: "Collapse composition preview", onToggle: {
+                    guard preview != nil else { return }
+                    expandedHistoryID = isExpanded ? nil : item.id
+                }) {
                     historyArtwork(item, preview: preview)
                 }
-                .buttonStyle(.plain)
                 .accessibilityIdentifier("history-card-\(item.id)")
-                .accessibilityValue(
-                    isExpanded ? Text("Expanded") : Text("Collapsed")
-                )
-                .accessibilityHint(
-                    isExpanded
-                        ? Text("Collapse composition preview")
-                        : Text("Expand composition preview")
-                )
             }
-
+        } details: {
             if let preview, isExpanded {
                 VStack(alignment: .leading, spacing: 8) {
                     expandedPhoto(preview)
@@ -688,11 +611,6 @@ struct ActivityView: View {
                 .transition(.opacity)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .tesseraeCard()
-        .clipShape(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-        )
         .task(id: model.previewGeneration) {
             await model.loadHistoryPreview(item)
         }
@@ -820,7 +738,7 @@ struct ActivityView: View {
                 )
                 .accessibilityIdentifier(accessibilityIdentifier)
 
-                compactStatus(
+                ActivityStatusBadge(
                     label: statusLabel,
                     symbol: statusSymbol,
                     color: statusColor
@@ -955,40 +873,8 @@ struct ActivityView: View {
         return matchingDisplays[0].panel
     }
 
-    private func compactStatus(
-        label: String,
-        symbol: String,
-        color: Color
-    ) -> some View {
-        Image(systemName: symbol)
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(color)
-            .frame(width: 24, height: 24)
-            .background(.thinMaterial, in: Circle())
-            .accessibilityLabel(Text(label))
-            .allowsHitTesting(false)
-    }
-
     private func expandedPhoto(_ thumbnail: UIImage) -> some View {
-        FittedPreviewLayout(
-            aspectRatio: thumbnail.size.width / thumbnail.size.height,
-            maximumHeight: 420
-        ) {
-            Image(uiImage: thumbnail)
-                .resizable()
-                .scaledToFit()
-        }
-        .frame(maxWidth: .infinity)
-            .background(
-                Color.primary.opacity(0.055),
-                in: RoundedRectangle(
-                    cornerRadius: 15,
-                    style: .continuous
-                )
-            )
-            .clipShape(
-                RoundedRectangle(cornerRadius: 15, style: .continuous)
-            )
+        ActivityExpandedPhoto(image: thumbnail)
             .accessibilityIdentifier("activity-photo-expanded")
             .accessibilityLabel("Expanded sent photo preview")
     }

@@ -5,12 +5,9 @@ Unless noted below, captured on 24 October 2026 from app source
 
 `bluetooth-maintenance.png` uses the simple-action icons
 from [`45f6c07f013e60c8ad3946a6ed7c7e0d6ad4b3db`](https://github.com/charmmmz/tesserae-companion-ios/commit/45f6c07f013e60c8ad3946a6ed7c7e0d6ad4b3db).
-The component, Offline Album and upload-detail screenshots show the nested-page
-paper background fix. `gallery-folder-actions.png` was captured
-from [`a23a2cff10e79796d5020341ad181f17dc7c70c9`](https://github.com/charmmmz/tesserae-companion-ios/commit/a23a2cff10e79796d5020341ad181f17dc7c70c9)
-after extracting the shared toolbar component into DesignSystem.
-The Dashboard settings, Lineup editor and selection, choice settings and duration
-captures accompany the full UI conventions audit. The source revision and capture
+The Offline Album and upload-detail screenshots show the nested-page paper
+background fix. The Lineup editor, selection, and duration captures accompany
+the full UI conventions audit. The source revision and capture
 refreshes are recorded in Git history. Changed captures use new filenames for
 both README thumbnails and their links.
 
@@ -36,6 +33,17 @@ in `/tmp/tesserae-floating-send/phone-unified.xcresult`, on the
 `Tesserae Adaptive iPhone` simulator. The navigation title, bottom tabs and Send
 placement were checked before replacing the superseded captures.
 
+`gallery-folder-floating-send.png` shows the shared Send button inside the
+Library's family folder. It is the original `Library folder shared toolbar`
+attachment from `TesseraeCompanionUITests.testRootToolbarsKeepSettingsAndContextActionsConsistent`,
+captured on 28 November 2026 on an iPhone 17 Pro Simulator with iOS 27.0,
+in English and light appearance, from the working tree based on `fbd614e`.
+
+The three `dashboard-*-floating-send.png` captures use the same revision,
+device, date, and appearance. They are the original `Dashboard native settings`,
+`Dashboard component paper background`, and `Component media priority saved`
+attachments from `DashboardSettingsUITests`.
+
 `displays-battery-levels.png` was refreshed on 3 November 2026 from the
 working tree based on `c1254af`, with battery symbols selected from the same
 latest percentage shown in the label. It is the original `Displays Root Toolbar`
@@ -58,17 +66,17 @@ were inspected before replacing the previous capture.
 | --- | --- |
 | `displays-battery-levels.png` | Demo Mode → Displays, server-matched Lineups toolbar icon |
 | `dashboards-floating-send.png` | Demo Mode → Dashboards, expanded display groups |
-| `dashboard-settings-actions.png` | Pantry → native settings, shared actions and bounded Push icon, before editing |
+| `dashboard-settings-floating-send.png` | Pantry → native settings, preview Push icon and shared Send button, before editing |
 | `lineup-editor-actions.png` | New Manual Lineup, native icon actions, selected display and two Dashboards |
-| `gallery-folder-actions.png` | Library → family folder, square image grid and shared More/Add capsule |
+| `gallery-folder-floating-send.png` | Library → family folder, square image grid, More/Add capsule, and floating Send button |
 | `send-photo-compact-fit-toggle.png` | Send → Use Sample → reset framing, centered Fill at 1.0×, compact one-tap fit button and display choices |
 | `activity-floating-send.png` | Demo Mode → Activity |
 | `bluetooth-maintenance.png` | Simulated PicPak → authenticated Maintenance, current battery status |
-| `dashboard-components.png` | Pantry → Demo Reminders settings, before searching or editing a field |
+| `dashboard-components-floating-send.png` | Pantry → Demo Reminders settings, before searching or editing a field |
 | `lineup-selection-actions.png` | New Manual Lineup → two selected Dashboards and shared Done capsule |
 | `offline-album.png` | Library → family → Offline Album → display readiness review |
 | `gallery-upload-details.png` | Simulated uploads → individual photo statuses |
-| `dashboard-choices.png` | Album widget → Players → ordered selection with shared Refresh/Done capsule |
+| `dashboard-choices-floating-send.png` | Album widget → Media players, with saved priority and shared Refresh/Done capsule |
 | `lineup-duration.png` | Cycle Lineup → Photo Frame duration, ten minutes, dark paper backdrop |
 
 To refresh, build the app and use its demo journey or the corresponding existing

@@ -25,7 +25,7 @@ final class AdaptiveLayoutUITests: XCTestCase {
         app.launchEnvironment["TESSERAE_UI_TEST_DEMO_LATENCY_MS"] = "500"
         app.launchEnvironment["TESSERAE_UI_TEST_AUTO_FRAMING"] = "1"
         app.launch()
-        let demo = app.buttons["Explore with Demo Data"]
+        let demo = app.onboardingShortcut("onboarding-demo")
         XCTAssertTrue(demo.waitForExistence(timeout: 8))
         reveal(demo, app: app)
         demo.tap()
@@ -183,6 +183,31 @@ final class AdaptiveLayoutUITests: XCTestCase {
         waitUntilHittable(list)
     }
 
+    func testPortraitDashboardPushLeavesSpaceBelowPreview() {
+        let app = demo()
+        app.buttons["Dashboards"].firstMatch.tap()
+        expandDashboardSection("display-e1004-desk", app: app)
+        let push = app.buttons["dashboard-push-morning-display-e1004-desk"]
+        XCTAssertTrue(push.waitForExistence(timeout: 5))
+        reveal(push, app: app)
+        push.tap()
+
+        let image = app.descendants(matching: .any)["dashboard-push-preview-morning"].firstMatch
+        let caption = app.staticTexts["dashboard-push-preview-caption-morning"]
+        let submit = app.buttons["Push to Desk"]
+        XCTAssertTrue(image.waitForExistence(timeout: 10))
+        XCTAssertTrue(caption.isHittable)
+        waitForStableFrame(submit)
+        capture("Portrait Dashboard Push footer", app: app)
+        XCTAssertTrue(submit.isHittable)
+        XCTAssertGreaterThanOrEqual(submit.frame.height, 44)
+        XCTAssertEqual(submit.frame.midX, caption.frame.midX, accuracy: 2)
+        XCTAssertGreaterThanOrEqual(
+            submit.frame.minY - caption.frame.maxY, 28,
+            "Leave room for the preview card’s 16-point inset and at least 12 points above the push button."
+        )
+    }
+
     func testAccessibilityDashboardModalKeepsActionReachable() {
         let app = demo(accessibilityText: true)
         app.buttons["Dashboards"].firstMatch.tap()
@@ -211,9 +236,13 @@ final class AdaptiveLayoutUITests: XCTestCase {
         let app = demo()
         let manage = app.buttons["manage-lineups"]
         let create = app.buttons["lineup-create"]
+        let send = app.buttons["root-send-action"]
+        let sendFrame = send.frame
         for _ in 0..<2 {
             manage.tap()
             XCTAssertTrue(create.waitForExistence(timeout: 5))
+            XCTAssertTrue(send.isHittable)
+            XCTAssertEqual(send.frame.minY, sendFrame.minY, accuracy: 1)
             let explicitBack = app.buttons["lineups-back-to-displays"]
             let back = explicitBack.exists
                 ? explicitBack
@@ -225,6 +254,8 @@ final class AdaptiveLayoutUITests: XCTestCase {
                 predicate: NSPredicate { _, _ in !create.exists && manage.isHittable }, object: nil
             )
             XCTAssertEqual(XCTWaiter.wait(for: [returned], timeout: 5), .completed)
+            XCTAssertTrue(send.isHittable)
+            XCTAssertEqual(send.frame.minY, sendFrame.minY, accuracy: 1)
         }
 
         manage.tap()
@@ -253,7 +284,8 @@ final class AdaptiveLayoutUITests: XCTestCase {
         capture("Display detail portrait", app: app)
         XCUIDevice.shared.orientation = .landscapeLeft
         XCTAssertTrue(app.navigationBars["Kitchen"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Server preview"].exists)
+        let preview = app.descendants(matching: .any)["display-detail-preview-picpak-kitchen"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 5))
         XCTAssertEqual(app.buttons.matching(identifier: "root-send-action").count, 1)
         XCTAssertTrue(send.isHittable)
         XCTAssertGreaterThan(send.frame.minX, app.frame.midX)

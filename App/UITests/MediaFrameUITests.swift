@@ -40,7 +40,7 @@ import XCTest
         if systemShare { app.launchEnvironment["TESSERAE_UI_TEST_SYSTEM_SHARE"] = "1" }
         app.launch()
         if !bluetooth {
-            let demo = app.buttons[largeText ? "使用演示数据体验" : "Explore with Demo Data"]
+            let demo = app.onboardingShortcut("onboarding-demo")
             XCTAssertTrue(demo.waitForExistence(timeout: 8))
             for _ in 0..<5 where !demo.isHittable { app.swipeUp() }
             demo.tap()
@@ -307,7 +307,7 @@ import XCTest
         app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_BLE"] = "1"
         app.launchEnvironment["TESSERAE_UI_TEST_PICPAK_PHOTO"] = "1"
         app.launch()
-        let nearby = app.buttons["onboarding-nearby-devices"]
+        let nearby = app.onboardingShortcut("onboarding-nearby-devices")
         XCTAssertTrue(nearby.waitForExistence(timeout: 8))
         reveal(nearby, in: app)
         nearby.tap()

@@ -9,6 +9,7 @@ public enum SharedImageRequestStatus: String, Codable, Hashable, Sendable {
 public struct SharedImageRequest: Codable, Identifiable, Hashable, Sendable {
     public let id: String
     public let instanceID: String
+    public let connectionEpoch: UUID?
     public let fileName: String
     public let contentType: String
     public let fit: ImageFitMode
@@ -24,6 +25,7 @@ public struct SharedImageRequest: Codable, Identifiable, Hashable, Sendable {
     public init(
         id: String = UUID().uuidString,
         instanceID: String,
+        connectionEpoch: UUID? = nil,
         fileName: String,
         contentType: String,
         fit: ImageFitMode,
@@ -38,6 +40,7 @@ public struct SharedImageRequest: Codable, Identifiable, Hashable, Sendable {
     ) {
         self.id = id
         self.instanceID = instanceID
+        self.connectionEpoch = connectionEpoch
         self.fileName = fileName
         self.contentType = contentType
         self.fit = fit
@@ -59,6 +62,7 @@ public struct SharedImageRequest: Codable, Identifiable, Hashable, Sendable {
         SharedImageRequest(
             id: id,
             instanceID: instanceID,
+            connectionEpoch: connectionEpoch,
             fileName: fileName,
             contentType: contentType,
             fit: fit,
@@ -73,9 +77,32 @@ public struct SharedImageRequest: Codable, Identifiable, Hashable, Sendable {
         )
     }
 
+    public func authorizingLocalRetry(instance: TesseraeInstance, fence: ConnectionFence) throws -> SharedImageRequest {
+        guard instanceID == instance.storageID, fence.connectionID == instance.connectionIdentity.id else {
+            throw ConnectionError.sessionChanged
+        }
+        return SharedImageRequest(
+            id: id,
+            instanceID: instanceID,
+            connectionEpoch: fence.epoch,
+            fileName: fileName,
+            contentType: contentType,
+            fit: fit,
+            framing: framing,
+            deviceIDs: deviceIDs,
+            overrideQuietHours: overrideQuietHours,
+            idempotencyKey: idempotencyKey,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            status: self.status,
+            lastError: lastError
+        )
+    }
+
     private enum CodingKeys: String, CodingKey {
         case id
         case instanceID = "instanceId"
+        case connectionEpoch
         case fileName
         case contentType
         case fit
@@ -95,11 +122,22 @@ public protocol ShareQueueStoring: Sendable {
     func requests() async throws -> [SharedImageRequest]
     func imageData(for request: SharedImageRequest) async throws -> Data
     func update(_ request: SharedImageRequest) async throws
+    func authorizeLocalRetry(_ request: SharedImageRequest, instance: TesseraeInstance, fence: ConnectionFence) async throws -> SharedImageRequest
     func remove(_ request: SharedImageRequest) async throws
     func purge(expiredBefore date: Date) async throws
 }
 
+public extension ShareQueueStoring {
+    func authorizeLocalRetry(_ request: SharedImageRequest, instance: TesseraeInstance, fence: ConnectionFence) async throws -> SharedImageRequest {
+        guard request.status != .submitting else { throw ShareQueueStoreError.requestInProgress }
+        let rebound = try request.authorizingLocalRetry(instance: instance, fence: fence)
+        try await update(rebound)
+        return rebound
+    }
+}
+
 public enum ShareQueueStoreError: Error, Equatable, LocalizedError, Sendable {
+    case requestInProgress
     case unavailable
     case invalidRequestID
     case missingImage
@@ -108,6 +146,8 @@ public enum ShareQueueStoreError: Error, Equatable, LocalizedError, Sendable {
 
     public var errorDescription: String? {
         switch self {
+        case .requestInProgress:
+            "This item is already being submitted."
         case .unavailable:
             "Shared Tesserae transfer storage is unavailable."
         case .invalidRequestID:
@@ -191,19 +231,50 @@ public actor FileShareQueueStore: ShareQueueStoring {
     }
 
     public func update(_ request: SharedImageRequest) throws {
-        try write(request, in: preparedDirectory())
+        let directory = try preparedDirectory()
+        try withRequestLock(request.id) {
+            let url = try metadataURL(for: request, in: directory)
+            guard FileManager.default.fileExists(atPath: url.path) else { throw ShareQueueStoreError.missingImage }
+            let existing = try TesseraeJSON.decoder().decode(SharedImageRequest.self, from: Data(contentsOf: url))
+            guard existing.instanceID == request.instanceID, existing.connectionEpoch == request.connectionEpoch,
+                  existing.idempotencyKey == request.idempotencyKey else { throw ConnectionError.sessionChanged }
+            try write(request, in: directory)
+        }
+    }
+
+    public func authorizeLocalRetry(_ request: SharedImageRequest, instance: TesseraeInstance, fence: ConnectionFence) async throws -> SharedImageRequest {
+        guard request.instanceID == instance.storageID, fence.connectionID == instance.connectionIdentity.id else {
+            throw ConnectionError.sessionChanged
+        }
+        let directory = try preparedDirectory()
+        return try withRequestLock(request.id) {
+            let url = try metadataURL(for: request, in: directory)
+            guard FileManager.default.fileExists(atPath: url.path) else { throw ShareQueueStoreError.missingImage }
+            let current = try TesseraeJSON.decoder().decode(SharedImageRequest.self, from: Data(contentsOf: url))
+            guard current.status != .submitting else { throw ShareQueueStoreError.requestInProgress }
+            guard current.instanceID == request.instanceID, current.connectionEpoch == request.connectionEpoch,
+                  current.idempotencyKey == request.idempotencyKey else {
+                throw ConnectionError.sessionChanged
+            }
+            let rebound = try current.authorizingLocalRetry(instance: instance, fence: fence)
+            try write(rebound, in: directory)
+            return rebound
+        }
     }
 
     public func remove(_ request: SharedImageRequest) throws {
         let directory = try preparedDirectory()
-        for url in [
-            try imageURL(for: request, in: directory),
-            try metadataURL(for: request, in: directory),
-        ] where FileManager.default.fileExists(atPath: url.path) {
-            do {
+        try withRequestLock(request.id) {
+            let metadata = try metadataURL(for: request, in: directory)
+            if FileManager.default.fileExists(atPath: metadata.path) {
+                let current = try TesseraeJSON.decoder().decode(SharedImageRequest.self, from: Data(contentsOf: metadata))
+                guard current.instanceID == request.instanceID, current.connectionEpoch == request.connectionEpoch else {
+                    throw ConnectionError.sessionChanged
+                }
+            }
+            for url in [try imageURL(for: request, in: directory), try metadataURL(for: request, in: directory)]
+            where FileManager.default.fileExists(atPath: url.path) {
                 try FileManager.default.removeItem(at: url)
-            } catch {
-                throw ShareQueueStoreError.writing(String(describing: error))
             }
         }
     }
@@ -212,6 +283,12 @@ public actor FileShareQueueStore: ShareQueueStoring {
         for request in try requests() where request.createdAt < date {
             try remove(request)
         }
+    }
+
+    private func withRequestLock<T>(_ id: String, _ operation: () throws -> T) throws -> T {
+        let directory = try preparedDirectory()
+        let component = ConnectionID(rawValue: id).fileComponent
+        return try SharedFileLock(url: directory.appending(path: "Locks/\(component).lock")).withLock { try operation() }
     }
 
     private func preparedDirectory() throws -> URL {

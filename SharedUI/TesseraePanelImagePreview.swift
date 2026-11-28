@@ -11,6 +11,7 @@ struct TesseraePanelImagePreview: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let image: UIImage?
     let panel: PanelProfile
+    let contentInset: Int
     let fit: ImageFitMode
     let maximumCanvasHeight: CGFloat
     let emptyTitle: String
@@ -37,6 +38,7 @@ struct TesseraePanelImagePreview: View {
     init(
         image: UIImage?,
         panel: PanelProfile,
+        contentInset: Int = 0,
         fit: ImageFitMode,
         maximumCanvasHeight: CGFloat,
         emptyTitle: String,
@@ -56,6 +58,7 @@ struct TesseraePanelImagePreview: View {
     ) {
         self.image = image
         self.panel = panel
+        self.contentInset = max(0, contentInset)
         self.fit = fit
         self.maximumCanvasHeight = maximumCanvasHeight
         self.emptyTitle = emptyTitle
@@ -141,6 +144,26 @@ struct TesseraePanelImagePreview: View {
 
     @ViewBuilder
     private func panelCanvas(size: CGSize) -> some View {
+        if contentInset == 0 {
+            imageCanvas(size: size)
+        } else {
+            let insetX = size.width * CGFloat(contentInset) / CGFloat(max(panel.width, 1))
+            let insetY = size.height * CGFloat(contentInset) / CGFloat(max(panel.height, 1))
+            ZStack {
+                Color.white
+                imageCanvas(size: CGSize(width: max(1, size.width - 2 * insetX), height: max(1, size.height - 2 * insetY)))
+                    .padding(.horizontal, insetX).padding(.vertical, insetY)
+            }
+            .frame(width: size.width, height: size.height)
+        }
+    }
+
+    private var compositionPanel: PanelProfile {
+        PanelProfile(width: max(1, panel.width - 2 * contentInset), height: max(1, panel.height - 2 * contentInset),
+            gamut: panel.gamut, orientation: panel.orientation)
+    }
+
+    private func imageCanvas(size: CGSize) -> some View {
         ZStack(alignment: .topLeading) {
             Color.white
 
@@ -156,8 +179,8 @@ struct TesseraePanelImagePreview: View {
                         sourceHeight: sourceHeight,
                         canvasWidth: size.width,
                         canvasHeight: size.height,
-                        targetWidth: Double(panel.width),
-                        targetHeight: Double(panel.height)
+                        targetWidth: Double(compositionPanel.width),
+                        targetHeight: Double(compositionPanel.height)
                     )
 
                     Image(uiImage: image)
@@ -189,8 +212,8 @@ struct TesseraePanelImagePreview: View {
                         sourceHeight: sourceHeight,
                         canvasWidth: size.width,
                         canvasHeight: size.height,
-                        targetPixelWidth: Double(panel.width),
-                        targetPixelHeight: Double(panel.height)
+                        targetPixelWidth: Double(compositionPanel.width),
+                        targetPixelHeight: Double(compositionPanel.height)
                     )
 
                     Image(uiImage: image)
@@ -416,7 +439,7 @@ struct TesseraePanelImagePreview: View {
     private var framingContext: FramingPreviewContext {
         FramingPreviewContext(
             imageID: image.map(ObjectIdentifier.init),
-            aspect: PanelAspectRatio(panel: panel),
+            aspect: PanelAspectRatio(panel: compositionPanel),
             fit: fit,
             maximumZoom: maximumFramingZoom,
             isEditable: framingEditingEnabled && framing != nil
@@ -427,7 +450,7 @@ struct TesseraePanelImagePreview: View {
         .init(
             canvas: size,
             source: CGSize(width: image.size.width * image.scale, height: image.size.height * image.scale),
-            target: CGSize(width: panel.width, height: panel.height),
+            target: CGSize(width: compositionPanel.width, height: compositionPanel.height),
             maximumZoom: maximumFramingZoom
         )
     }

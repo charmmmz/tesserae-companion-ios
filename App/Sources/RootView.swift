@@ -13,6 +13,13 @@ private struct BluetoothAssociationContext: Hashable {
     let isActive: Bool
 }
 
+private struct CloudBluetoothAssociationContext: Hashable {
+    let presentation: CloudPresentationContext
+    let fetchedAt: Date
+    let displayIDs: Set<String>
+    let macs: [String]
+}
+
 private struct BluetoothModeSyncContext: Hashable {
     let connection: RootConnectionContext
     let reports: [BluetoothModeReport]
@@ -21,6 +28,7 @@ private struct BluetoothModeSyncContext: Hashable {
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    @Environment(ConnectionHost.self) private var connectionHost
     @Environment(RemindersBridgeModel.self) private var remindersBridgeModel
     @Environment(HealthBridgeModel.self) private var healthBridgeModel
     @Environment(GalleryUploadCoordinator.self) private var galleryUploads
@@ -33,7 +41,7 @@ struct RootView: View {
     @State private var presentation = CompanionPresentation()
 
     private var connectionContext: RootConnectionContext {
-        RootConnectionContext(revision: model.connectionRevision, instanceID: model.activeInstance?.id)
+        RootConnectionContext(revision: model.connectionRevision, instanceID: model.activeStorageID)
     }
 
     private var bluetoothAssociationContext: BluetoothAssociationContext {
@@ -41,14 +49,23 @@ struct RootView: View {
             connection: connectionContext,
             displays: model.displays,
             macs: nearbyDevices.displayRecords.knownHardwareMACs,
-            isActive: scenePhase == .active
+            isActive: scenePhase == .active && connectionHost.cloud == nil
         )
+    }
+
+    private var cloudBluetoothAssociationContext: CloudBluetoothAssociationContext? {
+        guard scenePhase == .active, !connectionHost.isSwitching, !connectionHost.isSigningIn,
+              let cloud = connectionHost.cloud, !cloud.needsSignIn, !cloud.isRestricted,
+              let presentation = connectionHost.cloudPresentationContext, let fetchedAt = cloud.fetchedAt,
+              cloud.snapshot?.account.auth.scopes.contains("app:read") == true else { return nil }
+        return CloudBluetoothAssociationContext(presentation: presentation, fetchedAt: fetchedAt,
+            displayIDs: Set(cloud.devices.map(\.id)), macs: nearbyDevices.displayRecords.knownHardwareMACs)
     }
 
     private var bluetoothModeSyncContext: BluetoothModeSyncContext {
         BluetoothModeSyncContext(connection: connectionContext,
             reports: nearbyDevices.displayRecords.pendingModeReports(
-                displayIDs: model.displays.map(\.id), serverID: model.activeInstance?.id,
+                displayIDs: model.displays.map(\.id), serverID: model.activeStorageID,
                 includeStatus: model.capabilities?.features.contains("device_status_observations") == true),
             enabled: scenePhase == .active && model.connectionMode == .live
                 && model.capabilities?.features.contains("device_mode_observations") == true)
@@ -56,7 +73,9 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if model.isRestoringConnection && model.activeInstance == nil {
+            if let cloud = connectionHost.cloud {
+                CloudRootView(model: cloud).id(cloud.fence)
+            } else if (connectionHost.isRestoring || model.isRestoringConnection) && model.activeInstance == nil {
                 VStack(spacing: 12) {
                     ProgressView()
                     Text("Restoring Tesserae connection…")
@@ -79,9 +98,12 @@ struct RootView: View {
                 }
             }
         }
-        .animation(.snappy, value: model.activeInstance?.id)
+        .animation(.snappy, value: model.activeStorageID)
         .environment(presentation)
-        .onChange(of: model.activeInstance?.id, initial: true) { _, id in
+        .onChange(of: model.activeStorageID, initial: true) { _, id in
+            if let instance = model.activeInstance, let legacy = model.legacyBinding(for: instance), let id {
+                nearbyDevices.displayRecords.migrateServer(from: legacy, to: id)
+            }
             nearbyDevices.displayRecords.activeServerID = id
             rememberServerDisplays()
         }
@@ -107,7 +129,7 @@ struct RootView: View {
             }
         }
         .task {
-            await model.restoreConnectionIfNeeded()
+            await connectionHost.restore()
             model.openWebIfRequested()
             synchronizeConnectionMessage()
         }
@@ -128,6 +150,9 @@ struct RootView: View {
                 catch { return }
                 retrySeconds = min(retrySeconds * 2, 300)
             }
+        }
+        .task(id: cloudBluetoothAssociationContext) {
+            await associateCloudBluetoothDisplays()
         }
         .task(id: bluetoothModeSyncContext) {
             let context = bluetoothModeSyncContext
@@ -192,8 +217,35 @@ struct RootView: View {
             galleryUploads.cancelAndClear()
             messageCenter.dismiss(id: "gallery.uploads")
         }
+        .onChange(of: connectionHost.cloudContextRevision) { _, _ in
+            presentation.sheet = nil
+            presentation.isSendComposerPresented = false
+        }
         .onChange(of: connectionMessageRevision) { _, _ in
             synchronizeConnectionMessage()
+        }
+        .onChange(of: connectionHost.loginError) { _, error in
+            guard let error, model.activeInstance != nil || connectionHost.cloud != nil else {
+                messageCenter.dismiss(id: "cloud.authorization")
+                return
+            }
+            messageCenter.post(TesseraeMessage(id: "cloud.authorization", text: error, kind: .error,
+                lifetime: .persistent, priority: .high, systemImage: "person.crop.circle.badge.exclamationmark",
+                accessibilityIdentifier: "cloud-authorization-message",
+                action: TesseraeMessageAction(title: String(localized: "Choose Connection")) { serversPresented = true }))
+        }
+        .onChange(of: connectionHost.unconfirmedSignOutID) { _, id in
+            guard id != nil else { return }
+            let explanation = String(localized: "Signed out on this device. The server couldn’t confirm sign-out.")
+            messageCenter.post(TesseraeMessage(
+                id: "connection.sign-out",
+                text: String(localized: "Server sign-out unconfirmed"),
+                kind: .warning,
+                lifetime: .automatic(seconds: 6),
+                survivesPresentationChange: true,
+                accessibilityText: explanation
+            ))
+            AccessibilityNotification.Announcement(explanation).post()
         }
         .alert(
             "Something Went Wrong",
@@ -218,7 +270,24 @@ struct RootView: View {
 
     private func rememberServerDisplays() {
         nearbyDevices.displayRecords.observeServer(displays: model.displays, previews: model.displayPreviews,
-                                                   serverID: model.activeInstance?.id)
+                                                   serverID: model.activeStorageID)
+    }
+
+    private func associateCloudBluetoothDisplays() async {
+        guard let context = cloudBluetoothAssociationContext, let cloud = connectionHost.cloud else { return }
+        let store = nearbyDevices.displayRecords
+        let macs = context.displayIDs.isEmpty ? [] : context.macs
+        do {
+            let matches = try await BluetoothDisplayStore.resolveMACMatches(macs) { mac in
+                guard context == cloudBluetoothAssociationContext else { throw CancellationError() }
+                return try await cloud.client.lookupDisplay(mac: mac)
+            }
+            guard context == cloudBluetoothAssociationContext else { return }
+            store.observeMACMatches(matches, serverID: context.presentation.fence.connectionID.rawValue,
+                                    currentDisplayIDs: context.displayIDs, queriedMACs: Set(macs))
+        } catch {
+            // Keep confirmed associations until a later refresh can verify a new result.
+        }
     }
 
     private var connectionMessageRevision: String {
@@ -229,7 +298,7 @@ struct RootView: View {
         case .offline: "offline"
         case .requiresPairing: "requires-pairing"
         }
-        return [model.connectionNotice ?? "", health, model.activeInstance?.id ?? ""]
+        return [model.connectionNotice ?? "", health, model.activeStorageID ?? ""]
             .joined(separator: "|")
     }
 

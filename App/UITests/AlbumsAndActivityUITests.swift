@@ -96,12 +96,12 @@ final class AlbumsAndActivityUITests: XCTestCase {
         let history = app.buttons["history-card-history-demo-photo"]
         XCTAssertTrue(history.waitForExistence(timeout: 3))
         app.buttons["activity-filter"].tap()
-        app.buttons["activity-filter-needs-attention"].tap()
+        app.buttons.matching(NSPredicate(format: "identifier == %@ OR label == %@", "activity-filter-needs-attention", "Needs Attention")).firstMatch.tap()
         XCTAssertTrue(app.descendants(matching: .any)["activity-attention-empty"].waitForExistence(timeout: 3))
         XCTAssertFalse(history.exists)
         attach(app, name: "Activity needs attention empty state")
         app.buttons["activity-filter"].tap()
-        app.buttons["activity-filter-all"].tap()
+        app.buttons.matching(NSPredicate(format: "identifier == %@ OR label == %@", "activity-filter-all", "All")).firstMatch.tap()
         XCTAssertTrue(history.waitForExistence(timeout: 3))
         attach(app, name: "Activity all records")
     }
@@ -144,8 +144,8 @@ final class AlbumsAndActivityUITests: XCTestCase {
             app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityM"]
         }
         app.launch()
-        XCTAssertTrue(app.buttons["Explore with Demo Data"].waitForExistence(timeout: 4))
-        app.buttons["Explore with Demo Data"].tap()
+        XCTAssertTrue(app.onboardingShortcut("onboarding-demo").waitForExistence(timeout: 4))
+        app.onboardingShortcut("onboarding-demo").tap()
         XCTAssertTrue(app.tabBars.firstMatch.buttons["Library"].waitForExistence(timeout: 3))
         return app
     }
