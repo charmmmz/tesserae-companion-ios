@@ -71,10 +71,9 @@ public struct CloudReadClient: Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(["mac": mac])
         let response = try await transport.send(request, timeout: timeout)
-        try requireSuccess(response)
+        try requireSuccess(response, expectedStatus: 201)
         struct Pairing: Decodable { let code: String }
-        guard response.statusCode == 201,
-              let pairing = try? JSONDecoder().decode(Pairing.self, from: response.data),
+        guard let pairing = try? JSONDecoder().decode(Pairing.self, from: response.data),
               pairing.code.utf8.count == 32,
               pairing.code.utf8.allSatisfy({
                   (48...57).contains($0) || (65...90).contains($0)
@@ -146,9 +145,9 @@ public struct CloudReadClient: Sendable {
         return try await transport.send(request, timeout: timeout, authorizationTimeout: min(10, timeout))
     }
 
-    private func requireSuccess(_ response: TesseraeHTTPResponse) throws {
+    private func requireSuccess(_ response: TesseraeHTTPResponse, expectedStatus: Int = 200) throws {
+        if response.statusCode == expectedStatus { return }
         switch response.statusCode {
-        case 200: return
         case 401: throw CloudReadError.unauthorized
         case 403:
             struct Refusal: Decodable { let reason: String? }

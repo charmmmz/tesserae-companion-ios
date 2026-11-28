@@ -36,11 +36,12 @@ private actor OAuthFixture: TesseraeHTTPTransporting {
 }
 
 func tokenFixture(user: String = "u1", tenant: String = "t1", generation: Int = 0,
-                  expires: Double = 1, grant: String = "g1") throws -> Data {
+                  expires: Double = 1, grant: String = "g1",
+                  resource: String = "http://localhost:9000/api/t") throws -> Data {
     try JSONSerialization.data(withJSONObject: ["access_token": "synthetic-access-\(generation)",
         "token_type": "Bearer", "expires_in": expires, "refresh_token": "synthetic-refresh-\(generation)",
         "refresh_expires_in": 1000, "scope": "app:read app:send app:refresh",
-        "resource": "http://localhost:9000/api/t", "grant_id": grant, "generation": generation,
+        "resource": resource, "grant_id": grant, "generation": generation,
         "user": ["id": user, "email": "synthetic@example.invalid"],
         "tenant": ["id": tenant, "name": "Synthetic"], "role": "member"])
 }

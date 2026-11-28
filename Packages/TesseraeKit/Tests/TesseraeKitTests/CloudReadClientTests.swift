@@ -26,14 +26,17 @@ private actor CloudReadFixture: TesseraeHTTPTransporting {
         return try Data(contentsOf: repository.appending(path: "Contracts/Fixtures/cloud-bootstrap.json"))
     }
 
-    private func fixture(_ response: TesseraeHTTPResponse) async throws -> (CloudReadClient, CloudReadFixture) {
+    private func fixture(
+        _ response: TesseraeHTTPResponse,
+        issuer: URL = URL(string: "http://localhost:9000")!
+    ) async throws -> (CloudReadClient, CloudReadFixture) {
         let directory = URL.temporaryDirectory.appending(path: UUID().uuidString)
         let http = CloudReadFixture(response)
         let sessions = SharedSessionStore(directory: directory,
             vault: TestSessionVault(directory: directory.appending(path: "vault")), transport: http)
-        let issuer = URL(string: "http://localhost:9000")!
+        let token = try tokenFixture(expires: 3600, resource: issuer.appending(path: "api/t").absoluteString)
         let fence = try await sessions.installCloud(issuer: issuer,
-            response: JSONDecoder().decode(CloudTokenResponse.self, from: tokenFixture(expires: 3600)))
+            response: JSONDecoder().decode(CloudTokenResponse.self, from: token))
         return (CloudReadClient(transport: CloudAuthorizedTransport(issuer: issuer,
             fence: fence, sessions: sessions, transport: http)), http)
     }
@@ -87,6 +90,21 @@ private actor CloudReadFixture: TesseraeHTTPTransporting {
         await #expect(throws: CloudReadError.invalidResponse) { try await client.bootstrap() }
     }
 
+    @Test func createsDevicePairingWhenCloudReturnsCreated() async throws {
+        let issuer = try #require(URL(string: "https://cloud.example.invalid"))
+        let code = "abcdefghijklmnopqrstuvwxYZ0123-_"
+        let body = try JSONEncoder().encode(["code": code])
+        let (client, http) = try await fixture(.init(data: body, statusCode: 201), issuer: issuer)
+
+        let pairing = try await client.createDevicePairing(mac: "02:01:02:03:04:05")
+
+        #expect(pairing == code)
+        let requests = await http.requests
+        try #require(requests.count == 1)
+        #expect(requests[0].httpMethod == "POST")
+        #expect(requests[0].url?.path == "/api/t/app/device-pairing")
+    }
+
     @Test func previewNeverRendersAndMissingImageRemainsMissing() async throws {
         let png = Data([137, 80, 78, 71, 13, 10, 26, 10])
         let (client, http) = try await fixture(TesseraeHTTPResponse(data: png, statusCode: 200))
@@ -103,7 +121,7 @@ private actor CloudReadFixture: TesseraeHTTPTransporting {
         await #expect(throws: CloudReadError.invalidResponse) { try await client.pagePreview(id: "a") }
     }
 
-    @Test(arguments: [401, 403, 402, 429, 503, 404, 500])
+    @Test(arguments: [201, 401, 403, 402, 429, 503, 404, 500])
     func readFailureRetainsStatusMeaning(status: Int) async throws {
         let response = TesseraeHTTPResponse(data: Data(#"{"reason":"membership_removed"}"#.utf8),
             statusCode: status, headers: ["Retry-After": "17"])
