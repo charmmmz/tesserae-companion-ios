@@ -472,6 +472,44 @@ struct BluetoothDisplayStoreTests {
         #expect(ambiguous.record(for: "red", serverID: "home") == nil)
     }
 
+    @Test func cloudLookupUsesTheSameSavedBluetoothPresentationAndKeepsOtherMatches() throws {
+        let file = URL.temporaryDirectory.appending(path: UUID().uuidString + ".plist")
+        defer { try? FileManager.default.removeItem(at: file) }
+        let store = BluetoothDisplayStore(fileURL: file)
+        let firstMAC = "02:01:02:03:04:05"
+        let secondMAC = "02:01:02:03:04:06"
+        store.observe(deviceID: "nearby-picpak", name: "Kitchen", mode: .bluetooth,
+                      batteryMillivolts: nil, batteryPercent: 84, hardwareMAC: firstMAC, at: start)
+        store.observe(deviceID: "nearby-reterminal", name: "Desk", mode: .bluetooth,
+                      batteryMillivolts: nil, hardwareMAC: secondMAC, at: start)
+        let issuer = try #require(URL(string: "https://cloud.example.invalid"))
+        let cloud = ConnectionIdentity.cloud(issuer: issuer, userID: "person", tenantID: "home").id
+        let other = ConnectionIdentity.cloud(issuer: issuer, userID: "person", tenantID: "office").id
+        let ids: Set<String> = ["kitchen", "desk"]
+        store.observeMACMatches([firstMAC: "kitchen"], serverID: cloud.rawValue,
+                                currentDisplayIDs: ids, queriedMACs: [firstMAC])
+        store.observeMACMatches([secondMAC: "desk"], serverID: cloud.rawValue,
+                                currentDisplayIDs: ids, queriedMACs: [secondMAC])
+
+        let display = try JSONDecoder().decode(CloudDevice.self, from: Data("""
+        {"id":"kitchen","name":"Kitchen","kind":"picpak","panel":{"w":800,"h":480},
+         "format":"bin","dither":"none","sleep_interval_s":60,"battery_pct":53}
+        """.utf8))
+        let restored = BluetoothDisplayStore(fileURL: file)
+        #expect(restored.presentation(for: display, connectionID: cloud).isBluetooth)
+        #expect(restored.presentation(for: display, connectionID: cloud).batteryText == "84%")
+        #expect(restored.presentation(for: display, connectionID: other).batteryText == "53%")
+        #expect(!restored.presentation(for: display, connectionID: other).isBluetooth)
+        #expect(restored.record(for: "desk", serverID: cloud.rawValue)?.id == "nearby-reterminal")
+
+        restored.observeMACMatches([:], serverID: cloud.rawValue,
+                                   currentDisplayIDs: ids, queriedMACs: [secondMAC])
+        #expect(restored.record(for: "desk", serverID: cloud.rawValue) == nil)
+        #expect(restored.presentation(for: display, connectionID: cloud).isBluetooth)
+        restored.observeMACMatches([:], serverID: cloud.rawValue, currentDisplayIDs: [], queriedMACs: [])
+        #expect(restored.record(for: "kitchen", serverID: cloud.rawValue) == nil)
+    }
+
     @Test func shortMACSuffixCannotAutomaticallyAssociate() {
         let store = BluetoothDisplayStore(fileURL: nil)
         store.activeServerID = "home"

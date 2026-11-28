@@ -114,12 +114,11 @@ final class AppModel {
         let client = activeClient
         let deviceIDs = Set(displays.map(\.id))
         do {
-            var matches: [String: String] = [:]
-            for mac in macs {
+            let matches = try await BluetoothDisplayStore.resolveMACMatches(macs) { mac in
                 try checkConnectionSession(session)
-                if let id = try await client.lookupDisplay(mac: mac, instance: instance), deviceIDs.contains(id) {
-                    matches[mac] = id
-                }
+                guard let id = try await client.lookupDisplay(mac: mac, instance: instance),
+                      deviceIDs.contains(id) else { return nil }
+                return id
             }
             try checkConnectionSession(session)
             let currentIDs = Set(displays.map(\.id))

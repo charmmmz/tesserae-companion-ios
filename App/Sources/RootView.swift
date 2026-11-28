@@ -13,6 +13,13 @@ private struct BluetoothAssociationContext: Hashable {
     let isActive: Bool
 }
 
+private struct CloudBluetoothAssociationContext: Hashable {
+    let presentation: CloudPresentationContext
+    let fetchedAt: Date
+    let displayIDs: Set<String>
+    let macs: [String]
+}
+
 private struct BluetoothModeSyncContext: Hashable {
     let connection: RootConnectionContext
     let reports: [BluetoothModeReport]
@@ -44,6 +51,15 @@ struct RootView: View {
             macs: nearbyDevices.displayRecords.knownHardwareMACs,
             isActive: scenePhase == .active && connectionHost.cloud == nil
         )
+    }
+
+    private var cloudBluetoothAssociationContext: CloudBluetoothAssociationContext? {
+        guard scenePhase == .active, !connectionHost.isSwitching, !connectionHost.isSigningIn,
+              let cloud = connectionHost.cloud, !cloud.needsSignIn, !cloud.isRestricted,
+              let presentation = connectionHost.cloudPresentationContext, let fetchedAt = cloud.fetchedAt,
+              cloud.snapshot?.account.auth.scopes.contains("app:read") == true else { return nil }
+        return CloudBluetoothAssociationContext(presentation: presentation, fetchedAt: fetchedAt,
+            displayIDs: Set(cloud.devices.map(\.id)), macs: nearbyDevices.displayRecords.knownHardwareMACs)
     }
 
     private var bluetoothModeSyncContext: BluetoothModeSyncContext {
@@ -134,6 +150,9 @@ struct RootView: View {
                 catch { return }
                 retrySeconds = min(retrySeconds * 2, 300)
             }
+        }
+        .task(id: cloudBluetoothAssociationContext) {
+            await associateCloudBluetoothDisplays()
         }
         .task(id: bluetoothModeSyncContext) {
             let context = bluetoothModeSyncContext
@@ -252,6 +271,23 @@ struct RootView: View {
     private func rememberServerDisplays() {
         nearbyDevices.displayRecords.observeServer(displays: model.displays, previews: model.displayPreviews,
                                                    serverID: model.activeStorageID)
+    }
+
+    private func associateCloudBluetoothDisplays() async {
+        guard let context = cloudBluetoothAssociationContext, let cloud = connectionHost.cloud else { return }
+        let store = nearbyDevices.displayRecords
+        let macs = context.displayIDs.isEmpty ? [] : context.macs
+        do {
+            let matches = try await BluetoothDisplayStore.resolveMACMatches(macs) { mac in
+                guard context == cloudBluetoothAssociationContext else { throw CancellationError() }
+                return try await cloud.client.lookupDisplay(mac: mac)
+            }
+            guard context == cloudBluetoothAssociationContext else { return }
+            store.observeMACMatches(matches, serverID: context.presentation.fence.connectionID.rawValue,
+                                    currentDisplayIDs: context.displayIDs, queriedMACs: Set(macs))
+        } catch {
+            // Keep confirmed associations until a later refresh can verify a new result.
+        }
     }
 
     private var connectionMessageRevision: String {

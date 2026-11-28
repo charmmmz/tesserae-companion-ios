@@ -105,6 +105,33 @@ private actor CloudReadFixture: TesseraeHTTPTransporting {
         #expect(requests[0].url?.path == "/api/t/app/device-pairing")
     }
 
+    @Test func looksUpADeviceWithTheCloudWorkspaceGrantAndNormalizedMAC() async throws {
+        let (client, http) = try await fixture(.init(data: Data(#"{"device_id":"picpak-cloud"}"#.utf8), statusCode: 200))
+        #expect(try await client.lookupDisplay(mac: "02-01-02-03-04-05") == "picpak-cloud")
+        #expect(try await client.lookupDisplay(mac: "03:04:05") == nil)
+        let requests = await http.requests
+        try #require(requests.count == 1)
+        let request = requests[0]
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path == "/api/t/app/devices/lookup")
+        #expect(request.value(forHTTPHeaderField: "Authorization")?.hasPrefix("Bearer ") == true)
+        let body = try #require(request.httpBody)
+        #expect(try JSONDecoder().decode([String: String].self, from: body) == ["mac": "02:01:02:03:04:05"])
+    }
+
+    @Test func explicitlyNullLookupIsDistinctFromAnUnavailableOrInvalidResponse() async throws {
+        let (client, http) = try await fixture(.init(data: Data(#"{"device_id":null}"#.utf8), statusCode: 200))
+        #expect(try await client.lookupDisplay(mac: "02:01:02:03:04:05") == nil)
+        await http.set(.init(data: Data(), statusCode: 404))
+        await #expect(throws: CloudReadError.notFound) {
+            try await client.lookupDisplay(mac: "02:01:02:03:04:05")
+        }
+        await http.set(.init(data: Data("{}".utf8), statusCode: 200))
+        await #expect(throws: CloudReadError.invalidResponse) {
+            try await client.lookupDisplay(mac: "02:01:02:03:04:05")
+        }
+    }
+
     @Test func previewNeverRendersAndMissingImageRemainsMissing() async throws {
         let png = Data([137, 80, 78, 71, 13, 10, 26, 10])
         let (client, http) = try await fixture(TesseraeHTTPResponse(data: png, statusCode: 200))

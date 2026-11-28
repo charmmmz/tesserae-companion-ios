@@ -88,6 +88,29 @@ public struct CloudReadClient: Sendable {
         return result.devices
     }
 
+    public func lookupDisplay(mac: String) async throws -> String? {
+        guard let mac = DeviceHardwareIdentity.normalizedMAC(mac) else { return nil }
+        var request = URLRequest(url: issuer.appending(path: "api/t/app/devices/lookup"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(DeviceLookupRequest(mac: mac))
+        let response = try await transport.send(request, timeout: timeout, authorizationTimeout: min(10, timeout))
+        try requireSuccess(response)
+
+        struct Lookup: Decodable {
+            let deviceID: String?
+            enum CodingKeys: String, CodingKey { case deviceID = "device_id" }
+
+            init(from decoder: Decoder) throws {
+                let values = try decoder.container(keyedBy: CodingKeys.self)
+                deviceID = try values.decode(String?.self, forKey: .deviceID)
+            }
+        }
+        guard let lookup = try? JSONDecoder().decode(Lookup.self, from: response.data),
+              lookup.deviceID?.isEmpty != true else { throw CloudReadError.invalidResponse }
+        return lookup.deviceID
+    }
+
     public func pages() async throws -> [CloudPage] {
         struct Response: Decodable { let pages: [CloudPage] }
         let result: Response = try await read(["pages"])
