@@ -218,18 +218,20 @@ final class CloudBrowsingUITests: XCTestCase {
         let page = app.buttons["cloud-page-a2_page_shared"]
         XCTAssertTrue(page.waitForExistence(timeout: 5)); page.tap()
         XCTAssertTrue(app.images["cloud-preview-image"].waitForExistence(timeout: 10))
+        let detail = app.descendants(matching: .any)["cloud-resource-detail"].firstMatch
+        XCTAssertTrue(detail.exists)
         try await fault("change-page")
-        app.scrollViews["cloud-resource-detail"].swipeDown()
+        detail.swipeDown()
         XCTAssertTrue(app.navigationBars.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Morning Board A updated")).firstMatch.waitForExistence(timeout: 10))
         XCTAssertTrue(app.images["cloud-preview-image"].waitForExistence(timeout: 10))
         capture(app, "cloud-injected-page-version-loaded")
         try await fault("asset404")
-        app.scrollViews["cloud-resource-detail"].swipeDown()
+        detail.swipeDown()
         XCTAssertTrue(app.staticTexts["No Preview Yet"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.images["cloud-preview-image"].exists)
         capture(app, "cloud-injected-404-cleared-old-image")
         try await fault("delete-page")
-        app.scrollViews["cloud-resource-detail"].swipeDown()
+        detail.swipeDown()
         let removed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             !page.exists && app.buttons["cloud-page-a2_page_no_preview"].exists
                 && !app.images["cloud-preview-image"].exists

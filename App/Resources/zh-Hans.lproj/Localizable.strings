@@ -180,6 +180,7 @@
 "Expanded sent photo preview" = "已展开的发送照片预览";
 "Instance" = "实例";
 "Name" = "名称";
+"General" = "常规";
 "Version" = "版本";
 "API mode" = "API 模式";
 "Live Companion API" = "实时 Companion API";

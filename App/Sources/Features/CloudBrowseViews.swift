@@ -434,29 +434,13 @@ private struct CloudResourceDetail: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 14) {
-                if exists && model.verifiedDetails.contains(key) {
-                    previewCard
-                    if let device {
-                        connectionCard(device)
-                        deviceDetails(device)
-                    }
-                    if let page { dashboardDetails(page) }
-                } else if exists, case .rateLimited(let until) = previewState {
-                    rateLimitedPreview(until: until)
-                } else if exists && (previewState == nil || previewState == .loading) {
-                    ProgressView("Loading Preview…").frame(maxWidth: .infinity, minHeight: 180)
-                } else {
-                    ContentUnavailableView("Item Unavailable", systemImage: "rectangle.slash",
-                        description: Text(model.problem ?? String(localized: "This item is no longer available.")))
-                }
+        Group {
+            if isDevice {
+                displayContent
+            } else {
+                dashboardContent
             }
-            .frame(maxWidth: 820)
-            .padding(16)
-            .frame(maxWidth: .infinity)
         }
-        .tesseraeScreenBackground()
         .scrollBounceBehavior(.always)
         .accessibilityIdentifier("cloud-resource-detail")
         .refreshable { await reloadPreview() }
@@ -508,7 +492,53 @@ private struct CloudResourceDetail: View {
         }
     }
 
-    private var previewCard: some View {
+    private var displayContent: some View {
+        ScrollView {
+            VStack(spacing: 14) {
+                if let device, model.verifiedDetails.contains(key) {
+                    displayPreviewCard
+                    connectionCard(device)
+                    deviceDetails(device)
+                } else {
+                    detailStatus
+                }
+            }
+            .frame(maxWidth: 820)
+            .padding(16)
+            .frame(maxWidth: .infinity)
+        }
+        .tesseraeScreenBackground()
+    }
+
+    private var dashboardContent: some View {
+        DashboardDetailForm {
+            if let page, model.verifiedDetails.contains(key) {
+                Section {
+                    DashboardDetailPreview {
+                        preview
+                    } action: {
+                        EmptyView()
+                    }
+                }
+                dashboardDetails(page)
+            } else {
+                Section { detailStatus }
+            }
+        }
+    }
+
+    @ViewBuilder private var detailStatus: some View {
+        if exists, case .rateLimited(let until) = previewState {
+            rateLimitedPreview(until: until)
+        } else if exists && (previewState == nil || previewState == .loading) {
+            ProgressView("Loading Preview…").frame(maxWidth: .infinity, minHeight: 180)
+        } else {
+            ContentUnavailableView("Item Unavailable", systemImage: "rectangle.slash",
+                description: Text(model.problem ?? String(localized: "This item is no longer available.")))
+        }
+    }
+
+    private var displayPreviewCard: some View {
         DisplayPreviewCard {
             ViewThatFits(in: .horizontal) {
                 HStack {
@@ -528,9 +558,7 @@ private struct CloudResourceDetail: View {
     }
 
     private var previewTitle: some View {
-        Label(isDevice ? String(localized: "Screen Preview") : String(localized: "Preview"),
-            systemImage: isDevice ? "display" : "rectangle.on.rectangle")
-            .font(.headline)
+        Label("Screen Preview", systemImage: "display").font(.headline)
     }
 
     @ViewBuilder private var refreshButton: some View {
@@ -626,12 +654,13 @@ private struct CloudResourceDetail: View {
 
     private func dashboardDetails(_ page: CloudPage) -> some View {
         let names = model.devices.filter { $0.pageID == page.id }.map(\.name)
-        return DisplayDetailCard(title: "Dashboard Details", systemImage: "info.circle") {
-            DisplayDetailRow(title: "Type") { Text(page.kind.capitalized) }
+        return Section("General") {
+            LabeledContent("Name", value: page.name)
+            LabeledContent("Type", value: page.kind.capitalized)
             if !names.isEmpty {
-                DisplayDetailRow(title: "Assigned to") { Text(names.formatted(.list(type: .and))) }
+                LabeledContent("Assigned to", value: names.formatted(.list(type: .and)))
             }
-            DisplayDetailRow(title: "Updated") { Text(page.updatedAt.formatted()) }
+            LabeledContent("Updated", value: page.updatedAt.formatted())
         }
     }
 
@@ -701,12 +730,20 @@ private struct CloudResourceDetail: View {
         switch previewState {
         case .image(let data):
             if let image = UIImage(data: data) {
-                Image(uiImage: image).resizable().interpolation(.none).scaledToFit()
-                    .frame(maxWidth: .infinity)
-                    .frame(maxHeight: 380)
-                    .clipShape(RoundedRectangle(cornerRadius: 9))
+                let artwork = Image(uiImage: image).resizable().interpolation(.none).scaledToFit()
                     .accessibilityLabel("Existing Cloud Preview")
                     .accessibilityIdentifier("cloud-preview-image")
+
+                if isDevice {
+                    artwork
+                        .frame(maxWidth: .infinity)
+                        .frame(maxHeight: 380)
+                        .clipShape(RoundedRectangle(cornerRadius: 9))
+                } else {
+                    artwork
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(TesseraeTheme.surfaceInset, in: RoundedRectangle(cornerRadius: 9))
+                }
             } else {
                 ContentUnavailableView("Preview Unavailable", systemImage: "photo.badge.exclamationmark",
                     description: Text("This saved preview could not be opened."))

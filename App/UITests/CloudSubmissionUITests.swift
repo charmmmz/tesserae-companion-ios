@@ -191,10 +191,18 @@ import XCTest
         XCTAssertFalse(app.buttons["cloud-page-a3_page_land"].exists)
         let other = app.buttons["cloud-page-a3_page_portrait"]
         XCTAssertTrue(other.waitForExistence(timeout: 8)); reveal(other, in: app); other.tap()
-        XCTAssertTrue(app.images["cloud-preview-image"].waitForExistence(timeout: 10))
+        let preview = app.images["cloud-preview-image"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 10))
+        let general = app.staticTexts["General"]
+        XCTAssertTrue(general.exists)
+        XCTAssertLessThan(preview.frame.maxY, general.frame.minY)
         XCTAssertTrue(app.descendants(matching: .any)["cloud-dashboard-web"].firstMatch.exists)
         XCTAssertFalse(app.buttons["cloud-refresh-current"].exists)
         XCTAssertFalse(app.buttons["root-send-action"].exists)
+        let detail = app.descendants(matching: .any)["cloud-resource-detail"].firstMatch
+        XCTAssertTrue(detail.exists)
+        detail.swipeDown()
+        XCTAssertTrue(preview.waitForExistence(timeout: 10))
         capture(app, "A3-other-dashboard-read-only")
         app.navigationBars.buttons.firstMatch.tap()
         app.tabBars.buttons["Displays"].tap()
