@@ -80,7 +80,7 @@ struct CloudResourceList: View {
                     EmptyView()
                 }
             }
-            .tesseraeRootPageChrome()
+            .tesseraeMessageCenter()
         } detail: {
             NavigationStack {
                 if let selectedID {
@@ -462,7 +462,6 @@ private struct CloudResourceDetail: View {
     @Environment(ConnectionHost.self) private var host
     @Environment(NearbyDeviceManager.self) private var nearby
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @Environment(\.tesseraePageSendEnabled) private var pageSendEnabled
     @Environment(\.scenePhase) private var scenePhase
     @State private var refreshDecision = UUID()
     @State private var refreshObservation: UUID?
@@ -537,8 +536,7 @@ private struct CloudResourceDetail: View {
                 }
             }
         }
-        .tesseraeRootPageChrome()
-        .environment(\.tesseraePageSendEnabled, isDevice && pageSendEnabled)
+        .tesseraeMessageCenter()
         .task(id: model.previewVersion(id: id, isDevice: isDevice)) {
             await model.openDetail(id: id, isDevice: isDevice)
         }

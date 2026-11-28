@@ -21,17 +21,9 @@ struct TesseraeToolbarActions<Actions: View>: ToolbarContent {
     }
 }
 
-private struct TesseraePageSendEnabledKey: EnvironmentKey {
-    static let defaultValue = false
-}
-
-extension EnvironmentValues {
-    // Compact pages place Send above bottom tabs; wide windows have one shared
-    // action below the whole tab container, outside either split-view column.
-    var tesseraePageSendEnabled: Bool {
-        get { self[TesseraePageSendEnabledKey.self] }
-        set { self[TesseraePageSendEnabledKey.self] = newValue }
-    }
+@Observable
+private final class TesseraeTabSendPosition {
+    var contentBottom: CGFloat?
 }
 
 private enum TesseraeFloatingSendMetrics {
@@ -41,21 +33,47 @@ private enum TesseraeFloatingSendMetrics {
     static let reservedHeight = size + bottomPadding
 }
 
-private struct TesseraeRootPageChrome: ViewModifier {
-    @Environment(\.tesseraePageSendEnabled) private var pageSendEnabled
+private struct TesseraeTabSendViewport: ViewModifier {
+    @Environment(TesseraeTabSendPosition.self) private var position: TesseraeTabSendPosition?
+    let isSelected: Bool
 
     func body(content: Content) -> some View {
-        content.tesseraeMessageCenter(
-            bottomAccessoryHeight: pageSendEnabled ? TesseraeFloatingSendMetrics.reservedHeight : 0
-        ) {
-            if pageSendEnabled {
-                TesseraeFloatingSendAction()
+        content
+            .safeAreaPadding(.bottom, position == nil ? 0 : TesseraeFloatingSendMetrics.reservedHeight)
+            .overlay(alignment: .bottom) {
+                if isSelected, let position {
+                    Color.clear.frame(height: 0)
+                        .allowsHitTesting(false)
+                        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: {
+                            position.contentBottom = $0
+                        }
+                }
             }
-        }
     }
 }
 
-struct TesseraeFloatingSendAction: View {
+private struct TesseraeTabSendChrome: ViewModifier {
+    let isEnabled: Bool
+    @State private var position = TesseraeTabSendPosition()
+
+    func body(content: Content) -> some View {
+        content
+            .environment(isEnabled ? position : nil)
+            .overlay {
+                if isEnabled {
+                    GeometryReader { geometry in
+                        if let contentBottom = position.contentBottom {
+                            TesseraeFloatingSendAction()
+                                .padding(.bottom, max(0, geometry.frame(in: .global).maxY - contentBottom))
+                                .frame(maxHeight: .infinity, alignment: .bottom)
+                        }
+                    }
+                }
+            }
+    }
+}
+
+private struct TesseraeFloatingSendAction: View {
     var body: some View {
         HStack {
             Spacer(minLength: 0)
@@ -99,9 +117,13 @@ private struct TesseraeFloatingSendButtonStyle: ButtonStyle {
 }
 
 extension View {
-    /// Keep Send above the tab safe area and messages below navigation,
-    /// reserving content space without guessing the system bars' heights.
-    func tesseraeRootPageChrome() -> some View {
-        modifier(TesseraeRootPageChrome())
+    /// Reserve room in the tab's navigation container and report the edge above its tab bar.
+    func tesseraeTabSendViewport(isSelected: Bool) -> some View {
+        modifier(TesseraeTabSendViewport(isSelected: isSelected))
+    }
+
+    /// Keep one Send action above the tab content throughout navigation transitions.
+    func tesseraeTabSendChrome(isEnabled: Bool = true) -> some View {
+        modifier(TesseraeTabSendChrome(isEnabled: isEnabled))
     }
 }

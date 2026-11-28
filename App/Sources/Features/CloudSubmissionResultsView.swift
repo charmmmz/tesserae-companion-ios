@@ -85,7 +85,7 @@ struct CloudSubmissionActivity: View {
                 }
             }
             .tesseraeScreenBackground()
-            .tesseraeRootPageChrome()
+            .tesseraeMessageCenter()
             .navigationBarTitleDisplayMode(.inline)
             .refreshable { requestReload() }
             .toolbar { TesseraeRootToolbar { ActivityFilterMenu(filter: $filter) } }

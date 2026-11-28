@@ -8,7 +8,6 @@ struct CloudRootView: View {
     @Environment(CompanionPresentation.self) private var presentation
     @Environment(ConnectionHost.self) private var host
     @Environment(TesseraeMessageCenter.self) private var messageCenter
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var tab: Tab = .displays
     @State private var activityResultToReveal: UUID?
     @State private var feedbackScope = UUID()
@@ -23,20 +22,20 @@ struct CloudRootView: View {
         TabView(selection: $tab) {
             CloudResourceList(model: model, isDevice: true, isActive: tab == .displays && presentation.sheet == nil,
                 showResult: showActivity, onDashboardAccepted: sendAccepted)
+                .tesseraeTabSendViewport(isSelected: tab == .displays)
                 .tabItem { Label("Displays", systemImage: "display").accessibilityIdentifier("cloud-displays-tab") }
                 .tag(Tab.displays)
             CloudResourceList(model: model, isDevice: false, isActive: tab == .dashboards && presentation.sheet == nil,
                 showResult: showActivity, onDashboardAccepted: sendAccepted)
+                .tesseraeTabSendViewport(isSelected: tab == .dashboards)
                 .tabItem { Label("Dashboards", systemImage: "rectangle.stack").accessibilityIdentifier("cloud-pages-tab") }
                 .tag(Tab.dashboards)
             activity
+                .tesseraeTabSendViewport(isSelected: tab == .activity)
                 .tabItem { Label("Activity", systemImage: "clock.arrow.circlepath").accessibilityIdentifier("cloud-activity-tab") }
                 .tag(Tab.activity)
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if horizontalSizeClass != .compact && canSend { TesseraeFloatingSendAction() }
-        }
-        .environment(\.tesseraePageSendEnabled, horizontalSizeClass == .compact && canSend)
+        .tesseraeTabSendChrome(isEnabled: canSend)
         .sheet(item: $presentation.sheet) { sheet in
             switch sheet {
             case .settings:

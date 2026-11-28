@@ -774,10 +774,8 @@ struct TesseraePresentedMessage: View {
     }
 }
 
-private struct TesseraeMessageCenterModifier<BottomAccessory: View>: ViewModifier {
+private struct TesseraeMessageCenterModifier: ViewModifier {
     let verticalPadding: CGFloat
-    let bottomAccessoryHeight: CGFloat
-    @ViewBuilder let bottomAccessory: BottomAccessory
     @Environment(TesseraeMessageCenter.self) private var center
     @Environment(\.tesseraeWindowMessagesEnabled) private var windowMessagesEnabled
     @State private var messageHeight: CGFloat = 0
@@ -802,9 +800,6 @@ private struct TesseraeMessageCenterModifier<BottomAccessory: View>: ViewModifie
             .safeAreaInset(edge: .top, spacing: 0) {
                 Color.clear.frame(height: reservedMessageHeight)
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                Color.clear.frame(height: bottomAccessoryHeight)
-            }
             .overlay(alignment: .top) {
                 TesseraeMessageCenterHost(verticalPadding: verticalPadding)
                     .padding(.horizontal, 16)
@@ -812,26 +807,12 @@ private struct TesseraeMessageCenterModifier<BottomAccessory: View>: ViewModifie
                         messageHeight = height
                     }
             }
-            .overlay(alignment: .bottom) {
-                bottomAccessory
-            }
     }
 }
 
 extension View {
     func tesseraeMessageCenter(verticalPadding: CGFloat = 12) -> some View {
-        tesseraeMessageCenter(verticalPadding: verticalPadding) { EmptyView() }
-    }
-
-    func tesseraeMessageCenter<BottomAccessory: View>(
-        verticalPadding: CGFloat = 12,
-        bottomAccessoryHeight: CGFloat = 0,
-        @ViewBuilder bottomAccessory: () -> BottomAccessory
-    ) -> some View {
-        modifier(TesseraeMessageCenterModifier(
-            verticalPadding: verticalPadding, bottomAccessoryHeight: bottomAccessoryHeight,
-            bottomAccessory: bottomAccessory
-        ))
+        modifier(TesseraeMessageCenterModifier(verticalPadding: verticalPadding))
     }
 }
 

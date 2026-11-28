@@ -62,7 +62,6 @@ private enum AppTab: Hashable {
 }
 
 struct MainTabView: View {
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(AppModel.self) private var model
     @Environment(GalleryUploadCoordinator.self) private var galleryUploads
     @Environment(TesseraeMessageCenter.self) private var messageCenter
@@ -72,12 +71,7 @@ struct MainTabView: View {
     var body: some View {
         @Bindable var presentation = presentation
         tabs
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if horizontalSizeClass != .compact {
-                    TesseraeFloatingSendAction()
-                }
-            }
-            .environment(\.tesseraePageSendEnabled, horizontalSizeClass == .compact)
+            .tesseraeTabSendChrome()
             .sheet(item: $presentation.sheet) { sheet in
                 switch sheet {
                 case .settings:
@@ -118,10 +112,12 @@ struct MainTabView: View {
     private var tabs: some View {
         TabView(selection: $selection) {
             DisplaysView(isActive: selection == .displays && rootContentIsVisible)
+            .tesseraeTabSendViewport(isSelected: selection == .displays)
             .tabItem { Label("Displays", systemImage: "display") }
             .tag(AppTab.displays)
 
             DashboardsView(isActive: selection == .dashboards && rootContentIsVisible)
+            .tesseraeTabSendViewport(isSelected: selection == .dashboards)
             .tabItem { Label("Dashboards", systemImage: "rectangle.grid.2x2") }
             .tag(AppTab.dashboards)
 
@@ -131,6 +127,7 @@ struct MainTabView: View {
                         isActive: selection == .gallery && rootContentIsVisible
                     )
                 }
+                .tesseraeTabSendViewport(isSelected: selection == .gallery)
                 .tabItem {
                     Label("Library", systemImage: "photo.on.rectangle.angled")
                 }
@@ -142,6 +139,7 @@ struct MainTabView: View {
                     isActive: selection == .activity && rootContentIsVisible
                 )
             }
+            .tesseraeTabSendViewport(isSelected: selection == .activity)
             .tabItem { Label("Activity", systemImage: "clock.arrow.circlepath") }
             .tag(AppTab.activity)
         }
@@ -208,7 +206,7 @@ struct MainTabView: View {
         NavigationStack {
             content()
                 .navigationTitle(title)
-                .tesseraeRootPageChrome()
+                .tesseraeMessageCenter()
         }
     }
 }

@@ -1278,6 +1278,8 @@ final class TesseraeCompanionUITests: XCTestCase {
         displayDetailShot.lifetime = .keepAlways
         add(displayDetailShot)
         app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.buttons["root-send-action"].isHittable)
+        XCTAssertEqual(app.buttons["root-send-action"].frame.minY, floatingSendFrame.minY, accuracy: 1)
 
         app.buttons["Library"].firstMatch.tap()
         let libraryToolbar = checkToolbar(contextID: "gallery-create-folder", name: "Library Root Toolbar")
@@ -1287,7 +1289,10 @@ final class TesseraeCompanionUITests: XCTestCase {
         app.buttons["gallery-folder-folder_family"].tap()
         let folderActions = [app.buttons["gallery-grid-options"], app.buttons["gallery-add-photos"]]
         XCTAssertTrue(folderActions[0].waitForExistence(timeout: 3))
-        XCTAssertFalse(app.buttons["root-send-action"].isHittable)
+        let folderSend = app.buttons["root-send-action"]
+        XCTAssertTrue(folderSend.isHittable)
+        XCTAssertEqual(app.buttons.matching(identifier: "root-send-action").count, 1)
+        XCTAssertEqual(folderSend.frame.minY, floatingSendFrame.minY, accuracy: 1)
         for action in folderActions {
             XCTAssertGreaterThanOrEqual(action.frame.width, 44 - 0.01)
             XCTAssertGreaterThanOrEqual(action.frame.height, 44 - 0.01)

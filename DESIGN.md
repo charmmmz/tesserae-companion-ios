@@ -273,9 +273,12 @@ remain visible in the capsule.
 
 Every page uses `TesseraeToolbarActions` from `App/Sources/DesignSystem` for its
 trailing actions. `TesseraeRootToolbar` composes it with Settings.
-Compact root pages use `.tesseraeRootPageChrome()` for message lifetime/spacing
-and the independent Send button in the bottom safe area. App-level message
-presentation belongs to `.tesseraeWindowMessageOverlay(center:)`.
+Each tab container uses `.tesseraeTabSendChrome()` for one floating Send button.
+The selected tab's `.tesseraeTabSendViewport(isSelected:)` reports the bottom
+edge above the tab bar and reserves space for the action. Pushing or popping a
+page leaves the button in place. Sheets and full-screen covers appear above it.
+Pages use `.tesseraeMessageCenter()` for message lifetime and spacing. The window
+presents messages through `.tesseraeWindowMessageOverlay(center:)`.
 The component owns the single native capsule, icon-only labels, 44 × 44-point
 targets, 4-point spacing, symbol sizing, accent tint, and muted disabled state.
 Feature views supply action semantics and availability; they do not override

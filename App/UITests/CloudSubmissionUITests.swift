@@ -201,7 +201,8 @@ import XCTest
         XCTAssertLessThan(preview.frame.maxY, general.frame.minY)
         XCTAssertTrue(app.descendants(matching: .any)["cloud-dashboard-web"].firstMatch.exists)
         XCTAssertFalse(app.buttons["cloud-refresh-current"].exists)
-        XCTAssertFalse(app.buttons["root-send-action"].exists)
+        XCTAssertTrue(app.buttons["root-send-action"].isHittable)
+        XCTAssertEqual(app.buttons.matching(identifier: "root-send-action").count, 1)
         let detail = app.descendants(matching: .any)["cloud-resource-detail"].firstMatch
         XCTAssertTrue(detail.exists)
         detail.swipeDown()

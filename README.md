@@ -34,7 +34,7 @@ Tesserae Companion connects directly to your own Tesserae server, with a built-i
   <tr>
     <td align="center"><a href="docs/images/readme/displays-battery-levels.png"><img src="docs/images/readme/displays-battery-levels.png" width="220" alt="Displays overview with hardware, battery, connection type and the server-matched Lineups icon"></a></td>
     <td align="center"><a href="docs/images/readme/dashboards-floating-send.png"><img src="docs/images/readme/dashboards-floating-send.png" width="220" alt="Saved Dashboards grouped by display with preview and push actions"></a></td>
-    <td align="center"><a href="docs/images/readme/dashboard-settings-actions.png"><img src="docs/images/readme/dashboard-settings-actions.png" width="220" alt="Native Dashboard settings with paper background, shared actions, preview, and configuration controls"></a></td>
+    <td align="center"><a href="docs/images/readme/dashboard-settings-floating-send.png"><img src="docs/images/readme/dashboard-settings-floating-send.png" width="220" alt="Native Dashboard settings with paper background, shared actions, preview, and configuration controls"></a></td>
     <td align="center"><a href="docs/images/readme/lineup-editor-actions.png"><img src="docs/images/readme/lineup-editor-actions.png" width="220" alt="Native Lineup editor with consistent icon actions, a target display, and selected Dashboards"></a></td>
   </tr>
   <tr>
@@ -44,7 +44,7 @@ Tesserae Companion connects directly to your own Tesserae server, with a built-i
     <td align="center"><sub><strong>Lineups</strong><br>Choose targets and playback</sub></td>
   </tr>
   <tr>
-    <td align="center"><a href="docs/images/readme/gallery-folder-actions.png"><img src="docs/images/readme/gallery-folder-actions.png" width="220" alt="Photo Library showing a square grid of sample images and shared folder action capsule"></a></td>
+    <td align="center"><a href="docs/images/readme/gallery-folder-floating-send.png"><img src="docs/images/readme/gallery-folder-floating-send.png" width="220" alt="Photo Library showing a square grid of sample images, folder actions, and the floating Send button"></a></td>
     <td align="center"><a href="docs/images/readme/send-photo-compact-fit-toggle.png"><img src="docs/images/readme/send-photo-compact-fit-toggle.png" width="220" alt="Photo composer with a compact one-tap fit button, compact display choices and the upper-right Send action"></a></td>
     <td align="center"><a href="docs/images/readme/activity-floating-send.png"><img src="docs/images/readme/activity-floating-send.png" width="220" alt="Activity showing recent content and send outcomes"></a></td>
     <td align="center"><a href="docs/images/readme/bluetooth-maintenance.png"><img src="docs/images/readme/bluetooth-maintenance.png" width="220" alt="Authenticated Bluetooth maintenance for a supported PicPak display"></a></td>
@@ -62,7 +62,7 @@ Tesserae Companion connects directly to your own Tesserae server, with a built-i
 
 <table>
   <tr>
-    <td align="center"><a href="docs/images/readme/dashboard-components.png"><img src="docs/images/readme/dashboard-components.png" width="220" alt="Dashboard widget settings grouped into selections, text, and numbers"></a></td>
+    <td align="center"><a href="docs/images/readme/dashboard-components-floating-send.png"><img src="docs/images/readme/dashboard-components-floating-send.png" width="220" alt="Dashboard widget settings grouped into selections, text, and numbers"></a></td>
     <td align="center"><a href="docs/images/readme/lineup-selection-actions.png"><img src="docs/images/readme/lineup-selection-actions.png" width="220" alt="Lineup Dashboard selection with shared Done action and two saved Dashboards in playback order"></a></td>
     <td align="center"><a href="docs/images/readme/offline-album.png"><img src="docs/images/readme/offline-album.png" width="220" alt="Offline Album review with a photo summary and display readiness checks"></a></td>
     <td align="center"><a href="docs/images/readme/gallery-upload-details.png"><img src="docs/images/readme/gallery-upload-details.png" width="220" alt="Photo upload details grouped by Gallery folder"></a></td>
@@ -74,7 +74,7 @@ Tesserae Companion connects directly to your own Tesserae server, with a built-i
     <td align="center"><sub><strong>Uploads</strong><br>Follow individual photos</sub></td>
   </tr>
   <tr>
-    <td colspan="2" align="center"><a href="docs/images/readme/dashboard-choices.png"><img src="docs/images/readme/dashboard-choices.png" width="220" alt="Dashboard choices with ordered selections and a shared Refresh and Done capsule"></a></td>
+    <td colspan="2" align="center"><a href="docs/images/readme/dashboard-choices-floating-send.png"><img src="docs/images/readme/dashboard-choices-floating-send.png" width="220" alt="Dashboard choices with ordered selections and a shared Refresh and Done capsule"></a></td>
     <td colspan="2" align="center"><a href="docs/images/readme/lineup-duration.png"><img src="docs/images/readme/lineup-duration.png" width="220" alt="Lineup duration picker with consistent Done action and dark paper background"></a></td>
   </tr>
   <tr>

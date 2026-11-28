@@ -236,9 +236,13 @@ final class AdaptiveLayoutUITests: XCTestCase {
         let app = demo()
         let manage = app.buttons["manage-lineups"]
         let create = app.buttons["lineup-create"]
+        let send = app.buttons["root-send-action"]
+        let sendFrame = send.frame
         for _ in 0..<2 {
             manage.tap()
             XCTAssertTrue(create.waitForExistence(timeout: 5))
+            XCTAssertTrue(send.isHittable)
+            XCTAssertEqual(send.frame.minY, sendFrame.minY, accuracy: 1)
             let explicitBack = app.buttons["lineups-back-to-displays"]
             let back = explicitBack.exists
                 ? explicitBack
@@ -250,6 +254,8 @@ final class AdaptiveLayoutUITests: XCTestCase {
                 predicate: NSPredicate { _, _ in !create.exists && manage.isHittable }, object: nil
             )
             XCTAssertEqual(XCTWaiter.wait(for: [returned], timeout: 5), .completed)
+            XCTAssertTrue(send.isHittable)
+            XCTAssertEqual(send.frame.minY, sendFrame.minY, accuracy: 1)
         }
 
         manage.tap()
