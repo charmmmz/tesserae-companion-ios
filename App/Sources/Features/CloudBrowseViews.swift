@@ -274,8 +274,10 @@ private struct CloudDisplayCard: View {
     let device: CloudDevice
     let loadsPreview: Bool
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(NearbyDeviceManager.self) private var nearby
 
     var body: some View {
+        let local = nearby.displayRecords.presentation(for: device, connectionID: model.fence.connectionID)
         DisplayCardLayout {
             VStack(alignment: .leading, spacing: 9) {
                 Label {
@@ -291,10 +293,12 @@ private struct CloudDisplayCard: View {
                     ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
                     : AnyLayout(HStackLayout(spacing: 12))
                 metrics {
-                    if let battery = device.batteryReading {
-                        Label(battery.text, systemImage: battery.icon)
+                    if local.hasBatteryReading {
+                        Label(local.batteryText, systemImage: local.batterySymbolName)
                     }
-                    if let seen = device.lastSeenAt {
+                    if local.isBluetooth {
+                        BluetoothModeLabel(compact: true)
+                    } else if let seen = device.lastSeenAt {
                         Label {
                             Text(seen, format: .relative(presentation: .numeric, unitsStyle: .abbreviated))
                         } icon: {
@@ -309,7 +313,7 @@ private struct CloudDisplayCard: View {
                             canvasSize.height / CGFloat(max(device.panel.height, 1)))
             CloudCardPreview(model: model, id: device.id, isDevice: true,
                 loadsPreview: loadsPreview && device.frame != nil, title: device.name,
-                symbol: "display", detail: "\(device.panel.width) × \(device.panel.height)")
+                symbol: "display", detail: "\(device.panel.width) × \(device.panel.height)", localPreview: local.preview)
                 .frame(width: CGFloat(device.panel.width) * scale, height: CGFloat(device.panel.height) * scale)
                 .frame(width: canvasSize.width, height: canvasSize.height)
         }
@@ -413,16 +417,20 @@ private struct CloudCardPreview: View {
     let title: String
     let symbol: String
     let detail: String?
+    var localPreview: PreviewImageState?
     @State private var data: Data?
     @State private var loadedVersion: String?
 
     private var version: String? {
-        loadsPreview && !model.needsSignIn && !model.isRestricted ? model.previewVersion(id: id, isDevice: isDevice) : nil
+        guard localPreview == nil, loadsPreview, !model.needsSignIn, !model.isRestricted else { return nil }
+        return model.previewVersion(id: id, isDevice: isDevice)
     }
 
     var body: some View {
         PreviewArtwork(
-            state: version == loadedVersion ? data.map { PreviewImageState(data: $0, eTag: nil, phase: .ready) } : nil,
+            state: localPreview ?? (version == loadedVersion ? data.map {
+                PreviewImageState(data: $0, eTag: nil, phase: .ready)
+            } : nil),
             placeholderSystemName: symbol,
             placeholderLabel: String(localized: "Preview unavailable for \(title)"),
             imageLabel: String(localized: "Preview for \(title)"),
@@ -444,15 +452,6 @@ private struct CloudCardPreview: View {
     }
 }
 
-private extension CloudDevice {
-    var batteryReading: (text: String, icon: String)? {
-        guard let batteryPercent, (0...100).contains(batteryPercent) else { return nil }
-        let level = Int((batteryPercent / 25).rounded()) * 25
-        return ((batteryPercent / 100).formatted(.percent.precision(.fractionLength(0))),
-                "battery.\(level)percent")
-    }
-}
-
 private struct CloudResourceDetail: View {
     let model: CloudBrowseModel
     let id: String
@@ -460,6 +459,7 @@ private struct CloudResourceDetail: View {
     let showResult: (UUID) -> Void
     let pushDashboard: ((CloudPage) -> Void)?
     @Environment(ConnectionHost.self) private var host
+    @Environment(NearbyDeviceManager.self) private var nearby
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.tesseraePageSendEnabled) private var pageSendEnabled
     @State private var refreshDecision = UUID()
@@ -479,6 +479,9 @@ private struct CloudResourceDetail: View {
         return until
     }
     private var device: CloudDevice? { isDevice ? model.devices.first { $0.id == id } : nil }
+    private var bluetooth: DisplayBluetoothPresentation? {
+        device.map { nearby.displayRecords.presentation(for: $0, connectionID: model.fence.connectionID) }
+    }
     private var page: CloudPage? { isDevice ? nil : model.pages.first { $0.id == id } }
     private var name: String { device?.name ?? page?.name ?? String(localized: "Preview") }
     private var exists: Bool { device != nil || page != nil }
@@ -548,10 +551,10 @@ private struct CloudResourceDetail: View {
     private var displayContent: some View {
         ScrollView {
             VStack(spacing: 14) {
-                if let device, model.verifiedDetails.contains(key) {
+                if let device, let bluetooth, model.verifiedDetails.contains(key) {
                     displayPreviewCard
-                    connectionCard(device)
-                    deviceDetails(device)
+                    connectionCard(device, bluetooth: bluetooth)
+                    deviceDetails(device, firmwareVersion: bluetooth.firmwareVersion)
                 } else {
                     detailStatus
                 }
@@ -614,14 +617,25 @@ private struct CloudResourceDetail: View {
                     refreshButton
                 }
             }
-            preview
+            if let device, let localPreview = bluetooth?.preview {
+                PreviewArtwork(state: localPreview, placeholderSystemName: "display",
+                               placeholderLabel: "Preview Unavailable", imageLabel: "Last Bluetooth Send",
+                               accessibilityIdentifier: "cloud-bluetooth-preview", cachesDecodedImage: false)
+                    .aspectRatio(CGFloat(max(1, device.panel.width)) / CGFloat(max(1, device.panel.height)),
+                                 contentMode: .fit)
+                    .frame(maxHeight: 380)
+            } else {
+                preview
+            }
             refreshMessage
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var previewTitle: some View {
-        Label("Screen Preview", systemImage: "display").font(.headline)
+        Label(bluetooth?.usesLocalPreview == true ? String(localized: "Last Bluetooth Send") : String(localized: "Screen Preview"),
+              systemImage: "display")
+            .font(.headline)
     }
 
     @ViewBuilder private var refreshButton: some View {
@@ -668,18 +682,21 @@ private struct CloudResourceDetail: View {
         }
     }
 
-    private func connectionCard(_ device: CloudDevice) -> some View {
+    private func connectionCard(_ device: CloudDevice, bluetooth: DisplayBluetoothPresentation) -> some View {
         DisplayDetailCard(title: "Connection & Power", systemImage: "antenna.radiowaves.left.and.right") {
+            if bluetooth.isBluetooth {
+                DisplayDetailRow(title: "Status") { BluetoothModeLabel() }
+            }
             DisplayDetailRow(title: "Last Seen") {
-                if let seen = device.lastSeenAt {
+                if let seen = bluetooth.lastSeenAt(fallback: device.lastSeenAt) {
                     Text(seen, format: .relative(presentation: .numeric, unitsStyle: .abbreviated))
                 } else {
                     Text("Not reported")
                 }
             }
             DisplayDetailRow(title: "Battery") {
-                if let battery = device.batteryReading {
-                    Label(battery.text, systemImage: battery.icon)
+                if bluetooth.hasBatteryReading {
+                    Label(bluetooth.batteryText, systemImage: bluetooth.batterySymbolName)
                 } else {
                     Text("Not reported")
                 }
@@ -694,14 +711,14 @@ private struct CloudResourceDetail: View {
         }
     }
 
-    private func deviceDetails(_ device: CloudDevice) -> some View {
+    private func deviceDetails(_ device: CloudDevice, firmwareVersion: String?) -> some View {
         DisclosureGroup {
             VStack(spacing: 12) {
                 DisplayDetailRow(title: "Model") {
                     DisplayHardwareBadge(presentation: DisplayHardwarePresentation(kind: device.kind))
                 }
                 DisplayDetailRow(title: "Panel") { Text("\(device.panel.width) × \(device.panel.height)") }
-                if let firmware = device.firmwareVersion {
+                if let firmware = firmwareVersion {
                     DisplayDetailRow(title: "Firmware") { Text(firmware) }
                 }
             }

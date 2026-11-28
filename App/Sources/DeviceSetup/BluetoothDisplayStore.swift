@@ -474,7 +474,7 @@ final class BluetoothDisplayStore {
     }
 
     func presentation(for device: CloudDevice, connectionID: ConnectionID) -> DisplayBluetoothPresentation {
-        let percent = device.batteryPercent.flatMap { (0...100).contains($0) ? Int($0) : nil }
+        let percent = device.batteryPercent.flatMap { (0...100).contains($0) ? Int($0.rounded()) : nil }
         return presentation(displayID: device.id, serverID: connectionID.rawValue, batteryPercent: percent,
                             firmwareVersion: device.firmwareVersion, lastSeenAt: device.lastSeenAt)
     }
